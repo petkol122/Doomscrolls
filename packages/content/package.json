@@ -1,0 +1,15 @@
+{
+  "name": "@doomscrolls/content",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "echo content dev placeholder",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo content lint placeholder",
+    "test": "echo content test placeholder"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

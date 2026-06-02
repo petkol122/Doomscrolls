@@ -1,0 +1,180 @@
+# docs/BACKLOG_CORE_0_1.md — Core Build 0.1 Backlog
+
+## Purpose
+
+This backlog defines the implementation order for Doomscrolls Core Build 0.1.
+
+Core 0.1 is complete when a real user can register, log in, create a character, enter rooms, move, fight, die, respawn, loot items, use inventory/equipment/flask systems and reconnect with persistent state.
+
+---
+
+## Task Order
+
+### Task 001 — Repository Foundation
+
+Create monorepo, docs skeleton, package scripts and CI.
+
+### Task 002 — Shared Types
+
+Add IDs, account/profile/settings, character/stats/death, item/inventory/equipment, room state and protocol types.
+
+### Task 003 — Localization Foundation
+
+Add English source locale and localization key resolver. No language selector yet.
+
+### Task 004 — Content Registry
+
+Add content package, content definitions and validation.
+
+Initial content:
+
+```text
+sewer_dweller
+nightvision
+gravewalker
+heavy_strike
+trashboar_runt
+nightmarket
+blackwire_sewers
+starter_pipe
+sewer_jacket
+starter_blood_flask
+blackwire_scrap
+```
+
+### Task 005 — Local Infrastructure
+
+Add Docker Compose for PostgreSQL, Redis, server and client.
+
+### Task 006 — Prisma Schema and Migration
+
+Add Prisma schema and first migration for:
+
+```text
+User
+Session
+UserProfile
+UserSettings
+Character
+CharacterStats
+CharacterPassive
+Inventory
+ItemInstance
+Corpse
+```
+
+### Task 007 — Repository Layer
+
+Add repository classes around Prisma Client.
+
+### Task 008 — Server Foundation
+
+Add Fastify + Colyseus server, health endpoint, env validation, logger, DB/Redis connections.
+
+### Task 009 — Auth
+
+Implement username/password registration, login, sessions and `/me`.
+
+No guest auth.
+
+### Task 010 — Profile and Settings
+
+Implement public profile and functional settings.
+
+Core settings:
+
+```text
+masterVolume
+musicVolume
+sfxVolume
+showFpsCounter
+```
+
+### Task 011 — Character Creation
+
+Implement character creation, character name validation, origin/class validation, starting stats/passives, inventory/equipment initialization.
+
+### Task 012 — Client Foundation
+
+Add Phaser/Vite client foundation, auth screens, profile/settings screen and character select/create screen.
+
+### Task 013 — Room Authentication
+
+Authenticated room joins with character ownership validation.
+
+### Task 014 — TownRoom
+
+Implement The Nightmarket with player presence.
+
+### Task 015 — CombatRoom
+
+Implement Blackwire Sewers room with player entity state.
+
+### Task 016 — Movement
+
+Implement server-authoritative click-to-move.
+
+### Task 017 — Enemy Spawn and AI
+
+Spawn Trashboar Runt from content and implement AI v1.
+
+### Task 018 — Basic Combat
+
+Implement Heavy Strike, damage/armor/death and tests.
+
+### Task 019 — Corpse and Respawn
+
+Implement player death, corpse creation, safe respawn, corpse retrieval and forced recovery with durability foundation.
+
+### Task 020 — Grid Inventory
+
+Implement 10x6 grid inventory, item placement validation and persistence.
+
+### Task 021 — Equipment and Stat Modifiers
+
+Implement equipment slots, equip/unequip, stat recalculation and persistence.
+
+### Task 022 — Flask
+
+Implement Starter Blood Flask in flask_1 slot with server-validated healing/charges.
+
+### Task 023 — XP and Level
+
+Implement XP gain and level 1-10 data-driven progression.
+
+### Task 024 — Loot and Pickup
+
+Implement server-side loot generation, room loot entity and pickup into free grid space.
+
+### Task 025 — Reconnect
+
+Implement reload/reconnect flow preserving account, character, XP, inventory, equipment and active corpse state.
+
+### Task 026 — Core 0.1 End-to-End Test
+
+Run and document the full manual Core 0.1 scenario.
+
+---
+
+## Anti-Scope-Creep
+
+Do not implement before Core 0.1 is complete:
+
+```text
+second origin
+second class
+bosses
+quests
+trading
+crafting
+guilds
+friends
+PvP
+procedural dungeons
+mobile app
+Google login
+email recovery
+full Czech map
+monetization
+admin panel
+```

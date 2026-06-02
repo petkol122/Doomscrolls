@@ -1,0 +1,19 @@
+{
+  "name": "@doomscrolls/server",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "echo server dev placeholder",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo server lint placeholder",
+    "test": "echo server test placeholder",
+    "prisma:generate": "echo prisma generate placeholder",
+    "prisma:migrate:dev": "echo prisma migrate dev placeholder",
+    "prisma:migrate:deploy": "echo prisma migrate deploy placeholder",
+    "prisma:studio": "echo prisma studio placeholder"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

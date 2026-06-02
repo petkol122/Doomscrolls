@@ -1,0 +1,15 @@
+{
+  "name": "@doomscrolls/shared",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "echo shared dev placeholder",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo shared lint placeholder",
+    "test": "echo shared test placeholder"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
