@@ -173,6 +173,20 @@ The server uses Fastify with configured CORS, validates environment variables on
 
 The server currently does not implement auth endpoints, profile routes, character routes, gameplay rooms, combat, loot, enemy spawning, fake users, fake characters or fake inventory.
 
+The auth domain service layer exists at `apps/server/src/auth/` and provides:
+
+```text
+username/password registration and login logic
+password hashing with argon2id
+session token generation (cryptographically random)
+session token hashing (SHA-256 for DB storage)
+username validation and normalization
+display name validation
+safe auth response DTOs (no passwordHash exposure)
+```
+
+The auth service layer does not implement HTTP endpoints yet. `/auth/register`, `/auth/login` and `/me` routes are deferred to a later task.
+
 Generate Prisma Client for the server:
 
 ```bash

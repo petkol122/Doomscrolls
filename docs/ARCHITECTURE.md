@@ -177,6 +177,103 @@ The Prisma schema foundation exists, and the server validates `DATABASE_URL` so 
 
 ---
 
+## Auth Domain Service
+
+The auth domain service layer lives at:
+
+```text
+apps/server/src/auth/
+```
+
+Core components:
+
+```text
+AuthService.ts        - Registration, login, session validation logic
+PasswordService.ts    - Password hashing (argon2id) and verification
+SessionTokenService.ts - Session token generation and hashing
+UsernameService.ts    - Username validation and normalization
+AuthErrors.ts         - Typed auth error codes and safe error messages
+AuthTypes.ts          - Input/output types for auth service
+index.ts              - Public API exports
+```
+
+Auth service rules:
+
+- no guest accounts
+- username/password registration and login only
+- username is public, unique, visible and used for login
+- usernameNormalized is used for uniqueness and login (case-insensitive)
+- displayName is public, flexible and non-unique
+- avatarKey uses predefined/default value
+- session token is returned only after successful register/login
+- raw session token is never stored in DB
+- tokenHash is stored in DB
+- passwordHash is stored in DB
+- passwordHash is never returned to clients
+- raw session token is cryptographically random (32 bytes)
+- session token hashing uses SHA-256 for deterministic lookup
+
+Username validation rules:
+
+```text
+min length: 3
+max length: 24
+allowed characters: a-z, 0-9, underscore, dot
+must start with a letter or number
+no spaces
+no consecutive dots
+no leading/trailing dot
+case-insensitive unique through usernameNormalized
+reserved names blocked case-insensitively
+```
+
+Reserved usernames:
+
+```text
+admin, administrator, moderator, mod, support, staff, system, root,
+api, auth, login, register, me, profile, settings, doomscrolls, moloch
+```
+
+Password validation rules:
+
+```text
+min length: 8
+max length: 128
+must not be whitespace-only
+```
+
+Display name validation rules:
+
+```text
+min length: 1
+max length: 32
+trim leading/trailing whitespace
+allow spaces
+reject empty/whitespace-only
+reject unsafe control characters
+```
+
+Password hashing approach:
+
+```text
+algorithm: argon2id
+memoryCost: 65536 (64 MB)
+timeCost: 3
+parallelism: 4
+```
+
+Session token approach:
+
+```text
+raw token: 32 bytes (256 bits) cryptographically random, hex-encoded
+token hash: SHA-256 of raw token, stored in DB
+session expiry: 30 days
+```
+
+The auth service layer does not implement HTTP endpoints yet. `/auth/register`, `/auth/login` and `/me` routes are deferred to a later task.
+
+---
+
 ## Core 0.1 Runtime Scope
 
 Core 0.1 must support:

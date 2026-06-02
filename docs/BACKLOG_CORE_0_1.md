@@ -95,6 +95,8 @@ Implement username/password registration, login, sessions and `/me`.
 
 No guest auth.
 
+Status: Auth domain service layer implemented at `apps/server/src/auth/`. Includes username/password registration and login logic, password hashing with argon2id, session token generation and hashing, username validation/normalization, display name validation, and safe auth response DTOs. HTTP endpoints (`/auth/register`, `/auth/login`, `/me`) are not implemented yet and are deferred to a later task.
+
 ### Task 011 — Profile and Settings
 
 Implement public profile and functional settings.

@@ -96,3 +96,15 @@ Area: Client tooling
 Description: Vite is pinned to ^5.4.21 because local machine uses Node 19.4.0.
 Risk: Project may lag behind current Vite versions and CI/runtime may diverge.
 Planned fix: Standardize project Node version on an LTS release using .nvmrc/Volta, then revisit Vite upgrade.
+
+## Auth service transaction support
+
+```text
+Date: 2026-06-02
+Area: Auth domain service
+Description: AuthService.register() creates user + profile + settings + session records sequentially without a shared Prisma transaction. If a later step fails, earlier records may remain orphaned.
+Reason: Current repositories do not support a shared transaction client. Implementing transaction support requires refactoring repositories to accept a transaction client parameter.
+Risk: Partial user records could be created if a later step fails during registration.
+Planned fix: Refactor repositories to accept a shared transaction client and wrap registration in a Prisma transaction.
+Status: Open
+```

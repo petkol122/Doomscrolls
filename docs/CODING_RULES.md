@@ -48,6 +48,43 @@ Rules:
 
 ---
 
+## Auth Service Rules
+
+The auth domain service layer exists at `apps/server/src/auth/` and provides username/password registration, login, session validation, password hashing, session token generation and validation rules.
+
+Auth service rules:
+
+- no guest accounts
+- username/password registration and login only
+- username is public, unique, visible and used for login
+- usernameNormalized is used for uniqueness and login (case-insensitive)
+- displayName is public, flexible and non-unique
+- avatarKey uses predefined/default value
+- session token is returned only after successful register/login
+- raw session token is never stored in DB
+- tokenHash is stored in DB
+- passwordHash is stored in DB
+- passwordHash is never returned to clients
+- raw session token is cryptographically random (32 bytes)
+- session token hashing uses SHA-256 for deterministic lookup
+
+Password hashing approach:
+
+- algorithm: argon2id
+- memoryCost: 65536 (64 MB)
+- timeCost: 3
+- parallelism: 4
+
+Session token approach:
+
+- raw token: 32 bytes (256 bits) cryptographically random, hex-encoded
+- token hash: SHA-256 of raw token, stored in DB
+- session expiry: 30 days
+
+The auth service layer does not implement HTTP endpoints yet. `/auth/register`, `/auth/login` and `/me` routes are deferred to a later task.
+
+---
+
 ## Server Authority
 
 The client sends intent. The server decides outcomes.
