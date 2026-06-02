@@ -95,7 +95,7 @@ Implement username/password registration, login, sessions and `/me`.
 
 No guest auth.
 
-Status: Auth domain service layer implemented at `apps/server/src/auth/`. Includes username/password registration and login logic, password hashing with argon2id, session token generation and hashing, username validation/normalization, display name validation, and safe auth response DTOs. HTTP endpoints (`/auth/register`, `/auth/login`, `/me`) are not implemented yet and are deferred to a later task.
+Status: Auth domain service layer implemented at `apps/server/src/auth/`. HTTP endpoints implemented at `apps/server/src/http/routes/auth.routes.ts` with Bearer token authentication middleware at `apps/server/src/http/middleware/authenticate.ts` and error mapping at `apps/server/src/http/errors/httpErrorMapper.ts`. Request validation uses zod. `passwordHash` and `tokenHash` are never returned. Cookies, refresh tokens, OAuth, Google login, email login and password reset are not implemented.
 
 ### Task 010A — Auth Registration Transaction Safety
 

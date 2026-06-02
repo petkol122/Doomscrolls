@@ -3,6 +3,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { ServerEnv } from "../config/env";
 import { createLoggerOptions } from "../config/logger";
 import { registerHealthRoutes } from "./routes/health.routes";
+import { registerAuthRoutes } from "./routes/auth.routes";
 
 interface CreateHttpServerOptions {
   readonly env: ServerEnv;
@@ -17,6 +18,7 @@ export async function createHttpServer({ env }: CreateHttpServerOptions): Promis
   });
 
   await app.register(registerHealthRoutes, { environment: env.NODE_ENV });
+  await app.register(registerAuthRoutes);
 
   return app;
 }

@@ -108,3 +108,15 @@ Risk: Partial user records could be created if a later step fails during registr
 Planned fix: Refactor repositories to accept a shared transaction client and wrap registration in a Prisma transaction.
 Status: Resolved in Task 010A — AuthService.register() now wraps user/profile/settings/session creation in a single Prisma $transaction. Repositories already accepted Prisma.TransactionClient. PrismaDatabaseClient type was updated to reflect the union.
 ```
+
+## Auth HTTP routes runtime test blocked by Node 19.x
+
+```text
+Date: 2026-06-02
+Area: Server / Auth HTTP routes
+Description: Auth HTTP routes (POST /auth/register, POST /auth/login, GET /me) are implemented and typecheck successfully, but cannot be manually verified at runtime because Fastify 5.x and Colyseus 0.17.x require Node.js 20+ (diagnostics.tracingChannel API and import assertions). The current local environment runs Node 19.x.
+Reason: Local development environment has not been standardized on a supported Node LTS version yet.
+Risk: Auth route behavior is verified by TypeScript compilation only, not by live HTTP requests against local Postgres/Redis.
+Planned fix: Standardize project Node version on a supported LTS (20.x or 22.x) using .nvmrc/Volta, then perform live HTTP verification of auth routes.
+Status: Open
+```

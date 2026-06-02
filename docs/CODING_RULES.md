@@ -81,7 +81,7 @@ Session token approach:
 - token hash: SHA-256 of raw token, stored in DB
 - session expiry: 30 days
 
-The auth service layer does not implement HTTP endpoints yet. `/auth/register`, `/auth/login` and `/me` routes are deferred to a later task.
+The auth service layer provides HTTP endpoints at `POST /auth/register`, `POST /auth/login` and `GET /me`. Auth routes use Bearer token authentication via the `Authorization: Bearer <token>` header. Cookies, refresh tokens, OAuth, Google login, email login and password reset are not implemented yet. Request validation uses zod. Auth error codes are mapped to safe HTTP responses via `apps/server/src/http/errors/httpErrorMapper.ts`. The `/me` endpoint uses reusable authentication middleware at `apps/server/src/http/middleware/authenticate.ts`.
 
 Registration is atomic: `AuthService.register()` creates User, UserProfile, UserSettings and Session inside a single Prisma `$transaction`. No partial account state should remain on failure. Services that create multiple related records in one logical operation must use `$transaction`.
 

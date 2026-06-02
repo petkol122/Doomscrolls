@@ -173,7 +173,9 @@ graceful SIGINT/SIGTERM shutdown
 
 The Colyseus shell intentionally registers no rooms. `TownRoom`, `CombatRoom`, room authentication, movement, combat, enemy spawning, loot and gameplay messages are deferred to later Core 0.1 tasks.
 
-The Prisma schema foundation exists, and the server validates `DATABASE_URL` so configuration is explicit. The current runtime still does not execute database queries on startup and does not implement auth endpoints, repository classes, room persistence, inventory logic, corpse recovery logic or gameplay business logic.
+The Prisma schema foundation exists, and the server validates `DATABASE_URL` so configuration is explicit. The current runtime still does not execute database queries on startup and does not implement repository classes, room persistence, inventory logic, corpse recovery logic or gameplay business logic.
+
+Auth HTTP endpoints (`POST /auth/register`, `POST /auth/login`, `GET /me`) are now registered in the Fastify app via `registerAuthRoutes`. Auth routes use request validation with zod, a reusable Bearer token authentication middleware and a centralized auth error-to-HTTP mapper. No frontend auth UI is implemented by the server.
 
 ---
 
@@ -278,7 +280,25 @@ The raw session token is generated before the transaction. Only `tokenHash` is s
 
 Login does not currently use a transaction; session creation and `lastSeenAt` update are sequential. This is acceptable for login because there is no risk of partial account state.
 
-The auth service layer does not implement HTTP endpoints yet. `/auth/register`, `/auth/login` and `/me` routes are deferred to a later task.
+The auth service layer provides HTTP endpoints via Fastify routes:
+
+```text
+POST /auth/register  - Create a new account (201 Created)
+POST /auth/login     - Login with credentials (200 OK)
+GET  /me             - Get authenticated account state (200 OK)
+```
+
+Auth routes use Bearer token authentication via the `Authorization: Bearer <token>` header. Cookies, refresh tokens, OAuth, Google login, email login and password reset are not implemented yet. `passwordHash` and `tokenHash` are never returned in API responses. The raw session token is only returned to the client after successful register or login.
+
+Auth HTTP route files:
+
+```text
+apps/server/src/http/routes/auth.routes.ts       - Route handlers for register, login, me
+apps/server/src/http/middleware/authenticate.ts   - Reusable Bearer token authentication
+apps/server/src/http/errors/httpErrorMapper.ts    - Auth error to HTTP status/response mapping
+```
+
+Request validation uses zod schemas defined in the route handlers. The `/me` endpoint uses the `authenticateRequest` middleware which extracts the Bearer token, calls `AuthService.getAccountStateFromToken`, and returns appropriate error responses for invalid/expired/revoked sessions.
 
 ---
 

@@ -171,7 +171,17 @@ SESSION_SECRET
 
 The server uses Fastify with configured CORS, validates environment variables on startup, validates the `@doomscrolls/content` registry on startup, checks Redis with `PING`, initializes a Colyseus shell with no rooms registered, and exposes `GET /health` with a safe non-secret payload. Redis is required for startup. `DATABASE_URL` is used by Prisma CLI tooling and validated by the server config, but the server does not open a PostgreSQL connection or run database queries during startup yet.
 
-The server currently does not implement auth endpoints, profile routes, character routes, gameplay rooms, combat, loot, enemy spawning, fake users, fake characters or fake inventory.
+The server currently does not implement profile routes, character routes, gameplay rooms, combat, loot, enemy spawning, fake users, fake characters or fake inventory.
+
+Auth HTTP endpoints are now implemented:
+
+```text
+POST /auth/register  - Create a new account (201 Created)
+POST /auth/login     - Login with credentials (200 OK)
+GET  /me             - Get authenticated account state (200 OK)
+```
+
+Auth routes use Bearer token authentication via the `Authorization` header. Cookies, refresh tokens, OAuth, Google login, email login and password reset are not implemented yet. `passwordHash` and `tokenHash` are never returned in API responses. The raw session token is only returned to the client after successful register or login.
 
 The auth domain service layer exists at `apps/server/src/auth/` and provides:
 
@@ -188,7 +198,7 @@ atomic registration via Prisma $transaction
 
 Registration is atomic: User, UserProfile, UserSettings and Session are created inside a single Prisma `$transaction`. If any step fails, no partial account state remains. The raw session token is returned only on success; it is never stored in the database.
 
-The auth service layer does not implement HTTP endpoints yet. `/auth/register`, `/auth/login` and `/me` routes are deferred to a later task.
+The auth service layer provides HTTP endpoints at `POST /auth/register`, `POST /auth/login` and `GET /me`, registered in `apps/server/src/http/routes/auth.routes.ts` with reusable authentication middleware at `apps/server/src/http/middleware/authenticate.ts`. Request validation uses zod. Error mapping to safe HTTP responses uses `apps/server/src/http/errors/httpErrorMapper.ts`.
 
 Generate Prisma Client for the server:
 
