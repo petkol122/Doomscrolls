@@ -169,9 +169,29 @@ DATABASE_URL
 SESSION_SECRET
 ```
 
-The server uses Fastify with configured CORS, validates environment variables on startup, validates the `@doomscrolls/content` registry on startup, checks Redis with `PING`, initializes a Colyseus shell with no rooms registered, and exposes `GET /health` with a safe non-secret payload. Redis is required for startup. `DATABASE_URL` is validated for future Prisma work but no Prisma client, database schema, migrations or database connection are implemented yet.
+The server uses Fastify with configured CORS, validates environment variables on startup, validates the `@doomscrolls/content` registry on startup, checks Redis with `PING`, initializes a Colyseus shell with no rooms registered, and exposes `GET /health` with a safe non-secret payload. Redis is required for startup. `DATABASE_URL` is used by Prisma CLI tooling and validated by the server config, but the server does not open a PostgreSQL connection or run database queries during startup yet.
 
 The server currently does not implement auth endpoints, profile routes, character routes, gameplay rooms, combat, loot, enemy spawning, fake users, fake characters or fake inventory.
+
+Generate Prisma Client for the server:
+
+```bash
+pnpm --filter @doomscrolls/server prisma:generate
+```
+
+Create a development migration after local PostgreSQL is running:
+
+```bash
+pnpm --filter @doomscrolls/server prisma:migrate:dev -- --name init_core_0_1
+```
+
+Apply committed migrations in staging/production:
+
+```bash
+pnpm --filter @doomscrolls/server prisma:migrate:deploy
+```
+
+The Core 0.1 Prisma schema now lives at `apps/server/prisma/schema.prisma` and defines the database foundation for users, sessions, profiles, functional settings, characters, stats, passives, inventory, item instances and corpses. `apps/server/src/persistence/prisma.ts` provides a minimal Prisma Client bootstrap only. Auth endpoints, repository classes and gameplay/database business logic are intentionally not implemented yet.
 
 Run local PostgreSQL and Redis infrastructure:
 
@@ -182,7 +202,7 @@ docker compose -f infra/compose/docker-compose.local.yml --env-file infra/compos
 docker compose -f infra/compose/docker-compose.local.yml --env-file infra/compose/.env down
 ```
 
-See `docs/LOCAL_INFRASTRUCTURE.md` for service details, logs commands and local-only scope boundaries. The local Compose stack provides PostgreSQL and Redis only; it does not add Prisma schema, auth, server rooms, gameplay systems or production deployment.
+See `docs/LOCAL_INFRASTRUCTURE.md` for service details, logs commands and local-only scope boundaries. The local Compose stack provides PostgreSQL and Redis only; it does not add auth, server rooms, gameplay systems or production deployment.
 
 ---
 

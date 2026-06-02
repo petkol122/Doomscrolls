@@ -1,0 +1,210 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SessionStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum ItemLocationType {
+  ROOM_LOOT
+  INVENTORY
+  EQUIPMENT
+  CORPSE_BOUND
+  DELETED
+}
+
+enum CorpseStatus {
+  ACTIVE
+  RECOVERED
+}
+
+model User {
+  id                 String         @id @default(uuid())
+  username           String
+  usernameNormalized String         @unique
+  passwordHash       String
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  lastSeenAt         DateTime?
+
+  profile    UserProfile?
+  settings   UserSettings?
+  sessions   Session[]
+  characters Character[]
+
+  @@index([usernameNormalized])
+}
+
+model Session {
+  id        String        @id @default(uuid())
+  userId    String
+  tokenHash String        @unique
+  status    SessionStatus
+  createdAt DateTime      @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tokenHash])
+  @@index([userId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model UserProfile {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  displayName String
+  avatarKey   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserSettings {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  masterVolume   Float    @default(0.8)
+  musicVolume    Float    @default(0.6)
+  sfxVolume      Float    @default(0.8)
+  showFpsCounter Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Character {
+  id                      String   @id @default(uuid())
+  userId                  String
+  characterName           String
+  characterNameNormalized String
+  originId                String
+  classId                 String
+  level                   Int      @default(1)
+  xp                      Int      @default(0)
+  currentZoneId           String
+  currentHp               Int
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  lastPlayedAt            DateTime?
+
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stats     CharacterStats?
+  passives  CharacterPassive[]
+  inventory Inventory?
+  items     ItemInstance[]
+  corpses   Corpse[]
+
+  @@unique([userId, characterNameNormalized])
+  @@index([userId])
+  @@index([originId])
+  @@index([classId])
+  @@index([currentZoneId])
+}
+
+model CharacterStats {
+  id               String   @id @default(uuid())
+  characterId      String   @unique
+  power            Int
+  speed            Int
+  mind             Int
+  toughness        Int
+  maxHp            Int
+  damage           Int
+  armor            Int
+  moveSpeed        Float
+  attackCooldownMs Int
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+}
+
+model CharacterPassive {
+  id          String   @id @default(uuid())
+  characterId String
+  passiveId   String
+  sourceType  String
+  sourceId    String?
+  createdAt   DateTime @default(now())
+
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, passiveId, sourceType, sourceId])
+  @@index([characterId])
+  @@index([passiveId])
+}
+
+model Inventory {
+  id          String   @id @default(uuid())
+  characterId String   @unique
+  pageCount   Int      @default(1)
+  gridWidth   Int      @default(10)
+  gridHeight  Int      @default(6)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+}
+
+model ItemInstance {
+  id                String           @id @default(uuid())
+  definitionId      String
+  ownerCharacterId  String?
+  locationType      ItemLocationType
+  inventoryPage     Int?
+  inventoryX        Int?
+  inventoryY        Int?
+  equipmentSlot     String?
+  roomId            String?
+  zoneId            String?
+  positionX         Float?
+  positionY         Float?
+  corpseId          String?
+  quantity          Int              @default(1)
+  durabilityCurrent Int?
+  durabilityMax     Int?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  ownerCharacter Character? @relation(fields: [ownerCharacterId], references: [id], onDelete: SetNull)
+  corpse         Corpse?    @relation(fields: [corpseId], references: [id], onDelete: SetNull)
+
+  @@index([ownerCharacterId])
+  @@index([definitionId])
+  @@index([locationType])
+  @@index([roomId])
+  @@index([zoneId])
+  @@index([corpseId])
+}
+
+model Corpse {
+  id             String       @id @default(uuid())
+  characterId    String
+  zoneId         String
+  roomId         String?
+  positionX      Float
+  positionY      Float
+  status         CorpseStatus @default(ACTIVE)
+  forcedRecovery Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  recoveredAt    DateTime?
+
+  character Character      @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  items     ItemInstance[]
+
+  @@index([characterId])
+  @@index([status])
+  @@index([zoneId])
+}

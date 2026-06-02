@@ -78,15 +78,44 @@ Migrations location:
 apps/server/prisma/migrations/
 ```
 
+Core 0.1 schema foundation:
+
+```text
+User
+Session
+UserProfile
+UserSettings
+Character
+CharacterStats
+CharacterPassive
+Inventory
+ItemInstance
+Corpse
+```
+
+The schema stores content references such as origins, classes, passives, zones, equipment slots and item definitions as content IDs. These are not database relations because gameplay content remains data-driven in `packages/content`.
+
 Rules:
 
 - all schema changes require Prisma migration files
 - migrations must be committed
-- use `migrate dev` during development
-- use `migrate deploy` in staging/production
+- use `pnpm --filter @doomscrolls/server prisma:migrate:dev` during development
+- use `pnpm --filter @doomscrolls/server prisma:migrate:deploy` in staging/production
 - do not manually edit production schema
 - do not use raw SQL unless explicitly justified
 - keep Prisma usage behind repositories/services where practical
+- do not return `passwordHash` to clients in future auth/profile work
+
+Current Prisma scripts:
+
+```text
+pnpm --filter @doomscrolls/server prisma:generate
+pnpm --filter @doomscrolls/server prisma:migrate:dev
+pnpm --filter @doomscrolls/server prisma:migrate:deploy
+pnpm --filter @doomscrolls/server prisma:studio
+```
+
+`apps/server/src/persistence/prisma.ts` provides a minimal Prisma Client bootstrap. Repository classes, auth endpoints and persistence business logic are deferred to later Core 0.1 tasks.
 
 Local development infrastructure for PostgreSQL is defined in:
 
@@ -94,7 +123,7 @@ Local development infrastructure for PostgreSQL is defined in:
 infra/compose/docker-compose.local.yml
 ```
 
-The local `postgres` service uses `postgres:16-alpine`, a named Docker volume and a healthcheck. The Compose stack is infrastructure only; it does not define Prisma schema, migrations or database models.
+The local `postgres` service uses `postgres:16-alpine`, a named Docker volume and a healthcheck. Development migrations should be generated against this local PostgreSQL service with Prisma Migrate; do not use `prisma db push` as the committed workflow.
 
 ---
 
@@ -134,7 +163,7 @@ graceful SIGINT/SIGTERM shutdown
 
 The Colyseus shell intentionally registers no rooms. `TownRoom`, `CombatRoom`, room authentication, movement, combat, enemy spawning, loot and gameplay messages are deferred to later Core 0.1 tasks.
 
-PostgreSQL is still deferred to the Prisma task. The server validates `DATABASE_URL` so configuration is explicit, but it does not import Prisma, open PostgreSQL connections, define database models, run migrations or implement persistence yet.
+The Prisma schema foundation exists, and the server validates `DATABASE_URL` so configuration is explicit. The current runtime still does not execute database queries on startup and does not implement auth endpoints, repository classes, room persistence, inventory logic, corpse recovery logic or gameplay business logic.
 
 ---
 

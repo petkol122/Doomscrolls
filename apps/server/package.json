@@ -9,15 +9,16 @@
     "typecheck": "tsc --noEmit",
     "lint": "echo server lint placeholder",
     "test": "tsc --noEmit",
-    "prisma:generate": "echo prisma generate placeholder",
-    "prisma:migrate:dev": "echo prisma migrate dev placeholder",
-    "prisma:migrate:deploy": "echo prisma migrate deploy placeholder",
-    "prisma:studio": "echo prisma studio placeholder"
+    "prisma:generate": "prisma generate --schema=prisma/schema.prisma",
+    "prisma:migrate:dev": "prisma migrate dev --schema=prisma/schema.prisma",
+    "prisma:migrate:deploy": "prisma migrate deploy --schema=prisma/schema.prisma",
+    "prisma:studio": "prisma studio --schema=prisma/schema.prisma"
   },
   "dependencies": {
     "@doomscrolls/content": "workspace:*",
     "@doomscrolls/shared": "workspace:*",
     "@fastify/cors": "^11.2.0",
+    "@prisma/client": "^6.19.3",
     "colyseus": "^0.17.10",
     "dotenv": "^17.4.2",
     "fastify": "^5.8.5",
@@ -26,6 +27,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
+    "prisma": "^6.19.0",
     "tsx": "^4.22.4"
   }
 }

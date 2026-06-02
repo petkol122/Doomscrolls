@@ -81,6 +81,8 @@ ItemInstance
 Corpse
 ```
 
+Status: implemented as the Prisma schema/tooling foundation in `apps/server/prisma/schema.prisma`, with Prisma Client bootstrap in `apps/server/src/persistence/prisma.ts` and server Prisma scripts for generate, development migrations, deploy migrations and Studio. The first real Prisma migration was generated and applied against local PostgreSQL as `20260602144151_init_core_0_1`. Auth endpoints, repositories and gameplay persistence/business logic remain intentionally deferred. Migration files must be generated only when PostgreSQL is reachable; do not fake migrations.
+
 ### Task 009 — Repository Layer
 
 Add repository classes around Prisma Client.

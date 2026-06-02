@@ -20,6 +20,18 @@ Status:
 
 Known tech debt is listed below.
 
+## Prisma version pinned below latest major
+
+```text
+Date: 2026-06-02
+Area: Database tooling
+Description: apps/server uses Prisma 6.x because Prisma 7.x requires Node.js 20.19+, 22.12+ or 24.0+, while the current local environment is still on Node 19.x.
+Reason: Keep the Prisma schema foundation working with the current project machine without changing the Node runtime baseline inside this task.
+Risk: The project may lag behind the latest Prisma major until Node is standardized on a supported LTS version.
+Planned fix: Standardize the repository on a supported Node LTS version, then evaluate upgrading Prisma to the latest major in a dedicated tooling task.
+Status: Open
+```
+
 ## Server lint tooling
 
 ```text

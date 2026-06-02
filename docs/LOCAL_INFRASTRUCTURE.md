@@ -4,7 +4,7 @@
 
 This document describes the local-only Docker Compose infrastructure for Doomscrolls development.
 
-Task 005 provides PostgreSQL and Redis for future server, Prisma, auth, persistence and room work. It does not implement Prisma schema, database models, auth endpoints, server rooms, gameplay systems or production deployment.
+Task 005 provides PostgreSQL and Redis for server, Prisma, auth, persistence and room work. The local infrastructure itself does not implement auth endpoints, server rooms, gameplay systems or production deployment.
 
 ---
 
@@ -129,7 +129,7 @@ pnpm --filter @doomscrolls/server dev
 curl http://localhost:2567/health
 ```
 
-`DATABASE_URL` is required as configuration for upcoming Prisma work, but the current server foundation does not connect to PostgreSQL and does not define Prisma schema or migrations.
+`DATABASE_URL` is required for Prisma CLI commands and future runtime persistence. The Prisma schema foundation exists in `apps/server/prisma/schema.prisma`, but the current server runtime does not connect to PostgreSQL or run database queries on startup.
 
 ---
 
@@ -139,8 +139,6 @@ This infrastructure is intentionally local-only.
 
 It does not add:
 
-- Prisma schema or migrations
-- database models
 - auth endpoints
 - auth/profile/character Fastify routes
 - Colyseus gameplay rooms

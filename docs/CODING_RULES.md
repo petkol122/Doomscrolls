@@ -34,10 +34,14 @@ Rules:
 
 - schema changes require Prisma migrations
 - migrations must be committed
+- use `pnpm --filter @doomscrolls/server prisma:generate` after schema changes
+- use `pnpm --filter @doomscrolls/server prisma:migrate:dev` for development migrations
+- use `pnpm --filter @doomscrolls/server prisma:migrate:deploy` for staging/production migration deployment
 - normal application logic uses Prisma repositories/services
 - do not introduce another ORM
 - do not use raw SQL unless explicitly justified
 - do not use `prisma db push` as the normal committed workflow
+- do not log `DATABASE_URL` or return sensitive fields such as `passwordHash`
 
 ---
 
