@@ -59,6 +59,12 @@ level-up
 quest completion
 ```
 
+### Server foundation scope
+
+Server foundation work may add Fastify routes for infrastructure observability such as `GET /health`, environment validation, logger configuration, Redis checks and Colyseus infrastructure. It must not add fake auth, fake account state, fake characters, fake inventory, fake rooms or gameplay outcomes to make the client appear functional.
+
+Production CORS must use configured origins rather than arbitrary wildcards. Logs must not include secrets such as session secrets, database URLs or Redis URLs.
+
 ---
 
 ## Testing
@@ -108,6 +114,20 @@ testing commands
 ```
 
 Known shortcuts must be recorded in `docs/TECH_DEBT.md`.
+
+---
+
+## Local Infrastructure
+
+Local Docker Compose infrastructure belongs under `infra/compose`.
+
+Rules:
+
+- commit `.env.example` files with safe local placeholders only
+- never commit real secrets or local `.env` files
+- local PostgreSQL and Redis services must include healthchecks
+- local infrastructure must not include fake server/client containers
+- production deployment and cloud infrastructure require separate explicit tasks
 
 ---
 

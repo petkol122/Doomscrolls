@@ -150,6 +150,40 @@ Doomscrolls client booted
 
 No account UI, character selection, inventory, combat, map, player or enemy simulation exists yet. If `VITE_API_URL` is configured, the client performs a real `/health` request for observability only; it does not pretend login or gameplay works. `VITE_WS_URL` is safely read for future realtime work but is not used yet.
 
+Run the Node.js server foundation during local development:
+
+```bash
+cp .env.example .env
+pnpm --filter @doomscrolls/server dev
+curl http://localhost:2567/health
+```
+
+Required server environment variables:
+
+```text
+NODE_ENV
+SERVER_PORT
+CLIENT_ORIGIN
+REDIS_URL
+DATABASE_URL
+SESSION_SECRET
+```
+
+The server uses Fastify with configured CORS, validates environment variables on startup, validates the `@doomscrolls/content` registry on startup, checks Redis with `PING`, initializes a Colyseus shell with no rooms registered, and exposes `GET /health` with a safe non-secret payload. Redis is required for startup. `DATABASE_URL` is validated for future Prisma work but no Prisma client, database schema, migrations or database connection are implemented yet.
+
+The server currently does not implement auth endpoints, profile routes, character routes, gameplay rooms, combat, loot, enemy spawning, fake users, fake characters or fake inventory.
+
+Run local PostgreSQL and Redis infrastructure:
+
+```bash
+cp infra/compose/.env.example infra/compose/.env
+docker compose -f infra/compose/docker-compose.local.yml --env-file infra/compose/.env up -d
+docker compose -f infra/compose/docker-compose.local.yml --env-file infra/compose/.env ps
+docker compose -f infra/compose/docker-compose.local.yml --env-file infra/compose/.env down
+```
+
+See `docs/LOCAL_INFRASTRUCTURE.md` for service details, logs commands and local-only scope boundaries. The local Compose stack provides PostgreSQL and Redis only; it does not add Prisma schema, auth, server rooms, gameplay systems or production deployment.
+
 ---
 
 ## Repository Structure
@@ -185,6 +219,7 @@ docs/ARCHITECTURE.md
 docs/GAME_DESIGN.md
 docs/BACKLOG_CORE_0_1.md
 docs/CODING_RULES.md
+docs/LOCAL_INFRASTRUCTURE.md
 ```
 
 ---
@@ -203,6 +238,7 @@ shared types
 localization
 content registry
 local infrastructure
+server foundation
 Prisma schema
 auth
 profile

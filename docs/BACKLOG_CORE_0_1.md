@@ -48,9 +48,23 @@ blackwire_scrap
 
 ### Task 005 — Local Infrastructure
 
-Add Docker Compose for PostgreSQL, Redis, server and client.
+Add Docker Compose for PostgreSQL and Redis local development services.
 
-### Task 006 — Prisma Schema and Migration
+Status: implemented as local-only Docker Compose in `infra/compose/docker-compose.local.yml` with `postgres:16-alpine`, `redis:7-alpine`, healthchecks and `infra/compose/.env.example`. This task intentionally does not add server/client containers, Prisma schema, database models, auth endpoints, gameplay or server rooms.
+
+### Task 006 — Server Foundation
+
+Add Fastify + Colyseus server shell, health endpoint, env validation, structured logger, content validation on startup, Redis startup check and graceful shutdown.
+
+Status: implemented in `apps/server` with no auth endpoints, no Prisma/database schema, no database connection, no gameplay rooms, no fake rooms and no gameplay systems. Redis is required for runtime startup.
+
+### Task 007 — Client Foundation
+
+Add Phaser/Vite client foundation, auth screens, profile/settings screen and character select/create screen.
+
+Status: completed early and accepted as the current Vite + Phaser client shell. It does not implement account UI, character selection, inventory, combat, map, player or enemy simulation.
+
+### Task 008 — Prisma Schema and Migration
 
 Add Prisma schema and first migration for:
 
@@ -67,21 +81,17 @@ ItemInstance
 Corpse
 ```
 
-### Task 007 — Repository Layer
+### Task 009 — Repository Layer
 
 Add repository classes around Prisma Client.
 
-### Task 008 — Server Foundation
-
-Add Fastify + Colyseus server, health endpoint, env validation, logger, DB/Redis connections.
-
-### Task 009 — Auth
+### Task 010 — Auth
 
 Implement username/password registration, login, sessions and `/me`.
 
 No guest auth.
 
-### Task 010 — Profile and Settings
+### Task 011 — Profile and Settings
 
 Implement public profile and functional settings.
 
@@ -94,13 +104,9 @@ sfxVolume
 showFpsCounter
 ```
 
-### Task 011 — Character Creation
+### Task 012 — Character Creation
 
 Implement character creation, character name validation, origin/class validation, starting stats/passives, inventory/equipment initialization.
-
-### Task 012 — Client Foundation
-
-Add Phaser/Vite client foundation, auth screens, profile/settings screen and character select/create screen.
 
 ### Task 013 — Room Authentication
 

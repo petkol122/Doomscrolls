@@ -88,6 +88,54 @@ Rules:
 - do not use raw SQL unless explicitly justified
 - keep Prisma usage behind repositories/services where practical
 
+Local development infrastructure for PostgreSQL is defined in:
+
+```text
+infra/compose/docker-compose.local.yml
+```
+
+The local `postgres` service uses `postgres:16-alpine`, a named Docker volume and a healthcheck. The Compose stack is infrastructure only; it does not define Prisma schema, migrations or database models.
+
+---
+
+## Redis Architecture
+
+Redis is planned for presence, cache and realtime coordination support.
+
+Local development infrastructure for Redis is defined in:
+
+```text
+infra/compose/docker-compose.local.yml
+```
+
+The local `redis` service uses `redis:7-alpine` and a `redis-cli ping` healthcheck. Redis has no local volume by default because PostgreSQL remains the persistent source of truth for Core 0.1 account, character, inventory and progression data.
+
+The first server foundation requires `REDIS_URL` and performs a Redis connect + `PING` check during startup. Startup fails if Redis is unavailable because Redis is required local infrastructure for realtime/cache/presence foundations.
+
+---
+
+## Server Foundation
+
+The current server foundation lives in `apps/server` and provides:
+
+```text
+Fastify HTTP server
+configured CORS from CLIENT_ORIGIN
+structured Fastify logger with secret redaction
+environment validation with zod
+GET /health
+content registry validation on startup
+Redis connection check on startup
+Colyseus server shell attached to the HTTP server
+graceful SIGINT/SIGTERM shutdown
+```
+
+`GET /health` returns only a safe service payload and does not expose secrets or internal stack traces.
+
+The Colyseus shell intentionally registers no rooms. `TownRoom`, `CombatRoom`, room authentication, movement, combat, enemy spawning, loot and gameplay messages are deferred to later Core 0.1 tasks.
+
+PostgreSQL is still deferred to the Prisma task. The server validates `DATABASE_URL` so configuration is explicit, but it does not import Prisma, open PostgreSQL connections, define database models, run migrations or implement persistence yet.
+
 ---
 
 ## Core 0.1 Runtime Scope

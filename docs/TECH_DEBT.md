@@ -20,6 +20,30 @@ Status:
 
 Known tech debt is listed below.
 
+## Server lint tooling
+
+```text
+Date: 2026-06-02
+Area: Server tooling
+Description: apps/server has a real TypeScript typecheck/build/test command, but its lint script remains a placeholder because the repository-wide ESLint configuration is still not implemented.
+Reason: Keep server foundation focused on runtime infrastructure without introducing partial lint configuration that diverges from the monorepo.
+Risk: Server style issues are currently caught by TypeScript and review rather than ESLint automation.
+Planned fix: Add shared ESLint configuration and replace package placeholder lint scripts in a dedicated tooling task.
+Status: Open
+```
+
+## Colyseus peer dependency warning
+
+```text
+Date: 2026-06-02
+Area: Server realtime tooling
+Description: Installing Colyseus 0.17.x reports an unmet optional peer warning for vite >=6 while the client is pinned to Vite 5 due the local Node version constraint.
+Reason: The server uses Colyseus runtime APIs only; the warning comes from Colyseus bundled tooling/playground integration rather than current server gameplay code.
+Risk: Future Colyseus tooling integrations may require resolving the Vite version mismatch.
+Planned fix: Standardize on a supported Node LTS version, revisit the Vite upgrade, and re-check Colyseus peer dependencies when room tooling is introduced.
+Status: Open
+```
+
 ## Localization test tooling
 
 ```text
