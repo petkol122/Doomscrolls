@@ -183,7 +183,10 @@ session token hashing (SHA-256 for DB storage)
 username validation and normalization
 display name validation
 safe auth response DTOs (no passwordHash exposure)
+atomic registration via Prisma $transaction
 ```
+
+Registration is atomic: User, UserProfile, UserSettings and Session are created inside a single Prisma `$transaction`. If any step fails, no partial account state remains. The raw session token is returned only on success; it is never stored in the database.
 
 The auth service layer does not implement HTTP endpoints yet. `/auth/register`, `/auth/login` and `/me` routes are deferred to a later task.
 

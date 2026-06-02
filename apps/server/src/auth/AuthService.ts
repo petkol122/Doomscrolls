@@ -4,8 +4,9 @@ import type {
   SessionToken,
   UserId,
 } from "@doomscrolls/shared";
-import type { Prisma, PrismaClient, User as PrismaUser, UserProfile as PrismaUserProfile, UserSettings as PrismaUserSettings, Session as PrismaSession } from "@prisma/client";
+import { Prisma, type PrismaClient, type User as PrismaUser, type UserProfile as PrismaUserProfile, type UserSettings as PrismaUserSettings, type Session as PrismaSession } from "@prisma/client";
 import { SessionStatus } from "@prisma/client";
+import { prisma as defaultPrismaClient } from "../persistence/prisma";
 import { UserRepository } from "../persistence/repositories/UserRepository";
 import { SessionRepository } from "../persistence/repositories/SessionRepository";
 import { ProfileRepository } from "../persistence/repositories/ProfileRepository";
@@ -30,6 +31,19 @@ import type {
 import { DEFAULT_AUTH_CONFIG } from "./AuthTypes";
 
 type AuthDbClient = PrismaClient | Prisma.TransactionClient;
+
+/**
+ * Type guard to check if an error is a Prisma unique constraint violation (P2002).
+ * Used to map race-condition unique violations to safe auth errors.
+ */
+function isPrismaUniqueConstraintError(
+  error: unknown,
+): error is Prisma.PrismaClientKnownRequestError {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002"
+  );
+}
 
 /**
  * Authentication service for Core 0.1.
@@ -64,12 +78,14 @@ export class AuthService {
 
   /**
    * Register a new user account.
-   * Creates user + profile + settings + session.
+   * Creates user + profile + settings + session inside a single Prisma transaction.
+   * If any step fails, no partial account state remains.
    * Returns safe auth response DTO.
-   * 
-   * TODO: Implement proper transaction support when repositories are refactored
-   * to accept a shared transaction client. Currently, if a later step fails,
-   * earlier records may remain orphaned.
+   *
+   * Validation and password hashing happen outside the transaction
+   * to avoid holding a database connection during expensive operations.
+   * The username uniqueness pre-check is an optimization; the database
+   * unique constraint on usernameNormalized is the authoritative guard.
    */
   public async register(input: RegisterInput): Promise<SafeAuthResponse> {
     // 1. Validate username
@@ -90,45 +106,79 @@ export class AuthService {
     // 4. Validate displayName
     const displayName = this.validateAndTrimDisplayName(input.displayName);
 
-    // 5. Check username uniqueness
+    // 5. Pre-check username uniqueness (optimization; DB constraint is authoritative)
     const existingUser = await this.userRepository.findByUsernameNormalized(usernameNormalized);
     if (existingUser) {
       throw new AuthError(AuthErrorCode.USERNAME_TAKEN);
     }
 
-    // 6. Hash password
+    // 6. Hash password (expensive; done outside transaction)
     const passwordHash = await this.passwordService.hashPassword(input.password);
 
-    // 7. Create user
-    const user = await this.userRepository.createUser({
-      username: input.username,
-      usernameNormalized,
-      passwordHash,
-    });
-
-    // 8. Create profile
-    const avatarKey = input.avatarKey ?? this.config.defaultAvatarKey;
-    const profile = await this.profileRepository.createProfile({
-      userId: user.id,
-      displayName,
-      avatarKey,
-    });
-
-    // 9. Create default settings
-    const settings = await this.settingsRepository.createDefaultSettings(user.id);
-
-    // 10. Create session token
+    // 7. Generate session token material before transaction
+    //    Raw token is returned to client only if the transaction succeeds.
     const rawToken = this.sessionTokenService.createRawSessionToken();
     const tokenHash = this.sessionTokenService.hashSessionToken(rawToken);
     const expiresAt = this.sessionTokenService.calculateSessionExpiry(this.config.sessionExpiryDays);
 
-    const session = await this.sessionRepository.createSession({
-      userId: user.id,
-      tokenHash,
-      expiresAt,
-    });
+    // 8. Create user + profile + settings + session in one atomic transaction
+    const avatarKey = input.avatarKey ?? this.config.defaultAvatarKey;
 
-    // 11. Return safe auth response DTO (no characters yet for new user)
+    let user: PrismaUser;
+    let profile: PrismaUserProfile;
+    let settings: PrismaUserSettings;
+    let session: PrismaSession;
+
+    try {
+      ({ user, profile, settings, session } = await defaultPrismaClient.$transaction(
+        async (tx) => {
+          const txUserRepo = new UserRepository(tx);
+          const txProfileRepo = new ProfileRepository(tx);
+          const txSettingsRepo = new SettingsRepository(tx);
+          const txSessionRepo = new SessionRepository(tx);
+
+          const txUser = await txUserRepo.createUser({
+            username: input.username,
+            usernameNormalized,
+            passwordHash,
+          });
+
+          const txProfile = await txProfileRepo.createProfile({
+            userId: txUser.id,
+            displayName,
+            avatarKey,
+          });
+
+          const txSettings = await txSettingsRepo.createDefaultSettings(txUser.id);
+
+          const txSession = await txSessionRepo.createSession({
+            userId: txUser.id,
+            tokenHash,
+            expiresAt,
+          });
+
+          return {
+            user: txUser,
+            profile: txProfile,
+            settings: txSettings,
+            session: txSession,
+          };
+        },
+      ));
+    } catch (error: unknown) {
+      // Map Prisma unique constraint violation on usernameNormalized to safe error
+      if (isPrismaUniqueConstraintError(error)) {
+        throw new AuthError(AuthErrorCode.USERNAME_TAKEN);
+      }
+      // Re-throw AuthError instances directly
+      if (error instanceof AuthError) {
+        throw error;
+      }
+      throw new AuthError(AuthErrorCode.INTERNAL_ERROR);
+    }
+
+    // 9. Return safe auth response DTO (no characters yet for new user)
+    //    Raw token is returned to the client only after successful transaction.
     return this.buildSafeAuthResponse(user, profile, settings, session, rawToken, []);
   }
 

@@ -125,7 +125,7 @@ pnpm --filter @doomscrolls/server prisma:migrate:deploy
 pnpm --filter @doomscrolls/server prisma:studio
 ```
 
-`apps/server/src/persistence/prisma.ts` provides a minimal Prisma Client bootstrap and exports the shared Prisma Client instance. It avoids logging secrets such as `DATABASE_URL`; graceful disconnect/shutdown integration can be expanded later when runtime database usage is wired into services.
+`apps/server/src/persistence/prisma.ts` provides a minimal Prisma Client bootstrap, exports the shared Prisma Client instance, and exports the `PrismaDatabaseClient` type (`PrismaClient | Prisma.TransactionClient`). Repositories accept either a full `PrismaClient` or a transaction-scoped `Prisma.TransactionClient`, enabling services to wrap multiple repository calls inside `prisma.$transaction` for atomicity. It avoids logging secrets such as `DATABASE_URL`; graceful disconnect/shutdown integration can be expanded later when runtime database usage is wired into services.
 
 Local development infrastructure for PostgreSQL is defined in:
 
@@ -269,6 +269,14 @@ raw token: 32 bytes (256 bits) cryptographically random, hex-encoded
 token hash: SHA-256 of raw token, stored in DB
 session expiry: 30 days
 ```
+
+### Transaction safety
+
+Registration (`AuthService.register()`) creates User, UserProfile, UserSettings and Session records inside a single Prisma `$transaction`. If any step fails, no partial account state remains. Validation and password hashing happen outside the transaction to avoid holding a database connection during expensive operations. The username uniqueness pre-check is an optimization; the database unique constraint on `usernameNormalized` is the authoritative guard. Prisma unique constraint violations (P2002) are caught and mapped to a safe `USERNAME_TAKEN` error.
+
+The raw session token is generated before the transaction. Only `tokenHash` is stored inside the transaction. The raw token is returned to the caller only if the transaction succeeds. If the transaction fails, the raw token is never returned.
+
+Login does not currently use a transaction; session creation and `lastSeenAt` update are sequential. This is acceptable for login because there is no risk of partial account state.
 
 The auth service layer does not implement HTTP endpoints yet. `/auth/register`, `/auth/login` and `/me` routes are deferred to a later task.
 

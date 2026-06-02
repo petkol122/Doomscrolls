@@ -97,6 +97,12 @@ No guest auth.
 
 Status: Auth domain service layer implemented at `apps/server/src/auth/`. Includes username/password registration and login logic, password hashing with argon2id, session token generation and hashing, username validation/normalization, display name validation, and safe auth response DTOs. HTTP endpoints (`/auth/register`, `/auth/login`, `/me`) are not implemented yet and are deferred to a later task.
 
+### Task 010A — Auth Registration Transaction Safety
+
+Make registration atomic. User, UserProfile, UserSettings and Session must be created inside a single Prisma transaction so no partial account state remains on failure.
+
+Status: Resolved. `AuthService.register()` now creates user/profile/settings/session inside `prisma.$transaction`. Repositories already accepted `Prisma.TransactionClient`. The shared `PrismaDatabaseClient` type was updated to include `Prisma.TransactionClient`. Raw session token is generated before the transaction and returned only on success. HTTP endpoints, login transaction safety, frontend auth UI and gameplay remain deferred.
+
 ### Task 011 — Profile and Settings
 
 Implement public profile and functional settings.

@@ -106,5 +106,5 @@ Description: AuthService.register() creates user + profile + settings + session 
 Reason: Current repositories do not support a shared transaction client. Implementing transaction support requires refactoring repositories to accept a transaction client parameter.
 Risk: Partial user records could be created if a later step fails during registration.
 Planned fix: Refactor repositories to accept a shared transaction client and wrap registration in a Prisma transaction.
-Status: Open
+Status: Resolved in Task 010A — AuthService.register() now wraps user/profile/settings/session creation in a single Prisma $transaction. Repositories already accepted Prisma.TransactionClient. PrismaDatabaseClient type was updated to reflect the union.
 ```
