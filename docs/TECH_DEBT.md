@@ -55,3 +55,8 @@ Risk: Path mappings may need to be consolidated into the root tsconfig when more
 Planned fix: Move shared workspace path aliases to tsconfig.base.json or another central project reference setup once the monorepo build strategy matures.
 Status: Open
 ```
+
+Area: Client tooling
+Description: Vite is pinned to ^5.4.21 because local machine uses Node 19.4.0.
+Risk: Project may lag behind current Vite versions and CI/runtime may diverge.
+Planned fix: Standardize project Node version on an LTS release using .nvmrc/Volta, then revisit Vite upgrade.

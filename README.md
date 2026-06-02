@@ -136,6 +136,20 @@ pnpm build
 
 Exact commands may evolve as the repository is implemented. If commands change, update this README.
 
+Run the browser client during local development:
+
+```bash
+pnpm --filter @doomscrolls/client dev
+```
+
+The client is a Vite + Phaser foundation. It boots `BootScene`, `PreloadScene` and `ShellScene`, then displays only:
+
+```text
+Doomscrolls client booted
+```
+
+No account UI, character selection, inventory, combat, map, player or enemy simulation exists yet. If `VITE_API_URL` is configured, the client performs a real `/health` request for observability only; it does not pretend login or gameplay works. `VITE_WS_URL` is safely read for future realtime work but is not used yet.
+
 ---
 
 ## Repository Structure
