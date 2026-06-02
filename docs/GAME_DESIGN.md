@@ -90,6 +90,12 @@ unexplained phenomena
 - First Hub: The Nightmarket
 - First Combat Zone: Blackwire Sewers
 
+These locked Core 0.1 definitions are represented as data in `packages/content` and resolved through the content registry. Systems must consume registry data instead of embedding origin, class, enemy, item, zone, loot table or level values directly in gameplay code.
+
+The initial content registry includes definitions for `sewer_dweller`, `nightvision`, `gravewalker`, `heavy_strike`, `trashboar_runt`, `nightmarket`, `blackwire_sewers`, `starter_pipe`, `sewer_jacket`, `starter_blood_flask`, `blackwire_scrap`, Core 0.1 equipment slots, `sewer_starter_loot` and `level_1_to_10`.
+
+The current registry does not roll loot, execute skills, run combat, spawn enemies or manage rooms. Those systems remain separate server-authoritative tasks.
+
 ---
 
 ## Combat
@@ -237,3 +243,5 @@ English is the source/default language.
 Core 0.1 is English-only but localization-ready.
 
 Do not add a language selector until at least one additional locale exists.
+
+Initial Core 0.1 content names, descriptions and basic UI/system labels live in the localization package as English keys. Future languages are deferred until real translated locale files exist and pass validation.

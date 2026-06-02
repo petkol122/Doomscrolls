@@ -148,6 +148,7 @@ doomscrolls/
   packages/
     shared/
     content/
+    localization/
   infra/
     compose/
     docker/
@@ -185,6 +186,7 @@ repo
 workspace
 CI
 shared types
+localization
 content registry
 local infrastructure
 Prisma schema
@@ -195,3 +197,48 @@ character creation
 ```
 
 Only then implement rooms, movement, combat, loot, inventory and corpse/death.
+
+---
+
+## Localization
+
+English is the default/source language for Doomscrolls.
+
+Core Build 0.1 is localization-ready but English-only:
+
+- active locale: `en`
+- localization package: `packages/localization`
+- user-facing text should use localization keys instead of hardcoded strings
+- no language selector exists yet
+- future languages must not be exposed until real locale files and validation exist
+
+---
+
+## Content Registry
+
+Core Build 0.1 content definitions live in `packages/content` and are data-driven.
+
+The package currently defines the locked foundation content for:
+
+- Sewer Dweller origin and Nightvision passive
+- Gravewalker class and Heavy Strike skill definition
+- The Nightmarket and Blackwire Sewers zones
+- Trashboar Runt enemy definition
+- starter pipe, sewer jacket, starter blood flask and blackwire scrap items
+- Core 0.1 equipment slots, starter sewer loot table and level 1-10 XP table
+
+Gameplay systems must read these definitions through the content registry instead of hardcoding content values in systems.
+
+`packages/content` exposes:
+
+```ts
+contentRegistry.origins.get("sewer_dweller");
+contentRegistry.classes.get("gravewalker");
+contentRegistry.items.get("starter_pipe");
+validateContentRegistry(contentRegistry);
+assertValidContentRegistry(contentRegistry);
+```
+
+Content validation checks cross-references, Core 0.1 equipment slots, stat modifier targets, loot table entries, level thresholds and English localization keys.
+
+Loot rolling, combat execution, rooms, auth and database persistence are intentionally not implemented by the content package.

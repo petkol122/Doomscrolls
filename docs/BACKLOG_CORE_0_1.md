@@ -22,9 +22,13 @@ Add IDs, account/profile/settings, character/stats/death, item/inventory/equipme
 
 Add English source locale and localization key resolver. No language selector yet.
 
+Status: implemented as `packages/localization` with `en` as the only active Core 0.1 locale. Future languages are deferred until real locale files exist.
+
 ### Task 004 — Content Registry
 
 Add content package, content definitions and validation.
+
+Status: implemented as `packages/content` with modular Core 0.1 data files, typed registry lookups and cross-reference/localization validation. Loot rolling, combat logic, server rooms, auth endpoints and database persistence remain intentionally deferred to later tasks.
 
 Initial content:
 

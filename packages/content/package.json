@@ -3,13 +3,20 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "types": "./src/index.ts",
   "scripts": {
     "dev": "echo content dev placeholder",
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "lint": "echo content lint placeholder",
-    "test": "echo content test placeholder"
+    "test": "tsc --noEmit"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@doomscrolls/localization": "workspace:*",
+    "@doomscrolls/shared": "workspace:*"
+  },
   "devDependencies": {}
 }

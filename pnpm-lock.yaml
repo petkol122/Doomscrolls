@@ -18,9 +18,17 @@ importers:
         specifier: ^5.6.0
         version: 5.9.3
 
-  apps/client: {}
+  apps/client:
+    dependencies:
+      '@doomscrolls/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
 
-  apps/server: {}
+  apps/server:
+    dependencies:
+      '@doomscrolls/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
 
   packages/content: {}
 

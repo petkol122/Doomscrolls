@@ -1,5 +1,5 @@
 {
-  "name": "@doomscrolls/shared",
+  "name": "@doomscrolls/localization",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -8,11 +8,11 @@
   },
   "types": "./src/index.ts",
   "scripts": {
-    "dev": "echo shared dev placeholder",
+    "dev": "echo localization dev placeholder",
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "lint": "echo shared lint placeholder",
-    "test": "echo shared test placeholder"
+    "lint": "echo localization lint placeholder",
+    "test": "node -e \"console.log('localization test placeholder: validation runs during typecheck/build')\""
   },
   "dependencies": {},
   "devDependencies": {}

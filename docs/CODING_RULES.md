@@ -111,6 +111,31 @@ Known shortcuts must be recorded in `docs/TECH_DEBT.md`.
 
 ---
 
+## Localization
+
+English is the source/default language.
+
+Core 0.1 supports only the `en` locale in code. Do not add language settings, a language selector or inactive locale codes until real locale files exist.
+
+User-facing text should use localization keys from `packages/localization` instead of hardcoded strings. Missing keys must fail visibly, for example with a `[missing:key]` fallback, and must not silently return an empty string.
+
+---
+
+## Content Registry
+
+Core content definitions belong in `packages/content` as modular data files.
+
+Rules:
+
+- gameplay systems must consume `contentRegistry` definitions instead of hardcoding content values
+- content definitions must use localization keys for player-facing names and descriptions
+- cross-references must be validated with `validateContentRegistry` or `assertValidContentRegistry`
+- missing content lookups must not silently return fake fallback content
+- loot tables define weighted entries only; random loot rolling belongs in a later server-authoritative loot system
+- content data must not import Phaser, Prisma, Fastify, Colyseus, Redis, PostgreSQL or Node-only runtime APIs
+
+---
+
 ## Final Rule
 
 If a feature only appears to work, it is not done.

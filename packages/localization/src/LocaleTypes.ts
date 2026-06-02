@@ -1,0 +1,70 @@
+export type LocaleCode = "en";
+
+export const DEFAULT_LOCALE: LocaleCode = "en";
+
+export const SUPPORTED_LOCALES = [DEFAULT_LOCALE] as const satisfies readonly LocaleCode[];
+
+export type LocalizationDictionary = Record<string, string>;
+
+export type TranslationParams = Record<string, string | number>;
+
+export interface TranslateOptions {
+  locale?: LocaleCode;
+  params?: TranslationParams;
+}
+
+export const REQUIRED_LOCALIZATION_KEYS = [
+  "origin.sewer_dweller.name",
+  "origin.sewer_dweller.description",
+  "passive.nightvision.name",
+  "passive.nightvision.description",
+  "class.gravewalker.name",
+  "class.gravewalker.description",
+  "enemy.trashboar_runt.name",
+  "enemy.trashboar_runt.description",
+  "zone.nightmarket.name",
+  "zone.nightmarket.description",
+  "zone.blackwire_sewers.name",
+  "zone.blackwire_sewers.description",
+  "item.starter_pipe.name",
+  "item.starter_pipe.description",
+  "item.sewer_jacket.name",
+  "item.sewer_jacket.description",
+  "item.starter_blood_flask.name",
+  "item.starter_blood_flask.description",
+  "item.blackwire_scrap.name",
+  "item.blackwire_scrap.description",
+  "skill.heavy_strike.name",
+  "skill.heavy_strike.description",
+  "auth.username",
+  "auth.password",
+  "auth.login",
+  "auth.register",
+  "auth.logout",
+  "profile.display_name",
+  "profile.avatar",
+  "settings.master_volume",
+  "settings.music_volume",
+  "settings.sfx_volume",
+  "settings.show_fps_counter",
+  "character.create",
+  "character.select",
+  "character.name",
+  "character.origin",
+  "character.class",
+  "inventory.title",
+  "equipment.title",
+  "equipment.slot.weapon",
+  "equipment.slot.head",
+  "equipment.slot.chest",
+  "equipment.slot.hands",
+  "equipment.slot.feet",
+  "equipment.slot.ring_1",
+  "equipment.slot.amulet",
+  "equipment.slot.belt",
+  "equipment.slot.flask_1",
+  "error.generic",
+  "error.missing_localization_key"
+] as const;
+
+export type RequiredLocalizationKey = (typeof REQUIRED_LOCALIZATION_KEYS)[number];

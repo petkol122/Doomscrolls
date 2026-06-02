@@ -14,6 +14,8 @@
     "prisma:migrate:deploy": "echo prisma migrate deploy placeholder",
     "prisma:studio": "echo prisma studio placeholder"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@doomscrolls/shared": "workspace:*"
+  },
   "devDependencies": {}
 }

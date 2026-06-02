@@ -10,6 +10,8 @@
     "lint": "echo client lint placeholder",
     "test": "echo client test placeholder"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@doomscrolls/shared": "workspace:*"
+  },
   "devDependencies": {}
 }
