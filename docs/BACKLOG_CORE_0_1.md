@@ -87,6 +87,8 @@ Status: implemented as the Prisma schema/tooling foundation in `apps/server/pris
 
 Add repository classes around Prisma Client.
 
+Status: implemented as `apps/server/src/persistence/repositories` plus safe DTO mappers in `apps/server/src/persistence/mappers`. The layer wraps Prisma Client for users, sessions, profiles, functional settings, characters, inventories, item instances and corpses. It intentionally does not implement auth endpoints, password hashing, `/me`, gameplay rooms, combat, loot rolling, inventory placement, equip/unequip behavior or corpse recovery logic.
+
 ### Task 010 — Auth
 
 Implement username/password registration, login, sessions and `/me`.

@@ -103,8 +103,18 @@ Rules:
 - use `pnpm --filter @doomscrolls/server prisma:migrate:deploy` in staging/production
 - do not manually edit production schema
 - do not use raw SQL unless explicitly justified
-- keep Prisma usage behind repositories/services where practical
-- do not return `passwordHash` to clients in future auth/profile work
+- keep Prisma usage behind repositories/services rather than scattering queries through routes
+- do not return `passwordHash` to clients in auth/profile work
+- public persistence mappers must exclude secrets and must not invent fake gameplay/profile data
+
+Repository layer location:
+
+```text
+apps/server/src/persistence/repositories/
+apps/server/src/persistence/mappers/
+```
+
+The first repository layer wraps Prisma Client for users, sessions, profiles, settings, characters, inventories, item instances and corpses. It is intentionally data-access focused: it does not implement HTTP routes, registration, login, `/me`, password hashing, auth middleware, gameplay rooms, combat, loot rolling, inventory placement, equipment rules or corpse recovery logic. Business validation and endpoint behavior come in later service/route tasks.
 
 Current Prisma scripts:
 
@@ -115,7 +125,7 @@ pnpm --filter @doomscrolls/server prisma:migrate:deploy
 pnpm --filter @doomscrolls/server prisma:studio
 ```
 
-`apps/server/src/persistence/prisma.ts` provides a minimal Prisma Client bootstrap. Repository classes, auth endpoints and persistence business logic are deferred to later Core 0.1 tasks.
+`apps/server/src/persistence/prisma.ts` provides a minimal Prisma Client bootstrap and exports the shared Prisma Client instance. It avoids logging secrets such as `DATABASE_URL`; graceful disconnect/shutdown integration can be expanded later when runtime database usage is wired into services.
 
 Local development infrastructure for PostgreSQL is defined in:
 

@@ -38,6 +38,9 @@ Rules:
 - use `pnpm --filter @doomscrolls/server prisma:migrate:dev` for development migrations
 - use `pnpm --filter @doomscrolls/server prisma:migrate:deploy` for staging/production migration deployment
 - normal application logic uses Prisma repositories/services
+- routes must not scatter raw Prisma queries; add repository/service methods instead
+- public Prisma mappers must exclude `passwordHash` and other secrets
+- repository methods may support future services, but business-heavy auth/gameplay rules belong in service layers
 - do not introduce another ORM
 - do not use raw SQL unless explicitly justified
 - do not use `prisma db push` as the normal committed workflow
