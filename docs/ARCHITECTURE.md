@@ -302,6 +302,44 @@ Request validation uses zod schemas defined in the route handlers. The `/me` end
 
 ---
 
+## Character Domain Service
+
+The character domain service layer lives at:
+
+```text
+apps/server/src/character/
+```
+
+Core components:
+
+```text
+CharacterService.ts      - Character listing, per-user lookup and creation logic
+CharacterNameService.ts  - Character name trimming, validation and normalization
+CharacterStatsService.ts - Core 0.1 starting stat calculation
+CharacterErrors.ts       - Safe character error codes and messages
+CharacterTypes.ts        - Character service input/output/config types
+index.ts                 - Public API exports
+```
+
+Character service rules:
+
+- no HTTP character routes are implemented yet
+- no frontend character UI is implemented yet
+- no gameplay rooms, movement, combat, loot, inventory placement or equipment logic is implemented yet
+- character names are unique only within the owning account
+- duplicate checks use case-insensitive `characterNameNormalized`
+- origin/class lookup uses `@doomscrolls/content`
+- allowed origin/class combinations are enforced from origin content definitions
+- starting passives and starting zone come from origin content definitions
+- starting stats are calculated on the server
+- Core 0.1 inventory is initialized as 1 page, 10 columns and 6 rows
+
+### Character creation transaction safety
+
+`CharacterService.createCharacter()` validates input before persistence, then delegates atomic creation to `CharacterRepository.createCharacterWithInitialState()`. The repository uses Prisma nested writes inside `$transaction` when a full `PrismaClient` is available, creating `Character`, `CharacterStats`, `CharacterPassive` and `Inventory` together. If the nested create fails, no partial character initialization should remain. Prisma unique constraint violations are mapped to the safe `CHARACTER_NAME_TAKEN` error and raw Prisma errors are not leaked.
+
+---
+
 ## Core 0.1 Runtime Scope
 
 Core 0.1 must support:

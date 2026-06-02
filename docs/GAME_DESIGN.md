@@ -148,6 +148,20 @@ No mana/resource system in Core 0.1.
 
 Long-term, classes may have class-specific resources.
 
+Starting character stats are calculated server-side during character creation. Core 0.1 uses a simple deterministic foundation:
+
+```text
+primary stats = origin base stats + class base stats
+maxHp = 20 + toughness * 5
+damage = 1 + power
+armor = 0
+moveSpeed = 1 + speed * 0.02
+attackCooldownMs = max(500, 1100 - speed * 25)
+currentHp = maxHp
+```
+
+Starting passives and starting zone come from the selected origin content definition. The current character service does not create starting items, run gameplay rooms, move characters, execute combat or place inventory items.
+
 ---
 
 ## Inventory and Equipment

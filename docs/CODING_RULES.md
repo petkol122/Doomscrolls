@@ -85,6 +85,35 @@ The auth service layer provides HTTP endpoints at `POST /auth/register`, `POST /
 
 Registration is atomic: `AuthService.register()` creates User, UserProfile, UserSettings and Session inside a single Prisma `$transaction`. No partial account state should remain on failure. Services that create multiple related records in one logical operation must use `$transaction`.
 
+## Character Service Rules
+
+The character domain service layer exists at `apps/server/src/character/` and currently provides server-side character listing, per-user lookup and creation business logic only.
+
+Character service rules:
+
+- do not implement character HTTP routes until an explicit route task
+- do not implement frontend character UI until an explicit client task
+- do not implement rooms, movement, combat, loot, inventory placement or equipment UI in the character service
+- validate and normalize character names before persistence
+- character names are unique only within the owning account through `characterNameNormalized`
+- validate origin and class IDs through `@doomscrolls/content`
+- enforce origin/class combinations through origin content definitions
+- starting stats must be calculated server-side, never accepted from the client
+- starting passives and starting zone must come from content definitions, not hardcoded content IDs
+- character creation must create Character, CharacterStats, CharacterPassive and Inventory atomically where practical
+- do not add starting items unless a dedicated task implements real item persistence/placement rules
+
+Core 0.1 starting stat formulas:
+
+```text
+primary stats = origin base stats + class base stats
+maxHp = 20 + toughness * 5
+damage = 1 + power
+armor = 0
+moveSpeed = 1 + speed * 0.02
+attackCooldownMs = max(500, 1100 - speed * 25)
+```
+
 Client auth UI rules:
 
 - client auth forms must call the real backend API; no fake login, fake registration or fake users

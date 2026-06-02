@@ -138,6 +138,8 @@ showFpsCounter
 
 Implement character creation, character name validation, origin/class validation, starting stats/passives, inventory/equipment initialization.
 
+Status: Character domain service foundation implemented at `apps/server/src/character/`. It supports server-side list, per-user lookup and create business logic with character name validation/normalization, per-account duplicate name checks, content-registry origin/class validation, allowed origin/class enforcement, server-calculated starting stats, origin-defined starting passive/zone and empty Core 0.1 inventory initialization. HTTP character routes, frontend character UI, gameplay rooms, movement, combat, loot, starting items, inventory placement and equipment logic remain deferred.
+
 ### Task 013 — Room Authentication
 
 Authenticated room joins with character ownership validation.

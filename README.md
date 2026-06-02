@@ -214,6 +214,12 @@ Registration is atomic: User, UserProfile, UserSettings and Session are created 
 
 The auth service layer provides HTTP endpoints at `POST /auth/register`, `POST /auth/login` and `GET /me`, registered in `apps/server/src/http/routes/auth.routes.ts` with reusable authentication middleware at `apps/server/src/http/middleware/authenticate.ts`. Request validation uses zod. Error mapping to safe HTTP responses uses `apps/server/src/http/errors/httpErrorMapper.ts`.
 
+The server-side character domain service now exists at `apps/server/src/character/`. It provides character listing, per-user character lookup and character creation business logic only; HTTP character routes, frontend character UI, gameplay rooms, movement, combat, inventory placement and equipment UI are not implemented yet.
+
+Character creation is server-owned and uses the `@doomscrolls/content` registry to validate origin/class IDs and allowed origin/class combinations. Character names are trimmed, normalized case-insensitively and unique only within the owning account through `characterNameNormalized`. Starting primary stats are calculated from origin base stats plus class base stats; derived stats are calculated server-side; starting passives and starting zone come from the origin content definition. A Core 0.1 empty inventory is initialized as one 10x6 page.
+
+Character creation persists Character, CharacterStats, CharacterPassive and Inventory records atomically via the repository layer. No starting items are added in this task.
+
 Generate Prisma Client for the server:
 
 ```bash
