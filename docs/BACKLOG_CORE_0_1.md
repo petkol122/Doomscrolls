@@ -101,7 +101,25 @@ Status: Auth domain service layer implemented at `apps/server/src/auth/`. HTTP e
 
 Make registration atomic. User, UserProfile, UserSettings and Session must be created inside a single Prisma transaction so no partial account state remains on failure.
 
-Status: Resolved. `AuthService.register()` now creates user/profile/settings/session inside `prisma.$transaction`. Repositories already accepted `Prisma.TransactionClient`. The shared `PrismaDatabaseClient` type was updated to include `Prisma.TransactionClient`. Raw session token is generated before the transaction and returned only on success. HTTP endpoints, login transaction safety, frontend auth UI and gameplay remain deferred.
+Status: Resolved. `AuthService.register()` now creates user/profile/settings/session inside `prisma.$transaction`. Repositories already accepted `Prisma.TransactionClient`. The shared `PrismaDatabaseClient` type was updated to include `Prisma.TransactionClient`. Raw session token is generated before the transaction and returned only on success. HTTP endpoints are implemented. Gameplay remains deferred.
+
+### Task 011B — Client Auth UI Foundation
+
+Add the first real client-side auth flow using the real backend auth API:
+
+```text
+AuthScene
+register form
+login form
+POST /auth/register
+POST /auth/login
+GET /me with Bearer token
+localStorage token persistence for Core 0.1
+authenticated account shell
+logout
+```
+
+Status: Implemented as the first real client auth UI foundation. `BootScene -> PreloadScene -> AuthScene`; successful auth starts `AccountShellScene`. The client stores the returned session token in `localStorage` under `doomscrolls.sessionToken`, calls `/me` after register/login and on startup when a token exists, clears invalid tokens, and shows safe errors. The account shell displays real `/me` account/profile data and the real character count state only. Character creation, fake users, fake characters, gameplay rooms, inventory/equipment UI and gameplay are not implemented.
 
 ### Task 011 — Profile and Settings
 

@@ -20,6 +20,18 @@ Status:
 
 Known tech debt is listed below.
 
+## Core 0.1 client token storage
+
+```text
+Date: 2026-06-02
+Area: Client auth
+Description: The browser client stores the raw auth session token in localStorage under doomscrolls.sessionToken for the Core 0.1 auth UI foundation.
+Reason: This task intentionally implements a minimal local/Core 0.1 client auth flow without cookies or refresh tokens, matching the current backend auth API contract.
+Risk: localStorage tokens are exposed to successful XSS and are not the final hardened production session-storage strategy.
+Planned fix: Revisit session storage when production auth hardening, refresh-token strategy, CSP and deployment security are in scope.
+Status: Open
+```
+
 ## Prisma version pinned below latest major
 
 ```text

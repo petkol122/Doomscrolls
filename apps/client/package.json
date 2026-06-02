@@ -12,6 +12,7 @@
     "test": "echo client test placeholder"
   },
   "dependencies": {
+    "@doomscrolls/localization": "workspace:*",
     "@doomscrolls/shared": "workspace:*",
     "phaser": "^4.1.0"
   },

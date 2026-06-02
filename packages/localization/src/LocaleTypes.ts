@@ -41,6 +41,13 @@ export const REQUIRED_LOCALIZATION_KEYS = [
   "auth.login",
   "auth.register",
   "auth.logout",
+  "auth.title",
+  "auth.register_title",
+  "auth.login_title",
+  "auth.account_loaded",
+  "auth.no_characters",
+  "auth.api_url_missing",
+  "auth.loading_session",
   "profile.display_name",
   "profile.avatar",
   "settings.master_volume",
@@ -64,6 +71,11 @@ export const REQUIRED_LOCALIZATION_KEYS = [
   "equipment.slot.belt",
   "equipment.slot.flask_1",
   "error.generic",
+  "error.server_unavailable",
+  "error.invalid_register_input",
+  "error.duplicate_username",
+  "error.invalid_credentials",
+  "error.invalid_token",
   "error.missing_localization_key"
 ] as const;
 

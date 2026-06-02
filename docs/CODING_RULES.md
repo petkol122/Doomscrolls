@@ -85,6 +85,17 @@ The auth service layer provides HTTP endpoints at `POST /auth/register`, `POST /
 
 Registration is atomic: `AuthService.register()` creates User, UserProfile, UserSettings and Session inside a single Prisma `$transaction`. No partial account state should remain on failure. Services that create multiple related records in one logical operation must use `$transaction`.
 
+Client auth UI rules:
+
+- client auth forms must call the real backend API; no fake login, fake registration or fake users
+- `/me` must use `Authorization: Bearer <token>`
+- Core 0.1 client token persistence uses `localStorage` key `doomscrolls.sessionToken`
+- logout must remove the local token
+- startup may try `/me` when a local token exists
+- invalid or expired tokens must be cleared and return the user to auth UI
+- account shell must not invent fake character data; empty real character arrays must display `No characters yet.`
+- character creation, gameplay, rooms, inventory and equipment UI require separate real backend-supported tasks
+
 ---
 
 ## Server Authority

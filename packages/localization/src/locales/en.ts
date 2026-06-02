@@ -50,6 +50,13 @@ export const en = {
   "auth.login": "Log in",
   "auth.register": "Register",
   "auth.logout": "Log out",
+  "auth.title": "Doomscrolls account",
+  "auth.register_title": "Create account",
+  "auth.login_title": "Log in",
+  "auth.account_loaded": "Account loaded from the real backend API.",
+  "auth.no_characters": "No characters yet.",
+  "auth.api_url_missing": "Client API URL is not configured. Set VITE_API_URL to use account auth.",
+  "auth.loading_session": "Checking saved session...",
 
   "profile.display_name": "Display name",
   "profile.avatar": "Avatar",
@@ -78,6 +85,11 @@ export const en = {
   "equipment.slot.flask_1": "Flask",
 
   "error.generic": "Something went wrong.",
+  "error.server_unavailable": "Server unavailable. Please try again when the backend is running.",
+  "error.invalid_register_input": "Please check the registration fields and try again.",
+  "error.duplicate_username": "That username is already taken.",
+  "error.invalid_credentials": "Invalid username or password.",
+  "error.invalid_token": "Your session is invalid or expired. Please log in again.",
   "error.missing_localization_key": "Missing localization key: {key}"
 } as const satisfies LocalizationDictionary;
 

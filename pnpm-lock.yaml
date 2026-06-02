@@ -20,6 +20,9 @@ importers:
 
   apps/client:
     dependencies:
+      '@doomscrolls/localization':
+        specifier: workspace:*
+        version: link:../../packages/localization
       '@doomscrolls/shared':
         specifier: workspace:*
         version: link:../../packages/shared

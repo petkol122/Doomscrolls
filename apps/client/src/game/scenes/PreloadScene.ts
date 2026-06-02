@@ -6,6 +6,6 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   public create(): void {
-    this.scene.start("ShellScene");
+    this.scene.start("AuthScene");
   }
 }

@@ -142,13 +142,27 @@ Run the browser client during local development:
 pnpm --filter @doomscrolls/client dev
 ```
 
-The client is a Vite + Phaser foundation. It boots `BootScene`, `PreloadScene` and `ShellScene`, then displays only:
+The client is a Vite + Phaser foundation. It boots:
 
 ```text
-Doomscrolls client booted
+BootScene -> PreloadScene -> AuthScene
 ```
 
-No account UI, character selection, inventory, combat, map, player or enemy simulation exists yet. If `VITE_API_URL` is configured, the client performs a real `/health` request for observability only; it does not pretend login or gameplay works. `VITE_WS_URL` is safely read for future realtime work but is not used yet.
+`AuthScene` provides the first real browser auth UI foundation. It calls the real backend auth API at `VITE_API_URL`:
+
+```text
+POST /auth/register
+POST /auth/login
+GET  /me
+```
+
+After a successful register/login, the client stores the returned session token in `localStorage` under `doomscrolls.sessionToken`, calls `/me` with `Authorization: Bearer <token>`, and starts `AccountShellScene`. On startup, an existing local token is checked with `/me`; invalid or expired tokens are cleared and the client returns to `AuthScene`. Logout clears the local token.
+
+`localStorage` token storage is acceptable for the local/Core 0.1 client foundation. Cookies, refresh tokens and hardened production session storage may be revisited later.
+
+If `VITE_API_URL` is missing, the client shows a clear auth error and does not fake success. `VITE_WS_URL` is safely read for future realtime work but is not used yet.
+
+The authenticated account shell displays only real account data returned by `/me`: display name, username, avatar key and whether characters exist. Character creation is not implemented yet. If the real `characters` array is empty, the shell shows `No characters yet.` It does not show fake users, fake characters, inventory, combat, map, player or enemy simulation.
 
 Run the Node.js server foundation during local development:
 
