@@ -109,14 +109,14 @@ Planned fix: Refactor repositories to accept a shared transaction client and wra
 Status: Resolved in Task 010A — AuthService.register() now wraps user/profile/settings/session creation in a single Prisma $transaction. Repositories already accepted Prisma.TransactionClient. PrismaDatabaseClient type was updated to reflect the union.
 ```
 
-## Auth HTTP routes runtime test blocked by Node 19.x
+## Auth HTTP routes runtime verification unblocked by Node 24.x
 
 ```text
 Date: 2026-06-02
 Area: Server / Auth HTTP routes
-Description: Auth HTTP routes (POST /auth/register, POST /auth/login, GET /me) are implemented and typecheck successfully, but cannot be manually verified at runtime because Fastify 5.x and Colyseus 0.17.x require Node.js 20+ (diagnostics.tracingChannel API and import assertions). The current local environment runs Node 19.x.
-Reason: Local development environment has not been standardized on a supported Node LTS version yet.
-Risk: Auth route behavior is verified by TypeScript compilation only, not by live HTTP requests against local Postgres/Redis.
-Planned fix: Standardize project Node version on a supported LTS (20.x or 22.x) using .nvmrc/Volta, then perform live HTTP verification of auth routes.
-Status: Open
+Description: Auth HTTP routes (POST /auth/register, POST /auth/login, GET /me) were previously blocked from local runtime verification by the Node 19.x environment. Local Node 24.x now starts Fastify 5.x and Colyseus 0.17.x successfully.
+Reason: Node 24.x provides the runtime APIs required by the existing backend stack.
+Risk: Resolved for local runtime verification; keep repository Node version documentation/tooling aligned in a dedicated tooling task if needed.
+Planned fix: None for auth route runtime verification. Future Node version standardization should happen separately from backend feature work.
+Status: Resolved — live HTTP verification passed locally on Node v24.16.0 with Postgres/Redis infrastructure.
 ```
