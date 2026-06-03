@@ -171,6 +171,29 @@ Client auth UI rules:
 - `WorldSessionScene` must stay the connected room shell; it owns the active joined-room view and leave-world flow after a real server-approved join
 - if either client scene starts growing, extract only obvious tiny shared helpers or view modules under `apps/client/src/game/scenes/accountShell/` before the scene becomes a god file
 - WorldSession debug UI must stay clearly labeled as temporary server-synced debug state, not final gameplay UI
+- the player placeholder is a simple visual-only shape (circle body + triangle marker + ellipse shadow) rendered from synced server x/y only
+- the direction marker (triangle) rotates toward the last movement target / click direction as a facing indicator only
+- the player body position must come from server-synced PlayerPresence x/y only; no local prediction, no movement animation, no combat animation
+- player placeholder visual rules apply only when the server syncs PlayerPresence with position data; if position is missing, the placeholder must be hidden
+- no final art, sprite animation, or gameplay-coupled facing system is implemented in placeholder tasks
+
+## Interactable Object Rules
+
+Interactable objects are simple world elements that respond to click-to-interact with server-validated safe text messages. Forbidden scope is strict:
+
+- no quests, quest tracking, quest completion, or any quest state
+- no loot, inventory, item drops, or item acquisition
+- no NPC dialogue, conversation state, or multi-step interaction flows
+- no combat triggers, enemy spawning, or combat coupling
+- no collision geometry, movement blocking, or pathfinding obstacles
+- no persistence across room resets
+- no character levels, stat scaling, or gameplay-affecting behavior
+- no rewards of any kind (XP, items, account progress, cosmetics, achievements)
+- the server validates that the object exists and the player is within 50 units distance
+- the server returns only safe text messages; no game-state modifications
+- the client renders objects as simple placeholder shapes (rectangles or circles) with labels
+- the client does not predict, animate, or fake any interaction outcomes
+- responses display as temporary messages for 3 seconds then clear
 
 ---
 
@@ -239,8 +262,12 @@ TownRoom rules:
 - the server creates a `PlayerPresence` entry on `onJoin` with `sessionId`, `characterId`, `characterName` (as `displayName`), the resolved `spawnPointId`, initial x/y and runtime `movementSpeed`
 - the server removes the `PlayerPresence` entry on `onLeave`
 - `connectedPlayerCount` must derive from `playerPresence.size` on join/leave, never be set independently
+- `TownRoomState` may include an `enemies` `MapSchema<EnemyPresence>` for strictly synced placeholder enemies only
+- Core 0.1 currently ships one static Nightmarket `Trashboar Runt` placeholder enemy with synced `id`, `enemyId`, `label`, `x`, `y`, `hp`, and `maxHp`
 - the client renders roomKind, zoneId and connectedPlayerCount from room state; additionally it may extract player presence via a dedicated helper (`getTownRoomPresence`) to display connected player names
+- client enemy extraction must live in a separate helper module (`apps/client/src/net/townRoomEnemies.ts`), not inside `WorldSessionScene` or `AccountShellScene`
 - client presence extraction must live in a separate helper module (`apps/client/src/net/townRoomPresence.ts`), not inside `AccountShellScene`
+- do not add enemy AI, aggro, attacks, damage, loot, XP, death, persistence, rewards, collision, pathfinding, or gameplay coupling to this placeholder enemy foundation without a dedicated task
 - do not add a player entity list, map, movement, combat, loot, XP, inventory, equipment, corpse behavior, gameplay messages or client UI gameplay connection to `TownRoom` without a dedicated task
 - empty room registration must not be presented as gameplay
 
@@ -377,6 +404,7 @@ WorldSession visual layer rules:
 - connected-room overlay grouping belongs in small helper/view modules such as `worldSessionOverlayView.ts`, not inlined into a growing scene file
 - the world-area view may render only content-derived zone bounds for the active room zone; these bounds are visualized from content data and must not be presented as collision geometry, navigation mesh or map art
 - the player marker/dot must use synced `TownRoom` presence `x`/`y` only
+- enemy placeholders may render only synced `EnemyPresence` x/y, label and hp/maxHp data from room state; they must stay simple placeholder shapes/text, not sprites or gameplay actors
 - room header/status display must read synced `roomKind` from room state rather than inventing or hardcoding the value client-side
 - client code must not fake local movement, prediction, smoothing, interpolation or invented position updates in this layer
 - debug presence text may show synced `movementSpeed` when it is already present in `PlayerPresence`, but this must stay debug text only and must not become a gameplay HUD
@@ -385,7 +413,7 @@ WorldSession visual layer rules:
 - visual refresh after input must come from synced room-state updates, not from local speculative movement
 - runtime sanity for movement must continue to confirm gradual server-synced stepping and valid second-click retargeting, not instant local teleport behavior
 - the connected-room overlay must clearly state that it is temporary server-synced debug state, not final gameplay UI
-- do not add sprites, tiles, background map art, collision, pathfinding, animation, combat, enemy rendering, inventory UI or persistence to this layer without a dedicated task
+- do not add sprites, tiles, background map art, collision, pathfinding, animation, combat, enemy AI, enemy attacks, loot, XP, inventory UI or persistence to this layer without a dedicated task
 - helper extraction is required before `WorldSessionScene` becomes a god file; `worldSessionAreaView.ts` and `worldSessionOverlayView.ts` are the current examples and pattern to follow
 
 ## Testing

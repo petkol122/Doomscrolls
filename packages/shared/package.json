@@ -14,6 +14,9 @@
     "lint": "echo shared lint placeholder",
     "test": "echo shared test placeholder"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@colyseus/schema": "^3.0.69",
+    "@doomscrolls/localization": "workspace:*"
+  },
   "devDependencies": {}
 }

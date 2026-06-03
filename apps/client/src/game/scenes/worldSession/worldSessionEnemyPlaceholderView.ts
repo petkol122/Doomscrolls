@@ -1,0 +1,59 @@
+import { t } from "@doomscrolls/localization";
+import Phaser from "phaser";
+
+import type { TownRoomEnemySnapshot } from "../../../net/townRoomEnemies";
+
+const HIDDEN_POSITION = -9999;
+
+export interface WorldSessionEnemyPlaceholderView {
+  readonly refresh: (enemy: TownRoomEnemySnapshot) => void;
+  readonly hide: () => void;
+  readonly destroy: () => void;
+}
+
+export function createWorldSessionEnemyPlaceholderView(
+  scene: Phaser.Scene,
+  enemy: TownRoomEnemySnapshot,
+): WorldSessionEnemyPlaceholderView {
+  const container = scene.add.container(enemy.x, enemy.y);
+
+  const shadow = scene.add.ellipse(0, 10, 26, 12, 0x000000, 0.28);
+  const body = scene.add.rectangle(0, 0, 22, 22, 0xb12222, 0.95);
+  body.setStrokeStyle(2, 0xf0b0b0, 0.95);
+  const core = scene.add.circle(0, -2, 4, 0xffd7d7, 0.9);
+
+  const labelText = scene.add
+    .text(0, 15, t(enemy.label) + ` (${enemy.hp}/${enemy.maxHp})`, {
+      color: "#ffffff",
+      fontFamily: "Arial, sans-serif",
+      fontSize: "12px",
+    })
+    .setOrigin(0.5);
+  const hpText = scene.add
+    .text(0, -24, `HP ${enemy.hp}/${enemy.maxHp}`, {
+      color: "#ffdddd",
+      fontFamily: "Arial, sans-serif",
+      fontSize: "11px",
+    })
+    .setOrigin(0.5);
+
+  container.add([shadow, body, core, hpText, labelText]);
+
+  const hide = (): void => {
+    container.setPosition(HIDDEN_POSITION, HIDDEN_POSITION);
+  };
+
+  const refresh = (nextEnemy: TownRoomEnemySnapshot): void => {
+    container.setPosition(nextEnemy.x, nextEnemy.y);
+    labelText.setText(t(nextEnemy.label));
+    hpText.setText(`HP ${nextEnemy.hp}/${nextEnemy.maxHp}`);
+  };
+
+  return {
+    refresh,
+    hide,
+    destroy: () => {
+      container.destroy(true);
+    },
+  };
+}

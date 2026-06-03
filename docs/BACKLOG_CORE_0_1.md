@@ -397,6 +397,59 @@ Document client zone-bounds usage and review whether adding `@doomscrolls/conten
 
 Status: documented. README, ARCHITECTURE, BACKLOG and CODING_RULES docs now describe the client world area bounds from content. The dependency decision is: `@doomscrolls/content` is accepted as a client dependency because it has no Node-only runtime imports. If it ever gains such imports, a future task should extract a shared public content snapshot for client use. `pnpm lint` and `pnpm test` pass.
 
+### Task 055 — Player Facing Marker From Movement Target
+
+Make the placeholder direction marker point toward the last movement target / movement direction.
+
+Status: implemented. The client player placeholder view now exposes a `setMarkerDirection(angle: number)` method that rotates the small triangle marker toward the direction of the last click target. `worldSessionAreaView.ts` calculates the angle in pixel space using `Math.atan2(dy, dx) - Math.PI/2` from the player's synced position to the click target, and calls `setMarkerDirection()` to rotate the marker. The marker remains at its default orientation when no target exists. The player body position remains synced from server only; click-to-move is unchanged. This is still placeholder visual UI, not final animation or facing system. No animation system, local prediction, fake movement, enemies, combat, collision, pathfinding, inventory or persistence was added. Typecheck and build pass.
+
+### Task 056 — Player Visual Placeholder Docs + Checkpoint
+
+Document player placeholder + facing marker and run a light checkpoint.
+
+Status: documented. README, ARCHITECTURE, BACKLOG and CODING_RULES docs now state that `WorldSessionScene` shows a placeholder player shape from synced server x/y, the direction marker rotates to point toward the last movement target, body position is server-synced only, and this is still placeholder visual UI, not final art/animation. Forbidden scope includes no enemies, combat, collision, pathfinding, inventory or persistence. Validation checks passed: `pnpm --filter @doomscrolls/client typecheck`, `pnpm --filter @doomscrolls/client build`, `pnpm lint`, `pnpm test`.
+
+### Task 057 — Add One Visible Synced Interactable Object + Basic Interact Action
+
+Add one visible synced interactable object (notice board) to the Nightmarket zone and implement basic click-to-interact with server-validated distance check and safe text response.
+
+Status: implemented. 
+
+Server-side:
+- Created shared types: `InteractableObject` interface in `packages/shared/src/room/InteractableObjectTypes.ts`
+- Added Colyseus schema: `Interactable` class in `apps/server/src/realtime/rooms/Interactable.ts`
+- Extended `TownRoomState` with `interactables: MapSchema<Interactable>`
+- Created `initializeTownInteractables()` helper (initializes Nightmarket with notice board at 120, 140)
+- Created `interactValidation.ts` with `validateInteractIntent()` (distance <= 50 units) and `getInteractableResponseMessage()`
+- Updated protocol: `RequestInteractClientMessage` and `InteractResponseServerMessage` in shared
+- Integrated into `TownRoom.onCreate()` to initialize objects and register `request_interact` message handler
+
+Client-side:
+- Created `interactIntentClient.ts` to dispatch `request_interact` messages
+- Created `interactResponseClient.ts` to listen for server responses
+- Created `worldSessionInteractablesView.ts` rendering helper (draws objects as gold rectangles + labels, handles click detection)
+- Integrated interactables view into `worldSessionAreaView.ts`
+- Extended `WorldSessionScene` to display interact response messages for 3 seconds
+- Synchronized object rendering with room state via `refresh()` on state change
+
+Validation: All 7 checks passed:
+- `pnpm --filter @doomscrolls/shared typecheck` ✓
+- `pnpm --filter @doomscrolls/server typecheck` ✓
+- `pnpm --filter @doomscrolls/server build` ✓
+- `pnpm --filter @doomscrolls/client typecheck` ✓
+- `pnpm --filter @doomscrolls/client build` ✓
+- `pnpm lint` ✓
+- `pnpm test` ✓
+
+Behavior: Nightmarket notice board renders at its world position, click-to-interact sends validated request, server confirms distance and object existence, returns safe message ("The notice board hums quietly."), client displays message for 3 seconds then clears.
+
+Forbidden scope (strictly avoided):
+- No quests, loot, inventory, NPC dialogue, combat, collision detection, persistence
+- No character level, stat scaling, gameplay-affecting behavior
+- No fake rewards or completionist tracking
+
+Notes: Server uses 50-unit distance validation; objects initialized per room instance (no persistence); render layer kept thin via extracted helper modules; room stays lean via delegation to validation helpers.
+
 ---
 
 ## Anti-Scope-Creep

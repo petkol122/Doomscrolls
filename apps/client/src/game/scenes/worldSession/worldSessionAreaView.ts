@@ -4,9 +4,17 @@ import type { RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
 import Phaser from "phaser";
 
 import { sendMovementIntent } from "../../../net/movementIntentClient";
+import { sendInteractIntent } from "../../../net/interactIntentClient";
 import { getTownRoomPresence } from "../../../net/townRoomPresence";
 import { resolveWorldAreaBounds } from "../accountShell/resolveWorldAreaBounds";
 import { createWorldSessionPlayerPlaceholderView } from "./worldSessionPlayerPlaceholderView";
+import { createWorldSessionInteractablesView } from "./worldSessionInteractablesView";
+import { createWorldSessionEnemyPlaceholderView } from "./worldSessionEnemyPlaceholderView";
+import {
+  getTownRoomEnemies,
+  type TownRoomEnemySnapshot,
+} from "../../../net/townRoomEnemies";
+import type { WorldSessionEnemyPlaceholderView } from "./worldSessionEnemyPlaceholderView";
 
 const AREA_WIDTH = 800;
 const AREA_HEIGHT = 600;
@@ -39,17 +47,24 @@ export function createWorldSessionAreaView(
   room: Room<DoomscrollsRoomState>,
   onDebugStateChange?: () => void,
 ): WorldSessionAreaView {
-const container = scene.add.container(0, 0);
-const frame = scene.add.graphics();
+  const container = scene.add.container(0, 0);
+  const frame = scene.add.graphics();
   const playerPlaceholder = createWorldSessionPlayerPlaceholderView(scene);
-const targetMarker = scene.add.circle(-9999, -9999, 7, 0xff4a4a, 0.8);
-const targetLabel = scene.add.text(BOUNDS_ORIGIN_X, BOUNDS_ORIGIN_Y + AREA_HEIGHT + 112, "", {
-  color: "#ff4a4a",
-  fontFamily: "Arial, sans-serif",
-  fontSize: "14px",
-});
-const lineGraphic = scene.add.graphics();
-lineGraphic.lineStyle(1, 0xffffff, 0.5);
+  const interactablesView = createWorldSessionInteractablesView(scene, (objectId) => {
+    sendInteractIntent(room, objectId);
+  });
+
+  // Task 058 — Add enemy placeholder view
+  const enemyPlaceholders = new Map<string, WorldSessionEnemyPlaceholderView>();
+
+  const targetMarker = scene.add.circle(-9999, -9999, 7, 0xff4a4a, 0.8);
+  const targetLabel = scene.add.text(BOUNDS_ORIGIN_X, BOUNDS_ORIGIN_Y + AREA_HEIGHT + 112, "", {
+    color: "#ff4a4a",
+    fontFamily: "Arial, sans-serif",
+    fontSize: "14px",
+  });
+  const lineGraphic = scene.add.graphics();
+  lineGraphic.lineStyle(1, 0xffffff, 0.5);
   const title = scene.add.text(BOUNDS_ORIGIN_X, 48, t("world_area.title"), {
     color: "#d8c6a3",
     fontFamily: "Arial, sans-serif",
@@ -82,7 +97,17 @@ lineGraphic.lineStyle(1, 0xffffff, 0.5);
     fontSize: "14px",
   });
 
- container.add([frame, targetMarker, lineGraphic, title, instruction, boundsLabel, positionLabel, statusLabel, targetLabel]);
+  container.add([
+    frame,
+    targetMarker,
+    lineGraphic,
+    title,
+    instruction,
+    boundsLabel,
+    positionLabel,
+    statusLabel,
+    targetLabel,
+  ]);
 
   const inputZone = scene.add
     .zone(BOUNDS_ORIGIN_X, BOUNDS_ORIGIN_Y, AREA_WIDTH, AREA_HEIGHT)
@@ -102,6 +127,37 @@ lineGraphic.lineStyle(1, 0xffffff, 0.5);
     boundsLabel.setText(
       `zone=${zoneId} bounds: x=${bounds.minX}..${bounds.maxX}, y=${bounds.minY}..${bounds.maxY}`,
     );
+
+    // Task 057 — Refresh interactables view
+    interactablesView.refresh(nextRoom);
+
+    // Task 058 — Refresh enemies view
+    const currentEnemies = getTownRoomEnemies(nextRoom.state);
+    const projectedEnemies = currentEnemies
+      .map((enemy: TownRoomEnemySnapshot) => projectEnemyToArea(enemy, bounds))
+      .filter((enemy: TownRoomEnemySnapshot | null): enemy is TownRoomEnemySnapshot => enemy !== null);
+    const newEnemyIds = new Set(projectedEnemies.map((enemy: TownRoomEnemySnapshot) => enemy.id));
+
+    // Remove old enemies
+    for (const [id, view] of enemyPlaceholders.entries()) {
+      if (!newEnemyIds.has(id)) {
+        view.destroy();
+        enemyPlaceholders.delete(id);
+      }
+    }
+
+    // Add or refresh new/existing enemies
+    for (const enemy of projectedEnemies) {
+      let enemyView = enemyPlaceholders.get(enemy.id);
+      if (enemyView === undefined) {
+        enemyView = createWorldSessionEnemyPlaceholderView(scene, enemy);
+        enemyPlaceholders.set(enemy.id, enemyView);
+      } else {
+        enemyView.refresh(enemy);
+      }
+    }
+
+
 
     inputZone.removeAllListeners();
     inputZone.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
@@ -172,6 +228,12 @@ lineGraphic.lineStyle(1, 0xffffff, 0.5);
     getDebugState: () => ({ lastClickTarget }),
     destroy: () => {
       playerPlaceholder.destroy();
+      interactablesView.destroy();
+      // Task 058 — Destroy enemy placeholders
+      for (const view of enemyPlaceholders.values()) {
+        view.destroy();
+      }
+      enemyPlaceholders.clear();
       container.destroy(true);
     },
   };
@@ -183,4 +245,36 @@ function drawBounds(graphics: Phaser.GameObjects.Graphics): void {
   graphics.fillRect(BOUNDS_ORIGIN_X, BOUNDS_ORIGIN_Y, AREA_WIDTH, AREA_HEIGHT);
   graphics.lineStyle(2, 0x5f4a2f, 1);
   graphics.strokeRect(BOUNDS_ORIGIN_X, BOUNDS_ORIGIN_Y, AREA_WIDTH, AREA_HEIGHT);
+}
+
+function projectEnemyToArea(
+  enemy: TownRoomEnemySnapshot,
+  bounds: { readonly minX: number; readonly maxX: number; readonly minY: number; readonly maxY: number },
+): TownRoomEnemySnapshot | null {
+  const width = bounds.maxX - bounds.minX;
+  const height = bounds.maxY - bounds.minY;
+
+  if (width <= 0 || height <= 0) {
+    return null;
+  }
+
+  const normalizedX = (enemy.x - bounds.minX) / width;
+  const normalizedY = (enemy.y - bounds.minY) / height;
+
+  if (
+    !Number.isFinite(normalizedX) ||
+    !Number.isFinite(normalizedY) ||
+    normalizedX < 0 ||
+    normalizedX > 1 ||
+    normalizedY < 0 ||
+    normalizedY > 1
+  ) {
+    return null;
+  }
+
+  return {
+    ...enemy,
+    x: BOUNDS_ORIGIN_X + normalizedX * AREA_WIDTH,
+    y: BOUNDS_ORIGIN_Y + normalizedY * AREA_HEIGHT,
+  };
 }

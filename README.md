@@ -253,18 +253,20 @@ sendMovementIntent()              - client helper that sends request_move throug
 WorldSessionScene                 - connected-room scene that renders the current visual layer
 worldSessionAreaView.ts          - extracted rendering/input helper for the world area, kept separate to avoid scene god-file growth
 worldSessionOverlayView.ts       - extracted DOM overlay helper for grouped room/presence/movement debug sections
-worldSessionAreaView draws content-derived zone bounds and a player dot from synced TownRoom presence x/y only
+worldSessionPlayerPlaceholderView.ts - extracted player shape view (circle body + triangle marker + ellipse shadow)
+worldSessionAreaView draws content-derived zone bounds and a player placeholder from synced TownRoom presence x/y only
+the direction marker (triangle) rotates to point toward the last movement target / click direction
 click/tap inside the world area sends a real request_move intent through the joined room; a newer click replaces the previous target
-client does not fake local movement; the dot changes only after synced room-state updates arrive
+client does not fake local movement; the placeholder changes only after synced room-state updates arrive
 no collision, no pathfinding, no speed stats, no client interpolation/smoothing, no combat coupling, no persistence yet
-no sprites, no map art, no animation, no inventory UI
+no sprites, no map art, no animation system, no inventory UI
 ```
 
 `TownRoom` is intentionally kept as a thin Colyseus shell. The movement intent validator and position applicator live in dedicated helper modules (`movementIntentValidation.ts`, `applyMovementIntent.ts`) so the room file does not become monolithic. On the client, the rendering/input helper lives in its own module (`worldSessionAreaView.ts`) so `WorldSessionScene` stays orchestration-focused rather than growing into a god file.
 
-When the server accepts a `request_move` intent, it calls `applyMovementIntent()` which stores the validated `targetX` / `targetY` on the player's authoritative `PlayerPresence` movement-target fields. On join, `TownRoom` resolves a runtime `movementSpeed` from the selected character's derived stats and stores that speed in the joined `PlayerPresence`. The room simulation tick then runs every 50 ms and `stepTownRoomMovement()` advances each player's synced `x` / `y` toward the stored target using that player's own synced `movementSpeed`. If a player's stored speed is missing or invalid at runtime, the step helper falls back to a safe server constant (`TOWN_MOVEMENT_SPEED_FALLBACK_UNITS_PER_SECOND`) rather than trusting bad state. If the player clicks again before arrival, the new `request_move` replaces the previously stored target. Colyseus schema synchronization broadcasts the authoritative x/y updates to clients. On the client, `WorldSessionScene` listens for room `onStateChange`, refreshes `worldSessionAreaView`, redraws the content-derived zone bounds and repositions the player dot from synced `TownRoom` presence x/y only. The client does not predict, interpolate or invent local movement. This is still not full gameplay movement: there is no collision detection, no pathfinding, no combat coupling, and no persistence.
+When the server accepts a `request_move` intent, it calls `applyMovementIntent()` which stores the validated `targetX` / `targetY` on the player's authoritative `PlayerPresence` movement-target fields. On join, `TownRoom` resolves a runtime `movementSpeed` from the selected character's derived stats and stores that speed in the joined `PlayerPresence`. The room simulation tick then runs every 50 ms and `stepTownRoomMovement()` advances each player's synced `x` / `y` toward the stored target using that player's own synced `movementSpeed`. If a player's stored speed is missing or invalid at runtime, the step helper falls back to a safe server constant (`TOWN_MOVEMENT_SPEED_FALLBACK_UNITS_PER_SECOND`) rather than trusting bad state. If the player clicks again before arrival, the new `request_move` replaces the previously stored target. Colyseus schema synchronization broadcasts the authoritative x/y updates to clients. On the client, `WorldSessionScene` listens for room `onStateChange`, refreshes `worldSessionAreaView`, redraws the content-derived zone bounds and repositions the player placeholder from synced `TownRoom` presence x/y only. The client does not predict, interpolate or invent local movement. This is still not full gameplay movement: there is no collision detection, no pathfinding, no combat coupling, and no persistence.
 
-In the current WorldSession visual layer, click/tap inside the rendered world area uses the existing `sendMovementIntent()` helper to dispatch a real `request_move` intent through the already-joined Colyseus room. The area bounds come from content, and the player marker updates only from synced room state after the server accepts the target and the server tick gradually steps the authoritative position toward it. The connected-room overlay explicitly labels itself as temporary server-synced debug state, groups room info/player presence/movement debug into readable sections, keeps synced x/y and movementSpeed visible, and may show the last click target sent by the client when available. This remains a visual/network layer only: collision, pathfinding, stat-driven speed, interpolation/smoothing, combat, inventory UI and persistence are still deferred to later Core 0.1 tasks.
+In the current WorldSession visual layer, click/tap inside the rendered world area uses the existing `sendMovementIntent()` helper to dispatch a real `request_move` intent through the already-joined Colyseus room. The area bounds come from content, and the player placeholder updates only from synced room state after the server accepts the target and the server tick gradually steps the authoritative position toward it. The player body remains server-synced only; the direction marker rotates toward the last click target as a visual-only facing indicator. The connected-room overlay explicitly labels itself as temporary server-synced debug state, groups room info/player presence/movement debug into readable sections, keeps synced x/y and movementSpeed visible, and may show the last click target sent by the client when available. This remains a visual/network layer only: collision, pathfinding, stat-driven speed, interpolation/smoothing, combat, inventory UI and persistence are still deferred to later Core 0.1 tasks.
 
 Movement runtime sanity verification passed locally:
 
@@ -288,6 +290,32 @@ duplicate Karel returned 409
 logout/login preserved character visibility
 no fake character data appeared
 ```
+
+### Interactable object foundation (Core 0.1)
+
+The Core 0.1 interactable object foundation is in place but intentionally limited to world object rendering and basic interaction messaging:
+
+```text
+InteractableObject type lives in @doomscrolls/shared (fields: id, type, label, x, y)
+Colyseus schema Interactable class with @type decorators for all fields
+TownRoomState holds interactables as MapSchema<Interactable>
+RequestInteractClientMessage protocol message: type "request_interact", objectId
+InteractResponseServerMessage protocol message: type "interact_response", objectId, message
+initializeTownInteractables() server helper initializes zone-specific objects (apps/server/src/realtime/rooms/initializeTownInteractables.ts)
+validateInteractIntent() server helper validates objectId existence and distance <= 50 units (apps/server/src/realtime/rooms/interactValidation.ts)
+getInteractableResponseMessage() server helper returns safe response text per object
+TownRoom.onMessage("request_interact", ...) validates requests and sends InteractResponseServerMessage to requesting client
+sendInteractIntent() client helper dispatches request_interact through joined Colyseus room (apps/client/src/net/interactIntentClient.ts)
+registerInteractResponseListener() client helper listens for interact_response messages (apps/client/src/net/interactResponseClient.ts)
+worldSessionInteractablesView.ts client rendering helper that draws object shapes + labels and handles click detection
+WorldSessionScene listens for interact_response and displays message for 3 seconds
+Core 0.1 Nightmarket has one visible interactable: notice board at world coords (120, 140)
+notice board responds with safe message: "The notice board hums quietly."
+no quests, loot, inventory, NPC dialogue, combat, collision detection, persistence or fake rewards
+no character level, stat scaling or gameplay-affecting behavior
+```
+
+Interactable objects are intentionally limited. They have no active gameplay behavior, no rewards, no persistence, no collision and no rich dialogue. The server validates distance (50-unit radius from player) and returns safe text responses only. The client renders simple placeholder shapes (gold rectangles with labels) as standin visuals, handles click-to-interact input, and displays the server response message in the center of the screen for 3 seconds before clearing. This is a network + rendering layer only: quests, rewards, loot, inventory effects, NPC dialogue, combat coupling, collision geometry, and persistence are deferred to later Core 0.1 tasks.
 
 Selected character state runtime verification passed locally:
 

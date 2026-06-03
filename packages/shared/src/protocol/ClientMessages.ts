@@ -87,6 +87,15 @@ export interface DropInventoryItemClientMessage {
   readonly itemInstanceId: ItemInstanceId;
 }
 
+/**
+ * Task 057 — Interactable Object Foundation Batch
+ * Client sends interact request with object id.
+ */
+export interface RequestInteractClientMessage {
+  readonly type: "request_interact";
+  readonly objectId: string;
+}
+
 export type ClientRoomMessage =
   | MoveToPointClientMessage
   | AttackTargetClientMessage
@@ -101,4 +110,5 @@ export type ClientRoomMessage =
   | ForceRecoverCorpseClientMessage
   | ChatMessageClientMessage
   | TransitionZoneClientMessage
-  | DropInventoryItemClientMessage;
+  | DropInventoryItemClientMessage
+  | RequestInteractClientMessage;

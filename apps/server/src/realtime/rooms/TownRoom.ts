@@ -4,6 +4,8 @@ import type {
   RequestMoveRejectedServerMessage,
   UserId,
   ZoneId,
+  RequestInteractClientMessage,
+  InteractResponseServerMessage,
 } from "@doomscrolls/shared";
 import { RoomJoinValidationService } from "../RoomJoinValidationService";
 import type { TownRoomJoinOptions } from "./townRoomTypes";
@@ -18,6 +20,9 @@ import {
   stepTownRoomMovement,
   TOWN_MOVEMENT_TICK_RATE_MS,
 } from "./stepTownRoomMovement";
+import { initializeTownInteractables } from "./initializeTownInteractables";
+import { initializeTownEnemies } from "./initializeTownEnemies";
+import { validateInteractIntent, getInteractableResponseMessage } from "./interactValidation";
 
 /**
  * TownRoom with minimal Colyseus schema state.
@@ -73,6 +78,7 @@ export class TownRoom extends Room {
  * position through Colyseus schema synchronization.
  */
 private movementIntentHandlerRegistered = false;
+private interactHandlerRegistered = false;
 
   public override async onCreate(options: TownRoomJoinOptions): Promise<void> {
     const log = createRoomLogger(
@@ -83,7 +89,14 @@ private movementIntentHandlerRegistered = false;
 
     this.setState(new TownRoomState(zoneId));
 
+    // Task 057 — Initialize interactable objects
+    initializeTownInteractables(this.state as TownRoomState, zoneId);
+
+    // Task 058 — Initialize synced static enemy placeholders.
+    initializeTownEnemies(this.state as TownRoomState, zoneId);
+
     this.registerMovementIntentHandler(log);
+    this.registerInteractHandler(log);
     this.setSimulationInterval((deltaMs: number) => {
       stepTownRoomMovement(this.state as TownRoomState, deltaMs);
     }, TOWN_MOVEMENT_TICK_RATE_MS);
@@ -379,5 +392,94 @@ private movementIntentHandlerRegistered = false;
     }
 
     return null;
+  }
+
+  private registerInteractHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.interactHandlerRegistered) {
+      return;
+    }
+    this.interactHandlerRegistered = true;
+
+    this.onMessage("request_interact", (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const message = raw as Partial<RequestInteractClientMessage> | null;
+
+      if (!message || typeof message.objectId !== "string") {
+        log.warn?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+          },
+          "TownRoom request_interact rejected: invalid shape.",
+        );
+        return;
+      }
+
+      // Find player presence to get their position
+      const player = state.playerPresence.get(client.sessionId);
+      if (!player) {
+        log.warn?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+          },
+          "TownRoom request_interact rejected: player not found.",
+        );
+        return;
+      }
+
+      // Validate interact request (distance check, object exists, etc.)
+      const validation = validateInteractIntent(
+        state,
+        player.x,
+        player.y,
+        message.objectId,
+      );
+
+      if (!validation.ok) {
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            objectId: message.objectId,
+            reason: validation.reason,
+          },
+          "TownRoom request_interact rejected by validation.",
+        );
+        return;
+      }
+
+      // Send response message to the requesting client
+      const responseMessage = getInteractableResponseMessage(message.objectId);
+      const response: InteractResponseServerMessage = {
+        type: "interact_response",
+        objectId: message.objectId,
+        message: responseMessage,
+      };
+
+      try {
+        client.send("interact_response", response);
+      } catch {
+        log.warn?.(
+          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+          "TownRoom interact_response send failed.",
+        );
+      }
+
+      log.debug?.(
+        {
+          roomId: this.roomId,
+          roomName: this.roomName,
+          sessionId: client.sessionId,
+          objectId: message.objectId,
+        },
+        "TownRoom request_interact accepted and response sent.",
+      );
+    });
   }
 }

@@ -223,23 +223,61 @@ no seed character data
 no fake characters
 ```
 
+### Interactable object architecture (Core 0.1)
+
+```text
+Network contract:
+  RequestInteractClientMessage: { type: "request_interact", objectId }
+  InteractResponseServerMessage: { type: "interact_response", objectId, message }
+
+Server-side:
+  Colyseus schema: Interactable class with @type decorators
+  TownRoomState: interactables MapSchema<Interactable>
+  initializeTownInteractables(state, zoneId): populates static objects from zone definition
+  validateInteractIntent(state, playerX, playerY, objectId): validates distance <= 50 units
+  getInteractableResponseMessage(objectId): returns safe text response
+  TownRoom.onMessage("request_interact", ...): validates request, sends response or logs rejection
+  No persistence: objects are recreated on room instantiation
+
+Client-side:
+  sendInteractIntent(room, objectId): dispatches request_interact message
+  registerInteractResponseListener(room, callback): listens for server responses
+  worldSessionInteractablesView.ts: renders objects as geometric shapes + labels, handles clicks
+  WorldSessionScene: listens for responses, displays message for 3 seconds
+
+Core 0.1 Scope:
+  Nightmarket has one visible object: notice board at (120, 140)
+  Objects are rendered as simple gold rectangles with labels
+  Distance validation is 50 unit radius from player
+  Responses are safe text only; no game logic coupling
+  No quests, loot, inventory effects, NPC dialogue, combat, collision or rewards
+```
+
 Current WorldSession visual layer status:
 
 ```text
 WorldSessionScene is the connected realtime-room scene
 worldSessionAreaView.ts is an extracted rendering/input helper to avoid god-file growth
 worldSessionOverlayView.ts is an extracted DOM helper for the connected-room debug overlay
+worldSessionInteractablesView.ts is an extracted interactable object rendering/click helper
 the client renders content-derived zone bounds for the active room zone
-the player dot uses synced TownRoom presence x/y only
-click/tap inside the world area sends a real request_move intent
+the player placeholder is a simple circle (body) + triangle (direction marker) + ellipse (shadow) + core
+the player body position uses synced TownRoom presence x/y only
+the direction marker (triangle) rotates to point toward the last movement target / click point
+the client renders synced TownRoom enemies as simple placeholder shapes with label + HP text
+interactable objects render as simple placeholder shapes (rectangles) with labels
+click/tap on an interactable object sends a real request_interact intent
 the client does not fake or predict local movement
 the marker updates only after room-state sync from the server
+interact response messages display for 3 seconds before clearing
 roomKind display reads synced roomKind from room state
 the overlay groups room info, player presence and movement debug into readable sections
 the overlay states clearly that it is temporary server-synced debug state, not final gameplay UI
 movement debug may show the last click target sent by the client, but position still comes only from synced room state
-no sprites, no map art, no collision, no pathfinding, no animation, no combat
-no inventory UI and no persistence yet
+TownRoom currently syncs one static Trashboar Runt placeholder enemy in the Nightmarket only
+this is still placeholder visual UI, not final art or animation
+no sprites, no map art, no collision, no pathfinding, no final animation, no combat, no enemy AI
+no inventory UI, no persistence, no rich NPC dialogue, no quests, no rewards yet
 ```
 
 Client scene boundary rule:

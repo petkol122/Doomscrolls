@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@doomscrolls/localization": "workspace:*",
-    "@doomscrolls/shared": "workspace:*"
-  },
-  "devDependencies": {}
+    "@doomscrolls/shared": "workspace:*",
+    "uuid": "^14.0.0"
+  }
 }

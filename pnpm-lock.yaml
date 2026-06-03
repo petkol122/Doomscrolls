@@ -72,6 +72,9 @@ importers:
       ioredis:
         specifier: ^5.11.0
         version: 5.11.0
+      uuid:
+        specifier: ^14.0.0
+        version: 14.0.0
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -94,10 +97,20 @@ importers:
       '@doomscrolls/shared':
         specifier: workspace:*
         version: link:../shared
+      uuid:
+        specifier: ^14.0.0
+        version: 14.0.0
 
   packages/localization: {}
 
-  packages/shared: {}
+  packages/shared:
+    dependencies:
+      '@colyseus/schema':
+        specifier: ^3.0.69
+        version: 3.0.76
+      '@doomscrolls/localization':
+        specifier: workspace:*
+        version: link:../localization
 
 packages:
 
@@ -170,6 +183,10 @@ packages:
 
   '@colyseus/redis-presence@0.17.7':
     resolution: {integrity: sha512-N3QHKod90NidKzMbkIV2hNEnQl2GyiBzb2pQ+zGJZc87oKH6hdNmUThOqrUIN5bqqZky4HPzEsQbX/qjBDDT4A==}
+
+  '@colyseus/schema@3.0.76':
+    resolution: {integrity: sha512-i+ceBZyhB7lTn5+BoG/xxYfzW4dKKyLOywsGKVgXHe9fD905AS/Lk180jd1bICEJhebGeiRXEQ2YUPl/xwFg2g==}
+    hasBin: true
 
   '@colyseus/schema@4.0.26':
     resolution: {integrity: sha512-Zhabe73gFQxryb9sElsYJ6ZCvhMrhJxDNmbKnja2u4PgLaOht42FsPHZ2eYzM/epGI0FmhAzMo/opyNfjkLfEw==}
@@ -1967,6 +1984,10 @@ packages:
   uri-js@4.4.1:
     resolution: {integrity: sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==}
 
+  uuid@14.0.0:
+    resolution: {integrity: sha512-Qo+uWgilfSmAhXCMav1uYFynlQO7fMFiMVZsQqZRMIXp0O7rR7qjkj+cPvBHLgBqi960QCoo/PH2/6ZtVqKvrg==}
+    hasBin: true
+
   uuid@8.3.2:
     resolution: {integrity: sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==}
     deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
@@ -2143,6 +2164,8 @@ snapshots:
       - express
       - supports-color
       - zod
+
+  '@colyseus/schema@3.0.76': {}
 
   '@colyseus/schema@4.0.26(typescript@5.9.3)':
     dependencies:
@@ -3863,6 +3886,8 @@ snapshots:
   uri-js@4.4.1:
     dependencies:
       punycode: 2.3.1
+
+  uuid@14.0.0: {}
 
   uuid@8.3.2: {}
 

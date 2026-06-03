@@ -131,6 +131,16 @@ export interface ErrorServerMessage {
   readonly message: string;
 }
 
+/**
+ * Task 057 — Interactable Object Foundation Batch
+ * Server sends interact response with a safe message.
+ */
+export interface InteractResponseServerMessage {
+  readonly type: "interact_response";
+  readonly objectId: string;
+  readonly message: string;
+}
+
 export type ServerRoomMessage =
   | RoomStateSnapshotServerMessage
   | RoomStatePatchServerMessage
@@ -147,4 +157,5 @@ export type ServerRoomMessage =
   | ChatMessageServerMessage
   | ZoneTransitionApprovedServerMessage
   | RequestMoveRejectedServerMessage
+  | InteractResponseServerMessage
   | ErrorServerMessage;

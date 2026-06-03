@@ -22,6 +22,8 @@ export * from "./room/RoomStateTypes";
 export * from "./room/SpawnPointTypes";
 export * from "./room/PlayerPosition";
 export * from "./room/RoomJoinTypes";
+export * from "./room/InteractableObjectTypes";
+export * from "./room/EnemyPresence";
 
 export * from "./protocol/ClientMessages";
 export * from "./protocol/ServerMessages";
