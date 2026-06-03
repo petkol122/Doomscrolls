@@ -1,4 +1,15 @@
-import type { AuthResult, AuthSession, CharacterSummary, LoginPayload, PublicProfile, User, UserSettings } from "@doomscrolls/shared";
+import type {
+  AuthResult,
+  AuthSession,
+  CharacterDetails,
+  CharacterId,
+  CharacterSummary,
+  CreateCharacterPayload,
+  LoginPayload,
+  PublicProfile,
+  User,
+  UserSettings,
+} from "@doomscrolls/shared";
 
 export interface HealthCheckResult {
   readonly ok: boolean;
@@ -23,6 +34,26 @@ export interface AccountState {
 export interface AuthResponse extends AuthResult {
   readonly session: AuthSession;
   readonly characters: readonly CharacterSummary[];
+}
+
+interface CharacterSummaryHttpDto extends Omit<CharacterSummary, "originKey" | "classKey"> {
+  readonly originId: CharacterSummary["originKey"];
+  readonly classId: CharacterSummary["classKey"];
+}
+
+interface CharacterDetailsHttpDto extends Omit<CharacterDetails, "originKey" | "classKey"> {
+  readonly originId: CharacterDetails["originKey"];
+  readonly classId: CharacterDetails["classKey"];
+}
+
+interface CharacterListResponseHttpDto {
+  readonly characters: readonly CharacterSummaryHttpDto[];
+}
+
+interface CreateCharacterHttpRequest {
+  readonly characterName: CreateCharacterPayload["characterName"];
+  readonly originId: CreateCharacterPayload["originKey"];
+  readonly classId: CreateCharacterPayload["classKey"];
 }
 
 export type ApiErrorCode =
@@ -101,6 +132,37 @@ export class ApiClient {
     });
   }
 
+  public async getCharacters(sessionToken: string): Promise<readonly CharacterSummary[]> {
+    const response = await this.request<CharacterListResponseHttpDto>("/characters", {
+      method: "GET",
+      sessionToken
+    });
+
+    return response.characters.map((character) => this.toCharacterSummary(character));
+  }
+
+  public async createCharacter(
+    sessionToken: string,
+    input: CreateCharacterPayload
+  ): Promise<CharacterSummary> {
+    const response = await this.request<CharacterSummaryHttpDto>("/characters", {
+      method: "POST",
+      sessionToken,
+      body: this.toCreateCharacterHttpRequest(input)
+    });
+
+    return this.toCharacterSummary(response);
+  }
+
+  public async getCharacter(sessionToken: string, characterId: CharacterId): Promise<CharacterDetails> {
+    const response = await this.request<CharacterDetailsHttpDto>(`/characters/${characterId}`, {
+      method: "GET",
+      sessionToken
+    });
+
+    return this.toCharacterDetails(response);
+  }
+
   private async request<TResponse>(path: string, options: RequestOptions): Promise<TResponse> {
     const requestUrl = new URL(path, this.apiUrl);
 
@@ -143,6 +205,34 @@ export class ApiClient {
     }
 
     return headers;
+  }
+
+  private toCreateCharacterHttpRequest(input: CreateCharacterPayload): CreateCharacterHttpRequest {
+    return {
+      characterName: input.characterName,
+      originId: input.originKey,
+      classId: input.classKey
+    };
+  }
+
+  private toCharacterSummary(character: CharacterSummaryHttpDto): CharacterSummary {
+    const { originId, classId, ...rest } = character;
+
+    return {
+      ...rest,
+      originKey: originId,
+      classKey: classId
+    };
+  }
+
+  private toCharacterDetails(character: CharacterDetailsHttpDto): CharacterDetails {
+    const { originId, classId, ...rest } = character;
+
+    return {
+      ...rest,
+      originKey: originId,
+      classKey: classId
+    };
   }
 
   private async createErrorFromResponse(response: Response): Promise<ApiClientError> {
