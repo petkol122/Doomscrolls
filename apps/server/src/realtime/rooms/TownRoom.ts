@@ -29,7 +29,7 @@ import { TownRoomState } from "./TownRoomState";
  *  - client UI changes
  *  - fake gameplay
  */
-export class TownRoom extends Room<TownRoomState> {
+export class TownRoom extends Room {
   public static readonly ROOM_NAME = "town";
 
   public override async onCreate(options: TownRoomJoinOptions): Promise<void> {
@@ -140,7 +140,7 @@ export class TownRoom extends Room<TownRoomState> {
       throw new Error(`room_join_rejected:${result.reason}`);
     }
 
-    this.state.connectedPlayerCount += 1;
+    (this.state as TownRoomState).connectedPlayerCount += 1;
 
     safeLog.info?.(
       {
@@ -149,16 +149,17 @@ export class TownRoom extends Room<TownRoomState> {
         userId: result.character.ownerUserId,
         characterId: result.character.id,
         zoneId: result.resolvedZoneId,
-        connectedPlayerCount: this.state.connectedPlayerCount,
+        connectedPlayerCount: (this.state as TownRoomState).connectedPlayerCount,
       },
       "TownRoom join accepted, connectedPlayerCount incremented.",
     );
   }
 
   public override async onLeave(_client: Client): Promise<void> {
-    this.state.connectedPlayerCount = Math.max(
+    const state = this.state as TownRoomState;
+    state.connectedPlayerCount = Math.max(
       0,
-      this.state.connectedPlayerCount - 1,
+      state.connectedPlayerCount - 1,
     );
   }
 
