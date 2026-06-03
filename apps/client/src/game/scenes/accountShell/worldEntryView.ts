@@ -4,7 +4,6 @@ import type { Room } from "@colyseus/sdk";
 import { formatTownRoomState } from "../../../net/RealtimeClient";
 import { getTownRoomPresence } from "../../../net/townRoomPresence";
 import { createButton, createInfoLine } from "./accountShellDom";
-import { createWorldAreaInput } from "./worldAreaInputView";
 
 export function createWorldEntryStub(
   characters: readonly CharacterSummary[],
@@ -134,9 +133,6 @@ export function createConnectedWorldSessionView(
     onLeaveWorld();
   });
   section.appendChild(leaveButton);
-
-  const worldArea = createWorldAreaInput({ room });
-  section.appendChild(worldArea.container);
 
   return section;
 }

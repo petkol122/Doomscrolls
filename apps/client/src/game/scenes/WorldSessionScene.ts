@@ -6,6 +6,7 @@ import type { AccountState } from "../../net/ApiClient";
 import { createAccountHeader } from "./accountShell/accountShellAccountHeader";
 import { applyOverlayPanelStyles, applyOverlayRootStyles } from "./accountShell/accountShellOverlayStyling";
 import { createConnectedWorldSessionView } from "./accountShell/worldEntryView";
+import { createWorldSessionAreaView, type WorldSessionAreaView } from "./worldSession/worldSessionAreaView";
 
 interface WorldSessionSceneData {
   readonly account: AccountState;
@@ -18,6 +19,7 @@ export class WorldSessionScene extends Phaser.Scene {
   private account: AccountState | null = null;
   private characterId: CharacterId | null = null;
   private room: Room<DoomscrollsRoomState> | null = null;
+  private worldAreaView: WorldSessionAreaView | null = null;
 
   public constructor() {
     super("WorldSessionScene");
@@ -45,15 +47,18 @@ export class WorldSessionScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    this.worldAreaView = createWorldSessionAreaView(this, this.room);
+
     this.renderOverlay();
     this.room.onStateChange(() => {
       if (this.room !== null) {
+        this.worldAreaView?.refreshFromRoomState(this.room);
         this.renderOverlay();
       }
     });
 
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroyOverlay());
-    this.events.once(Phaser.Scenes.Events.DESTROY, () => this.destroyOverlay());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.handleSceneTeardown());
+    this.events.once(Phaser.Scenes.Events.DESTROY, () => this.handleSceneTeardown());
   }
 
   private renderOverlay(): void {
@@ -117,5 +122,11 @@ export class WorldSessionScene extends Phaser.Scene {
   private destroyOverlay(): void {
     this.overlay?.remove();
     this.overlay = null;
+  }
+
+  private handleSceneTeardown(): void {
+    this.worldAreaView?.destroy();
+    this.worldAreaView = null;
+    this.destroyOverlay();
   }
 }
