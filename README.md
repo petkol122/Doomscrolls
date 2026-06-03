@@ -228,6 +228,20 @@ Character creation is server-owned and uses the `@doomscrolls/content` registry 
 
 Character creation persists Character, CharacterStats, CharacterPassive and Inventory records atomically via the repository layer. No starting items, frontend character UI, gameplay rooms, movement, combat, loot, inventory placement or equipment logic are implemented yet.
 
+Character API runtime verification has passed locally:
+
+```text
+GET  /characters              -> 200 OK
+POST /characters              -> 201 Created
+GET  /characters/:characterId -> 200 OK
+duplicate same-account name   -> 409 Conflict
+same name on second account   -> 201 Created
+invalid origin                -> 400 Bad Request
+missing token                 -> 401 Unauthorized
+```
+
+Verified responses do not expose `passwordHash` or `tokenHash`. This verification covers the server HTTP Character API only; there is still no frontend character UI and no gameplay/room implementation.
+
 Generate Prisma Client for the server:
 
 ```bash

@@ -114,6 +114,20 @@ GET  /characters/:characterId
 
 All require `Authorization: Bearer <session-token>`. Routes validate request shape with zod and leave detailed character-name/content validation to `CharacterService`. Character names are unique only within the owning account, and missing/not-owned characters return `404` without exposing other users' data.
 
+Character API runtime verification has passed for the implemented server routes:
+
+```text
+GET  /characters              -> 200 OK
+POST /characters              -> 201 Created
+GET  /characters/:characterId -> 200 OK
+duplicate same-account name   -> 409 Conflict
+same name on second account   -> 201 Created
+invalid origin                -> 400 Bad Request
+missing token                 -> 401 Unauthorized
+```
+
+Verified responses must not expose `passwordHash` or `tokenHash`. Character API documentation must continue to state that no frontend character UI, gameplay rooms, movement, combat, loot, seed data, inventory placement or equipment logic exists until those are implemented by explicit dedicated tasks.
+
 Core 0.1 starting stat formulas:
 
 ```text

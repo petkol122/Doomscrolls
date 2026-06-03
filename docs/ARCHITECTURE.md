@@ -345,6 +345,20 @@ GET  /characters/:characterId - authenticated owner-scoped detail lookup
 
 All character routes require `Authorization: Bearer <session-token>`. Missing, malformed, invalid or expired tokens return `401 Unauthorized`. Request validation in routes checks only JSON/body/path shape (`characterName`, `originId`, `classId`, `characterId` strings); detailed character-name and content validation remains in `CharacterService`. Character errors are mapped safely: invalid character name/origin/class/origin-class combination to `400`, duplicate account-local character name to `409`, missing/not-owned character to `404`, and internal character errors to `500`. Raw Prisma errors and stack traces must not be exposed.
 
+Runtime verification status: implemented and locally verified. The verified Character API behavior is:
+
+```text
+GET  /characters              -> 200 OK
+POST /characters              -> 201 Created
+GET  /characters/:characterId -> 200 OK
+duplicate same-account name   -> 409 Conflict
+same name on second account   -> 201 Created
+invalid origin                -> 400 Bad Request
+missing token                 -> 401 Unauthorized
+```
+
+Runtime verification also confirmed that `passwordHash` and `tokenHash` are not exposed in Character API responses. This does not add or imply frontend character UI, gameplay rooms, movement, combat, loot, seed data, inventory placement or equipment logic.
+
 ### Character creation transaction safety
 
 `CharacterService.createCharacter()` validates input before persistence, then delegates atomic creation to `CharacterRepository.createCharacterWithInitialState()`. The repository uses Prisma nested writes inside `$transaction` when a full `PrismaClient` is available, creating `Character`, `CharacterStats`, `CharacterPassive` and `Inventory` together. If the nested create fails, no partial character initialization should remain. Prisma unique constraint violations are mapped to the safe `CHARACTER_NAME_TAKEN` error and raw Prisma errors are not leaked. Character details include the persisted empty inventory grid configuration, but no starting items, placement behavior or equipment logic are implemented in this route task.

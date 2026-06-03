@@ -140,6 +140,8 @@ Implement character creation, character name validation, origin/class validation
 
 Status: Character domain service foundation implemented at `apps/server/src/character/` and exposed through authenticated Fastify HTTP routes in `apps/server/src/http/routes/character.routes.ts`. `GET /characters`, `POST /characters` and `GET /characters/:characterId` require Bearer auth, call `CharacterService`, and return safe owner-scoped character DTOs. The service supports character name validation/normalization, per-account duplicate name checks, content-registry origin/class validation, allowed origin/class enforcement, server-calculated starting stats, origin-defined starting passive/zone and empty Core 0.1 inventory initialization. Character names are unique only within the owning account. Frontend character UI, gameplay rooms, movement, combat, loot, starting items, inventory placement and equipment logic remain deferred.
 
+Runtime verification: passed locally for the implemented Character API routes. Verified outcomes: `GET /characters` returns `200`, `POST /characters` returns `201`, `GET /characters/:characterId` returns `200`, duplicate same-account character name returns `409`, the same character name on a second account returns `201`, invalid origin returns `400`, missing Bearer token returns `401`, and responses do not expose `passwordHash` or `tokenHash`. This task status is documentation-only and does not add frontend character UI, gameplay rooms, seed data or gameplay behavior.
+
 ### Task 013 — Room Authentication
 
 Authenticated room joins with character ownership validation.
