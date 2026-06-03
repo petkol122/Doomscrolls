@@ -6,3 +6,4 @@ export { TOWN_ROOM_NAME } from "./townRoomName";
 
 // Room-related shared type contracts
 export type { TownRoomJoinOptions } from "./townRoomTypes";
+export { TownRoomState } from "./TownRoomState";

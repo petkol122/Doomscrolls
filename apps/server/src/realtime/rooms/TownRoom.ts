@@ -1,4 +1,4 @@
-import { Room } from "colyseus";
+import { Room, Client } from "colyseus";
 import type {
   CharacterId,
   UserId,
@@ -7,51 +7,48 @@ import type {
 import type { ServerLogger } from "../../config/logger";
 import { RoomJoinValidationService } from "../RoomJoinValidationService";
 import type { TownRoomJoinOptions } from "./townRoomTypes";
+import { TownRoomState } from "./TownRoomState";
 
 /**
- * Empty placeholder Colyseus room for town (hub) gameplay.
+ * TownRoom with minimal Colyseus schema state.
  *
- * Task 018.1 scope:
- *  - extends `colyseus.Room`
- *  - accepts a placeholder `TownRoomJoinOptions` for future `onCreate` / `onJoin` use
- *  - `onCreate` logs a safe, minimal initialization event
- *  - `onJoin`  logs a safe join event without validating anything
- *  - `onLeave` / `onDispose` are intentionally no-ops
+ * Task 021.1 scope:
+ *  - Creates and sets a TownRoomState schema containing:
+ *      roomKind = "town"
+ *      zoneId
+ *      connectedPlayerCount
+ *  - On valid join, increments connectedPlayerCount.
+ *  - On leave, decrements connectedPlayerCount (floor 0).
  *
- * Task 018.2 scope (this file):
- *  - `onJoin` now wires `RoomJoinValidationService` to validate the join
- *    using the authenticated user/session context and the requested character.
- *  - Invalid joins are rejected safely by throwing from `onJoin`; the raw
- *    session token is never logged, and the session token value is never
- *    embedded in the thrown error message.
- *  - Valid joins are accepted but do NOT spawn any player entity, do NOT
- *    create any room state, and do NOT start any gameplay. Spawning a
- *    player is intentionally deferred to a later dedicated task.
- *
- * Explicitly out of scope (deferred to later dedicated tasks):
- *  - state schema, players, entities, movement, combat
- *  - chat, inventory, equipment, persistence
- *  - real client connection UI
- *  - seed data
+ * Explicitly out of scope:
+ *  - player entity
+ *  - position / movement / combat
+ *  - map
+ *  - chat
+ *  - persistence
+ *  - client UI changes
+ *  - fake gameplay
  */
-export class TownRoom extends Room {
+export class TownRoom extends Room<TownRoomState> {
   public static readonly ROOM_NAME = "town";
 
-  public override async onCreate(_options: TownRoomJoinOptions): Promise<void> {
+  public override async onCreate(options: TownRoomJoinOptions): Promise<void> {
     const logger = (this as unknown as { logger?: ServerLogger }).logger;
+
+    const zoneId: ZoneId = options.requestedZoneId ?? ("nightmarket" as ZoneId);
+
+    this.setState(new TownRoomState(zoneId));
+
     if (logger && typeof logger.info === "function") {
       logger.info(
-        { roomId: this.roomId, roomName: this.roomName },
-        "TownRoom created (placeholder, no gameplay state).",
+        { roomId: this.roomId, roomName: this.roomName, zoneId, roomKind: "town" },
+        "TownRoom created with minimal state schema.",
       );
     }
-
-    // options is intentionally unused for now; reserved for future join-options.
-    void _options;
   }
 
   public override async onJoin(
-    _client: unknown,
+    _client: Client,
     options?: TownRoomJoinOptions,
   ): Promise<void> {
     const logger = (this as unknown as { logger?: ServerLogger }).logger;
@@ -133,15 +130,17 @@ export class TownRoom extends Room {
 
     if (!result.success) {
       safeLog.warn?.(
-        {
-          roomId: this.roomId,
-          roomName: this.roomName,
-          reason: result.reason,
+        { 
+          roomId: this.roomId, 
+          roomName: this.roomName, 
+          reason: result.reason, 
         },
         "TownRoom join rejected by validation service.",
       );
       throw new Error(`room_join_rejected:${result.reason}`);
     }
+
+    this.state.connectedPlayerCount += 1;
 
     safeLog.info?.(
       {
@@ -150,12 +149,17 @@ export class TownRoom extends Room {
         userId: result.character.ownerUserId,
         characterId: result.character.id,
         zoneId: result.resolvedZoneId,
+        connectedPlayerCount: this.state.connectedPlayerCount,
       },
-      "TownRoom join accepted (validation only, no player spawn).",
+      "TownRoom join accepted, connectedPlayerCount incremented.",
     );
+  }
 
-    // Intentionally NOT spawning a player entity. Spawning is deferred to
-    // a later dedicated task per Task 018.2 scope.
+  public override async onLeave(_client: Client): Promise<void> {
+    this.state.connectedPlayerCount = Math.max(
+      0,
+      this.state.connectedPlayerCount - 1,
+    );
   }
 
   /**
@@ -191,7 +195,7 @@ export class TownRoom extends Room {
       };
       if (options.requestedZoneId !== undefined) {
         return { ...result, requestedZoneId: options.requestedZoneId };
-      }
+      } 
       return result;
     }
 

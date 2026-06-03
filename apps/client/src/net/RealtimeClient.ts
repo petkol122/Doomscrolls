@@ -33,3 +33,19 @@ export async function joinTownRoom(
 
   return client.joinOrCreate("town", payload);
 }
+
+/**
+ * Formats town room state for display/logging purposes.
+ * Extracts and formats key town room information.
+ */
+export function formatTownRoomState(state: RoomState): {
+  roomKind: string;
+  zoneId: string;
+  playerCount: number;
+} {
+  return {
+    roomKind: state.kind,
+    zoneId: state.zoneId,
+    playerCount: state.connectedPlayerCount,
+  };
+}
