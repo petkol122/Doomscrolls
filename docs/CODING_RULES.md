@@ -235,7 +235,7 @@ TownRoom rules:
 - invalid join cases must fail safely and must not leak another user's character data
 - invalid join cases were checked earlier through the room join validation flow and must remain covered as join behavior evolves
 - client code must not decide room access or claim join success without the server
-- the server creates a `PlayerPresence` entry on `onJoin` with `sessionId`, `characterId`, `characterName` (as `displayName`) and the resolved `spawnPointId`
+- the server creates a `PlayerPresence` entry on `onJoin` with `sessionId`, `characterId`, `characterName` (as `displayName`), the resolved `spawnPointId`, initial x/y and runtime `movementSpeed`
 - the server removes the `PlayerPresence` entry on `onLeave`
 - `connectedPlayerCount` must derive from `playerPresence.size` on join/leave, never be set independently
 - the client renders roomKind, zoneId and connectedPlayerCount from room state; additionally it may extract player presence via a dedicated helper (`getTownRoomPresence`) to display connected player names
@@ -348,6 +348,9 @@ Movement intent foundation rules:
 - The server helper `applyMovementIntent(state, sessionId, targetX, targetY)` lives in `apps/server/src/realtime/rooms/applyMovementIntent.ts` and stores `hasMovementTarget` / `targetX` / `targetY` in the Colyseus schema state. It must not validate, move instantly, check speed/cooldown/collision/pathfinding, persist to DB, or trigger gameplay events
 - `TownRoom` runs a server-owned simulation interval every 50 ms and delegates movement stepping to `stepTownRoomMovement(state, deltaMs)` in `apps/server/src/realtime/rooms/stepTownRoomMovement.ts`
 - `stepTownRoomMovement()` is the only place in this foundation that may mutate synced `PlayerPresence.x` / `y` after join; it moves them gradually toward the stored target and clears the target when close enough
+- `TownRoom` must resolve runtime movement speed from the joined character's derived stats on join and store it in `PlayerPresence.movementSpeed`
+- `stepTownRoomMovement()` must use each player's stored `movementSpeed` for per-player authoritative step distance; it must not invent client-owned speed
+- `TOWN_MOVEMENT_SPEED_FALLBACK_UNITS_PER_SECOND` exists only as a server safety guard when runtime speed is missing or invalid; it must not be documented or treated as the primary gameplay speed source
 - A newer valid `request_move` replaces the previously stored target for that player
 - The server still does NOT know about collision, pathfinding, combat, or persistence; movement stepping is only authoritative target following
 - Default movement intent bounds (`DEFAULT_MOVEMENT_INTENT_BOUNDS`) are a temporary, conservative numeric range, not a map size; real map-aware bounds will be introduced together with real map data in a later task
@@ -374,6 +377,7 @@ WorldSession visual layer rules:
 - the player marker/dot must use synced `TownRoom` presence `x`/`y` only
 - room header/status display must read synced `roomKind` from room state rather than inventing or hardcoding the value client-side
 - client code must not fake local movement, prediction, smoothing, interpolation or invented position updates in this layer
+- debug presence text may show synced `movementSpeed` when it is already present in `PlayerPresence`, but this must stay debug text only and must not become a gameplay HUD
 - click/tap input in the world area may send only a real `request_move` intent through `sendMovementIntent()` on an already-joined room
 - visual refresh after input must come from synced room-state updates, not from local speculative movement
 - runtime sanity for movement must continue to confirm gradual server-synced stepping and valid second-click retargeting, not instant local teleport behavior

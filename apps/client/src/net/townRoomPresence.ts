@@ -42,6 +42,12 @@ export interface PlayerPresenceEntry {
    * collision, or interpolation is implied by this display helper.
    */
   readonly position?: PlayerPosition;
+  /**
+   * Server-synced runtime movement speed for this player, when present.
+   * Optional because older / partial state objects may not carry the field
+   * yet; callers must treat absence as "unknown", not as zero speed.
+   */
+  readonly movementSpeed?: number;
 }
 
 export interface TownRoomPresence {
@@ -84,7 +90,8 @@ export function getTownRoomPresence(
 
     const withSpawn = applyOptionalSpawnPoint(baseEntry, value);
     const withPosition = applyOptionalPosition(withSpawn, value);
-    players.push(withPosition);
+    const withMovementSpeed = applyOptionalMovementSpeed(withPosition, value);
+    players.push(withMovementSpeed);
   });
 
   return {
@@ -121,4 +128,18 @@ function applyOptionalPosition(
   }
   const position: PlayerPosition = { x: rawX, y: rawY };
   return { ...entry, position };
+}
+
+function applyOptionalMovementSpeed(
+  entry: PlayerPresenceEntry,
+  value: Record<string, unknown>,
+): PlayerPresenceEntry {
+  const rawMovementSpeed = value.movementSpeed;
+  if (typeof rawMovementSpeed !== "number") {
+    return entry;
+  }
+  if (!Number.isFinite(rawMovementSpeed) || rawMovementSpeed <= 0) {
+    return entry;
+  }
+  return { ...entry, movementSpeed: rawMovementSpeed };
 }

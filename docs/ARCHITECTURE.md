@@ -527,7 +527,7 @@ Current TownRoom state:
 roomKind: "town"
 zoneId: varies (currently "nightmarket")
 playerPresence: MapSchema<PlayerPresence> keyed by Colyseus sessionId
-  each entry: { sessionId, characterId, displayName, spawnPointId, x, y }
+  each entry: { sessionId, characterId, displayName, spawnPointId, x, y, movementSpeed, hasMovementTarget, targetX, targetY }
 connectedPlayerCount: derived from playerPresence.size on join/leave
 ```
 
@@ -565,17 +565,19 @@ shared server reject: RequestMoveRejectedServerMessage { type: "request_move_rej
 shared reject reasons: invalid_shape | non_finite_target | out_of_range
 server helper:        validateMovementIntent(input) -> { ok: true, targetX, targetY, clientTime? } | { ok: false, reason }
 server helper:        applyMovementIntent(state, sessionId, targetX, targetY) - stores hasMovementTarget/targetX/targetY on PlayerPresence
-server helper:        stepTownRoomMovement(state, deltaMs) - advances authoritative x/y toward stored target and clears it when reached
+server helper:        stepTownRoomMovement(state, deltaMs) - advances authoritative x/y toward stored target using per-player movementSpeed and clears it when reached
 TownRoom.onMessage("request_move", ...)  - validates intent shape + range, on accept stores the target via applyMovementIntent(), on rejection sends request_move_rejected
 TownRoom.setSimulationInterval(..., 50)  - runs the authoritative movement step every 50 ms
 client helper:        sendMovementIntent(room, targetX, targetY, options?)  - sends request_move through an already-joined Colyseus room
 client display:       onStateChange re-renders the world session visual layer; updated x/y shown from synced presence state only
 room is intentionally a thin Colyseus shell; validation + application live in apps/server/src/realtime/rooms/movementIntentValidation.ts and applyMovementIntent.ts
 newer request_move intents replace the previously stored target for that player
-no collision, no pathfinding, no stat-driven speed, no interpolation, no combat coupling, no persistence yet
+movementSpeed is resolved from character-derived stats on join and stored in synced PlayerPresence runtime state
+fallback speed exists only as a server safety guard when synced runtime speed is missing/invalid
+no collision, no pathfinding, no interpolation, no combat coupling, no persistence yet
 ```
 
-This batch includes the network contract, validation shell, target storage and authoritative movement stepping. When the server accepts a `request_move` intent, it calls `applyMovementIntent()` which stores the validated `targetX`/`targetY` as the player's movement target in the Colyseus schema. A separate simulation interval then runs every 50 ms and `stepTownRoomMovement()` advances authoritative `PlayerPresence.x`/`y` toward that stored target at a constant server-owned rate. If a newer click arrives first, it simply replaces the previous target. Colyseus broadcasts the resulting x/y updates automatically to all clients. On the client, the `onStateChange` handler re-renders the world session layer from synced room state only. There is still no collision, no pathfinding, no stat-driven move speed, no interpolation, no combat coupling, and no persistence tied to it yet. The validator uses zone bounds as placeholder constraints rather than real map geometry.
+This batch includes the network contract, validation shell, target storage and authoritative movement stepping. When the server accepts a `request_move` intent, it calls `applyMovementIntent()` which stores the validated `targetX`/`targetY` as the player's movement target in the Colyseus schema. On `TownRoom` join, the server resolves a runtime movement speed from the selected character's derived stats (`character.stats.derived.moveSpeed`) and stores that speed in `PlayerPresence.movementSpeed`. A separate simulation interval then runs every 50 ms and `stepTownRoomMovement()` advances authoritative `PlayerPresence.x`/`y` toward that stored target using each player's own stored speed. If a player's runtime speed is missing or invalid, the step helper uses `TOWN_MOVEMENT_SPEED_FALLBACK_UNITS_PER_SECOND` as a safety fallback only. If a newer click arrives first, it simply replaces the previous target. Colyseus broadcasts the resulting x/y updates automatically to all clients. On the client, the `onStateChange` handler re-renders the world session layer from synced room state only. There is still no collision, no pathfinding, no interpolation, no combat coupling, and no persistence tied to it yet. The validator uses zone bounds as placeholder constraints rather than real map geometry.
 
 Authoritative movement runtime sanity passed locally with account `movecheck044` and character `Mover044`. The synced player marker moved gradually under server control rather than teleporting instantly on the client, and a second click correctly replaced the previous target before arrival. The client room header/status also fixed a display bug by reading `roomKind` directly from synced room state. This verification does not imply map art, collision, pathfinding, combat, persistence, or a real gameplay loop.
 
@@ -600,7 +602,6 @@ no map yet
 no combat yet
 no gameplay yet
 no collision/pathfinding yet
-no stat-driven speed yet
 no movement persistence yet
 ```
 

@@ -113,7 +113,11 @@ export function createConnectedWorldSessionView(
         player.position !== undefined
           ? ` (x=${player.position.x}, y=${player.position.y})`
           : "";
-      li.textContent = `${player.displayName} (${player.characterId})${spawnSuffix}${positionSuffix}`;
+      const speedSuffix =
+        player.movementSpeed !== undefined
+          ? ` speed=${player.movementSpeed}`
+          : "";
+      li.textContent = `${player.displayName} (${player.characterId})${spawnSuffix}${positionSuffix}${speedSuffix}`;
       li.style.marginBottom = "2px";
       playerList.appendChild(li);
     }

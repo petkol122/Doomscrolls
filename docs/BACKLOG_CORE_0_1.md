@@ -239,7 +239,13 @@ Implement Blackwire Sewers room with player entity state.
 
 Implement server-authoritative click-to-move.
 
-Status: partially implemented as the current movement-step foundation. `request_move` is a real shared/network contract, the server validates the intent, `applyMovementIntent()` stores `targetX` / `targetY` on the authoritative player presence entry, and `TownRoom` runs a 50 ms simulation interval that calls `stepTownRoomMovement()` to move synced `x` / `y` gradually toward the stored target. A newer click replaces the previous target. The client renders synced x/y only and does not fake local movement. Collision, pathfinding, stat-driven speed, interpolation/smoothing, combat coupling and persistence remain deferred.
+Status: partially implemented as the current movement-step foundation. `request_move` is a real shared/network contract, the server validates the intent, `applyMovementIntent()` stores `targetX` / `targetY` on the authoritative player presence entry, and `TownRoom` runs a 50 ms simulation interval that calls `stepTownRoomMovement()` to move synced `x` / `y` gradually toward the stored target. `TownRoom` resolves a runtime movement speed from the joined character's derived stats and stores that value in `PlayerPresence.movementSpeed`; the movement tick uses each player's stored speed, with a fallback constant kept only as a server safety guard for invalid runtime state. A newer click replaces the previous target. The client renders synced x/y only and may show synced speed in debug presence text when available. Collision, pathfinding, interpolation/smoothing, combat coupling and persistence remain deferred.
+
+### Task 048 — Movement Speed Docs + Small Client Display
+
+Document the current movement-speed flow and, if already synchronized, show speed in the debug presence list only.
+
+Status: implemented. The docs now state that `TownRoom` resolves runtime movement speed from character-derived stats on join, stores that speed in `PlayerPresence`, and that `stepTownRoomMovement()` uses each player's synced speed during the 50 ms authoritative movement tick. They also state that the fallback speed constant exists only as a server safety guard when runtime speed is missing or invalid. On the client, `apps/client/src/net/townRoomPresence.ts` now forwards synced `movementSpeed` when present, and `apps/client/src/game/scenes/accountShell/worldEntryView.ts` appends it to the existing debug player-presence text. No prediction, gameplay HUD, collision, pathfinding, combat, inventory or persistence changes were added.
 
 ### Task 017 — Enemy Spawn and AI
 
