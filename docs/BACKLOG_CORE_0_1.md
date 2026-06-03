@@ -143,7 +143,7 @@ no fake character data appeared
 
 Document runtime verification of selected character state/persistence. This is a documentation-only task and must not change code, add a play button, add room joins, add gameplay, add seed data or add fake characters.
 
-Status: documented after local runtime verification. `AccountShellScene` supports selected character state for real account characters. The first real character is selected by default, the user can select another real character, and the selected character ID persists in `localStorage` under `doomscrolls.selectedCharacterId`. Stored selection is restored only when it belongs to the current account's real `/me` characters. Logout clears selected character storage. There is still no play button, no room join and no gameplay.
+Status: documented after local runtime verification. `AccountShellScene` supports selected character state for real account characters. The first real character is selected by default, the user can select another real character, and the selected character ID persists in `localStorage` under `doomscrolls.selectedCharacterId`. Stored selection is restored only when it belongs to the current account's real `/me` characters. Logout clears selected character storage. `AccountShellScene` remains the authenticated account/character shell only; there is still no connected room shell or gameplay in this task.
 
 Runtime verification summary:
 
@@ -183,6 +183,13 @@ This validation service now backs the empty TownRoom join gate. No client room c
 Document empty `TownRoom` registration and valid join runtime verification. This is a documentation-only task and must not add code, player entities, room state schema, maps, movement, combat, gameplay, client UI connection or fake room behavior.
 
 Status: documented after local runtime verification. `TownRoom` is registered as the Colyseus room name `town`. It validates joins with a real `sessionToken` plus `characterId`, and a valid owned character can join. Invalid join cases were checked earlier through the room join validation flow. The room remains an empty shell: no player entity, no room state schema, no map, no movement, no combat, no gameplay and no client UI connection.
+
+Client scene boundary note for follow-up tasks:
+
+```text
+AccountShellScene = authenticated account/character shell
+WorldSessionScene = connected room shell once a real join succeeds
+```
 
 Runtime verification summary:
 

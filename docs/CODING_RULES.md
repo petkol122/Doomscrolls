@@ -167,6 +167,9 @@ Client auth UI rules:
 - the room reference must be stored in client memory only, not in localStorage or any persistent storage
 - the Leave button must call room.leave() and reset to the pre-join UI state
 - client UI documentation must explicitly state when no fake characters, rooms, gameplay or seed data were added
+- `AccountShellScene` must stay the authenticated account/character shell; it owns account info, real character list/create/select flows and pre-join world entry only
+- `WorldSessionScene` must stay the connected room shell; it owns the active joined-room view and leave-world flow after a real server-approved join
+- if either client scene starts growing, extract only obvious tiny shared helpers or view modules under `apps/client/src/game/scenes/accountShell/` before the scene becomes a god file
 
 ---
 

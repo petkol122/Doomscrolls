@@ -210,7 +210,7 @@ Current client character UI status:
 ```text
 Enter World button calls real RealtimeClient.joinTownRoom on click
 Enter World enabled only when a character is selected
-successful join shows "Connected to The Nightmarket."
+successful join starts WorldSessionScene, the connected room shell
 failed join shows safe "Could not enter world."
 Leave button appears after successful join
 room reference is stored in client memory only
@@ -223,7 +223,14 @@ no seed character data
 no fake characters
 ```
 
-AccountShellScene was refactored to avoid god-file growth. DOM helpers, character list view, character create form view, and world entry view were extracted into separate modules under `apps/client/src/game/scenes/accountShell/`. The scene file itself remains focused on orchestration only. Code-size rule: scene files must not grow into monoliths; extract view/helper modules as the scene accumulates functionality.
+Client scene boundary rule:
+
+```text
+AccountShellScene = authenticated account/character shell before room connection
+WorldSessionScene = connected room shell after a successful realtime join
+```
+
+`AccountShellScene` was refactored to avoid god-file growth. DOM helpers, a shared account header helper, character list view, character create form view, and world entry view were extracted into separate modules under `apps/client/src/game/scenes/accountShell/`. The scene file itself remains focused on orchestration only. `WorldSessionScene` remains intentionally smaller and focused on the connected-room shell. Code-size rule: scene files must not grow into monoliths; extract view/helper modules as the scene accumulates functionality.
 
 Runtime verification summary:
 
