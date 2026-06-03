@@ -216,6 +216,12 @@ export class AccountShellScene extends Phaser.Scene {
       this.room = joinedRoom;
       this.entered = true;
 
+      joinedRoom.onStateChange(() => {
+        if (this.account !== null && this.room === joinedRoom) {
+          this.renderAccountOverlay(this.account);
+        }
+      });
+
       if (this.account !== null) {
         this.renderAccountOverlay(this.account);
       }
