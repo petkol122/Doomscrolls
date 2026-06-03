@@ -40,6 +40,8 @@ export type {
   SkillTargetingMode,
   SpawnPointContentDefinition,
   SpawnPointContentId,
+  ZoneContentBounds,
   ZoneContentDefinition,
+  ZoneContentId,
   ZoneRoomType
 } from "./data/types";

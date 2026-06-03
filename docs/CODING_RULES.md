@@ -300,6 +300,23 @@ Player position foundation rules:
 - do not add movement input, server-side movement simulation, pathfinding, facing/direction interpolation, map rendering, scene-based player placement, player sprite, combat, loot, XP, inventory, equipment or corpse behavior to the player position foundation without a dedicated task
 - the player position foundation is data flow only and must not be presented as gameplay
 
+## Zone Bounds Content Rules
+
+Core 0.1 ships zone-specific movement bounds as part of zone content definitions. Each zone defines a `bounds` field (`{ minX, maxX, minY, maxY }`) that represents conservative placeholder constraints for movement intent validation, not collision geometry or map size.
+
+Zone bounds content rules:
+
+- `ZoneContentBounds` is a shared type defined in `packages/content/src/data/types.ts` with four finite number fields: `minX`, `maxX`, `minY`, `maxY`
+- Every `ZoneContentDefinition` must include a `bounds` field
+- Content validation (`validateContentRegistry`) enforces that:
+  - `minX < maxX` and `minY < maxY`
+  - all four values are finite numbers
+- `resolveZoneBounds(zoneId)` (`apps/server/src/realtime/rooms/resolveZoneBounds.ts`) is the server-side helper that looks up zone bounds from the content registry by `ZoneId`
+- `TownRoom.registerMovementIntentHandler` resolves the room's `zoneId` through `resolveZoneBounds` and passes the result as `bounds` to `validateMovementIntent`, replacing the old generic `DEFAULT_MOVEMENT_INTENT_BOUNDS`
+- The `DEFAULT_MOVEMENT_INTENT_BOUNDS` constant in `movementIntentValidation.ts` remains as a fallback when no caller-supplied bounds are provided (e.g. future combat rooms before they adopt zone-aware bounds)
+- Zone bounds are placeholder zone constraints, not collision geometry or map size; they must not be used for map rendering, pathfinding, collision detection, or game world geometry
+- zone content validation must not be presented as gameplay
+
 ## Movement Intent Foundation Rules
 
 Core 0.1 ships a movement intent foundation defined in `packages/shared/src/protocol/ClientMessages.ts`, `packages/shared/src/protocol/ServerMessages.ts`, the server helper `validateMovementIntent()` in `apps/server/src/realtime/rooms/movementIntentValidation.ts`, the `TownRoom` `request_move` message handler, and the client helper `sendMovementIntent()` in `apps/client/src/net/movementIntentClient.ts`. The intent contract and validation shell are in place; movement simulation itself is intentionally not part of this batch.

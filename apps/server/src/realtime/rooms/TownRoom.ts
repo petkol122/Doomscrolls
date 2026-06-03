@@ -12,6 +12,7 @@ import { buildTownPlayerPresence } from "./buildPlayerPresence";
 import { createRoomLogger } from "./roomLogger";
 import { validateMovementIntent } from "./movementIntentValidation";
 import { applyMovementIntent } from "./applyMovementIntent";
+import { resolveZoneBounds } from "./resolveZoneBounds";
 
 /**
  * TownRoom with minimal Colyseus schema state.
@@ -235,7 +236,9 @@ private movementIntentHandlerRegistered = false;
     this.movementIntentHandlerRegistered = true;
 
     this.onMessage("request_move", (client: Client, raw: unknown) => {
-      const result = validateMovementIntent({ message: raw });
+      const state = this.state as TownRoomState;
+      const zoneBounds = resolveZoneBounds(state.zoneId);
+      const result = validateMovementIntent({ message: raw, bounds: zoneBounds });
 
       if (!result.ok) {
         const candidate = raw as { clientTime?: unknown } | null;
@@ -274,7 +277,6 @@ private movementIntentHandlerRegistered = false;
       // Apply the validated position update to the player's
       // PlayerPresence. Colyseus schema synchronization handles the
       // broadcast automatically.
-      const state = this.state as TownRoomState;
       const applied = applyMovementIntent(
         state,
         client.sessionId,

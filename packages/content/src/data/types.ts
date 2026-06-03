@@ -72,6 +72,13 @@ export interface EnemyContentDefinition extends LocalizedContentDefinition {
   readonly spriteKey: string;
 }
 
+export interface ZoneContentBounds {
+  readonly minX: number;
+  readonly maxX: number;
+  readonly minY: number;
+  readonly maxY: number;
+}
+
 export interface ZoneContentDefinition extends LocalizedContentDefinition {
   readonly id: ZoneContentId;
   readonly zoneId: ZoneId;
@@ -80,6 +87,7 @@ export interface ZoneContentDefinition extends LocalizedContentDefinition {
   readonly enemyIds: readonly EnemyId[];
   readonly transitionZoneIds: readonly ZoneContentId[];
   readonly mapKey: string;
+  readonly bounds: ZoneContentBounds;
 }
 
 export interface ItemUseEffectDefinition {
