@@ -12,7 +12,12 @@ import {
 } from "../../auth/sessionStorage";
 import { clientEnv } from "../../config/env";
 import { ApiClient, ApiClientError, type AccountState, type ApiErrorCode } from "../../net/ApiClient";
-import { createRealtimeClient, joinTownRoom } from "../../net/RealtimeClient";
+import {
+  createRealtimeClient,
+  formatTownRoomState,
+  joinTownRoom
+} from "../../net/RealtimeClient";
+import type { RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
 
 const CORE_0_1_ORIGIN_ID = "sewer_dweller" satisfies OriginKey;
 const CORE_0_1_CLASS_ID = "gravewalker" satisfies CharacterClassKey;
@@ -34,7 +39,7 @@ export class AccountShellScene extends Phaser.Scene {
   private account: AccountState | null = null;
   private apiClient: ApiClient | null = null;
   private selectedCharacterId: CharacterId | null = null;
-  private room: Room | null = null;
+  private room: Room<DoomscrollsRoomState> | null = null;
   private entered: boolean = false;
 
   public constructor() {
@@ -214,6 +219,13 @@ export class AccountShellScene extends Phaser.Scene {
     status.style.margin = "10px 0 0";
     status.style.color = this.entered ? "#b9d49a" : "#c7ad84";
     section.appendChild(status);
+
+    if (this.entered && this.room !== null) {
+      const roomState = formatTownRoomState(this.room.state);
+      section.appendChild(this.createInfoLine("Room Kind", roomState.roomKind));
+      section.appendChild(this.createInfoLine("Zone ID", roomState.zoneId));
+      section.appendChild(this.createInfoLine("Connected Players", String(roomState.playerCount)));
+    }
 
     if (this.entered) {
       const leaveButton = this.createButton(t("world_entry.leave_world"));
