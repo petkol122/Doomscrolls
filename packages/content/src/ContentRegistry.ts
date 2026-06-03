@@ -7,6 +7,7 @@ import { lootTables } from "./data/lootTables";
 import { origins } from "./data/origins";
 import { passives } from "./data/passives";
 import { skills } from "./data/skills";
+import { spawnPoints } from "./data/spawnPoints";
 import { zones } from "./data/zones";
 import type {
   CharacterClassContentDefinition,
@@ -18,6 +19,7 @@ import type {
   OriginContentDefinition,
   PassiveContentDefinition,
   SkillContentDefinition,
+  SpawnPointContentDefinition,
   ZoneContentDefinition
 } from "./data/types";
 
@@ -40,6 +42,7 @@ export interface ContentRegistryInput {
   readonly zones: readonly ZoneContentDefinition[];
   readonly levelTables: readonly LevelTableDefinition[];
   readonly equipmentSlots: readonly EquipmentSlotContentDefinition[];
+  readonly spawnPoints: readonly SpawnPointContentDefinition[];
 }
 
 function createCollection<TDefinition extends { readonly id: string }>(
@@ -84,6 +87,7 @@ export class ContentRegistry {
   public readonly zones: ContentCollection<ZoneContentDefinition>;
   public readonly levelTables: ContentCollection<LevelTableDefinition>;
   public readonly equipmentSlots: ContentCollection<EquipmentSlotContentDefinition>;
+  public readonly spawnPoints: ContentCollection<SpawnPointContentDefinition>;
 
   public constructor(input: ContentRegistryInput) {
     this.origins = createCollection("origin", input.origins);
@@ -96,6 +100,7 @@ export class ContentRegistry {
     this.zones = createCollection("zone", input.zones);
     this.levelTables = createCollection("level table", input.levelTables);
     this.equipmentSlots = createCollection("equipment slot", input.equipmentSlots);
+    this.spawnPoints = createCollection("spawn point", input.spawnPoints);
   }
 }
 
@@ -109,5 +114,6 @@ export const contentRegistry = new ContentRegistry({
   lootTables,
   zones,
   levelTables,
-  equipmentSlots
+  equipmentSlots,
+  spawnPoints
 });

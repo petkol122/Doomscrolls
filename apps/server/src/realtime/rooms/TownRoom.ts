@@ -9,6 +9,7 @@ import { RoomJoinValidationService } from "../RoomJoinValidationService";
 import type { TownRoomJoinOptions } from "./townRoomTypes";
 import { TownRoomState } from "./TownRoomState";
 import { PlayerPresence } from "./PlayerPresence";
+import { resolveTownSpawnPoint } from "./resolveTownSpawnPoint";
 
 /**
  * TownRoom with minimal Colyseus schema state.
@@ -146,9 +147,14 @@ export class TownRoom extends Room {
     const characterId = result.character.id;
     const characterName = result.character.characterName;
 
+    // Task 023.2: resolve the spawn point for this TownRoom join from
+    // content. Only the id is stored on presence for now; no x/y is
+    // exposed as an active gameplay position, no movement, no entity.
+    const spawnPointId = resolveTownSpawnPoint(result.resolvedZoneId);
+
     state.playerPresence.set(
       sessionId,
-      new PlayerPresence(sessionId, characterId, characterName),
+      new PlayerPresence(sessionId, characterId, characterName, spawnPointId),
     );
     state.connectedPlayerCount = state.playerPresence.size;
 
@@ -160,9 +166,10 @@ export class TownRoom extends Room {
         userId: result.character.ownerUserId,
         characterId,
         zoneId: result.resolvedZoneId,
+        spawnPointId,
         connectedPlayerCount: state.connectedPlayerCount,
       },
-      "TownRoom join accepted, player presence added.",
+      "TownRoom join accepted, player presence added with resolved spawn point.",
     );
   }
 
