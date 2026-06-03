@@ -11,11 +11,12 @@ import { TownRoomState } from "./TownRoomState";
 import { buildTownPlayerPresence } from "./buildPlayerPresence";
 import { createRoomLogger } from "./roomLogger";
 import { validateMovementIntent } from "./movementIntentValidation";
+import { applyMovementIntent } from "./applyMovementIntent";
 
 /**
  * TownRoom with minimal Colyseus schema state.
  *
- * Task 021.1 / 022.1 / 023.2 / 025 / 026 scope:
+ * Task 021.1 / 022.1 / 023.2 / 025 / 026 / 029 scope:
  *  - Creates and sets a TownRoomState schema containing:
  *      roomKind = "town"
  *      zoneId
@@ -26,11 +27,15 @@ import { validateMovementIntent } from "./movementIntentValidation";
  *    entry with the initial world position copied from the spawn
  *    point, and inserts it into the presence map.
  *  - On leave, removes the presence entry.
- *  - Task 026: registers a `request_move` message handler that only
+ *  - Task 026: registers a `request_move` message handler that
  *    validates the intent shape + range and (on rejection) sends a
  *    safe `request_move_rejected` message back to the originating
- *    client. It does NOT mutate player position, does NOT broadcast,
- *    and does NOT know about maps, collision or pathfinding.
+ *    client.
+ *  - Task 029: on acceptance, applies the validated position update
+ *    to the player's PlayerPresence via {@link applyMovementIntent},
+ *    which is broadcast automatically through Colyseus schema sync.
+ *    No interpolation, pathfinding, collision, map, speed checks,
+ *    combat or persistence.
  *
  * Player presence building is delegated to
  * {@link buildTownPlayerPresence} so this room stays a thin Colyseus
@@ -52,13 +57,17 @@ import { validateMovementIntent } from "./movementIntentValidation";
 export class TownRoom extends Room {
   public static readonly ROOM_NAME = "town";
 
-  /**
-   * Per-room flag: the `request_move` handler is registered once on
-   * `onCreate` rather than per-client. Colyseus delivers untrusted,
-   * schema-typed messages of the registered `type` to the handler
-   * with the originating client and raw payload.
-   */
-  private movementIntentHandlerRegistered = false;
+/**
+ * Per-room flag: the `request_move` handler is registered once on
+ * `onCreate` rather than per-client. Colyseus delivers untrusted,
+ * schema-typed messages of the registered `type` to the handler
+ * with the originating client and raw payload.
+ *
+ * Task 029 extends the handler to also apply the validated position
+ * update to the player's PlayerPresence, which is then broadcast
+ * automatically through Colyseus schema synchronization.
+ */
+private movementIntentHandlerRegistered = false;
 
   public override async onCreate(options: TownRoomJoinOptions): Promise<void> {
     const log = createRoomLogger(
@@ -203,13 +212,14 @@ export class TownRoom extends Room {
   /**
    * Register the `request_move` message handler on the room.
    *
-   * Scope (Task 026 — foundation only):
+   * Scope (Task 026 foundation + Task 029 movement step 1):
    *   - validates the intent shape and range
    *   - on rejection, sends a `request_move_rejected` message back
    *     to the originating client with a safe reason code
-   *   - on acceptance, currently logs the validated intent at debug
-   *     level only; it does NOT mutate any player position, does NOT
-   *     broadcast, and does NOT touch `PlayerPresence.x` / `PlayerPresence.y`
+   *   - on acceptance, applies the validated position update to the
+   *     player's PlayerPresence via {@link applyMovementIntent} so the
+   *     new x/y is broadcast automatically through Colyseus schema
+   *     synchronization
    *
    * The handler is registered once per room. Colyseus forwards every
    * untrusted, schema-typed message of the registered `type` to this
@@ -261,20 +271,41 @@ export class TownRoom extends Room {
         return;
       }
 
-      // Intent accepted by the validator. Intentionally NOT mutating
-      // any player position, NOT broadcasting, and NOT changing
-      // PlayerPresence.x/y. Future movement tasks will own that.
-      log.debug?.(
-        {
-          roomId: this.roomId,
-          roomName: this.roomName,
-          sessionId: client.sessionId,
-          targetX: result.targetX,
-          targetY: result.targetY,
-          clientTime: result.clientTime,
-        },
-        "TownRoom request_move accepted by validator (no movement yet).",
+      // Apply the validated position update to the player's
+      // PlayerPresence. Colyseus schema synchronization handles the
+      // broadcast automatically.
+      const state = this.state as TownRoomState;
+      const applied = applyMovementIntent(
+        state,
+        client.sessionId,
+        result.targetX,
+        result.targetY,
       );
+
+      if (applied) {
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            targetX: result.targetX,
+            targetY: result.targetY,
+            clientTime: result.clientTime,
+          },
+          "TownRoom request_move applied and broadcast via schema sync.",
+        );
+      } else {
+        log.warn?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            targetX: result.targetX,
+            targetY: result.targetY,
+          },
+          "TownRoom request_move accepted but player presence not found.",
+        );
+      }
     });
   }
 
