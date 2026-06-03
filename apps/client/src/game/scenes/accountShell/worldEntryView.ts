@@ -2,6 +2,7 @@ import { t } from "@doomscrolls/localization";
 import type { CharacterId, CharacterSummary, RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
 import type { Room } from "@colyseus/sdk";
 import { formatTownRoomState } from "../../../net/RealtimeClient";
+import { getTownRoomPresence } from "../../../net/townRoomPresence";
 import { createButton, createInfoLine } from "./accountShellDom";
 
 export function createWorldEntryStub(
@@ -64,6 +65,31 @@ export function createWorldEntryStub(
     section.appendChild(createInfoLine("Room Kind", roomState.roomKind));
     section.appendChild(createInfoLine("Zone ID", roomState.zoneId));
     section.appendChild(createInfoLine("Connected Players", String(roomState.playerCount)));
+
+    const presence = getTownRoomPresence(room.state as unknown as Record<string, unknown>);
+    if (presence !== null && presence.players.length > 0) {
+      const playerList = document.createElement("ul");
+      playerList.style.margin = "8px 0 0";
+      playerList.style.padding = "0";
+      playerList.style.listStyle = "none";
+      playerList.style.fontSize = "13px";
+      playerList.style.color = "#b9d49a";
+
+      for (const player of presence.players) {
+        const li = document.createElement("li");
+        li.textContent = `${player.displayName} (${player.characterId})`;
+        li.style.marginBottom = "2px";
+        playerList.appendChild(li);
+      }
+
+      const label = document.createElement("p");
+      label.textContent = "Players:";
+      label.style.margin = "10px 0 2px";
+      label.style.fontSize = "13px";
+      label.style.color = "#a88d63";
+      section.appendChild(label);
+      section.appendChild(playerList);
+    }
   }
 
   if (entered) {
