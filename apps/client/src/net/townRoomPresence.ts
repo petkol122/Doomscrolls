@@ -10,9 +10,10 @@
  * import Colyseus schema types directly.
  *
  * Task 022.2 — Client Presence Display Types Only.
+ * Task 023.3 — Client Spawn Point Display Helper Only.
  */
 
-import type { CharacterId } from "@doomscrolls/shared";
+import type { CharacterId, SpawnPointId } from "@doomscrolls/shared";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -22,6 +23,12 @@ export interface PlayerPresenceEntry {
   readonly sessionId: string;
   readonly characterId: CharacterId;
   readonly displayName: string;
+  /**
+   * Spawn point id assigned to the player by the server, when present.
+   * Optional because older / partial state objects may not carry the field
+   * yet; callers must treat absence as "unknown", not as "no spawn".
+   */
+  readonly spawnPointId?: SpawnPointId;
 }
 
 export interface TownRoomPresence {
@@ -56,12 +63,21 @@ export function getTownRoomPresence(
 
   const players: PlayerPresenceEntry[] = [];
   presenceMap.forEach((value) => {
-    const entry: PlayerPresenceEntry = {
+    const rawSpawnPointId = value.spawnPointId;
+    const baseEntry: PlayerPresenceEntry = {
       sessionId: String(value.sessionId ?? ""),
       characterId: (value.characterId ?? "") as CharacterId,
       displayName: String(value.displayName ?? ""),
     };
-    players.push(entry);
+    if (typeof rawSpawnPointId === "string" && rawSpawnPointId.length > 0) {
+      const entryWithSpawn: PlayerPresenceEntry = {
+        ...baseEntry,
+        spawnPointId: rawSpawnPointId as SpawnPointId,
+      };
+      players.push(entryWithSpawn);
+    } else {
+      players.push(baseEntry);
+    }
   });
 
   return {

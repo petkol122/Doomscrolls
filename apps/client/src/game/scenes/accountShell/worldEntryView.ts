@@ -77,7 +77,11 @@ export function createWorldEntryStub(
 
       for (const player of presence.players) {
         const li = document.createElement("li");
-        li.textContent = `${player.displayName} (${player.characterId})`;
+        const spawnSuffix =
+          player.spawnPointId !== undefined && player.spawnPointId.length > 0
+            ? ` @ ${player.spawnPointId}`
+            : "";
+        li.textContent = `${player.displayName} (${player.characterId})${spawnSuffix}`;
         li.style.marginBottom = "2px";
         playerList.appendChild(li);
       }
