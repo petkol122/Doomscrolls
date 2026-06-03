@@ -31,7 +31,7 @@ export interface LocalizedContentDefinition {
 
 export interface OriginContentDefinition extends LocalizedContentDefinition {
   readonly id: OriginKey;
-  readonly passiveId: PassiveKey;
+  readonly passiveIds: readonly PassiveKey[];
   readonly startingZoneId: ZoneContentId;
   readonly allowedClassIds: readonly CharacterClassKey[];
   readonly baseStats: PrimaryStats;

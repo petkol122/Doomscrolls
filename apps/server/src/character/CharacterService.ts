@@ -20,6 +20,8 @@ function isPrismaUniqueConstraintError(error: unknown): error is Prisma.PrismaCl
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 }
 
+// Temporary pre-death-system baseline: character creation and generic detail reads report
+// persisted characters as alive until the dedicated death/corpse service owns this state.
 const ALIVE_DEATH_STATE = { lifeState: "alive" } as const;
 
 export class CharacterService {
@@ -97,13 +99,11 @@ export class CharacterService {
           ...startingStats.primary,
           ...startingStats.derived,
         },
-        passives: [
-          {
-            passiveId: origin.passiveId,
-            sourceType: "origin",
-            sourceId: origin.id,
-          },
-        ],
+        passives: origin.passiveIds.map((passiveId) => ({
+          passiveId,
+          sourceType: "origin",
+          sourceId: origin.id,
+        })),
         inventory: {
           pageCount: this.config.inventoryPageCount,
           gridWidth: this.config.inventoryGridWidth,

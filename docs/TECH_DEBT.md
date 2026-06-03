@@ -20,6 +20,18 @@ Status:
 
 Known tech debt is listed below.
 
+## Character death state baseline before corpse system
+
+```text
+Date: 2026-06-03
+Area: Character domain service
+Description: CharacterService returns deathState.lifeState = "alive" for newly created characters and for generic character detail reads.
+Reason: The dedicated death/corpse/respawn system is not implemented yet, and this task must not introduce it. New characters being alive is correct; existing persisted characters use this value as an explicit pre-death-system baseline only.
+Risk: Once death/corpse persistence becomes authoritative, generic character detail reads must use persisted death/corpse state instead of the temporary baseline.
+Planned fix: Replace the baseline in the dedicated death/corpse service task by reading authoritative character life state and active corpse state from persistence.
+Status: Open
+```
+
 ## Core 0.1 client token storage
 
 ```text

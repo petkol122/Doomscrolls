@@ -85,8 +85,10 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
   for (const origin of registry.origins.all) {
     validateLocalizedDefinition("origin", origin, errors);
 
-    if (!registry.passives.has(origin.passiveId)) {
-      errors.push({ category: "origin", id: origin.id, message: `Unknown passive id: ${origin.passiveId}` });
+    for (const passiveId of origin.passiveIds) {
+      if (!registry.passives.has(passiveId)) {
+        errors.push({ category: "origin", id: origin.id, message: `Unknown passive id: ${passiveId}` });
+      }
     }
 
     if (!registry.zones.has(origin.startingZoneId)) {
