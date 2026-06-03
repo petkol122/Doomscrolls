@@ -12,5 +12,6 @@ export type RoomId = Brand<string, "RoomId">;
 export type ZoneId = Brand<string, "ZoneId">;
 export type CorpseId = Brand<string, "CorpseId">;
 export type ContentId = Brand<string, "ContentId">;
+export type SpawnPointId = Brand<string, "SpawnPointId">;
 
 export type IsoDateTimeString = Brand<string, "IsoDateTimeString">;

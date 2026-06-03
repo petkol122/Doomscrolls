@@ -88,7 +88,8 @@ export const REQUIRED_LOCALIZATION_KEYS = [
   "error.invalid_token",
   "error.invalid_character_create_input",
   "error.duplicate_character_name",
-  "error.missing_localization_key"
+  "error.missing_localization_key",
+  "spawn.nightmarket.default"
 ] as const;
 
 export type RequiredLocalizationKey = (typeof REQUIRED_LOCALIZATION_KEYS)[number];

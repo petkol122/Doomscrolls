@@ -19,6 +19,7 @@ export { enemies } from "./data/enemies";
 export { items } from "./data/items";
 export { lootTables } from "./data/lootTables";
 export { zones } from "./data/zones";
+export { spawnPoints } from "./data/spawnPoints";
 export { levelTables } from "./data/levelTables";
 export { equipmentSlots } from "./data/equipmentSlots";
 
@@ -37,6 +38,8 @@ export type {
   PassiveContentDefinition,
   SkillContentDefinition,
   SkillTargetingMode,
+  SpawnPointContentDefinition,
+  SpawnPointContentId,
   ZoneContentDefinition,
   ZoneRoomType
 } from "./data/types";
