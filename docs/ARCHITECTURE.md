@@ -531,6 +531,8 @@ no combat yet
 no gameplay yet
 ```
 
+`TownRoom` is intentionally kept as a thin Colyseus shell. Logger wrappers (e.g. `roomLogger.ts`) and other reusable helpers live in separate files under `apps/server/src/realtime/rooms/`; gameplay, map, movement, combat, AI, loot, XP, inventory, equipment, corpse, persistence and UI logic must not accumulate inside `TownRoom.ts` or future room files. Helpers must be extracted before a room file becomes monolithic. The full guard is defined in `docs/CODING_RULES.md` under `Realtime Room File-Size Guard`.
+
 Runtime verification summary:
 
 ```text

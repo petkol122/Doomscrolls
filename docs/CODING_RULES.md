@@ -240,6 +240,32 @@ TownRoom rules:
 - do not add a player entity list, map, movement, combat, loot, XP, inventory, equipment, corpse behavior, gameplay messages or client UI gameplay connection to `TownRoom` without a dedicated task
 - empty room registration must not be presented as gameplay
 
+## Realtime Room File-Size Guard
+
+Realtime room files (e.g. `TownRoom.ts`, future `CombatRoom.ts`) must stay small and orchestration-focused. A room file is the Colyseus room class; it is not a place to accumulate game systems.
+
+Realtime room file-size guard rules:
+
+- `TownRoom` (and every future room file) should stay a thin Colyseus shell: room lifecycle (`onCreate` / `onJoin` / `onLeave`), join validation, presence and the minimal schema state required to represent the room
+- Logger wrappers and any other small reusable helpers belong in separate helper modules such as `roomLogger.ts` (`apps/server/src/realtime/rooms/roomLogger.ts`); they must not be inlined into room files
+- Room files must not accumulate gameplay, map, movement, pathing, combat, AI, loot, XP, inventory, equipment, corpse behavior, chat, networking serialization, networking deserialization or UI logic
+- Room files must not grow into monoliths; extract helpers, validators, message handlers, schema classes, presence builders and other concerns into dedicated modules before a room file becomes large
+- A room file is showing "god file" pressure when it owns responsibilities from more than one of: lifecycle, validation, message handling, state schema, presence, gameplay, AI, persistence, UI. Split before merge in that case
+- New helpers extracted from a room file must be placed under `apps/server/src/realtime/rooms/` (or a clearly-named subdirectory such as `helpers/`) and should be reusable across rooms where it makes sense
+- Room files must not duplicate helper logic across rooms; if the same logger wrapper, validator or presence helper is needed by more than one room, it must be a shared helper module, not copy-pasted
+- Gameplay behavior, even small isolated bits, must not be added to a room file without a dedicated task that also updates `docs/ARCHITECTURE.md` and `docs/CODING_RULES.md`
+- Extract helpers before files become monolithic; if a room file starts needing its own logger, validator, schema builder, presence builder or message handler, that piece must move to a separate file first
+
+Extraction examples (already applied):
+
+```text
+apps/server/src/realtime/rooms/roomLogger.ts             - shared Colyseus logger wrapper
+apps/server/src/realtime/rooms/resolveTownSpawnPoint.ts  - content-based spawn point lookup
+apps/client/src/net/townRoomPresence.ts                  - client presence extraction helper
+```
+
+Any new room helper must follow the same pattern: own file, focused responsibility, no gameplay, no hardcoded content.
+
 ## Spawn Point Foundation Rules
 
 Core 0.1 ships the data-driven spawn point foundation defined across `packages/shared/src/room/SpawnPointTypes.ts` and `packages/content/src/data/spawnPoints.ts`. Spawn point behavior is intentionally limited to data flow and join-time resolution; no movement, no map, no entity placement and no combat depend on it yet.
