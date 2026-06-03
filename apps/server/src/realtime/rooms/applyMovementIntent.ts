@@ -1,18 +1,17 @@
 import type { TownRoomState } from "./TownRoomState";
-import { clampMovementStep } from "./clampMovementStep";
-
 /**
- * Apply a validated movement intent by updating the player's world
- * position in the Colyseus schema state.
+ * Apply a validated movement intent by updating the player's server-owned
+ * target position in the Colyseus schema state.
  *
  * The change is broadcast automatically by Colyseus through the schema
  * synchronization mechanism — no manual broadcast is needed.
  *
- * This function mutates the state in-place. It clamps the requested
- * movement target against the player's current position and updates the
- * `PlayerPresence.x` and `PlayerPresence.y` fields. It does NOT:
+ * This function mutates the state in-place. It stores the requested
+ * target in `hasMovementTarget` / `targetX` / `targetY`. Position updates
+ * happen later on the room simulation tick. It does NOT:
  *  - validate the intent (caller must have run
  *    {@link validateMovementIntent} first)
+ *  - move the player immediately
  *  - perform pathfinding, collision, interpolation or persistence
  *  - persist the new position to the database
  *  - trigger any gameplay events (combat, loot, etc.)
@@ -23,9 +22,8 @@ import { clampMovementStep } from "./clampMovementStep";
  * @param sessionId  The Colyseus session ID of the moving player.
  * @param targetX  The validated target X coordinate.
  * @param targetY  The validated target Y coordinate.
- * @returns The applied coordinates if the presence entry was found and
- *          updated; `null` if no presence entry exists for the given
- *          sessionId.
+ * @returns The stored target if the presence entry was found and updated;
+ *          `null` if no presence entry exists for the given sessionId.
  */
 export function applyMovementIntent(
   state: TownRoomState,
@@ -39,10 +37,9 @@ export function applyMovementIntent(
     return null;
   }
 
-  const appliedTarget = clampMovementStep(presence, targetX, targetY);
+  presence.hasMovementTarget = true;
+  presence.targetX = targetX;
+  presence.targetY = targetY;
 
-  presence.x = appliedTarget.x;
-  presence.y = appliedTarget.y;
-
-  return appliedTarget;
+  return { x: targetX, y: targetY };
 }

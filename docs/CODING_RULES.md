@@ -344,21 +344,39 @@ Movement intent foundation rules:
 - `targetX` / `targetY` are required finite numbers; `clientTime` is optional and informational only and must never be trusted for any gameplay outcome
 - The server helper `validateMovementIntent({ message, bounds? })` returns a discriminated `{ ok: true, targetX, targetY, clientTime? } | { ok: false, reason }` result and never throws
 - Server-owned rejection reasons live in `RequestMoveRejectedReason = "invalid_shape" | "non_finite_target" | "out_of_range"`; the reason set is intentionally generic across future combat / dungeon / boss rooms
-- `TownRoom.onMessage("request_move", ...)` validates the intent and, on acceptance, applies the validated position to `PlayerPresence.x` / `PlayerPresence.y` via `applyMovementIntent()`; on rejection, sends a `request_move_rejected` message back
-- The server helper `applyMovementIntent(state, sessionId, targetX, targetY)` lives in `apps/server/src/realtime/rooms/applyMovementIntent.ts` and sets the player's `PlayerPresence.x` / `PlayerPresence.y` in the Colyseus schema state, which is broadcast automatically. It is a thin mutation helper and must not validate, check speed/cooldown/collision/pathfinding, persist to DB, or trigger gameplay events
-- The server still does NOT know about maps, collision or pathfinding; position application is the validated target copy only
+- `TownRoom.onMessage("request_move", ...)` validates the intent and, on acceptance, stores the player's latest authoritative movement target via `applyMovementIntent()`; on rejection, sends a `request_move_rejected` message back
+- The server helper `applyMovementIntent(state, sessionId, targetX, targetY)` lives in `apps/server/src/realtime/rooms/applyMovementIntent.ts` and stores `hasMovementTarget` / `targetX` / `targetY` in the Colyseus schema state. It must not validate, move instantly, check speed/cooldown/collision/pathfinding, persist to DB, or trigger gameplay events
+- `TownRoom` runs a server-owned simulation interval every 50 ms and delegates movement stepping to `stepTownRoomMovement(state, deltaMs)` in `apps/server/src/realtime/rooms/stepTownRoomMovement.ts`
+- `stepTownRoomMovement()` is the only place in this foundation that may mutate synced `PlayerPresence.x` / `y` after join; it moves them gradually toward the stored target and clears the target when close enough
+- A newer valid `request_move` replaces the previously stored target for that player
+- The server still does NOT know about collision, pathfinding, combat, or persistence; movement stepping is only authoritative target following
 - Default movement intent bounds (`DEFAULT_MOVEMENT_INTENT_BOUNDS`) are a temporary, conservative numeric range, not a map size; real map-aware bounds will be introduced together with real map data in a later task
 - The client helper `sendMovementIntent(room, targetX, targetY, options?)` lives in its own module and is the only sanctioned way to send a `request_move` intent; it must not be wired to UI, mouse clicks, Phaser scene input or `AccountShellScene` until an explicit click-to-move task is added
 - `AccountShellScene` must not import `sendMovementIntent`; movement intent UI is deferred to later tasks
-- Movement intent foundation code must not implement movement simulation, pathfinding, collision detection, map rendering, scene-based entity placement, player sprite, combat, loot, XP, inventory, equipment, corpse behavior, or persistence
-- The movement intent foundation is a network contract, validation shell and position-application layer only and must not be presented as gameplay
+- Client rendering must use synced room-state x/y only; it must not fake local movement, prediction, interpolation, smoothing or instant teleports on click
+- Movement step foundation code must not implement collision detection, pathfinding, stat-driven speed, map rendering, scene-based entity placement, player sprite, combat, loot, XP, inventory, equipment, corpse behavior, or persistence
+- The movement intent + step foundation is a network contract, validation shell and authoritative stepping layer only and must not be presented as complete gameplay
 - The client `AccountShellScene` must not import `sendMovementIntent`; movement intent UI is deferred to later tasks
   (the dev-only "Send test move intent" button introduced by Task 027 lives in
   `apps/client/src/game/scenes/accountShell/testMoveIntentView.ts` and is rendered by
   `worldEntryView.ts` only after Enter World, not in `AccountShellScene`)
 - The dev-only test move intent button must not update any local position, must not pretend movement
   happened, must not read mouse or keyboard input, and must not introduce any map, sprite, pathfinding,
-  collision, combat or persistence; the server applies the validated position and Colyseus sync updates the client display
+
+## WorldSession Visual Layer Rules
+
+Core 0.1 ships a minimal WorldSession visual layer in `apps/client/src/game/scenes/WorldSessionScene.ts` plus the extracted helper `apps/client/src/game/scenes/worldSession/worldSessionAreaView.ts`. This layer is intentionally limited to synchronized visual feedback and real movement-intent input; it is not gameplay.
+
+WorldSession visual layer rules:
+
+- `WorldSessionScene` must stay the connected-room orchestration shell; world-area rendering/input logic belongs in `worldSessionAreaView.ts` or future dedicated helper modules, not inlined into a growing scene file
+- the world-area view may render only content-derived zone bounds for the active room zone; these bounds are visualized from content data and must not be presented as collision geometry, navigation mesh or map art
+- the player marker/dot must use synced `TownRoom` presence `x`/`y` only
+- client code must not fake local movement, prediction, smoothing, interpolation or invented position updates in this layer
+- click/tap input in the world area may send only a real `request_move` intent through `sendMovementIntent()` on an already-joined room
+- visual refresh after input must come from synced room-state updates, not from local speculative movement
+- do not add sprites, tiles, background map art, collision, pathfinding, animation, combat, enemy rendering, inventory UI or persistence to this layer without a dedicated task
+- helper extraction is required before `WorldSessionScene` becomes a god file; `worldSessionAreaView.ts` is the current example and pattern to follow
 
 ## Testing
 

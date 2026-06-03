@@ -223,6 +223,20 @@ no seed character data
 no fake characters
 ```
 
+Current WorldSession visual layer status:
+
+```text
+WorldSessionScene is the connected realtime-room scene
+worldSessionAreaView.ts is an extracted rendering/input helper to avoid god-file growth
+the client renders content-derived zone bounds for the active room zone
+the player dot uses synced TownRoom presence x/y only
+click/tap inside the world area sends a real request_move intent
+the client does not fake or predict local movement
+the marker updates only after room-state sync from the server
+no sprites, no map art, no collision, no pathfinding, no animation, no combat
+no inventory UI and no persistence yet
+```
+
 Client scene boundary rule:
 
 ```text
@@ -230,7 +244,7 @@ AccountShellScene = authenticated account/character shell before room connection
 WorldSessionScene = connected room shell after a successful realtime join
 ```
 
-`AccountShellScene` was refactored to avoid god-file growth. DOM helpers, a shared account header helper, character list view, character create form view, and world entry view were extracted into separate modules under `apps/client/src/game/scenes/accountShell/`. The scene file itself remains focused on orchestration only. `WorldSessionScene` remains intentionally smaller and focused on the connected-room shell. Code-size rule: scene files must not grow into monoliths; extract view/helper modules as the scene accumulates functionality.
+`AccountShellScene` was refactored to avoid god-file growth. DOM helpers, a shared account header helper, character list view, character create form view, and world entry view were extracted into separate modules under `apps/client/src/game/scenes/accountShell/`. `WorldSessionScene` follows the same rule: its world-area rendering/input logic is split into `apps/client/src/game/scenes/worldSession/worldSessionAreaView.ts`, leaving the scene focused on orchestration and room-state refresh. Code-size rule: scene files must not grow into monoliths; extract view/helper modules as the scene accumulates functionality.
 
 Runtime verification summary:
 
@@ -549,15 +563,18 @@ shared client intent:  RequestMoveClientMessage { type: "request_move", targetX,
 shared server reject: RequestMoveRejectedServerMessage { type: "request_move_rejected", reason, clientTime? }
 shared reject reasons: invalid_shape | non_finite_target | out_of_range
 server helper:        validateMovementIntent(input) -> { ok: true, targetX, targetY, clientTime? } | { ok: false, reason }
-server helper:        applyMovementIntent(state, sessionId, targetX, targetY) - sets PlayerPresence.x/y, Colyseus broadcasts automatically
-TownRoom.onMessage("request_move", ...)  - validates intent shape + range, on accept applies position via applyMovementIntent(), on rejection sends request_move_rejected
+server helper:        applyMovementIntent(state, sessionId, targetX, targetY) - stores hasMovementTarget/targetX/targetY on PlayerPresence
+server helper:        stepTownRoomMovement(state, deltaMs) - advances authoritative x/y toward stored target and clears it when reached
+TownRoom.onMessage("request_move", ...)  - validates intent shape + range, on accept stores the target via applyMovementIntent(), on rejection sends request_move_rejected
+TownRoom.setSimulationInterval(..., 50)  - runs the authoritative movement step every 50 ms
 client helper:        sendMovementIntent(room, targetX, targetY, options?)  - sends request_move through an already-joined Colyseus room
-client display:       onStateChange re-renders worldEntryView, updated x/y shown from presence list
+client display:       onStateChange re-renders the world session visual layer; updated x/y shown from synced presence state only
 room is intentionally a thin Colyseus shell; validation + application live in apps/server/src/realtime/rooms/movementIntentValidation.ts and applyMovementIntent.ts
-client helper is NOT wired to UI or mouse clicks yet; later tasks will own click-to-move UI and server-side movement simulation
+newer request_move intents replace the previously stored target for that player
+no collision, no pathfinding, no stat-driven speed, no interpolation, no combat coupling, no persistence yet
 ```
 
-This batch includes the network contract, validation shell and position application. When the server accepts a `request_move` intent, it calls `applyMovementIntent()` which sets the validated `targetX`/`targetY` on the player's `PlayerPresence` in the Colyseus schema, and the new position is broadcast automatically to all clients. On the client, the `onStateChange` handler re-renders the overlay and `worldEntryView.ts` shows the updated x/y from the presence list. There is still no movement simulation (speed checks, pathfinding, collision, map awareness), no map rendering, no player sprite, no combat, and no persistence tied to it yet. The validator uses a temporary, conservative numeric range as bounds (`DEFAULT_MOVEMENT_INTENT_BOUNDS`); real map-aware bounds will be introduced together with real map data in a later task.
+This batch includes the network contract, validation shell, target storage and authoritative movement stepping. When the server accepts a `request_move` intent, it calls `applyMovementIntent()` which stores the validated `targetX`/`targetY` as the player's movement target in the Colyseus schema. A separate simulation interval then runs every 50 ms and `stepTownRoomMovement()` advances authoritative `PlayerPresence.x`/`y` toward that stored target at a constant server-owned rate. If a newer click arrives first, it simply replaces the previous target. Colyseus broadcasts the resulting x/y updates automatically to all clients. On the client, the `onStateChange` handler re-renders the world session layer from synced room state only. There is still no collision, no pathfinding, no stat-driven move speed, no interpolation, no combat coupling, and no persistence tied to it yet. The validator uses zone bounds as placeholder constraints rather than real map geometry.
 
 Movement intent client UI stub (Task 027 — dev-only, no simulation):
 
@@ -577,9 +594,11 @@ Current TownRoom limitations:
 ```text
 no player entity list yet
 no map yet
-no movement yet
 no combat yet
 no gameplay yet
+no collision/pathfinding yet
+no stat-driven speed yet
+no movement persistence yet
 ```
 
 `TownRoom` is intentionally kept as a thin Colyseus shell. Logger wrappers (e.g. `roomLogger.ts`) and other reusable helpers live in separate files under `apps/server/src/realtime/rooms/`; gameplay, map, movement, combat, AI, loot, XP, inventory, equipment, corpse, persistence and UI logic must not accumulate inside `TownRoom.ts` or future room files. Helpers must be extracted before a room file becomes monolithic. The full guard is defined in `docs/CODING_RULES.md` under `Realtime Room File-Size Guard`.

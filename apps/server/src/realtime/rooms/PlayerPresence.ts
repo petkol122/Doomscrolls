@@ -4,15 +4,15 @@ import type { CharacterId, SpawnPointId } from "@doomscrolls/shared";
 /**
  * Minimal player presence entry for TownRoom.
  *
- * Contains only identity metadata plus the player's initial world
- * position:
+ * Contains only identity metadata plus the player's server-synced world
+ * position and simple authoritative movement target state:
  *  - sessionId    (Colyseus client session id)
  *  - characterId  (the player's selected character)
  *  - displayName  (the player's public display name)
  *  - spawnPointId (the spawn point resolved from content for this join)
- *  - x, y         (initial world position copied from the resolved
- *                  spawn point on join; not an active gameplay
- *                  position yet, no movement)
+ *  - x, y         (server-owned synced position)
+ *  - hasMovementTarget / targetX / targetY
+ *                (simple server-owned click-move target state)
  *
  * No pathing, no movement simulation, no facing, no map, no combat,
  * no chat, no gameplay.
@@ -28,6 +28,9 @@ export class PlayerPresence extends Schema {
   @type("string") public spawnPointId: SpawnPointId;
   @type("number") public x: number;
   @type("number") public y: number;
+  @type("boolean") public hasMovementTarget: boolean;
+  @type("number") public targetX: number;
+  @type("number") public targetY: number;
 
   constructor(
     sessionId: string,
@@ -44,5 +47,8 @@ export class PlayerPresence extends Schema {
     this.spawnPointId = spawnPointId;
     this.x = x;
     this.y = y;
+    this.hasMovementTarget = false;
+    this.targetX = x;
+    this.targetY = y;
   }
 }

@@ -239,6 +239,8 @@ Implement Blackwire Sewers room with player entity state.
 
 Implement server-authoritative click-to-move.
 
+Status: partially implemented as the current movement-step foundation. `request_move` is a real shared/network contract, the server validates the intent, `applyMovementIntent()` stores `targetX` / `targetY` on the authoritative player presence entry, and `TownRoom` runs a 50 ms simulation interval that calls `stepTownRoomMovement()` to move synced `x` / `y` gradually toward the stored target. A newer click replaces the previous target. The client renders synced x/y only and does not fake local movement. Collision, pathfinding, stat-driven speed, interpolation/smoothing, combat coupling and persistence remain deferred.
+
 ### Task 017 — Enemy Spawn and AI
 
 Spawn Trashboar Runt from content and implement AI v1.
@@ -320,6 +322,20 @@ No position, movement, map, combat, chat, persistence, or gameplay was added. Th
 Add the shared `SpawnPointDefinition` type and content-side `SpawnPointContentDefinition` so spawn points are data-driven like every other Core 0.1 gameplay concept.
 
 Status: implemented. `SpawnPointDefinition` lives in `packages/shared/src/room/SpawnPointTypes.ts` with `id`, `zoneId`, `x`, `y`, and an optional `labelKey`. The content side defines `SpawnPointContentDefinition` in `packages/content/src/data/types.ts` and registers exactly one Core 0.1 spawn point (`nightmarket_spawn`, `zoneId = "nightmarket"`) in `packages/content/src/data/spawnPoints.ts`. x/y are content data only and are not used as an active gameplay position yet.
+
+### Task 041 — WorldSession Visual Layer Docs
+
+Document the current WorldSession visual layer. This is a documentation-only task and must not change code, add movement simulation, add sprites, add map art, add collision/pathfinding, add combat, add inventory UI or add persistence.
+
+Status: documented after reading the current client WorldSession implementation and running validation checks. `WorldSessionScene` now documents the current connected-room visual layer accurately: `worldSessionAreaView.ts` is the extracted rendering/input helper, the client renders content-derived zone bounds for the active zone, the player dot uses synced `TownRoom` presence `x`/`y` only, and click/tap inside the area sends a real movement intent through the joined room. The client does not fake local movement or predict the resulting position; the marker updates only after synced room-state changes arrive from the server.
+
+The documented forbidden scope remains unchanged: no sprites, no map art, no collision, no pathfinding, no animation, no combat, no inventory UI and no persistence yet. The helper split into `worldSessionAreaView.ts` is explicitly documented to keep `WorldSessionScene` orchestration-focused and avoid client scene god-file growth.
+
+### Task 043 — Movement Step Docs + Runtime Sanity
+
+Document the current server-authoritative movement stepping and, if practical, do one light runtime sanity check. This task must not add features.
+
+Status: documented from the current implementation. `request_move` no longer means an instant authoritative teleport to the clicked point. Instead, accepted input stores `targetX` / `targetY` on server-owned movement-target fields, and the server simulation tick moves `PlayerPresence.x` / `y` toward that target every 50 ms. A newer click replaces the older target. The client renders synced x/y only. Collision, pathfinding, stat-driven speed, interpolation/smoothing, combat coupling and persistence are still out of scope.
 
 ### Task 023.2 — Spawn Point Assignment Only
 

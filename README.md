@@ -234,27 +234,34 @@ no map rendering, pathfinding, collision, or speed checks yet
 
 The client depends on `@doomscrolls/content` for these bounds. This is safe because the content package contains only pure TypeScript data and types — no Node-only runtime APIs such as Prisma, Fastify, Colyseus, or PostgreSQL.
 
-### Movement intent foundation (Core 0.1)
+### Movement intent + movement step foundation (Core 0.1)
 
-The Core 0.1 movement intent foundation is in place. The network contract, server-side validation shell and position application are implemented. There is no movement simulation (speed, pathfinding, collision) yet.
+The Core 0.1 movement intent and movement-step foundation is in place. The network contract, server-side validation shell, server-owned target storage, server tick stepping and the first WorldSession visual layer are implemented. It is still intentionally limited and is not full gameplay movement yet.
 
 ```text
 RequestMoveClientMessage          - shared client intent: type "request_move", targetX, targetY, optional clientTime
 RequestMoveRejectedReason         - server-owned rejection codes: invalid_shape | non_finite_target | out_of_range
 RequestMoveRejectedServerMessage  - server-to-client rejection message
 validateMovementIntent()          - server helper that validates intent shape + range (apps/server/src/realtime/rooms/movementIntentValidation.ts)
-applyMovementIntent()             - server helper that applies validated target x/y to PlayerPresence (apps/server/src/realtime/rooms/applyMovementIntent.ts)
-TownRoom.onMessage("request_move", ...) - validates intents, on accept applies position to PlayerPresence via applyMovementIntent(), Colyseus schema sync broadcasts the update
+applyMovementIntent()             - server helper that stores validated targetX/targetY on PlayerPresence (apps/server/src/realtime/rooms/applyMovementIntent.ts)
+stepTownRoomMovement()            - server helper that advances x/y toward the stored target every simulation tick (apps/server/src/realtime/rooms/stepTownRoomMovement.ts)
+TownRoom.onMessage("request_move", ...) - validates intents, on accept stores the movement target via applyMovementIntent(); Colyseus schema sync broadcasts later x/y changes from the server tick
+TownRoom.setSimulationInterval()  - runs every 50 ms and steps authoritative x/y toward the latest stored target
 sendMovementIntent()              - client helper that sends request_move through an already-joined Colyseus room (apps/client/src/net/movementIntentClient.ts)
-Colyseus sync on the client fires onStateChange which re-renders worldEntryView, showing updated x/y from presence list
-no movement simulation, no pathfinding, no collision, no map rendering, no player sprite, no combat, no persistence
+WorldSessionScene                 - connected-room scene that renders the current visual layer
+worldSessionAreaView.ts          - extracted rendering/input helper for the world area, kept separate to avoid scene god-file growth
+worldSessionAreaView draws content-derived zone bounds and a player dot from synced TownRoom presence x/y only
+click/tap inside the world area sends a real request_move intent through the joined room; a newer click replaces the previous target
+client does not fake local movement; the dot changes only after synced room-state updates arrive
+no collision, no pathfinding, no speed stats, no client interpolation/smoothing, no combat coupling, no persistence yet
+no sprites, no map art, no animation, no inventory UI
 ```
 
-`TownRoom` is intentionally kept as a thin Colyseus shell. The movement intent validator and position applicator live in dedicated helper modules (`movementIntentValidation.ts`, `applyMovementIntent.ts`) so the room file does not become monolithic. The client helper lives in its own module (`movementIntentClient.ts`) and is NOT wired to mouse clicks yet — later Core 0.1 tasks will own click-to-move UI and server-side movement simulation.
+`TownRoom` is intentionally kept as a thin Colyseus shell. The movement intent validator and position applicator live in dedicated helper modules (`movementIntentValidation.ts`, `applyMovementIntent.ts`) so the room file does not become monolithic. On the client, the rendering/input helper lives in its own module (`worldSessionAreaView.ts`) so `WorldSessionScene` stays orchestration-focused rather than growing into a god file.
 
-When the server accepts a `request_move` intent, it calls `applyMovementIntent()` which sets the validated `targetX` / `targetY` on the player's `PlayerPresence.x` and `PlayerPresence.y`. Colyseus schema synchronization broadcasts the updated position to all clients. On the client, the existing `onStateChange` handler in `AccountShellScene` re-renders the overlay, and `worldEntryView.ts` reads the fresh presence state — showing the new x/y values next to each player's display name. This is still not real gameplay movement: there is no speed check, cooldown, pathfinding, collision detection, map awareness, interpolation, or persistence.
+When the server accepts a `request_move` intent, it calls `applyMovementIntent()` which stores the validated `targetX` / `targetY` on the player's authoritative `PlayerPresence` movement-target fields. The room simulation tick then runs every 50 ms and `stepTownRoomMovement()` advances the player's synced `x` / `y` toward that stored target at a constant server-owned rate until the target is reached. If the player clicks again before arrival, the new `request_move` replaces the previously stored target. Colyseus schema synchronization broadcasts the authoritative x/y updates to clients. On the client, `WorldSessionScene` listens for room `onStateChange`, refreshes `worldSessionAreaView`, redraws the content-derived zone bounds and repositions the player dot from synced `TownRoom` presence x/y only. The client does not predict, interpolate or invent local movement. This is still not full gameplay movement: there is no collision detection, no pathfinding, no stat-driven move speed, no combat coupling, and no persistence.
 
-A dev-only "Send test move intent" button is rendered in `worldEntryView.ts` only after Enter World, while the client is still connected to a town room. The button uses the existing `sendMovementIntent()` helper to dispatch a single hardcoded `request_move` intent (target 420, 320) through the already-joined Colyseus room. It exists purely to verify that the network contract from Task 026 wires up end-to-end through the client UI: the server validates, applies, and broadcasts the position update, and the client display refreshes to show the new x/y from room state. Click-to-move, map rendering, player sprite, movement simulation, server-side speed checks, pathfinding, collision, combat and persistence are still deferred to later Core 0.1 tasks.
+In the current WorldSession visual layer, click/tap inside the rendered world area uses the existing `sendMovementIntent()` helper to dispatch a real `request_move` intent through the already-joined Colyseus room. The area bounds come from content, and the player marker updates only from synced room state after the server accepts the target and the server tick gradually steps the authoritative position toward it. This remains a visual/network layer only: collision, pathfinding, stat-driven speed, interpolation/smoothing, combat, inventory UI and persistence are still deferred to later Core 0.1 tasks.
 
 Client character list/create runtime verification passed locally:
 

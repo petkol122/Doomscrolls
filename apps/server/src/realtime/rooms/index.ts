@@ -24,3 +24,11 @@ export type {
   MovementIntentValidationInput,
   MovementIntentValidationResult,
 } from "./movementIntentValidation";
+
+// Server-authoritative town movement step helper (Task 042).
+export {
+  stepTownRoomMovement,
+  TOWN_MOVEMENT_SPEED_UNITS_PER_SECOND,
+  TOWN_MOVEMENT_STOP_DISTANCE,
+  TOWN_MOVEMENT_TICK_RATE_MS,
+} from "./stepTownRoomMovement";

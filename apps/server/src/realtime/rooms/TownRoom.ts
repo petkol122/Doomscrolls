@@ -13,6 +13,10 @@ import { createRoomLogger } from "./roomLogger";
 import { validateMovementIntent } from "./movementIntentValidation";
 import { applyMovementIntent } from "./applyMovementIntent";
 import { resolveZoneBounds } from "./resolveZoneBounds";
+import {
+  stepTownRoomMovement,
+  TOWN_MOVEMENT_TICK_RATE_MS,
+} from "./stepTownRoomMovement";
 
 /**
  * TownRoom with minimal Colyseus schema state.
@@ -32,11 +36,11 @@ import { resolveZoneBounds } from "./resolveZoneBounds";
  *    validates the intent shape + range and (on rejection) sends a
  *    safe `request_move_rejected` message back to the originating
  *    client.
- *  - Task 029: on acceptance, applies the validated position update
- *    to the player's PlayerPresence via {@link applyMovementIntent},
- *    which is broadcast automatically through Colyseus schema sync.
- *    No interpolation, pathfinding, collision, map, speed checks,
- *    combat or persistence.
+ *  - Task 042: on accepted request_move, stores a server-owned movement
+ *    target for that player. A room simulation tick advances x/y toward
+ *    the target over time at a constant speed. No client authority,
+ *    no interpolation, no pathfinding, no collision, no combat,
+ *    no persistence.
  *
  * Player presence building is delegated to
  * {@link buildTownPlayerPresence} so this room stays a thin Colyseus
@@ -45,7 +49,6 @@ import { resolveZoneBounds } from "./resolveZoneBounds";
  * `docs/CODING_RULES.md` "Realtime Room File-Size Guard".
  *
  * Explicitly out of scope:
- *  - movement simulation / position updates after join
  *  - pathfinding
  *  - collision
  *  - map rendering
@@ -64,9 +67,9 @@ export class TownRoom extends Room {
  * schema-typed messages of the registered `type` to the handler
  * with the originating client and raw payload.
  *
- * Task 029 extends the handler to also apply the validated position
- * update to the player's PlayerPresence, which is then broadcast
- * automatically through Colyseus schema synchronization.
+ * Task 042 extends the handler to store the validated movement target,
+ * while the room simulation tick advances the player's authoritative
+ * position through Colyseus schema synchronization.
  */
 private movementIntentHandlerRegistered = false;
 
@@ -80,6 +83,9 @@ private movementIntentHandlerRegistered = false;
     this.setState(new TownRoomState(zoneId));
 
     this.registerMovementIntentHandler(log);
+    this.setSimulationInterval((deltaMs: number) => {
+      stepTownRoomMovement(this.state as TownRoomState, deltaMs);
+    }, TOWN_MOVEMENT_TICK_RATE_MS);
 
     log.info(
       { roomId: this.roomId, roomName: this.roomName, zoneId, roomKind: "town" },
@@ -213,14 +219,13 @@ private movementIntentHandlerRegistered = false;
   /**
    * Register the `request_move` message handler on the room.
    *
-   * Scope (Task 026 foundation + Task 029 movement step 1):
+   * Scope (Task 026 foundation + Task 042 server-authoritative click movement):
    *   - validates the intent shape and range
    *   - on rejection, sends a `request_move_rejected` message back
    *     to the originating client with a safe reason code
-   *   - on acceptance, applies the validated position update to the
-   *     player's PlayerPresence via {@link applyMovementIntent} so the
-   *     new x/y is broadcast automatically through Colyseus schema
-   *     synchronization
+   *   - on acceptance, stores the player's authoritative movement
+   *     target via {@link applyMovementIntent}
+   *   - actual position changes happen later on the room simulation tick
    *
    * The handler is registered once per room. Colyseus forwards every
    * untrusted, schema-typed message of the registered `type` to this
@@ -274,9 +279,9 @@ private movementIntentHandlerRegistered = false;
         return;
       }
 
-      // Apply the validated position update to the player's
-      // PlayerPresence. Colyseus schema synchronization handles the
-      // broadcast automatically.
+      // Store the validated movement target. The room simulation tick
+      // advances position later; Colyseus schema synchronization handles
+      // the broadcast automatically.
       const applied = applyMovementIntent(
         state,
         client.sessionId,
@@ -292,11 +297,11 @@ private movementIntentHandlerRegistered = false;
             sessionId: client.sessionId,
             targetX: result.targetX,
             targetY: result.targetY,
-            appliedX: applied.x,
-            appliedY: applied.y,
+            storedTargetX: applied.x,
+            storedTargetY: applied.y,
             clientTime: result.clientTime,
           },
-          "TownRoom request_move applied with per-request movement clamp and broadcast via schema sync.",
+          "TownRoom request_move accepted and stored as server-authoritative movement target.",
         );
       } else {
         log.warn?.(
