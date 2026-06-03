@@ -1,5 +1,6 @@
 import { t } from "@doomscrolls/localization";
-import type { CharacterClassKey, CharacterId, CharacterSummary, OriginKey } from "@doomscrolls/shared";
+import type { CharacterClassKey, CharacterId, CharacterSummary, OriginKey, SessionToken } from "@doomscrolls/shared";
+import type { Room } from "@colyseus/sdk";
 import Phaser from "phaser";
 
 import {
@@ -11,6 +12,7 @@ import {
 } from "../../auth/sessionStorage";
 import { clientEnv } from "../../config/env";
 import { ApiClient, ApiClientError, type AccountState, type ApiErrorCode } from "../../net/ApiClient";
+import { createRealtimeClient, joinTownRoom } from "../../net/RealtimeClient";
 
 const CORE_0_1_ORIGIN_ID = "sewer_dweller" satisfies OriginKey;
 const CORE_0_1_CLASS_ID = "gravewalker" satisfies CharacterClassKey;
@@ -32,6 +34,8 @@ export class AccountShellScene extends Phaser.Scene {
   private account: AccountState | null = null;
   private apiClient: ApiClient | null = null;
   private selectedCharacterId: CharacterId | null = null;
+  private room: Room | null = null;
+  private entered: boolean = false;
 
   public constructor() {
     super("AccountShellScene");
@@ -190,20 +194,82 @@ export class AccountShellScene extends Phaser.Scene {
     }
 
     const playButton = this.createButton(t("world_entry.enter_world"));
-    playButton.disabled = true;
-    playButton.style.cursor = "not-allowed";
-    playButton.style.opacity = "0.62";
+    const isDisabled = selectedCharacter === null || this.entered;
+    playButton.disabled = isDisabled;
+    playButton.style.cursor = isDisabled ? "not-allowed" : "pointer";
+    playButton.style.opacity = isDisabled ? "0.62" : "1";
     playButton.setAttribute("aria-describedby", "doomscrolls-world-entry-status");
+
+    if (!this.entered && selectedCharacter !== null) {
+      playButton.addEventListener("click", () => {
+        void this.handleEnterWorld();
+      });
+    }
+
     section.appendChild(playButton);
 
     const status = document.createElement("p");
     status.id = "doomscrolls-world-entry-status";
-    status.textContent = t("world_entry.coming_next");
+    status.textContent = this.entered ? t("world_entry.connected") : t("world_entry.coming_next");
     status.style.margin = "10px 0 0";
-    status.style.color = "#c7ad84";
+    status.style.color = this.entered ? "#b9d49a" : "#c7ad84";
     section.appendChild(status);
 
+    if (this.entered) {
+      const leaveButton = this.createButton(t("world_entry.leave_world"));
+      leaveButton.style.marginTop = "12px";
+      leaveButton.addEventListener("click", () => {
+        void this.handleLeaveWorld();
+      });
+      section.appendChild(leaveButton);
+    }
+
     return section;
+  }
+
+  private async handleEnterWorld(): Promise<void> {
+    const sessionToken = readStoredSessionToken();
+    if (sessionToken === null || this.selectedCharacterId === null) {
+      return;
+    }
+
+    if (this.room !== null) {
+      return;
+    }
+
+    try {
+      const client = createRealtimeClient();
+      const joinedRoom = await joinTownRoom(client, sessionToken as SessionToken, this.selectedCharacterId);
+      this.room = joinedRoom;
+      this.entered = true;
+
+      if (this.account !== null) {
+        this.renderAccountOverlay(this.account);
+      }
+    } catch {
+      const status = document.getElementById("doomscrolls-world-entry-status");
+      if (status !== null) {
+        status.textContent = t("world_entry.join_failed");
+        status.style.color = "#ff9c8a";
+      }
+    }
+  }
+
+  private async handleLeaveWorld(): Promise<void> {
+    if (this.room !== null) {
+      try {
+        this.room.leave();
+      } catch {
+        // Ignore leave errors
+      }
+      this.room = null;
+    }
+
+    this.entered = false;
+
+    if (this.account !== null) {
+      this.renderAccountOverlay(this.account);
+    }
   }
 
   private createSelectedCharacterSummary(character: CharacterSummary): HTMLElement {

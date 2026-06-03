@@ -79,6 +79,9 @@ export const en = {
   "world_entry.enter_world": "Enter World",
   "world_entry.coming_next": "World entry coming next.",
   "world_entry.no_character_selected": "Select a character before entering the world.",
+  "world_entry.connected": "Connected to The Nightmarket.",
+  "world_entry.join_failed": "Could not enter world.",
+  "world_entry.leave_world": "Leave",
 
   "inventory.title": "Inventory",
   "equipment.title": "Equipment",
