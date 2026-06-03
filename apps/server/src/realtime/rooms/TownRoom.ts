@@ -13,6 +13,7 @@ import { createRoomLogger } from "./roomLogger";
 import { validateMovementIntent } from "./movementIntentValidation";
 import { applyMovementIntent } from "./applyMovementIntent";
 import { resolveZoneBounds } from "./resolveZoneBounds";
+import { resolvePlayerMovementSpeed } from "./resolvePlayerMovementSpeed";
 import {
   stepTownRoomMovement,
   TOWN_MOVEMENT_TICK_RATE_MS,
@@ -179,6 +180,7 @@ private movementIntentHandlerRegistered = false;
     const characterId = result.character.id;
     const characterName = result.character.characterName;
     const resolvedZoneId = result.resolvedZoneId;
+    const movementSpeed = resolvePlayerMovementSpeed(result.character);
 
     // Delegate presence building (spawn point resolution + initial
     // world position copy) to a dedicated helper so this room file
@@ -188,6 +190,7 @@ private movementIntentHandlerRegistered = false;
       characterId,
       displayName: characterName,
       resolvedZoneId,
+      movementSpeed,
     });
 
     state.playerPresence.set(sessionId, presence);
@@ -202,6 +205,7 @@ private movementIntentHandlerRegistered = false;
         characterId,
         zoneId: resolvedZoneId,
         spawnPointId: presence.spawnPointId,
+        movementSpeed: presence.movementSpeed,
         x: presence.x,
         y: presence.y,
         connectedPlayerCount: state.connectedPlayerCount,

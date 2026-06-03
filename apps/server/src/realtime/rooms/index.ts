@@ -28,7 +28,11 @@ export type {
 // Server-authoritative town movement step helper (Task 042).
 export {
   stepTownRoomMovement,
-  TOWN_MOVEMENT_SPEED_UNITS_PER_SECOND,
   TOWN_MOVEMENT_STOP_DISTANCE,
   TOWN_MOVEMENT_TICK_RATE_MS,
 } from "./stepTownRoomMovement";
+
+export {
+  resolvePlayerMovementSpeed,
+  TOWN_MOVEMENT_SPEED_FALLBACK_UNITS_PER_SECOND,
+} from "./resolvePlayerMovementSpeed";

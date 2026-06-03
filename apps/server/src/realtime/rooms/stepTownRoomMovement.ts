@@ -1,8 +1,8 @@
 import type { PlayerPresence } from "./PlayerPresence";
 import type { TownRoomState } from "./TownRoomState";
+import { TOWN_MOVEMENT_SPEED_FALLBACK_UNITS_PER_SECOND } from "./resolvePlayerMovementSpeed";
 
 export const TOWN_MOVEMENT_TICK_RATE_MS = 50;
-export const TOWN_MOVEMENT_SPEED_UNITS_PER_SECOND = 180;
 export const TOWN_MOVEMENT_STOP_DISTANCE = 2;
 
 interface MovementStepResult {
@@ -25,12 +25,17 @@ export function stepTownRoomMovement(
   }
 
   let movedPlayerCount = 0;
-  const maxDistance = TOWN_MOVEMENT_SPEED_UNITS_PER_SECOND * (deltaMs / 1000);
 
   state.playerPresence.forEach((presence) => {
     if (!presence.hasMovementTarget) {
       return;
     }
+
+    const speed =
+      Number.isFinite(presence.movementSpeed) && presence.movementSpeed > 0
+        ? presence.movementSpeed
+        : TOWN_MOVEMENT_SPEED_FALLBACK_UNITS_PER_SECOND;
+    const maxDistance = speed * (deltaMs / 1000);
 
     if (stepPresenceTowardTarget(presence, maxDistance)) {
       movedPlayerCount += 1;

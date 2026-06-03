@@ -11,6 +11,7 @@ import type { CharacterId, SpawnPointId } from "@doomscrolls/shared";
  *  - displayName  (the player's public display name)
  *  - spawnPointId (the spawn point resolved from content for this join)
  *  - x, y         (server-owned synced position)
+ *  - movementSpeed (server-owned runtime movement speed for tick stepping)
  *  - hasMovementTarget / targetX / targetY
  *                (simple server-owned click-move target state)
  *
@@ -28,6 +29,7 @@ export class PlayerPresence extends Schema {
   @type("string") public spawnPointId: SpawnPointId;
   @type("number") public x: number;
   @type("number") public y: number;
+  @type("number") public movementSpeed: number;
   @type("boolean") public hasMovementTarget: boolean;
   @type("number") public targetX: number;
   @type("number") public targetY: number;
@@ -39,6 +41,7 @@ export class PlayerPresence extends Schema {
     spawnPointId: SpawnPointId,
     x: number,
     y: number,
+    movementSpeed: number,
   ) {
     super();
     this.sessionId = sessionId;
@@ -47,6 +50,7 @@ export class PlayerPresence extends Schema {
     this.spawnPointId = spawnPointId;
     this.x = x;
     this.y = y;
+    this.movementSpeed = movementSpeed;
     this.hasMovementTarget = false;
     this.targetX = x;
     this.targetY = y;
