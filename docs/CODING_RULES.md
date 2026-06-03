@@ -160,6 +160,12 @@ Client auth UI rules:
 - stored selected character IDs must be restored only when they belong to the current account's real characters
 - logout must remove both `doomscrolls.sessionToken` and `doomscrolls.selectedCharacterId`
 - play buttons, room joins, gameplay, rooms, inventory and equipment UI require separate real backend-supported tasks
+- the Enter World button must only be enabled when a character is selected
+- on click, the Enter World button must call RealtimeClient.joinTownRoom(sessionToken, selectedCharacterId)
+- on success, the UI must show "Connected to The Nightmarket." and a Leave button
+- on failure, the UI must show the safe error "Could not enter world."
+- the room reference must be stored in client memory only, not in localStorage or any persistent storage
+- the Leave button must call room.leave() and reset to the pre-join UI state
 - client UI documentation must explicitly state when no fake characters, rooms, gameplay or seed data were added
 
 ---
@@ -206,7 +212,15 @@ Room join validation rules:
 
 ## TownRoom Rules
 
-`TownRoom` is registered as the Colyseus room name `town`. It is currently an authenticated empty room shell only.
+`TownRoom` is registered as the Colyseus room name `town`. It exposes a minimal Colyseus schema state (`TownRoomState`) with:
+
+```text
+roomKind: "town"
+zoneId: varies (currently "nightmarket")
+connectedPlayerCount: tracked on join/leave
+```
+
+No player entity list, no map, no movement, no combat, no gameplay state exists yet.
 
 TownRoom rules:
 
@@ -216,7 +230,8 @@ TownRoom rules:
 - invalid join cases must fail safely and must not leak another user's character data
 - invalid join cases were checked earlier through the room join validation flow and must remain covered as join behavior evolves
 - client code must not decide room access or claim join success without the server
-- do not add a player entity, room state schema, map, movement, combat, loot, XP, inventory, equipment, corpse behavior, gameplay messages or client UI connection to `TownRoom` without a dedicated task
+- the client renders roomKind, zoneId and connectedPlayerCount from room state only; no gameplay state is exposed
+- do not add a player entity list, map, movement, combat, loot, XP, inventory, equipment, corpse behavior, gameplay messages or client UI gameplay connection to `TownRoom` without a dedicated task
 - empty room registration must not be presented as gameplay
 
 ---

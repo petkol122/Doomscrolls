@@ -205,17 +205,24 @@ origin: sewer_dweller / Sewer Dweller
 class:  gravewalker / Gravewalker
 ```
 
-Current client character UI limitations:
+Current client character UI status:
 
 ```text
-no play button yet
-no client room join yet
-no gameplay connection yet
-no movement or combat yet
+Enter World button calls real RealtimeClient.joinTownRoom on click
+Enter World enabled only when a character is selected
+successful join shows "Connected to The Nightmarket."
+failed join shows safe "Could not enter world."
+Leave button appears after successful join
+room reference is stored in client memory only
+after join, client renders roomKind, zoneId, connectedPlayerCount from room state
+no player entity list yet
+no map, movement or combat yet
 no inventory/equipment UI yet
 no seed character data
 no fake characters
 ```
+
+AccountShellScene was refactored to avoid god-file growth. DOM helpers, character list view, character create form view, and world entry view were extracted into separate modules under `apps/client/src/game/scenes/accountShell/`. The scene file itself remains focused on orchestration only. Code-size rule: scene files must not grow into monoliths; extract view/helper modules as the scene accumulates functionality.
 
 Runtime verification summary:
 
@@ -491,16 +498,22 @@ room class: TownRoom
 
 `TownRoom` currently performs authenticated join validation only. Join options must include a real `sessionToken` and `characterId`; the server validates the session and verifies that the character is owned by the authenticated account before allowing the join. A valid owned character can join `town`. Invalid join cases were checked earlier through `RoomJoinValidationService` and must continue to fail with safe reasons rather than leaking ownership or persistence details.
 
+Current TownRoom state:
+
+```text
+roomKind: "town"
+zoneId: varies (currently "nightmarket")
+connectedPlayerCount: tracked on join/leave
+```
+
 Current TownRoom limitations:
 
 ```text
-no player entity yet
-no room state schema yet
+no player entity list yet
 no map yet
 no movement yet
 no combat yet
 no gameplay yet
-no client UI connection yet
 ```
 
 Runtime verification summary:

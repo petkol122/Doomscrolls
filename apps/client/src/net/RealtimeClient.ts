@@ -1,5 +1,7 @@
-import { Client } from "@colyseus/sdk";
+import { Client, Room } from "@colyseus/sdk";
 
+import type { CharacterId, SessionToken, ZoneId } from "@doomscrolls/shared";
+import type { RoomJoinAuthPayload, RoomState } from "@doomscrolls/shared";
 import { clientEnv } from "../config/env";
 
 export type RealtimeClient = Client;
@@ -14,4 +16,36 @@ function requireRealtimeWsUrl(): URL {
   }
 
   return clientEnv.wsUrl;
+}
+
+export async function joinTownRoom(
+  client: RealtimeClient,
+  sessionToken: SessionToken,
+  characterId: CharacterId,
+  requestedZoneId?: ZoneId,
+): Promise<Room<RoomState>> {
+  const payload: RoomJoinAuthPayload = {
+    sessionToken,
+    characterId,
+    requestedRoomKind: "town",
+    ...(requestedZoneId !== undefined ? { requestedZoneId } : {}),
+  };
+
+  return client.joinOrCreate("town", payload);
+}
+
+/**
+ * Formats town room state for display/logging purposes.
+ * Extracts and formats key town room information.
+ */
+export function formatTownRoomState(state: RoomState): {
+  roomKind: string;
+  zoneId: string;
+  playerCount: number;
+} {
+  return {
+    roomKind: state.kind,
+    zoneId: state.zoneId,
+    playerCount: state.connectedPlayerCount,
+  };
 }

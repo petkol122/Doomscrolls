@@ -7,6 +7,7 @@ export interface RoomState {
   readonly roomId: RoomId;
   readonly zoneId: ZoneId;
   readonly kind: RoomKind;
+  readonly connectedPlayerCount: number;
   readonly entities: Readonly<Record<EntityId, RoomEntity>>;
   readonly serverTime: IsoDateTimeString;
 }

@@ -14,7 +14,7 @@ async function main(): Promise<void> {
   validateContentOnStartup(logger);
 
   const redis = createRedisConnection(env);
-  const realtimeServer = createRealtimeServer({ httpServer: app.server, logger });
+  const realtimeServer = await createRealtimeServer({ app, httpServer: app.server, logger });
 
   registerShutdownHandlers({ app, logger, realtimeServer, redis });
 
