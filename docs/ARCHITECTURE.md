@@ -505,8 +505,20 @@ Current TownRoom state:
 roomKind: "town"
 zoneId: varies (currently "nightmarket")
 playerPresence: MapSchema<PlayerPresence> keyed by Colyseus sessionId
-  each entry: { sessionId, characterId, displayName }
+  each entry: { sessionId, characterId, displayName, spawnPointId }
 connectedPlayerCount: derived from playerPresence.size on join/leave
+```
+
+Spawn point foundation (Core 0.1):
+
+```text
+SpawnPointDefinition lives in @doomscrolls/shared
+SpawnPointContentDefinition lives in @doomscrolls/content
+Core 0.1 ships exactly one spawn point: nightmarket_spawn (zoneId = "nightmarket")
+TownRoom.resolveTownSpawnPoint() resolves the spawnPointId from content on join
+PlayerPresence stores spawnPointId only (no x/y, no active position)
+client PlayerPresenceEntry.spawnPointId? passes the field through for display
+x/y on SpawnPointDefinition are content data only and are not used as an active gameplay position yet
 ```
 
 Current TownRoom limitations:

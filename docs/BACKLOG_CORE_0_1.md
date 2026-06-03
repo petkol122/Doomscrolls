@@ -308,6 +308,30 @@ The client has a new dedicated helper at `apps/client/src/net/townRoomPresence.t
 
 No position, movement, map, combat, chat, persistence, or gameplay was added. The client helper isolates schema-aware access behind a clean interface so callers do not import Colyseus schema types directly. Typecheck and build pass cleanly.
 
+### Task 023.1 — Shared SpawnPointDefinition
+
+Add the shared `SpawnPointDefinition` type and content-side `SpawnPointContentDefinition` so spawn points are data-driven like every other Core 0.1 gameplay concept.
+
+Status: implemented. `SpawnPointDefinition` lives in `packages/shared/src/room/SpawnPointTypes.ts` with `id`, `zoneId`, `x`, `y`, and an optional `labelKey`. The content side defines `SpawnPointContentDefinition` in `packages/content/src/data/types.ts` and registers exactly one Core 0.1 spawn point (`nightmarket_spawn`, `zoneId = "nightmarket"`) in `packages/content/src/data/spawnPoints.ts`. x/y are content data only and are not used as an active gameplay position yet.
+
+### Task 023.2 — Spawn Point Assignment Only
+
+Resolve the spawn point on TownRoom join and store only the spawn point id on the player presence entry.
+
+Status: implemented. `apps/server/src/realtime/rooms/resolveTownSpawnPoint.ts` exposes `resolveTownSpawnPoint(resolvedZoneId)`, a side-effect-free content lookup that validates the `nightmarket_spawn` definition belongs to the resolved zone and returns a branded `SpawnPointId`. `TownRoom.onJoin` calls it after the join validation gate and stores the resolved id on the new `PlayerPresence` entry. The `PlayerPresence` schema now carries `spawnPointId` as a string field; no x/y, no player entity, no movement, no map, no combat, no gameplay.
+
+### Task 023.3 — Client Spawn Point Display Helper Only
+
+Teach the existing client presence helper to forward `spawnPointId` when the server-side presence entry provides one, and let `worldEntryView` show it next to the player's display name. No map, no movement, no gameplay, no x/y display.
+
+Status: implemented. `apps/client/src/net/townRoomPresence.ts` now exposes `PlayerPresenceEntry.spawnPointId?: SpawnPointId` and copies the field from the Colyseus schema value when present (non-empty string). Older or partial state objects continue to work without it. `apps/client/src/game/scenes/accountShell/worldEntryView.ts` shows each connected player's display name, character ID, and, when present, the resolved `spawnPointId` suffix. No x/y, no position, no scene, no map, no gameplay behavior was added. Client `pnpm typecheck` and `pnpm build` pass cleanly.
+
+### Task 023.4 — Spawn Point Docs Only
+
+Document the Core 0.1 spawn point foundation across `README.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG_CORE_0_1.md`, and `docs/CODING_RULES.md`. This is a documentation-only task and must not change code, add movement, add map rendering, add combat, or add gameplay behavior.
+
+Status: documented. The four docs now state that `SpawnPointDefinition` exists in shared/content, Core 0.1 ships exactly one spawn point (`nightmarket_spawn`), `TownRoom` resolves the `spawnPointId` from content on join, `PlayerPresence` stores `spawnPointId` only, the client can display it in the presence list, x/y are content data only and are not used as an active gameplay position yet, and that movement, map, combat and gameplay are not implemented by these tasks. `docs/TECH_DEBT.md` was reviewed and no new debt entry was needed.
+
 ### Task 026 — Core 0.1 End-to-End Test
 
 Run and document the full manual Core 0.1 scenario.

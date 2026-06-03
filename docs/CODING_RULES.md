@@ -218,7 +218,7 @@ Room join validation rules:
 roomKind: "town"
 zoneId: varies (currently "nightmarket")
 playerPresence: MapSchema<PlayerPresence> keyed by Colyseus sessionId
-  each entry: { sessionId, characterId, displayName }
+  each entry: { sessionId, characterId, displayName, spawnPointId }
 connectedPlayerCount: derived from playerPresence.size on join/leave
 ```
 
@@ -232,13 +232,29 @@ TownRoom rules:
 - invalid join cases must fail safely and must not leak another user's character data
 - invalid join cases were checked earlier through the room join validation flow and must remain covered as join behavior evolves
 - client code must not decide room access or claim join success without the server
-- the server creates a `PlayerPresence` entry on `onJoin` with `sessionId`, `characterId` and `characterName` (as `displayName`)
+- the server creates a `PlayerPresence` entry on `onJoin` with `sessionId`, `characterId`, `characterName` (as `displayName`) and the resolved `spawnPointId`
 - the server removes the `PlayerPresence` entry on `onLeave`
 - `connectedPlayerCount` must derive from `playerPresence.size` on join/leave, never be set independently
 - the client renders roomKind, zoneId and connectedPlayerCount from room state; additionally it may extract player presence via a dedicated helper (`getTownRoomPresence`) to display connected player names
 - client presence extraction must live in a separate helper module (`apps/client/src/net/townRoomPresence.ts`), not inside `AccountShellScene`
 - do not add a player entity list, map, movement, combat, loot, XP, inventory, equipment, corpse behavior, gameplay messages or client UI gameplay connection to `TownRoom` without a dedicated task
 - empty room registration must not be presented as gameplay
+
+## Spawn Point Foundation Rules
+
+Core 0.1 ships the data-driven spawn point foundation defined across `packages/shared/src/room/SpawnPointTypes.ts` and `packages/content/src/data/spawnPoints.ts`. Spawn point behavior is intentionally limited to data flow and join-time resolution; no movement, no map, no entity placement and no combat depend on it yet.
+
+Spawn point foundation rules:
+
+- `SpawnPointDefinition` (`packages/shared`) and `SpawnPointContentDefinition` (`packages/content`) are the only source of truth for spawn point data; gameplay systems must not hardcode spawn point ids, x/y, or labels
+- the Core 0.1 content registry ships exactly one spawn point, `nightmarket_spawn`, bound to the `nightmarket` zone
+- `TownRoom` must resolve the spawn point through `resolveTownSpawnPoint(resolvedZoneId)` in `apps/server/src/realtime/rooms/resolveTownSpawnPoint.ts`; the helper is a side-effect-free content lookup that throws if the resolved zone does not match the spawn point binding
+- `PlayerPresence` stores `spawnPointId` only; it must not store x/y or any other active world position
+- x/y on `SpawnPointDefinition` are content data only; they are not an active gameplay position and must not be read, displayed, synchronized, or used by client, server, or scene code as a player's world position yet
+- client presence rendering may display `spawnPointId` next to the player's display name when the server-side presence entry provides one, but must not show x/y and must not imply an active position
+- client presence extraction must not import Colyseus schema types directly; it goes through the existing helper module
+- do not add player entity placement, movement, map rendering, scene-based entity spawning, combat, loot, XP, inventory, equipment, corpse behavior or any other gameplay behavior to the spawn point foundation without a dedicated task
+- the spawn point foundation is data flow only and must not be presented as gameplay
 
 ---
 

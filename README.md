@@ -184,7 +184,24 @@ If the real `characters` array is empty, the shell shows `No characters yet.`
 
 `AccountShellScene` was refactored to extract DOM helpers into `accountShell/accountShellDom.ts`, character list view into `accountShell/characterListView.ts`, character create form into `accountShell/characterCreateFormView.ts`, and world entry view into `accountShell/worldEntryView.ts`. This keeps the scene file lean and avoids god-file growth. The rule is: scene files should not grow into monoliths; extract view/helper modules as the scene accumulates functionality.
 
-A dedicated client helper (`apps/client/src/net/townRoomPresence.ts`) now extracts player presence data from the Colyseus `TownRoomState` schema at runtime. It returns `connectedPlayerCount` plus an array of `{ sessionId, characterId, displayName }` entries. The helper is used by `worldEntryView.ts` to display player names after Enter World. Presence rendering logic is kept out of `AccountShellScene` — the scene only calls `getTownRoomPresence()` via the view module.
+A dedicated client helper (`apps/client/src/net/townRoomPresence.ts`) now extracts player presence data from the Colyseus `TownRoomState` schema at runtime. It returns `connectedPlayerCount` plus an array of `{ sessionId, characterId, displayName, spawnPointId? }` entries. When the server-side `PlayerPresence` entry carries a `spawnPointId` (currently the resolved `nightmarket_spawn` for TownRoom joins), the helper passes it through so `worldEntryView.ts` can show it next to the player's display name. Presence rendering logic is kept out of `AccountShellScene` — the scene only calls `getTownRoomPresence()` via the view module.
+
+### Spawn point foundation (Core 0.1)
+
+The Core 0.1 spawn point foundation is in place but intentionally limited to data flow, not gameplay:
+
+```text
+SpawnPointDefinition lives in @doomscrolls/shared (zoneId, id, x, y, optional labelKey)
+SpawnPointContentDefinition lives in @doomscrolls/content
+Core 0.1 ships exactly one spawn point: nightmarket_spawn (zoneId = "nightmarket")
+TownRoom.resolveTownSpawnPoint() resolves the spawnPointId from content on join
+PlayerPresence stores spawnPointId only (no x/y, no active position)
+client can display spawnPointId in the presence list (PlayerPresenceEntry.spawnPointId?)
+x/y are content data only and are not used as an active gameplay position yet
+no movement, no map, no combat, no gameplay behavior
+```
+
+The x/y fields on `SpawnPointDefinition` are stored in the content registry as static data. They are not used as a player's active world position yet and must not be presented as such. Movement, map rendering, scene-based entity placement and gameplay are deferred to later Core 0.1 tasks.
 
 Client character list/create runtime verification passed locally:
 
