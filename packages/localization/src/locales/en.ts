@@ -75,6 +75,11 @@ export const en = {
   "character.level": "Level",
   "character.create_success": "Character created.",
 
+  "world_entry.title": "Selected character",
+  "world_entry.enter_world": "Enter World",
+  "world_entry.coming_next": "World entry coming next.",
+  "world_entry.no_character_selected": "Select a character before entering the world.",
+
   "inventory.title": "Inventory",
   "equipment.title": "Equipment",
   "equipment.slot.weapon": "Weapon",

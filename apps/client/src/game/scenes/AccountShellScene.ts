@@ -137,7 +137,7 @@ export class AccountShellScene extends Phaser.Scene {
     loaded.style.color = "#b9d49a";
     panel.appendChild(loaded);
 
-    panel.appendChild(this.createSelectedCharacterSummary(account.characters));
+    panel.appendChild(this.createWorldEntryStub(account.characters));
     panel.appendChild(this.createCharacterList(account.characters));
     panel.appendChild(this.createCharacterCreateForm());
 
@@ -163,10 +163,61 @@ export class AccountShellScene extends Phaser.Scene {
     return root;
   }
 
-  private createSelectedCharacterSummary(characters: readonly CharacterSummary[]): HTMLElement {
+  private createWorldEntryStub(characters: readonly CharacterSummary[]): HTMLElement {
     const selectedCharacter = characters.find((character) => character.id === this.selectedCharacterId) ?? null;
-    const selectedCharacterName = selectedCharacter?.characterName ?? t("auth.no_characters");
-    return this.createInfoLine(t("character.select"), selectedCharacterName);
+    const section = document.createElement("section");
+    section.style.margin = "18px 0 22px";
+    section.style.padding = "16px";
+    section.style.border = "1px solid #3d3324";
+    section.style.borderRadius = "8px";
+    section.style.background = "rgba(18, 14, 11, 0.9)";
+
+    const title = document.createElement("h2");
+    title.textContent = t("world_entry.title");
+    title.style.margin = "0 0 12px";
+    title.style.fontFamily = "Georgia, serif";
+    title.style.fontSize = "24px";
+    section.appendChild(title);
+
+    if (selectedCharacter === null) {
+      const empty = document.createElement("p");
+      empty.textContent = t("world_entry.no_character_selected");
+      empty.style.margin = "0 0 12px";
+      empty.style.color = "#a88d63";
+      section.appendChild(empty);
+    } else {
+      section.appendChild(this.createSelectedCharacterSummary(selectedCharacter));
+    }
+
+    const playButton = this.createButton(t("world_entry.enter_world"));
+    playButton.disabled = true;
+    playButton.style.cursor = "not-allowed";
+    playButton.style.opacity = "0.62";
+    playButton.setAttribute("aria-describedby", "doomscrolls-world-entry-status");
+    section.appendChild(playButton);
+
+    const status = document.createElement("p");
+    status.id = "doomscrolls-world-entry-status";
+    status.textContent = t("world_entry.coming_next");
+    status.style.margin = "10px 0 0";
+    status.style.color = "#c7ad84";
+    section.appendChild(status);
+
+    return section;
+  }
+
+  private createSelectedCharacterSummary(character: CharacterSummary): HTMLElement {
+    const summary = document.createElement("div");
+    summary.style.display = "grid";
+    summary.style.gap = "6px";
+    summary.style.marginBottom = "12px";
+
+    summary.appendChild(this.createInfoLine(t("character.name"), character.characterName));
+    summary.appendChild(this.createInfoLine(t("character.origin"), t(`origin.${character.originKey}.name`)));
+    summary.appendChild(this.createInfoLine(t("character.class"), t(`class.${character.classKey}.name`)));
+    summary.appendChild(this.createInfoLine(t("character.level"), String(character.level)));
+
+    return summary;
   }
 
   private createCharacterList(characters: readonly CharacterSummary[]): HTMLElement {
