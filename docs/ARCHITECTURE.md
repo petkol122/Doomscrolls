@@ -535,6 +535,22 @@ no movement input, no movement simulation, no pathfinding, no combat, no map, no
 
 x/y on `PlayerPresence` are the player's initial world position only. They are copied from the resolved spawn point at join time and are never updated. They are not an active gameplay position: there is no movement input, no server-side movement simulation, no pathfinding, no facing/direction, no map, no player sprite, and no combat. They are shown on the client only as debug `(x=..., y=...)` suffixes next to the player's display name. The `PlayerPosition` shared type is intentionally identical to `Vector2`; no facing field is part of this type yet.
 
+Movement intent foundation (Task 026 — foundation only):
+
+```text
+shared client intent:  RequestMoveClientMessage { type: "request_move", targetX, targetY, clientTime? }
+shared server reject: RequestMoveRejectedServerMessage { type: "request_move_rejected", reason, clientTime? }
+shared reject reasons: invalid_shape | non_finite_target | out_of_range
+server helper:        validateMovementIntent(input) -> { ok: true, targetX, targetY, clientTime? } | { ok: false, reason }
+TownRoom.onMessage("request_move", ...)  - validates intent shape + range only, sends rejection on failure, logs accept/reject
+client helper:        sendMovementIntent(room, targetX, targetY, options?)  - sends request_move through an already-joined Colyseus room
+room must NOT mutate any player position, must NOT broadcast, must NOT know about maps / collision / pathfinding
+room is intentionally a thin Colyseus shell; movement validation lives in apps/server/src/realtime/rooms/movementIntentValidation.ts
+client helper is NOT wired to UI or mouse clicks yet; later tasks will own click-to-move UI and server-side movement simulation
+```
+
+This batch is the network contract and validation shell only. There is no movement simulation, no position updates after join, no pathfinding, no collision, no map rendering, no player sprite, no combat, and no persistence tied to it yet. The validator uses a temporary, conservative numeric range as bounds (`DEFAULT_MOVEMENT_INTENT_BOUNDS`); real map-aware bounds will be introduced together with real map data in a later task.
+
 Current TownRoom limitations:
 
 ```text

@@ -299,6 +299,24 @@ Player position foundation rules:
 - The client `getTownRoomPresence()` helper exposes `position?: { x, y }` per player; callers may show x/y only as debug info next to the player's display name (e.g. `(x=..., y=...)` suffix) and must not imply movement, facing, animation or a map position
 - do not add movement input, server-side movement simulation, pathfinding, facing/direction interpolation, map rendering, scene-based player placement, player sprite, combat, loot, XP, inventory, equipment or corpse behavior to the player position foundation without a dedicated task
 - the player position foundation is data flow only and must not be presented as gameplay
+
+## Movement Intent Foundation Rules
+
+Core 0.1 ships a movement intent foundation defined in `packages/shared/src/protocol/ClientMessages.ts`, `packages/shared/src/protocol/ServerMessages.ts`, the server helper `validateMovementIntent()` in `apps/server/src/realtime/rooms/movementIntentValidation.ts`, the `TownRoom` `request_move` message handler, and the client helper `sendMovementIntent()` in `apps/client/src/net/movementIntentClient.ts`. The intent contract and validation shell are in place; movement simulation itself is intentionally not part of this batch.
+
+Movement intent foundation rules:
+
+- The client may only send `RequestMoveClientMessage { type: "request_move", targetX, targetY, clientTime? }`. The server never accepts client-sent damage, kills, XP, loot, inventory changes, equipment changes, level-up or quest completion
+- `targetX` / `targetY` are required finite numbers; `clientTime` is optional and informational only and must never be trusted for any gameplay outcome
+- The server helper `validateMovementIntent({ message, bounds? })` returns a discriminated `{ ok: true, targetX, targetY, clientTime? } | { ok: false, reason }` result and never throws; it must not be used to mutate any player position
+- Server-owned rejection reasons live in `RequestMoveRejectedReason = "invalid_shape" | "non_finite_target" | "out_of_range"`; the reason set is intentionally generic across future combat / dungeon / boss rooms
+- `TownRoom.onMessage("request_move", ...)` only runs the validator and, on rejection, sends a `request_move_rejected` message back to the originating client; it does NOT mutate any `PlayerPresence.x` / `PlayerPresence.y`, does NOT broadcast, and does NOT know about maps, collision or pathfinding
+- Default movement intent bounds (`DEFAULT_MOVEMENT_INTENT_BOUNDS`) are a temporary, conservative numeric range, not a map size; real map-aware bounds will be introduced together with real map data in a later task
+- The client helper `sendMovementIntent(room, targetX, targetY, options?)` lives in its own module and is the only sanctioned way to send a `request_move` intent; it must not be wired to UI, mouse clicks, Phaser scene input or `AccountShellScene` until an explicit click-to-move task is added
+- `AccountShellScene` must not import `sendMovementIntent`; movement intent UI is deferred to later tasks
+- Movement intent foundation code must not implement movement simulation, position updates after join, pathfinding, collision detection, map rendering, scene-based entity placement, player sprite, combat, loot, XP, inventory, equipment, corpse behavior, or persistence
+- The movement intent foundation is a network contract and validation shell only and must not be presented as gameplay
+
 ## Testing
 
 Tests are required from the beginning.

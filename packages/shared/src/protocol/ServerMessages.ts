@@ -87,6 +87,36 @@ export interface ZoneTransitionApprovedServerMessage {
   readonly targetZoneId: ZoneId;
 }
 
+// ---------------------------------------------------------------------------
+// Movement intent acknowledgement / rejection (Task 026)
+//
+// Intent validation only — the server does not yet move the player,
+// does not broadcast, and does not know about maps, collision or
+// pathfinding. A `request_move_rejected` message is sent back to the
+// originating client when the intent shape/range is invalid; there is
+// no positive acknowledgement yet because there is no movement
+// simulation to acknowledge.
+// ---------------------------------------------------------------------------
+
+/**
+ * Safe, server-owned rejection reasons for `request_move` intents.
+ *
+ * The client never decides whether a movement intent is valid; the
+ * server validates shape and range and may reject with one of these
+ * reasons. The reasons are intentionally generic across future
+ * combat / dungeon / boss rooms.
+ */
+export type RequestMoveRejectedReason =
+  | "invalid_shape"
+  | "non_finite_target"
+  | "out_of_range";
+
+export interface RequestMoveRejectedServerMessage {
+  readonly type: "request_move_rejected";
+  readonly reason: RequestMoveRejectedReason;
+  readonly clientTime?: number;
+}
+
 export type ServerErrorCode =
   | "invalid_message"
   | "not_authenticated"
@@ -116,4 +146,5 @@ export type ServerRoomMessage =
   | CorpseRecoveredServerMessage
   | ChatMessageServerMessage
   | ZoneTransitionApprovedServerMessage
+  | RequestMoveRejectedServerMessage
   | ErrorServerMessage;

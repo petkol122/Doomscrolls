@@ -35,6 +35,30 @@ export interface UnequipItemClientMessage extends UnequipItemPayload {
   readonly type: "unequip_item";
 }
 
+// ---------------------------------------------------------------------------
+// Movement intent (Task 026 — Player Movement Intent Foundation Batch)
+//
+// Generic across future combat / dungeon / boss rooms: any room that
+// wants server-authoritative click-to-move can accept this same
+// intent. The server validates shape + range only for now; it does
+// not yet move the player, does not broadcast, and does not know
+// about maps, collision or pathfinding.
+// ---------------------------------------------------------------------------
+
+/**
+ * Movement intent sent by the client.
+ *
+ * `clientTime` is optional and is currently informational only. It
+ * lets future server logic reason about intent ordering / latency
+ * without trusting the value for any gameplay outcome.
+ */
+export interface RequestMoveClientMessage {
+  readonly type: "request_move";
+  readonly targetX: number;
+  readonly targetY: number;
+  readonly clientTime?: number;
+}
+
 export interface RequestRespawnClientMessage {
   readonly type: "request_respawn";
 }
@@ -71,6 +95,7 @@ export type ClientRoomMessage =
   | MoveInventoryItemClientMessage
   | EquipItemClientMessage
   | UnequipItemClientMessage
+  | RequestMoveClientMessage
   | RequestRespawnClientMessage
   | RetrieveCorpseClientMessage
   | ForceRecoverCorpseClientMessage

@@ -219,6 +219,23 @@ no movement input, no movement simulation, no pathfinding, no combat, no map, no
 ```
 
 The `x` and `y` fields on `PlayerPresence` are copied from the resolved spawn point at join time. They are not an active gameplay position yet: there is no movement input handler, no server-side movement simulation, no pathfinding, no facing/direction interpolation, and no updates after join. They are visible on the client only as debug `(x=..., y=...)` suffixes next to the player's display name. Movement, map rendering, scene-based entity placement, combat, and gameplay are deferred to later Core 0.1 tasks.
+
+### Movement intent foundation (Core 0.1)
+
+The Core 0.1 movement intent foundation is in place but intentionally limited to the network contract and server-side validation shell. There is no movement simulation yet.
+
+```text
+RequestMoveClientMessage          - shared client intent: type "request_move", targetX, targetY, optional clientTime
+RequestMoveRejectedReason         - server-owned rejection codes: invalid_shape | non_finite_target | out_of_range
+RequestMoveRejectedServerMessage  - server-to-client rejection message
+validateMovementIntent()          - server helper that validates intent shape + range (apps/server/src/realtime/rooms/movementIntentValidation.ts)
+TownRoom.onMessage("request_move", ...) - validates intents, logs accept/reject, does NOT mutate player position, does NOT broadcast
+sendMovementIntent()              - client helper that sends request_move through an already-joined Colyseus room (apps/client/src/net/movementIntentClient.ts)
+no movement simulation, no position updates after join, no pathfinding, no collision, no map rendering, no player sprite, no combat, no persistence
+```
+
+`TownRoom` is intentionally kept as a thin Colyseus shell. The movement intent validator lives in a dedicated helper module (`movementIntentValidation.ts`) so the room file does not become monolithic. The client helper lives in its own module (`movementIntentClient.ts`) and is NOT wired to UI or mouse clicks yet — later Core 0.1 tasks will own click-to-move UI and server-side movement simulation. The server validates intent shape and range only; it does not update any player position, does not broadcast, and does not know about maps, collision or pathfinding.
+
 Client character list/create runtime verification passed locally:
 
 ```text

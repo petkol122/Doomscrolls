@@ -1,6 +1,7 @@
 import { Room, Client } from "colyseus";
 import type {
   CharacterId,
+  RequestMoveRejectedServerMessage,
   UserId,
   ZoneId,
 } from "@doomscrolls/shared";
@@ -9,11 +10,12 @@ import type { TownRoomJoinOptions } from "./townRoomTypes";
 import { TownRoomState } from "./TownRoomState";
 import { buildTownPlayerPresence } from "./buildPlayerPresence";
 import { createRoomLogger } from "./roomLogger";
+import { validateMovementIntent } from "./movementIntentValidation";
 
 /**
  * TownRoom with minimal Colyseus schema state.
  *
- * Task 021.1 / 022.1 / 023.2 / 025 scope:
+ * Task 021.1 / 022.1 / 023.2 / 025 / 026 scope:
  *  - Creates and sets a TownRoomState schema containing:
  *      roomKind = "town"
  *      zoneId
@@ -24,23 +26,39 @@ import { createRoomLogger } from "./roomLogger";
  *    entry with the initial world position copied from the spawn
  *    point, and inserts it into the presence map.
  *  - On leave, removes the presence entry.
+ *  - Task 026: registers a `request_move` message handler that only
+ *    validates the intent shape + range and (on rejection) sends a
+ *    safe `request_move_rejected` message back to the originating
+ *    client. It does NOT mutate player position, does NOT broadcast,
+ *    and does NOT know about maps, collision or pathfinding.
  *
  * Player presence building is delegated to
  * {@link buildTownPlayerPresence} so this room stays a thin Colyseus
- * shell. See `docs/CODING_RULES.md` "Realtime Room File-Size Guard".
+ * shell. Movement intent validation is delegated to
+ * {@link validateMovementIntent} for the same reason. See
+ * `docs/CODING_RULES.md` "Realtime Room File-Size Guard".
  *
  * Explicitly out of scope:
- *  - movement input / movement simulation / pathing
+ *  - movement simulation / position updates after join
+ *  - pathfinding
+ *  - collision
  *  - map rendering
  *  - combat
  *  - player sprite / entity placement
  *  - gameplay loop
  *  - persistence
  *  - chat
- *  - position updates after join
  */
 export class TownRoom extends Room {
   public static readonly ROOM_NAME = "town";
+
+  /**
+   * Per-room flag: the `request_move` handler is registered once on
+   * `onCreate` rather than per-client. Colyseus delivers untrusted,
+   * schema-typed messages of the registered `type` to the handler
+   * with the originating client and raw payload.
+   */
+  private movementIntentHandlerRegistered = false;
 
   public override async onCreate(options: TownRoomJoinOptions): Promise<void> {
     const log = createRoomLogger(
@@ -50,6 +68,8 @@ export class TownRoom extends Room {
     const zoneId: ZoneId = options.requestedZoneId ?? ("nightmarket" as ZoneId);
 
     this.setState(new TownRoomState(zoneId));
+
+    this.registerMovementIntentHandler(log);
 
     log.info(
       { roomId: this.roomId, roomName: this.roomName, zoneId, roomKind: "town" },
@@ -178,6 +198,84 @@ export class TownRoom extends Room {
     const state = this.state as TownRoomState;
     state.playerPresence.delete(_client.sessionId);
     state.connectedPlayerCount = state.playerPresence.size;
+  }
+
+  /**
+   * Register the `request_move` message handler on the room.
+   *
+   * Scope (Task 026 — foundation only):
+   *   - validates the intent shape and range
+   *   - on rejection, sends a `request_move_rejected` message back
+   *     to the originating client with a safe reason code
+   *   - on acceptance, currently logs the validated intent at debug
+   *     level only; it does NOT mutate any player position, does NOT
+   *     broadcast, and does NOT touch `PlayerPresence.x` / `PlayerPresence.y`
+   *
+   * The handler is registered once per room. Colyseus forwards every
+   * untrusted, schema-typed message of the registered `type` to this
+   * callback together with the originating client. The handler is
+   * intentionally tolerant and never throws into Colyseus.
+   */
+  private registerMovementIntentHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.movementIntentHandlerRegistered) {
+      return;
+    }
+    this.movementIntentHandlerRegistered = true;
+
+    this.onMessage("request_move", (client: Client, raw: unknown) => {
+      const result = validateMovementIntent({ message: raw });
+
+      if (!result.ok) {
+        const candidate = raw as { clientTime?: unknown } | null;
+        const echoClientTime =
+          result.reason === "invalid_shape" &&
+          candidate !== null &&
+          typeof candidate.clientTime === "number"
+            ? candidate.clientTime
+            : undefined;
+
+        const rejection: RequestMoveRejectedServerMessage = {
+          type: "request_move_rejected",
+          reason: result.reason,
+          ...(echoClientTime !== undefined ? { clientTime: echoClientTime } : {}),
+        };
+
+        try {
+          client.send("request_move_rejected", rejection);
+        } catch {
+          // Swallow send errors; the room must never crash on a
+          // rejected intent. The client connection state will be
+          // handled by Colyseus itself.
+        }
+        log.warn?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            reason: result.reason,
+          },
+          "TownRoom request_move rejected: invalid intent shape/range.",
+        );
+        return;
+      }
+
+      // Intent accepted by the validator. Intentionally NOT mutating
+      // any player position, NOT broadcasting, and NOT changing
+      // PlayerPresence.x/y. Future movement tasks will own that.
+      log.debug?.(
+        {
+          roomId: this.roomId,
+          roomName: this.roomName,
+          sessionId: client.sessionId,
+          targetX: result.targetX,
+          targetY: result.targetY,
+          clientTime: result.clientTime,
+        },
+        "TownRoom request_move accepted by validator (no movement yet).",
+      );
+    });
   }
 
   /**

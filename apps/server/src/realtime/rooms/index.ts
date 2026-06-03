@@ -13,3 +13,14 @@ export {
   NIGHTMARKET_DEFAULT_SPAWN_POINT_ID,
   resolveTownSpawnPoint,
 } from "./resolveTownSpawnPoint";
+
+// Movement intent validation helper (Task 026).
+export {
+  DEFAULT_MOVEMENT_INTENT_BOUNDS,
+  validateMovementIntent,
+} from "./movementIntentValidation";
+export type {
+  MovementIntentBounds,
+  MovementIntentValidationInput,
+  MovementIntentValidationResult,
+} from "./movementIntentValidation";
