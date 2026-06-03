@@ -147,8 +147,20 @@ Client auth UI rules:
 - logout must remove the local token
 - startup may try `/me` when a local token exists
 - invalid or expired tokens must be cleared and return the user to auth UI
-- account shell must not invent fake character data; empty real character arrays must display `No characters yet.`
-- character creation, gameplay, rooms, inventory and equipment UI require separate real backend-supported tasks
+- account shell must show the real character list from `/me`; empty real character arrays must display `No characters yet.`
+- client character creation may call only the real authenticated `POST /characters` endpoint; it must not create local-only/fake characters
+- current Core 0.1 client create options are `sewer_dweller` / Sewer Dweller and `gravewalker` / Gravewalker only
+- after successful character creation, the client must refresh real account state rather than locally inventing the resulting character list
+- browser refresh/session resume must restore character visibility through `/me`
+- duplicate same-account character names must show a safe backend error, such as the real `409 Conflict` response
+- selected character state may only reference real characters from the current `/me` account state
+- if real characters exist and no valid stored selection exists, the first real character is selected by default
+- users may select another real character from the current account character list
+- selected character ID persistence uses `localStorage` key `doomscrolls.selectedCharacterId`
+- stored selected character IDs must be restored only when they belong to the current account's real characters
+- logout must remove both `doomscrolls.sessionToken` and `doomscrolls.selectedCharacterId`
+- play buttons, room joins, gameplay, rooms, inventory and equipment UI require separate real backend-supported tasks
+- client UI documentation must explicitly state when no fake characters, rooms, gameplay or seed data were added
 
 ---
 

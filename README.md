@@ -162,7 +162,42 @@ After a successful register/login, the client stores the returned session token 
 
 If `VITE_API_URL` is missing, the client shows a clear auth error and does not fake success. `VITE_WS_URL` is safely read for future realtime work but is not used yet.
 
-The authenticated account shell displays only real account data returned by `/me`: display name, username, avatar key and whether characters exist. Character creation is not implemented yet. If the real `characters` array is empty, the shell shows `No characters yet.` It does not show fake users, fake characters, inventory, combat, map, player or enemy simulation.
+The authenticated `AccountShellScene` displays only real account data returned by `/me`: display name, username, avatar key and the real character list. It can create a Core 0.1 character through the real authenticated `POST /characters` endpoint, using the currently locked create options only:
+
+```text
+origin: sewer_dweller / Sewer Dweller
+class:  gravewalker / Gravewalker
+```
+
+After successful creation, the client refreshes real account state and resumes the character list from `/me`. Browser refresh also restores the authenticated account shell and character list through `/me` when the stored session token is still valid. Duplicate character names on the same account show a safe error from the real `409 Conflict` response.
+
+`AccountShellScene` supports selected character state for real account characters. The first real character is selected by default, and the user can select another real character from the list. The selected character ID persists in `localStorage` under `doomscrolls.selectedCharacterId`; stored selection is restored only if that ID belongs to the current account's real `/me` characters. Logout clears selected character storage together with the local session token.
+
+Current client character UI limitations: there is no play button yet, no room join yet, no gameplay rooms, no movement, no combat, no inventory/equipment UI, no seed data and no fake characters. If the real `characters` array is empty, the shell shows `No characters yet.`
+
+Client character list/create runtime verification passed locally:
+
+```text
+registered test account clientchar_1780480193
+created character Karel
+POST /characters returned 201
+refresh restored character through /me
+duplicate Karel returned 409
+logout/login preserved character visibility
+no fake character data appeared
+```
+
+Selected character state runtime verification passed locally:
+
+```text
+account verify0164_1780482330
+created PersistOne and PersistTwo
+selected PersistTwo
+refresh preserved PersistTwo
+logout cleared selected character storage
+login restored valid selected character
+no play button, room join or gameplay added
+```
 
 Run the Node.js server foundation during local development:
 

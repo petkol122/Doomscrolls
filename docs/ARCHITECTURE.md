@@ -175,7 +175,67 @@ The Colyseus shell intentionally registers no rooms. `TownRoom`, `CombatRoom`, r
 
 The Prisma schema foundation exists, and the server validates `DATABASE_URL` so configuration is explicit. The current runtime still does not execute database queries on startup and does not implement repository classes, room persistence, inventory logic, corpse recovery logic or gameplay business logic.
 
-Auth HTTP endpoints (`POST /auth/register`, `POST /auth/login`, `GET /me`) are now registered in the Fastify app via `registerAuthRoutes`. Character HTTP endpoints (`GET /characters`, `POST /characters`, `GET /characters/:characterId`) are registered via `registerCharacterRoutes`. Auth and character routes use request validation with zod, a reusable Bearer token authentication middleware and centralized safe error-to-HTTP mapping. No frontend auth or character UI is implemented by the server.
+Auth HTTP endpoints (`POST /auth/register`, `POST /auth/login`, `GET /me`) are now registered in the Fastify app via `registerAuthRoutes`. Character HTTP endpoints (`GET /characters`, `POST /characters`, `GET /characters/:characterId`) are registered via `registerCharacterRoutes`. Auth and character routes use request validation with zod, a reusable Bearer token authentication middleware and centralized safe error-to-HTTP mapping. The server owns character creation and account state; it does not implement frontend behavior, gameplay rooms, movement, combat, loot, seed data or fake character data.
+
+---
+
+## Client Account Shell and Character UI
+
+The browser client uses the real backend auth and account-state APIs for the authenticated account shell. After registration/login or startup token resume, the client calls `/me` with `Authorization: Bearer <token>` and renders only the returned account/profile/settings/character data.
+
+Current implemented client character behavior:
+
+```text
+AccountShellScene shows real characters from /me
+character creation submits real POST /characters requests
+after creation, the client refreshes real account state
+browser refresh resumes the character list through /me
+duplicate same-account character names show a safe error
+first real character is selected by default
+user can select another real character
+selectedCharacterId persists in localStorage as doomscrolls.selectedCharacterId
+stored selection is restored only for current-account characters
+logout clears selected character storage
+```
+
+Core 0.1 currently exposes only the locked create options:
+
+```text
+origin: sewer_dweller / Sewer Dweller
+class:  gravewalker / Gravewalker
+```
+
+Current client character UI limitations:
+
+```text
+no play button yet
+no room join yet
+no rooms/gameplay yet
+no movement or combat yet
+no inventory/equipment UI yet
+no seed character data
+no fake characters
+```
+
+Runtime verification summary:
+
+```text
+registered test account clientchar_1780480193
+created character Karel
+POST /characters returned 201
+refresh restored character through /me
+duplicate Karel returned 409
+logout/login preserved character visibility
+no fake character data appeared
+
+account verify0164_1780482330
+created PersistOne and PersistTwo
+selected PersistTwo
+refresh preserved PersistTwo
+logout cleared selected character storage
+login restored valid selected character
+no play button, room join or gameplay added
+```
 
 ---
 

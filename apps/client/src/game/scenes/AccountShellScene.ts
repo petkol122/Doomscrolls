@@ -1,8 +1,14 @@
 import { t } from "@doomscrolls/localization";
-import type { CharacterClassKey, CharacterSummary, OriginKey } from "@doomscrolls/shared";
+import type { CharacterClassKey, CharacterId, CharacterSummary, OriginKey } from "@doomscrolls/shared";
 import Phaser from "phaser";
 
-import { clearStoredSessionToken, readStoredSessionToken } from "../../auth/sessionStorage";
+import {
+  clearStoredSelectedCharacterId,
+  clearStoredSessionToken,
+  readStoredSelectedCharacterId,
+  readStoredSessionToken,
+  storeSelectedCharacterId
+} from "../../auth/sessionStorage";
 import { clientEnv } from "../../config/env";
 import { ApiClient, ApiClientError, type AccountState, type ApiErrorCode } from "../../net/ApiClient";
 
@@ -25,6 +31,7 @@ export class AccountShellScene extends Phaser.Scene {
   private overlay: HTMLDivElement | null = null;
   private account: AccountState | null = null;
   private apiClient: ApiClient | null = null;
+  private selectedCharacterId: CharacterId | null = null;
 
   public constructor() {
     super("AccountShellScene");
@@ -58,8 +65,31 @@ export class AccountShellScene extends Phaser.Scene {
   }
 
   private renderAccountOverlay(account: AccountState): void {
+    this.syncSelectedCharacterId(account.characters);
     this.destroyOverlay();
     this.overlay = this.createAccountOverlay(account);
+  }
+
+  private syncSelectedCharacterId(characters: readonly CharacterSummary[]): void {
+    if (characters.length === 0) {
+      this.selectedCharacterId = null;
+      clearStoredSelectedCharacterId();
+      return;
+    }
+
+    this.selectedCharacterId ??= readStoredSelectedCharacterId() as CharacterId | null;
+
+    const selectedCharacterExists = characters.some((character) => character.id === this.selectedCharacterId);
+    if (!selectedCharacterExists) {
+      this.selectedCharacterId = characters[0]?.id ?? null;
+    }
+
+    if (this.selectedCharacterId === null) {
+      clearStoredSelectedCharacterId();
+      return;
+    }
+
+    storeSelectedCharacterId(this.selectedCharacterId);
   }
 
   private createAccountOverlay(account: AccountState): HTMLDivElement {
@@ -107,6 +137,7 @@ export class AccountShellScene extends Phaser.Scene {
     loaded.style.color = "#b9d49a";
     panel.appendChild(loaded);
 
+    panel.appendChild(this.createSelectedCharacterSummary(account.characters));
     panel.appendChild(this.createCharacterList(account.characters));
     panel.appendChild(this.createCharacterCreateForm());
 
@@ -122,6 +153,7 @@ export class AccountShellScene extends Phaser.Scene {
     logout.style.font = "inherit";
     logout.addEventListener("click", () => {
       clearStoredSessionToken();
+      clearStoredSelectedCharacterId();
       this.destroyOverlay();
       this.scene.start("AuthScene");
     });
@@ -129,6 +161,12 @@ export class AccountShellScene extends Phaser.Scene {
 
     document.body.appendChild(root);
     return root;
+  }
+
+  private createSelectedCharacterSummary(characters: readonly CharacterSummary[]): HTMLElement {
+    const selectedCharacter = characters.find((character) => character.id === this.selectedCharacterId) ?? null;
+    const selectedCharacterName = selectedCharacter?.characterName ?? t("auth.no_characters");
+    return this.createInfoLine(t("character.select"), selectedCharacterName);
   }
 
   private createCharacterList(characters: readonly CharacterSummary[]): HTMLElement {
@@ -168,18 +206,27 @@ export class AccountShellScene extends Phaser.Scene {
   }
 
   private createCharacterListItem(character: CharacterSummary): HTMLElement {
+    const isSelected = character.id === this.selectedCharacterId;
     const item = document.createElement("li");
+    item.style.display = "flex";
+    item.style.alignItems = "center";
+    item.style.justifyContent = "space-between";
+    item.style.gap = "14px";
     item.style.padding = "12px";
-    item.style.border = "1px solid #3d3324";
+    item.style.border = isSelected ? "1px solid #b9d49a" : "1px solid #3d3324";
     item.style.borderRadius = "8px";
-    item.style.background = "rgba(25, 19, 14, 0.9)";
+    item.style.background = isSelected ? "rgba(46, 60, 31, 0.72)" : "rgba(25, 19, 14, 0.9)";
+
+    const content = document.createElement("div");
+    content.style.minWidth = "0";
+    content.style.flex = "1";
 
     const name = document.createElement("strong");
-    name.textContent = character.characterName;
+    name.textContent = isSelected ? `${character.characterName} ✓` : character.characterName;
     name.style.display = "block";
     name.style.marginBottom = "6px";
     name.style.color = "#ffe6bd";
-    item.appendChild(name);
+    content.appendChild(name);
 
     const details = document.createElement("p");
     details.textContent = [
@@ -189,7 +236,24 @@ export class AccountShellScene extends Phaser.Scene {
     ].join(" · ");
     details.style.margin = "0";
     details.style.color = "#c7ad84";
-    item.appendChild(details);
+    content.appendChild(details);
+    item.appendChild(content);
+
+    const selectButton = this.createButton(t("character.select"));
+    selectButton.style.marginTop = "0";
+    selectButton.disabled = isSelected;
+    selectButton.style.cursor = isSelected ? "default" : "pointer";
+    selectButton.style.opacity = isSelected ? "0.72" : "1";
+    selectButton.setAttribute("aria-pressed", String(isSelected));
+    selectButton.addEventListener("click", () => {
+      this.selectedCharacterId = character.id;
+      storeSelectedCharacterId(character.id);
+
+      if (this.account !== null) {
+        this.renderAccountOverlay(this.account);
+      }
+    });
+    item.appendChild(selectButton);
 
     return item;
   }
@@ -276,11 +340,14 @@ export class AccountShellScene extends Phaser.Scene {
     this.setCreateStatus(elements, "", "info");
 
     try {
-      await this.apiClient.createCharacter(sessionToken, {
+      const createdCharacter = await this.apiClient.createCharacter(sessionToken, {
         characterName,
         originKey: elements.origin.value as OriginKey,
         classKey: elements.characterClass.value as CharacterClassKey
       });
+
+      this.selectedCharacterId = createdCharacter.id;
+      storeSelectedCharacterId(createdCharacter.id);
 
       const account = await this.apiClient.getMe(sessionToken);
       this.account = account;

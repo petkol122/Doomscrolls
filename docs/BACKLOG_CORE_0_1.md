@@ -119,7 +119,43 @@ authenticated account shell
 logout
 ```
 
-Status: Implemented as the first real client auth UI foundation. `BootScene -> PreloadScene -> AuthScene`; successful auth starts `AccountShellScene`. The client stores the returned session token in `localStorage` under `doomscrolls.sessionToken`, calls `/me` after register/login and on startup when a token exists, clears invalid tokens, and shows safe errors. The account shell displays real `/me` account/profile data and the real character count state only. Character creation, fake users, fake characters, gameplay rooms, inventory/equipment UI and gameplay are not implemented.
+Status: Implemented as the first real client auth UI foundation. `BootScene -> PreloadScene -> AuthScene`; successful auth starts `AccountShellScene`. The client stores the returned session token in `localStorage` under `doomscrolls.sessionToken`, calls `/me` after register/login and on startup when a token exists, clears invalid tokens, and shows safe errors. The account shell displays real `/me` account/profile data and the real character list only. Fake users, fake characters, gameplay rooms, inventory/equipment UI and gameplay are not implemented.
+
+### Task 015.5 — Client Character UI Docs Only
+
+Document runtime verification of the client character list/create flow. This is a documentation-only task and must not change code, add features, add gameplay, add rooms or add seed data.
+
+Status: documented after local runtime verification. `AccountShellScene` shows real characters from `/me`, can create a character through the real authenticated `POST /characters` endpoint, refreshes real account state after create, and resumes the character list through `/me` after browser refresh or logout/login. Core 0.1 create options are currently limited to `sewer_dweller` / Sewer Dweller origin and `gravewalker` / Gravewalker class. Duplicate character name on the same account shows a safe error from the real `409 Conflict` response. There is still no character select/play behavior, no rooms/gameplay, no seed character data and no fake characters.
+
+Runtime verification summary:
+
+```text
+registered test account clientchar_1780480193
+created character Karel
+POST /characters returned 201
+refresh restored character through /me
+duplicate Karel returned 409
+logout/login preserved character visibility
+no fake character data appeared
+```
+
+### Task 016.5 — Character Selection Docs Only
+
+Document runtime verification of selected character state/persistence. This is a documentation-only task and must not change code, add a play button, add room joins, add gameplay, add seed data or add fake characters.
+
+Status: documented after local runtime verification. `AccountShellScene` supports selected character state for real account characters. The first real character is selected by default, the user can select another real character, and the selected character ID persists in `localStorage` under `doomscrolls.selectedCharacterId`. Stored selection is restored only when it belongs to the current account's real `/me` characters. Logout clears selected character storage. There is still no play button, no room join and no gameplay.
+
+Runtime verification summary:
+
+```text
+account verify0164_1780482330
+created PersistOne and PersistTwo
+selected PersistTwo
+refresh preserved PersistTwo
+logout cleared selected character storage
+login restored valid selected character
+no play button, room join or gameplay added
+```
 
 ### Task 011 — Profile and Settings
 
