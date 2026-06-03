@@ -176,7 +176,7 @@ After successful creation, the client refreshes real account state and resumes t
 
 `AccountShellScene` supports selected character state for real account characters. The first real character is selected by default, and the user can select another real character from the list. The selected character ID persists in `localStorage` under `doomscrolls.selectedCharacterId`; stored selection is restored only if that ID belongs to the current account's real `/me` characters. Logout clears selected character storage together with the local session token.
 
-Current client character UI limitations: there is no play button yet, no client room join yet, no gameplay connection, no movement, no combat, no inventory/equipment UI, no seed data and no fake characters. If the real `characters` array is empty, the shell shows `No characters yet.`
+The authenticated `AccountShellScene` now has a working **Enter World** button. It is enabled only when a character is selected. On click, it calls `RealtimeClient.joinTownRoom(sessionToken, selectedCharacterId)`. On successful join, the status shows `"Connected to The Nightmarket."` and a Leave button appears. On failure, it shows a safe error `"Could not enter world."`. The room reference is stored in client memory only. There is no map, no player entity, no movement, no combat, no room state schema, no inventory/equipment UI, no seed data and no fake gameplay yet. If the real `characters` array is empty, the shell shows `No characters yet.`
 
 Client character list/create runtime verification passed locally:
 
@@ -199,7 +199,7 @@ selected PersistTwo
 refresh preserved PersistTwo
 logout cleared selected character storage
 login restored valid selected character
-no play button, room join or gameplay added
+Enter World button only enabled for selected character
 ```
 
 Run the Node.js server foundation during local development:

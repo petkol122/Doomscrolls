@@ -268,6 +268,18 @@ Implement server-side loot generation, room loot entity and pickup into free gri
 
 Implement reload/reconnect flow preserving account, character, XP, inventory, equipment and active corpse state.
 
+### Task 020.1 — Enter World Button Wiring
+
+Wire the existing Enter World button to call the real RealtimeClient.joinTownRoom.
+
+Status: Implemented. `AccountShellScene` now enables the Enter World button only when a character is selected. On click, it calls `RealtimeClient.joinTownRoom(sessionToken, selectedCharacterId)`. On success it shows `"Connected to The Nightmarket."` and a Leave button. On failure it shows `"Could not enter world."` in red. The room reference is stored in client memory only (`this.room`). No map, player entity, movement, combat, room state schema, inventory/equipment UI or fake gameplay was added. Typecheck and build pass on the client.
+
+### Task 020.2 — Enter World Docs Only
+
+Document the Enter World button wiring. This is a documentation-only task and must not change code.
+
+Status: documented after typecheck and build verification. The Enter World button calls the real town room join method, requires a selected character, shows `"Connected to The Nightmarket."` on success with a Leave button, shows `"Could not enter world."` on failure, and stores the room reference in client memory only. All four docs (README, ARCHITECTURE, BACKLOG, CODING_RULES) were updated to reflect the current state. No map, player, movement, combat, room state schema, inventory/equipment UI or fake gameplay was added.
+
 ### Task 026 — Core 0.1 End-to-End Test
 
 Run and document the full manual Core 0.1 scenario.

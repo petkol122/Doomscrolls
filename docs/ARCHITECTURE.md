@@ -205,13 +205,17 @@ origin: sewer_dweller / Sewer Dweller
 class:  gravewalker / Gravewalker
 ```
 
-Current client character UI limitations:
+Current client character UI status:
 
 ```text
-no play button yet
-no client room join yet
-no gameplay connection yet
-no movement or combat yet
+Enter World button calls real RealtimeClient.joinTownRoom on click
+Enter World enabled only when a character is selected
+successful join shows "Connected to The Nightmarket."
+failed join shows safe "Could not enter world."
+Leave button appears after successful join
+room reference is stored in client memory only
+no map, player entity, movement or combat yet
+no room state schema yet
 no inventory/equipment UI yet
 no seed character data
 no fake characters

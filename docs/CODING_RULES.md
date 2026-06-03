@@ -160,6 +160,12 @@ Client auth UI rules:
 - stored selected character IDs must be restored only when they belong to the current account's real characters
 - logout must remove both `doomscrolls.sessionToken` and `doomscrolls.selectedCharacterId`
 - play buttons, room joins, gameplay, rooms, inventory and equipment UI require separate real backend-supported tasks
+- the Enter World button must only be enabled when a character is selected
+- on click, the Enter World button must call RealtimeClient.joinTownRoom(sessionToken, selectedCharacterId)
+- on success, the UI must show "Connected to The Nightmarket." and a Leave button
+- on failure, the UI must show the safe error "Could not enter world."
+- the room reference must be stored in client memory only, not in localStorage or any persistent storage
+- the Leave button must call room.leave() and reset to the pre-join UI state
 - client UI documentation must explicitly state when no fake characters, rooms, gameplay or seed data were added
 
 ---
