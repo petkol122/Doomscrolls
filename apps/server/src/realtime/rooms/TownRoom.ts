@@ -4,12 +4,12 @@ import type {
   UserId,
   ZoneId,
 } from "@doomscrolls/shared";
-import type { ServerLogger } from "../../config/logger";
 import { RoomJoinValidationService } from "../RoomJoinValidationService";
 import type { TownRoomJoinOptions } from "./townRoomTypes";
 import { TownRoomState } from "./TownRoomState";
 import { PlayerPresence } from "./PlayerPresence";
 import { resolveTownSpawnPoint } from "./resolveTownSpawnPoint";
+import { createRoomLogger } from "./roomLogger";
 
 /**
  * TownRoom with minimal Colyseus schema state.
@@ -35,39 +35,27 @@ export class TownRoom extends Room {
   public static readonly ROOM_NAME = "town";
 
   public override async onCreate(options: TownRoomJoinOptions): Promise<void> {
-    const logger = (this as unknown as { logger?: ServerLogger }).logger;
+    const log = createRoomLogger(
+      (this as unknown as { logger?: unknown }).logger,
+    );
 
     const zoneId: ZoneId = options.requestedZoneId ?? ("nightmarket" as ZoneId);
 
     this.setState(new TownRoomState(zoneId));
 
-    if (logger && typeof logger.info === "function") {
-      logger.info(
-        { roomId: this.roomId, roomName: this.roomName, zoneId, roomKind: "town" },
-        "TownRoom created with minimal state schema.",
-      );
-    }
+    log.info(
+      { roomId: this.roomId, roomName: this.roomName, zoneId, roomKind: "town" },
+      "TownRoom created with minimal state schema.",
+    );
   }
 
   public override async onJoin(
     _client: Client,
     options?: TownRoomJoinOptions,
   ): Promise<void> {
-    const logger = (this as unknown as { logger?: ServerLogger }).logger;
-    const safeLog: Pick<ServerLogger, "debug" | "info" | "warn" | "error"> = {
-      debug: (obj: unknown, msg?: string) => {
-        logger?.debug?.(obj, msg);
-      },
-      info: (obj: unknown, msg?: string) => {
-        logger?.info?.(obj, msg);
-      },
-      warn: (obj: unknown, msg?: string) => {
-        logger?.warn?.(obj, msg);
-      },
-      error: (obj: unknown, msg?: string) => {
-        logger?.error?.(obj, msg);
-      },
-    };
+    const safeLog = createRoomLogger(
+      (this as unknown as { logger?: unknown }).logger,
+    );
 
     if (!options) {
       safeLog.warn?.(
