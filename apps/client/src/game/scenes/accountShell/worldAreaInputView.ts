@@ -3,6 +3,7 @@ import type { Room } from "@colyseus/sdk";
 import type { RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
 import { sendMovementIntent } from "../../../net/movementIntentClient";
 import { getTownRoomPresence, type PlayerPresenceEntry } from "../../../net/townRoomPresence";
+import { resolveWorldAreaBounds } from "./resolveWorldAreaBounds";
 
 // ---------------------------------------------------------------------------
 // World area input view (Task 033 — Click-to-Move Input Intent Only)
@@ -13,14 +14,13 @@ import { getTownRoomPresence, type PlayerPresenceEntry } from "../../../net/town
 //   - does NOT fake movement locally (only server changes matter)
 //   - does NOT do pathfinding, collision, speed checks, or animation
 //
+// Bounds are resolved from content registry data (placeholder zone bounds,
+// NOT collision geometry or map size).
+//
 // This module stays small and isolated from AccountShellScene.
 // The parent AccountShellScene already re-renders the full overlay on
 // room state change, so we only snapshot the current state once.
 // ---------------------------------------------------------------------------
-
-/** Zone bounds matching the nightmarket content definition (0–800 x 0–600). */
-const DEFAULT_AREA_W = 800;
-const DEFAULT_AREA_H = 600;
 
 /** CSS pixel size of the world area panel. */
 const PANEL_W = 400;
@@ -32,7 +32,7 @@ export interface WorldAreaInputElements {
 
 interface WorldAreaInputOptions {
   readonly room: Room<DoomscrollsRoomState>;
-  readonly bounds?: { readonly minX: number; readonly maxX: number; readonly minY: number; readonly maxY: number };
+  readonly zoneId?: string;
 }
 
 /**
@@ -43,12 +43,17 @@ interface WorldAreaInputOptions {
  * movement intent. The player's current synced position (x, y) from the
  * server is displayed as a blue dot inside the panel and as text below it.
  *
+ * Bounds are resolved from the content registry (placeholder zone bounds,
+ * NOT collision geometry or map size). Falls back to safe defaults if the
+ * zone is missing from content.
+ *
  * No local position faking — the dot only moves when the server confirms
  * a new position via Colyseus schema sync.
  */
 export function createWorldAreaInput(options: WorldAreaInputOptions): WorldAreaInputElements {
   const { room } = options;
-  const bounds = options.bounds ?? { minX: 0, maxX: DEFAULT_AREA_W, minY: 0, maxY: DEFAULT_AREA_H };
+  const zoneId = options.zoneId ?? room.state.zoneId;
+  const bounds = resolveWorldAreaBounds(zoneId);
 
   const container = document.createElement("div");
   container.style.marginTop = "12px";
