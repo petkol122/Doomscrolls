@@ -212,7 +212,15 @@ Room join validation rules:
 
 ## TownRoom Rules
 
-`TownRoom` is registered as the Colyseus room name `town`. It is currently an authenticated empty room shell only.
+`TownRoom` is registered as the Colyseus room name `town`. It exposes a minimal Colyseus schema state (`TownRoomState`) with:
+
+```text
+roomKind: "town"
+zoneId: varies (currently "nightmarket")
+connectedPlayerCount: tracked on join/leave
+```
+
+No player entity list, no map, no movement, no combat, no gameplay state exists yet.
 
 TownRoom rules:
 
@@ -222,7 +230,8 @@ TownRoom rules:
 - invalid join cases must fail safely and must not leak another user's character data
 - invalid join cases were checked earlier through the room join validation flow and must remain covered as join behavior evolves
 - client code must not decide room access or claim join success without the server
-- do not add a player entity, room state schema, map, movement, combat, loot, XP, inventory, equipment, corpse behavior, gameplay messages or client UI connection to `TownRoom` without a dedicated task
+- the client renders roomKind, zoneId and connectedPlayerCount from room state only; no gameplay state is exposed
+- do not add a player entity list, map, movement, combat, loot, XP, inventory, equipment, corpse behavior, gameplay messages or client UI gameplay connection to `TownRoom` without a dedicated task
 - empty room registration must not be presented as gameplay
 
 ---
