@@ -50,11 +50,11 @@ export class CharacterService {
     const characterRepository = new CharacterRepository(this.db);
     const character = await characterRepository.findByIdForUser(characterId.toString(), userId.toString());
 
-    if (!character?.stats) {
+    if (!character?.stats || !character.inventory) {
       throw new CharacterError(CharacterErrorCode.CHARACTER_NOT_FOUND);
     }
 
-    return toCharacterDetailsDto({ ...character, stats: character.stats }, ALIVE_DEATH_STATE);
+    return toCharacterDetailsDto({ ...character, stats: character.stats, inventory: character.inventory }, ALIVE_DEATH_STATE);
   }
 
   public async createCharacter(userId: UserId | string, input: CreateCharacterInput): Promise<CreateCharacterResult> {
@@ -111,11 +111,11 @@ export class CharacterService {
         },
       });
 
-      if (!character.stats) {
+      if (!character.stats || !character.inventory) {
         throw new CharacterError(CharacterErrorCode.INTERNAL_ERROR);
       }
 
-      return toCharacterDetailsDto({ ...character, stats: character.stats }, ALIVE_DEATH_STATE);
+      return toCharacterDetailsDto({ ...character, stats: character.stats, inventory: character.inventory }, ALIVE_DEATH_STATE);
     } catch (error: unknown) {
       if (isPrismaUniqueConstraintError(error)) {
         throw new CharacterError(CharacterErrorCode.CHARACTER_NAME_TAKEN);

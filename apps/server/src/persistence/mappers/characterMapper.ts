@@ -10,7 +10,7 @@ import type {
   UserId,
   ZoneId,
 } from "@doomscrolls/shared";
-import type { Character, CharacterPassive, CharacterStats as PrismaCharacterStats } from "@prisma/client";
+import type { Character, CharacterPassive, CharacterStats as PrismaCharacterStats, Inventory } from "@prisma/client";
 import { toIsoDateTimeString } from "./dateMapper";
 
 export function toCharacterStatsDto(character: Pick<Character, "currentHp">, stats: PrismaCharacterStats): CharacterStats {
@@ -48,13 +48,22 @@ export function toCharacterSummaryDto(character: Character): CharacterSummary {
 }
 
 export function toCharacterDetailsDto(
-  character: Character & { stats: PrismaCharacterStats; passives: readonly CharacterPassive[] },
+  character: Character & { stats: PrismaCharacterStats; passives: readonly CharacterPassive[]; inventory: Inventory },
   deathState: CharacterDeathState,
 ): CharacterDetails {
   return {
     ...toCharacterSummaryDto(character),
     passiveKeys: character.passives.map((passive) => passive.passiveId as PassiveKey),
     stats: toCharacterStatsDto(character, character.stats),
+    inventory: {
+      characterId: character.id as CharacterId,
+      config: {
+        pageCount: character.inventory.pageCount,
+        gridWidth: character.inventory.gridWidth,
+        gridHeight: character.inventory.gridHeight,
+      },
+      items: [],
+    },
     deathState,
   };
 }

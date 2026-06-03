@@ -91,7 +91,8 @@ The character domain service layer exists at `apps/server/src/character/` and cu
 
 Character service rules:
 
-- do not implement character HTTP routes until an explicit route task
+- character HTTP routes may expose `CharacterService` through authenticated Fastify handlers only
+- character HTTP route handlers must not query Prisma directly
 - do not implement frontend character UI until an explicit client task
 - do not implement rooms, movement, combat, loot, inventory placement or equipment UI in the character service
 - validate and normalize character names before persistence
@@ -102,6 +103,16 @@ Character service rules:
 - starting passives and starting zone must come from content definitions, not hardcoded content IDs
 - character creation must create Character, CharacterStats, CharacterPassive and Inventory atomically where practical
 - do not add starting items unless a dedicated task implements real item persistence/placement rules
+
+Implemented character HTTP routes:
+
+```text
+GET  /characters
+POST /characters
+GET  /characters/:characterId
+```
+
+All require `Authorization: Bearer <session-token>`. Routes validate request shape with zod and leave detailed character-name/content validation to `CharacterService`. Character names are unique only within the owning account, and missing/not-owned characters return `404` without exposing other users' data.
 
 Core 0.1 starting stat formulas:
 

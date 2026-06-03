@@ -1,5 +1,6 @@
 import type { CharacterDeathState } from "./DeathTypes";
 import type { CharacterStats } from "./StatTypes";
+import type { InventoryGrid } from "../inventory/InventoryTypes";
 import type { CharacterId, IsoDateTimeString, UserId, ZoneId } from "../ids";
 
 export type CharacterName = string;
@@ -30,5 +31,6 @@ export interface CharacterSummary {
 export interface CharacterDetails extends CharacterSummary {
   readonly passiveKeys: readonly PassiveKey[];
   readonly stats: CharacterStats;
+  readonly inventory: InventoryGrid;
   readonly deathState: CharacterDeathState;
 }

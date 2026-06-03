@@ -175,7 +175,7 @@ The Colyseus shell intentionally registers no rooms. `TownRoom`, `CombatRoom`, r
 
 The Prisma schema foundation exists, and the server validates `DATABASE_URL` so configuration is explicit. The current runtime still does not execute database queries on startup and does not implement repository classes, room persistence, inventory logic, corpse recovery logic or gameplay business logic.
 
-Auth HTTP endpoints (`POST /auth/register`, `POST /auth/login`, `GET /me`) are now registered in the Fastify app via `registerAuthRoutes`. Auth routes use request validation with zod, a reusable Bearer token authentication middleware and a centralized auth error-to-HTTP mapper. No frontend auth UI is implemented by the server.
+Auth HTTP endpoints (`POST /auth/register`, `POST /auth/login`, `GET /me`) are now registered in the Fastify app via `registerAuthRoutes`. Character HTTP endpoints (`GET /characters`, `POST /characters`, `GET /characters/:characterId`) are registered via `registerCharacterRoutes`. Auth and character routes use request validation with zod, a reusable Bearer token authentication middleware and centralized safe error-to-HTTP mapping. No frontend auth or character UI is implemented by the server.
 
 ---
 
@@ -323,7 +323,8 @@ index.ts                 - Public API exports
 
 Character service rules:
 
-- no HTTP character routes are implemented yet
+- authenticated HTTP character routes expose list/create/get behavior through `CharacterService`
+- route handlers must not query Prisma directly
 - no frontend character UI is implemented yet
 - no gameplay rooms, movement, combat, loot, inventory placement or equipment logic is implemented yet
 - character names are unique only within the owning account
@@ -334,9 +335,19 @@ Character service rules:
 - starting stats are calculated on the server
 - Core 0.1 inventory is initialized as 1 page, 10 columns and 6 rows
 
+Character HTTP routes:
+
+```text
+GET  /characters              - authenticated list for the current account
+POST /characters              - authenticated character creation
+GET  /characters/:characterId - authenticated owner-scoped detail lookup
+```
+
+All character routes require `Authorization: Bearer <session-token>`. Missing, malformed, invalid or expired tokens return `401 Unauthorized`. Request validation in routes checks only JSON/body/path shape (`characterName`, `originId`, `classId`, `characterId` strings); detailed character-name and content validation remains in `CharacterService`. Character errors are mapped safely: invalid character name/origin/class/origin-class combination to `400`, duplicate account-local character name to `409`, missing/not-owned character to `404`, and internal character errors to `500`. Raw Prisma errors and stack traces must not be exposed.
+
 ### Character creation transaction safety
 
-`CharacterService.createCharacter()` validates input before persistence, then delegates atomic creation to `CharacterRepository.createCharacterWithInitialState()`. The repository uses Prisma nested writes inside `$transaction` when a full `PrismaClient` is available, creating `Character`, `CharacterStats`, `CharacterPassive` and `Inventory` together. If the nested create fails, no partial character initialization should remain. Prisma unique constraint violations are mapped to the safe `CHARACTER_NAME_TAKEN` error and raw Prisma errors are not leaked.
+`CharacterService.createCharacter()` validates input before persistence, then delegates atomic creation to `CharacterRepository.createCharacterWithInitialState()`. The repository uses Prisma nested writes inside `$transaction` when a full `PrismaClient` is available, creating `Character`, `CharacterStats`, `CharacterPassive` and `Inventory` together. If the nested create fails, no partial character initialization should remain. Prisma unique constraint violations are mapped to the safe `CHARACTER_NAME_TAKEN` error and raw Prisma errors are not leaked. Character details include the persisted empty inventory grid configuration, but no starting items, placement behavior or equipment logic are implemented in this route task.
 
 ---
 

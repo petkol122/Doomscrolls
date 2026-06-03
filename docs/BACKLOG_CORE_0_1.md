@@ -138,7 +138,7 @@ showFpsCounter
 
 Implement character creation, character name validation, origin/class validation, starting stats/passives, inventory/equipment initialization.
 
-Status: Character domain service foundation implemented at `apps/server/src/character/`. It supports server-side list, per-user lookup and create business logic with character name validation/normalization, per-account duplicate name checks, content-registry origin/class validation, allowed origin/class enforcement, server-calculated starting stats, origin-defined starting passive/zone and empty Core 0.1 inventory initialization. HTTP character routes, frontend character UI, gameplay rooms, movement, combat, loot, starting items, inventory placement and equipment logic remain deferred.
+Status: Character domain service foundation implemented at `apps/server/src/character/` and exposed through authenticated Fastify HTTP routes in `apps/server/src/http/routes/character.routes.ts`. `GET /characters`, `POST /characters` and `GET /characters/:characterId` require Bearer auth, call `CharacterService`, and return safe owner-scoped character DTOs. The service supports character name validation/normalization, per-account duplicate name checks, content-registry origin/class validation, allowed origin/class enforcement, server-calculated starting stats, origin-defined starting passive/zone and empty Core 0.1 inventory initialization. Character names are unique only within the owning account. Frontend character UI, gameplay rooms, movement, combat, loot, starting items, inventory placement and equipment logic remain deferred.
 
 ### Task 013 — Room Authentication
 

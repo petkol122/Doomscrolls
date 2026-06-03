@@ -185,7 +185,7 @@ SESSION_SECRET
 
 The server uses Fastify with configured CORS, validates environment variables on startup, validates the `@doomscrolls/content` registry on startup, checks Redis with `PING`, initializes a Colyseus shell with no rooms registered, and exposes `GET /health` with a safe non-secret payload. Redis is required for startup. `DATABASE_URL` is used by Prisma CLI tooling and validated by the server config, but the server does not open a PostgreSQL connection or run database queries during startup yet.
 
-The server currently does not implement profile routes, character routes, gameplay rooms, combat, loot, enemy spawning, fake users, fake characters or fake inventory.
+The server currently does not implement profile routes, gameplay rooms, combat, loot, enemy spawning, fake users, fake characters or fake inventory.
 
 Auth HTTP endpoints are now implemented:
 
@@ -214,11 +214,19 @@ Registration is atomic: User, UserProfile, UserSettings and Session are created 
 
 The auth service layer provides HTTP endpoints at `POST /auth/register`, `POST /auth/login` and `GET /me`, registered in `apps/server/src/http/routes/auth.routes.ts` with reusable authentication middleware at `apps/server/src/http/middleware/authenticate.ts`. Request validation uses zod. Error mapping to safe HTTP responses uses `apps/server/src/http/errors/httpErrorMapper.ts`.
 
-The server-side character domain service now exists at `apps/server/src/character/`. It provides character listing, per-user character lookup and character creation business logic only; HTTP character routes, frontend character UI, gameplay rooms, movement, combat, inventory placement and equipment UI are not implemented yet.
+The server-side character domain service now exists at `apps/server/src/character/`. It provides character listing, per-user character lookup and character creation business logic. Authenticated HTTP character routes are registered in `apps/server/src/http/routes/character.routes.ts`:
 
-Character creation is server-owned and uses the `@doomscrolls/content` registry to validate origin/class IDs and allowed origin/class combinations. Character names are trimmed, normalized case-insensitively and unique only within the owning account through `characterNameNormalized`. Starting primary stats are calculated from origin base stats plus class base stats; derived stats are calculated server-side; starting passives and starting zone come from the origin content definition. A Core 0.1 empty inventory is initialized as one 10x6 page.
+```text
+GET  /characters              - List authenticated user's character summaries (200 OK)
+POST /characters              - Create a character for the authenticated user (201 Created)
+GET  /characters/:characterId - Get authenticated-user-owned character details (200 OK)
+```
 
-Character creation persists Character, CharacterStats, CharacterPassive and Inventory records atomically via the repository layer. No starting items are added in this task.
+All character routes require `Authorization: Bearer <session-token>` and use the existing auth middleware. Missing, malformed, invalid or expired tokens return `401 Unauthorized`. Route handlers validate request shape with zod and call `CharacterService`; they do not query Prisma directly.
+
+Character creation is server-owned and uses the `@doomscrolls/content` registry to validate origin/class IDs and allowed origin/class combinations. Character names are trimmed, normalized case-insensitively and unique only within the owning account through `characterNameNormalized`; the same character name is allowed on a different account. Starting primary stats are calculated from origin base stats plus class base stats; derived stats are calculated server-side; starting passives and starting zone come from the origin content definition. A Core 0.1 empty inventory is initialized as one 10x6 page and returned as safe character detail data.
+
+Character creation persists Character, CharacterStats, CharacterPassive and Inventory records atomically via the repository layer. No starting items, frontend character UI, gameplay rooms, movement, combat, loot, inventory placement or equipment logic are implemented yet.
 
 Generate Prisma Client for the server:
 
