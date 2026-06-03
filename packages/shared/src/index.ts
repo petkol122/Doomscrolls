@@ -19,6 +19,7 @@ export * from "./content/ContentTypes";
 
 export * from "./room/EntityTypes";
 export * from "./room/RoomStateTypes";
+export * from "./room/RoomJoinTypes";
 
 export * from "./protocol/ClientMessages";
 export * from "./protocol/ServerMessages";
