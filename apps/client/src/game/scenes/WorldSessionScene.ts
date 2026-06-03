@@ -5,7 +5,7 @@ import Phaser from "phaser";
 import type { AccountState } from "../../net/ApiClient";
 import { createAccountHeader } from "./accountShell/accountShellAccountHeader";
 import { applyOverlayPanelStyles, applyOverlayRootStyles } from "./accountShell/accountShellOverlayStyling";
-import { createConnectedWorldSessionView } from "./accountShell/worldEntryView";
+import { createWorldSessionOverlayView } from "./worldSession/worldSessionOverlayView";
 import { createWorldSessionAreaView, type WorldSessionAreaView } from "./worldSession/worldSessionAreaView";
 
 interface WorldSessionSceneData {
@@ -47,7 +47,9 @@ export class WorldSessionScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    this.worldAreaView = createWorldSessionAreaView(this, this.room);
+    this.worldAreaView = createWorldSessionAreaView(this, this.room, () => {
+      this.renderOverlay();
+    });
 
     this.renderOverlay();
     this.room.onStateChange(() => {
@@ -89,9 +91,14 @@ export class WorldSessionScene extends Phaser.Scene {
     panel.appendChild(createAccountHeader(account));
 
     panel.appendChild(
-      createConnectedWorldSessionView(character, room, () => {
+      createWorldSessionOverlayView(
+        character,
+        room,
+        this.worldAreaView?.getDebugState() ?? { lastClickTarget: null },
+        () => {
         void this.handleLeaveWorld();
-      })
+        },
+      )
     );
 
     document.body.appendChild(root);

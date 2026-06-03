@@ -170,6 +170,7 @@ Client auth UI rules:
 - `AccountShellScene` must stay the authenticated account/character shell; it owns account info, real character list/create/select flows and pre-join world entry only
 - `WorldSessionScene` must stay the connected room shell; it owns the active joined-room view and leave-world flow after a real server-approved join
 - if either client scene starts growing, extract only obvious tiny shared helpers or view modules under `apps/client/src/game/scenes/accountShell/` before the scene becomes a god file
+- WorldSession debug UI must stay clearly labeled as temporary server-synced debug state, not final gameplay UI
 
 ---
 
@@ -368,21 +369,24 @@ Movement intent foundation rules:
 
 ## WorldSession Visual Layer Rules
 
-Core 0.1 ships a minimal WorldSession visual layer in `apps/client/src/game/scenes/WorldSessionScene.ts` plus the extracted helper `apps/client/src/game/scenes/worldSession/worldSessionAreaView.ts`. This layer is intentionally limited to synchronized visual feedback and real movement-intent input; it is not gameplay.
+Core 0.1 ships a minimal WorldSession visual layer in `apps/client/src/game/scenes/WorldSessionScene.ts` plus the extracted helpers `apps/client/src/game/scenes/worldSession/worldSessionAreaView.ts` and `apps/client/src/game/scenes/worldSession/worldSessionOverlayView.ts`. This layer is intentionally limited to synchronized visual feedback and real movement-intent input; it is not gameplay.
 
 WorldSession visual layer rules:
 
 - `WorldSessionScene` must stay the connected-room orchestration shell; world-area rendering/input logic belongs in `worldSessionAreaView.ts` or future dedicated helper modules, not inlined into a growing scene file
+- connected-room overlay grouping belongs in small helper/view modules such as `worldSessionOverlayView.ts`, not inlined into a growing scene file
 - the world-area view may render only content-derived zone bounds for the active room zone; these bounds are visualized from content data and must not be presented as collision geometry, navigation mesh or map art
 - the player marker/dot must use synced `TownRoom` presence `x`/`y` only
 - room header/status display must read synced `roomKind` from room state rather than inventing or hardcoding the value client-side
 - client code must not fake local movement, prediction, smoothing, interpolation or invented position updates in this layer
 - debug presence text may show synced `movementSpeed` when it is already present in `PlayerPresence`, but this must stay debug text only and must not become a gameplay HUD
+- movement debug text may show the last click target only when it comes from a real already-sent client intent; it must not imply arrival, prediction or local movement
 - click/tap input in the world area may send only a real `request_move` intent through `sendMovementIntent()` on an already-joined room
 - visual refresh after input must come from synced room-state updates, not from local speculative movement
 - runtime sanity for movement must continue to confirm gradual server-synced stepping and valid second-click retargeting, not instant local teleport behavior
+- the connected-room overlay must clearly state that it is temporary server-synced debug state, not final gameplay UI
 - do not add sprites, tiles, background map art, collision, pathfinding, animation, combat, enemy rendering, inventory UI or persistence to this layer without a dedicated task
-- helper extraction is required before `WorldSessionScene` becomes a god file; `worldSessionAreaView.ts` is the current example and pattern to follow
+- helper extraction is required before `WorldSessionScene` becomes a god file; `worldSessionAreaView.ts` and `worldSessionOverlayView.ts` are the current examples and pattern to follow
 
 ## Testing
 

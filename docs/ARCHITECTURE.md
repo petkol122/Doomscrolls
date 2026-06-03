@@ -228,12 +228,16 @@ Current WorldSession visual layer status:
 ```text
 WorldSessionScene is the connected realtime-room scene
 worldSessionAreaView.ts is an extracted rendering/input helper to avoid god-file growth
+worldSessionOverlayView.ts is an extracted DOM helper for the connected-room debug overlay
 the client renders content-derived zone bounds for the active room zone
 the player dot uses synced TownRoom presence x/y only
 click/tap inside the world area sends a real request_move intent
 the client does not fake or predict local movement
 the marker updates only after room-state sync from the server
 roomKind display reads synced roomKind from room state
+the overlay groups room info, player presence and movement debug into readable sections
+the overlay states clearly that it is temporary server-synced debug state, not final gameplay UI
+movement debug may show the last click target sent by the client, but position still comes only from synced room state
 no sprites, no map art, no collision, no pathfinding, no animation, no combat
 no inventory UI and no persistence yet
 ```
@@ -245,7 +249,7 @@ AccountShellScene = authenticated account/character shell before room connection
 WorldSessionScene = connected room shell after a successful realtime join
 ```
 
-`AccountShellScene` was refactored to avoid god-file growth. DOM helpers, a shared account header helper, character list view, character create form view, and world entry view were extracted into separate modules under `apps/client/src/game/scenes/accountShell/`. `WorldSessionScene` follows the same rule: its world-area rendering/input logic is split into `apps/client/src/game/scenes/worldSession/worldSessionAreaView.ts`, leaving the scene focused on orchestration and room-state refresh. Code-size rule: scene files must not grow into monoliths; extract view/helper modules as the scene accumulates functionality.
+`AccountShellScene` was refactored to avoid god-file growth. DOM helpers, a shared account header helper, character list view, character create form view, and world entry view were extracted into separate modules under `apps/client/src/game/scenes/accountShell/`. `WorldSessionScene` follows the same rule: its world-area rendering/input logic is split into `apps/client/src/game/scenes/worldSession/worldSessionAreaView.ts`, and its grouped connected-room debug overlay lives in `apps/client/src/game/scenes/worldSession/worldSessionOverlayView.ts`, leaving the scene focused on orchestration and room-state refresh. Code-size rule: scene files must not grow into monoliths; extract view/helper modules as the scene accumulates functionality.
 
 Runtime verification summary:
 

@@ -18,18 +18,37 @@ interface PositionSnapshot {
   readonly y: number;
 }
 
+interface ClickTargetSnapshot {
+  readonly x: number;
+  readonly y: number;
+}
+
+export interface WorldSessionDebugState {
+  readonly lastClickTarget: ClickTargetSnapshot | null;
+}
+
 export interface WorldSessionAreaView {
   readonly refreshFromRoomState: (room: Room<DoomscrollsRoomState>) => void;
+  readonly getDebugState: () => WorldSessionDebugState;
   readonly destroy: () => void;
 }
 
 export function createWorldSessionAreaView(
   scene: Phaser.Scene,
   room: Room<DoomscrollsRoomState>,
+  onDebugStateChange?: () => void,
 ): WorldSessionAreaView {
-  const container = scene.add.container(0, 0);
-  const frame = scene.add.graphics();
-  const marker = scene.add.circle(-9999, -9999, 7, 0x4a9eff, 1);
+const container = scene.add.container(0, 0);
+const frame = scene.add.graphics();
+const playerMarker = scene.add.circle(-9999, -9999, 7, 0x4a9eff, 1);
+const targetMarker = scene.add.circle(-9999, -9999, 7, 0xff4a4a, 0.8);
+const targetLabel = scene.add.text(BOUNDS_ORIGIN_X, BOUNDS_ORIGIN_Y + AREA_HEIGHT + 112, "", {
+  color: "#ff4a4a",
+  fontFamily: "Arial, sans-serif",
+  fontSize: "14px",
+});
+const lineGraphic = scene.add.graphics();
+lineGraphic.lineStyle(1, 0xffffff, 0.5);
   const title = scene.add.text(BOUNDS_ORIGIN_X, 48, t("world_area.title"), {
     color: "#d8c6a3",
     fontFamily: "Arial, sans-serif",
@@ -62,7 +81,7 @@ export function createWorldSessionAreaView(
     fontSize: "14px",
   });
 
-  container.add([frame, marker, title, instruction, boundsLabel, positionLabel, statusLabel]);
+container.add([frame, playerMarker, targetMarker, lineGraphic, title, instruction, boundsLabel, positionLabel, statusLabel, targetLabel]);
 
   const inputZone = scene.add
     .zone(BOUNDS_ORIGIN_X, BOUNDS_ORIGIN_Y, AREA_WIDTH, AREA_HEIGHT)
@@ -72,6 +91,7 @@ export function createWorldSessionAreaView(
   container.add(inputZone);
 
   let previousPosition: PositionSnapshot | null = null;
+  let lastClickTarget: ClickTargetSnapshot | null = null;
 
   const refreshFromRoomState = (nextRoom: Room<DoomscrollsRoomState>): void => {
     const zoneId = nextRoom.state.zoneId;
@@ -88,14 +108,19 @@ export function createWorldSessionAreaView(
       const localY = Phaser.Math.Clamp(pointer.y - BOUNDS_ORIGIN_Y, 0, AREA_HEIGHT);
       const worldX = bounds.minX + (localX / AREA_WIDTH) * (bounds.maxX - bounds.minX);
       const worldY = bounds.minY + (localY / AREA_HEIGHT) * (bounds.maxY - bounds.minY);
-      sendMovementIntent(nextRoom, Math.round(worldX), Math.round(worldY));
+      lastClickTarget = { x: Math.round(worldX), y: Math.round(worldY) };
+      onDebugStateChange?.();
+      sendMovementIntent(nextRoom, lastClickTarget.x, lastClickTarget.y);
     });
 
     const presence = getTownRoomPresence(nextRoom.state as unknown as Record<string, unknown>);
     const self = presence?.players.find((player) => player.sessionId === nextRoom.sessionId) ?? null;
 
     if (self?.position === undefined) {
-      marker.setPosition(-9999, -9999);
+      playerMarker.setPosition(-9999, -9999);
+      targetMarker.setPosition(-9999, -9999);
+      targetLabel.setText("");
+      lineGraphic.clear();
       positionLabel.setText(t("world_area.no_position"));
       statusLabel.setText("");
       previousPosition = null;
@@ -106,7 +131,24 @@ export function createWorldSessionAreaView(
     const pixelX = BOUNDS_ORIGIN_X + ((x - bounds.minX) / (bounds.maxX - bounds.minX)) * AREA_WIDTH;
     const pixelY = BOUNDS_ORIGIN_Y + ((y - bounds.minY) / (bounds.maxY - bounds.minY)) * AREA_HEIGHT;
 
-    marker.setPosition(pixelX, pixelY);
+    // Update player marker (authoritative position)
+    playerMarker.setPosition(pixelX, pixelY);
+
+    // Update target marker and line if a click target exists (debug, non-authoritative)
+    if (lastClickTarget) {
+      const targetPixelX = BOUNDS_ORIGIN_X + ((lastClickTarget.x - bounds.minX) / (bounds.maxX - bounds.minX)) * AREA_WIDTH;
+      const targetPixelY = BOUNDS_ORIGIN_Y + ((lastClickTarget.y - bounds.minY) / (bounds.maxY - bounds.minY)) * AREA_HEIGHT;
+      targetMarker.setPosition(targetPixelX, targetPixelY);
+      targetLabel.setText(`Target: ${lastClickTarget.x}, ${lastClickTarget.y} (non-auth)`);
+      lineGraphic.clear();
+      lineGraphic.lineStyle(1, 0xffffff, 0.5);
+      lineGraphic.lineBetween(pixelX, pixelY, targetPixelX, targetPixelY);
+    } else {
+      targetMarker.setPosition(-9999, -9999);
+      targetLabel.setText("");
+      lineGraphic.clear();
+    }
+
     positionLabel.setText(`x=${Math.round(x)}, y=${Math.round(y)}`);
     statusLabel.setText(
       previousPosition !== null && (previousPosition.x !== x || previousPosition.y !== y)
@@ -120,6 +162,7 @@ export function createWorldSessionAreaView(
 
   return {
     refreshFromRoomState,
+    getDebugState: () => ({ lastClickTarget }),
     destroy: () => {
       container.destroy(true);
     },

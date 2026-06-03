@@ -1,8 +1,5 @@
 import { t } from "@doomscrolls/localization";
-import type { CharacterId, CharacterSummary, RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
-import type { Room } from "@colyseus/sdk";
-import { formatTownRoomState } from "../../../net/RealtimeClient";
-import { getTownRoomPresence } from "../../../net/townRoomPresence";
+import type { CharacterId, CharacterSummary } from "@doomscrolls/shared";
 import { createButton, createInfoLine } from "./accountShellDom";
 
 export function createWorldEntryStub(
@@ -56,87 +53,6 @@ export function createWorldEntryStub(
   status.style.margin = "10px 0 0";
   status.style.color = "#c7ad84";
   section.appendChild(status);
-
-  return section;
-}
-
-export function createConnectedWorldSessionView(
-  character: CharacterSummary | null,
-  room: Room<DoomscrollsRoomState>,
-  onLeaveWorld: () => void,
-): HTMLElement {
-  const section = document.createElement("section");
-  section.style.margin = "18px 0 22px";
-  section.style.padding = "16px";
-  section.style.border = "1px solid #3d3324";
-  section.style.borderRadius = "8px";
-  section.style.background = "rgba(18, 14, 11, 0.9)";
-
-  const title = document.createElement("h2");
-  title.textContent = t("world_entry.title");
-  title.style.margin = "0 0 12px";
-  title.style.fontFamily = "Georgia, serif";
-  title.style.fontSize = "24px";
-  section.appendChild(title);
-
-  const status = document.createElement("p");
-  status.textContent = t("world_entry.connected");
-  status.style.margin = "0 0 12px";
-  status.style.color = "#b9d49a";
-  section.appendChild(status);
-
-  if (character !== null) {
-    section.appendChild(createSelectedCharacterSummary(character));
-  }
-
-  const roomState = formatTownRoomState(room.state);
-  section.appendChild(createInfoLine("Room Kind", roomState.roomKind));
-  section.appendChild(createInfoLine("Zone ID", roomState.zoneId));
-  section.appendChild(createInfoLine("Connected Players", String(roomState.playerCount)));
-
-  const presence = getTownRoomPresence(room.state as unknown as Record<string, unknown>);
-  if (presence !== null && presence.players.length > 0) {
-    const playerList = document.createElement("ul");
-    playerList.style.margin = "8px 0 0";
-    playerList.style.padding = "0";
-    playerList.style.listStyle = "none";
-    playerList.style.fontSize = "13px";
-    playerList.style.color = "#b9d49a";
-
-    for (const player of presence.players) {
-      const li = document.createElement("li");
-      const spawnSuffix =
-        player.spawnPointId !== undefined && player.spawnPointId.length > 0
-          ? ` @ ${player.spawnPointId}`
-          : "";
-      const positionSuffix =
-        player.position !== undefined
-          ? ` (x=${player.position.x}, y=${player.position.y})`
-          : "";
-      const speedSuffix =
-        player.movementSpeed !== undefined
-          ? ` speed=${player.movementSpeed}`
-          : "";
-      li.textContent = `${player.displayName} (${player.characterId})${spawnSuffix}${positionSuffix}${speedSuffix}`;
-      li.style.marginBottom = "2px";
-      playerList.appendChild(li);
-    }
-
-    const label = document.createElement("p");
-    label.textContent = "Players:";
-    label.style.margin = "10px 0 2px";
-    label.style.fontSize = "13px";
-    label.style.color = "#a88d63";
-    section.appendChild(label);
-    section.appendChild(playerList);
-  }
-
-  const leaveButton = createButton(t("world_entry.leave_world"));
-  leaveButton.style.marginTop = "12px";
-  leaveButton.addEventListener("click", () => {
-    onLeaveWorld();
-  });
-  section.appendChild(leaveButton);
 
   return section;
 }
