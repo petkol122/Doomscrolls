@@ -1,0 +1,8 @@
+- [x] Read worldEntryView.ts to understand current Enter World UI structure
+- [x] Read AccountShellScene.ts to understand wiring
+- [x] Read shared protocol files for type signatures
+- [x] Check localization strings for relevant keys
+- [x] Add dev test move intent button in worldEntryView.ts
+- [x] Update docs (README, ARCHITECTURE, BACKLOG_CORE_0_1, CODING_RULES)
+- [x] Run pnpm typecheck + build for client
+- [x] Final report

@@ -82,6 +82,9 @@ export const en = {
   "world_entry.connected": "Connected to The Nightmarket.",
   "world_entry.join_failed": "Could not enter world.",
   "world_entry.leave_world": "Leave",
+  "world_entry.test_move_intent_idle": "Dev: send a hardcoded movement intent.",
+  "world_entry.test_move_intent_sent": "Move intent sent.",
+  "world_entry.test_move_intent_error": "Move intent not sent.",
 
   "inventory.title": "Inventory",
   "equipment.title": "Equipment",

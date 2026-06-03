@@ -551,6 +551,19 @@ client helper is NOT wired to UI or mouse clicks yet; later tasks will own click
 
 This batch is the network contract and validation shell only. There is no movement simulation, no position updates after join, no pathfinding, no collision, no map rendering, no player sprite, no combat, and no persistence tied to it yet. The validator uses a temporary, conservative numeric range as bounds (`DEFAULT_MOVEMENT_INTENT_BOUNDS`); real map-aware bounds will be introduced together with real map data in a later task.
 
+Movement intent client UI stub (Task 027 — dev-only, no simulation):
+
+```text
+apps/client/src/game/scenes/accountShell/testMoveIntentView.ts  - small dev-only button + status, owns createTestMoveIntentButton(room)
+worldEntryView.ts                                                - renders the test button only when entered && room !== null (i.e. after Enter World)
+sendMovementIntent()                                             - reused as-is; button calls it with hardcoded targetX=420, targetY=320
+feedback                                                         - safe "Move intent sent." on dispatched, safe "Move intent not sent." on dispatch failure
+no local position update, no server-side position update, no movement simulation, no map, no sprite, no combat
+AccountShellScene was NOT modified; the new view module keeps the scene file lean
+```
+
+The test button exists purely to verify that the Task 026 network contract wires up end-to-end through the client UI. The server still only validates intent shape and range; it does not mutate any player position, does not broadcast, and does not know about maps, collision or pathfinding. Click-to-move, map rendering, player sprite, movement simulation, position updates and combat are deferred to later Core 0.1 tasks.
+
 Current TownRoom limitations:
 
 ```text

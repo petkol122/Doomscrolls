@@ -316,6 +316,13 @@ Movement intent foundation rules:
 - `AccountShellScene` must not import `sendMovementIntent`; movement intent UI is deferred to later tasks
 - Movement intent foundation code must not implement movement simulation, position updates after join, pathfinding, collision detection, map rendering, scene-based entity placement, player sprite, combat, loot, XP, inventory, equipment, corpse behavior, or persistence
 - The movement intent foundation is a network contract and validation shell only and must not be presented as gameplay
+- The client `AccountShellScene` must not import `sendMovementIntent`; movement intent UI is deferred to later tasks
+  (the dev-only "Send test move intent" button introduced by Task 027 lives in
+  `apps/client/src/game/scenes/accountShell/testMoveIntentView.ts` and is rendered by
+  `worldEntryView.ts` only after Enter World, not in `AccountShellScene`)
+- The dev-only test move intent button must not update any local position, must not pretend movement
+  happened, must not read mouse or keyboard input, and must not introduce any map, sprite, pathfinding,
+  collision, combat or persistence; the server still only validates intent shape and range
 
 ## Testing
 

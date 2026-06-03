@@ -4,6 +4,7 @@ import type { Room } from "@colyseus/sdk";
 import { formatTownRoomState } from "../../../net/RealtimeClient";
 import { getTownRoomPresence } from "../../../net/townRoomPresence";
 import { createButton, createInfoLine } from "./accountShellDom";
+import { createTestMoveIntentButton } from "./testMoveIntentView";
 
 export function createWorldEntryStub(
   characters: readonly CharacterSummary[],
@@ -107,6 +108,15 @@ export function createWorldEntryStub(
       onLeaveWorld();
     });
     section.appendChild(leaveButton);
+
+    // Dev-only movement intent stub (Task 027). Sends one hardcoded
+    // `request_move` intent through the already-joined Colyseus room
+    // using the `sendMovementIntent()` helper. Server validates shape
+    // and range only; the client does not move and does not pretend
+    // movement happened. Rendered only while connected to a town
+    // room so the button never appears before Enter World.
+    const testMoveIntent = createTestMoveIntentButton(room);
+    section.appendChild(testMoveIntent.container);
   }
 
   return section;

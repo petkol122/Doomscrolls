@@ -236,6 +236,8 @@ no movement simulation, no position updates after join, no pathfinding, no colli
 
 `TownRoom` is intentionally kept as a thin Colyseus shell. The movement intent validator lives in a dedicated helper module (`movementIntentValidation.ts`) so the room file does not become monolithic. The client helper lives in its own module (`movementIntentClient.ts`) and is NOT wired to UI or mouse clicks yet — later Core 0.1 tasks will own click-to-move UI and server-side movement simulation. The server validates intent shape and range only; it does not update any player position, does not broadcast, and does not know about maps, collision or pathfinding.
 
+A dev-only "Send test move intent" button is rendered in `worldEntryView.ts` only after Enter World, while the client is still connected to a town room. The button uses the existing `sendMovementIntent()` helper to dispatch a single hardcoded `request_move` intent (target 420, 320) through the already-joined Colyseus room. It exists purely to verify that the network contract from Task 026 wires up end-to-end through the client UI: the server only validates intent shape and range, the client does not move, and no local or server-side position update is performed. Click-to-move, map rendering, player sprite, movement simulation, position updates and combat are still deferred to later Core 0.1 tasks.
+
 Client character list/create runtime verification passed locally:
 
 ```text
