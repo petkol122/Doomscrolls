@@ -233,6 +233,7 @@ the player dot uses synced TownRoom presence x/y only
 click/tap inside the world area sends a real request_move intent
 the client does not fake or predict local movement
 the marker updates only after room-state sync from the server
+roomKind display reads synced roomKind from room state
 no sprites, no map art, no collision, no pathfinding, no animation, no combat
 no inventory UI and no persistence yet
 ```
@@ -575,6 +576,8 @@ no collision, no pathfinding, no stat-driven speed, no interpolation, no combat 
 ```
 
 This batch includes the network contract, validation shell, target storage and authoritative movement stepping. When the server accepts a `request_move` intent, it calls `applyMovementIntent()` which stores the validated `targetX`/`targetY` as the player's movement target in the Colyseus schema. A separate simulation interval then runs every 50 ms and `stepTownRoomMovement()` advances authoritative `PlayerPresence.x`/`y` toward that stored target at a constant server-owned rate. If a newer click arrives first, it simply replaces the previous target. Colyseus broadcasts the resulting x/y updates automatically to all clients. On the client, the `onStateChange` handler re-renders the world session layer from synced room state only. There is still no collision, no pathfinding, no stat-driven move speed, no interpolation, no combat coupling, and no persistence tied to it yet. The validator uses zone bounds as placeholder constraints rather than real map geometry.
+
+Authoritative movement runtime sanity passed locally with account `movecheck044` and character `Mover044`. The synced player marker moved gradually under server control rather than teleporting instantly on the client, and a second click correctly replaced the previous target before arrival. The client room header/status also fixed a display bug by reading `roomKind` directly from synced room state. This verification does not imply map art, collision, pathfinding, combat, persistence, or a real gameplay loop.
 
 Movement intent client UI stub (Task 027 — dev-only, no simulation):
 

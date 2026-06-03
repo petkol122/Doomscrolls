@@ -263,6 +263,17 @@ When the server accepts a `request_move` intent, it calls `applyMovementIntent()
 
 In the current WorldSession visual layer, click/tap inside the rendered world area uses the existing `sendMovementIntent()` helper to dispatch a real `request_move` intent through the already-joined Colyseus room. The area bounds come from content, and the player marker updates only from synced room state after the server accepts the target and the server tick gradually steps the authoritative position toward it. This remains a visual/network layer only: collision, pathfinding, stat-driven speed, interpolation/smoothing, combat, inventory UI and persistence are still deferred to later Core 0.1 tasks.
 
+Movement runtime sanity verification passed locally:
+
+```text
+account movecheck044
+character Mover044
+server-synced movement advanced gradually, not as an instant local teleport
+second click retargeting worked before arrival
+roomKind display bug fixed by reading roomKind from synced room state
+still no map art, collision, pathfinding, combat, persistence, or real gameplay loop
+```
+
 Client character list/create runtime verification passed locally:
 
 ```text

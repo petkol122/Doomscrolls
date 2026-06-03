@@ -335,7 +335,7 @@ The documented forbidden scope remains unchanged: no sprites, no map art, no col
 
 Document the current server-authoritative movement stepping and, if practical, do one light runtime sanity check. This task must not add features.
 
-Status: documented from the current implementation. `request_move` no longer means an instant authoritative teleport to the clicked point. Instead, accepted input stores `targetX` / `targetY` on server-owned movement-target fields, and the server simulation tick moves `PlayerPresence.x` / `y` toward that target every 50 ms. A newer click replaces the older target. The client renders synced x/y only. Collision, pathfinding, stat-driven speed, interpolation/smoothing, combat coupling and persistence are still out of scope.
+Status: documented from the current implementation and updated after runtime sanity verification. `request_move` no longer means an instant authoritative teleport to the clicked point. Instead, accepted input stores `targetX` / `targetY` on server-owned movement-target fields, and the server simulation tick moves `PlayerPresence.x` / `y` toward that target every 50 ms. A newer click replaces the older target. The client renders synced x/y only. Runtime sanity passed locally with account `movecheck044` and character `Mover044`: movement advanced gradually from synced server state rather than as an instant local teleport, and second-click retargeting worked before arrival. The related room header/status display bug was also fixed by reading `roomKind` from synced room state. Collision, map art, pathfinding, stat-driven speed, interpolation/smoothing, combat coupling, persistence and a real gameplay loop are still out of scope.
 
 ### Task 023.2 — Spawn Point Assignment Only
 
