@@ -290,6 +290,24 @@ Status: documented after reading source files and running validation checks. `To
 
 All four docs (README, ARCHITECTURE, BACKLOG, CODING_RULES) were updated. TECH_DEBT was reviewed — no new debt entries needed. Validation checks (`pnpm lint`, `pnpm test`) passed.
 
+### Task 022.1 — TownRoom State + Player Presence
+
+Implement TownRoomState schema and PlayerPresence schema on the server. No client changes yet.
+
+### Task 022.2 — Client Presence Display Types Only
+
+Add client helper to extract player presence from TownRoom room state. No gameplay, map, movement, or runtime test.
+
+### Task 022.3 — TownRoom Presence Docs Only
+
+Document current TownRoom player presence tracking on both server and client. This is a documentation-only task and must not change code.
+
+Status: documented after reading source files and running validation checks. `TownRoom` now tracks player presence via a `MapSchema<PlayerPresence>` keyed by Colyseus `sessionId`. Each `PlayerPresence` entry contains `sessionId`, `characterId`, and `displayName`. `connectedPlayerCount` derives from `playerPresence.size` on join/leave. The server sets presence on `onJoin` using the validated character's `characterId` and `characterName` (as `displayName`), and removes it on `onLeave`.
+
+The client has a new dedicated helper at `apps/client/src/net/townRoomPresence.ts` that safely reads the Colyseus `MapSchema` at runtime and returns a `TownRoomPresence` object with `connectedPlayerCount` and a `players` array of `{ sessionId, characterId, displayName }`. The helper is used by `worldEntryView.ts` to render each connected player's display name and character ID below the existing room info lines after Enter World. Presence rendering logic stays out of `AccountShellScene` — the scene only triggers the view re-render through the existing `onStateChange` handler.
+
+No position, movement, map, combat, chat, persistence, or gameplay was added. The client helper isolates schema-aware access behind a clean interface so callers do not import Colyseus schema types directly. Typecheck and build pass cleanly.
+
 ### Task 026 — Core 0.1 End-to-End Test
 
 Run and document the full manual Core 0.1 scenario.

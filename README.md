@@ -178,11 +178,13 @@ After successful creation, the client refreshes real account state and resumes t
 
 The authenticated `AccountShellScene` now has a working **Enter World** button. It is enabled only when a character is selected. On click, it calls `RealtimeClient.joinTownRoom(sessionToken, selectedCharacterId)`. On successful join, the status shows `"Connected to The Nightmarket."` and a Leave button appears. On failure, it shows a safe error `"Could not enter world."`. The room reference is stored in client memory only.
 
-The client now renders the minimal `TownRoom` state after successful join: `roomKind` (`"town"`), `zoneId` (currently `"nightmarket"`), and `connectedPlayerCount`. These are displayed as read-only info lines under the status message. No player entity list, no map, no movement, no combat, no gameplay state is exposed yet.
+The client now renders the minimal `TownRoom` state after successful join: `roomKind` (`"town"`), `zoneId` (currently `"nightmarket"`), and `connectedPlayerCount`. These are displayed as read-only info lines under the status message. Additionally, a helper module (`townRoomPresence.ts`) extracts player presence from the Colyseus schema state and renders each connected player's display name and character ID in a small list. No map, no movement, no combat, no gameplay state is exposed yet.
 
 If the real `characters` array is empty, the shell shows `No characters yet.`
 
 `AccountShellScene` was refactored to extract DOM helpers into `accountShell/accountShellDom.ts`, character list view into `accountShell/characterListView.ts`, character create form into `accountShell/characterCreateFormView.ts`, and world entry view into `accountShell/worldEntryView.ts`. This keeps the scene file lean and avoids god-file growth. The rule is: scene files should not grow into monoliths; extract view/helper modules as the scene accumulates functionality.
+
+A dedicated client helper (`apps/client/src/net/townRoomPresence.ts`) now extracts player presence data from the Colyseus `TownRoomState` schema at runtime. It returns `connectedPlayerCount` plus an array of `{ sessionId, characterId, displayName }` entries. The helper is used by `worldEntryView.ts` to display player names after Enter World. Presence rendering logic is kept out of `AccountShellScene` — the scene only calls `getTownRoomPresence()` via the view module.
 
 Client character list/create runtime verification passed locally:
 

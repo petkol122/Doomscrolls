@@ -215,7 +215,8 @@ failed join shows safe "Could not enter world."
 Leave button appears after successful join
 room reference is stored in client memory only
 after join, client renders roomKind, zoneId, connectedPlayerCount from room state
-no player entity list yet
+client extracts player presence via getTownRoomPresence() helper and renders display names / character IDs
+player presence helper lives in apps/client/src/net/townRoomPresence.ts, separate from AccountShellScene
 no map, movement or combat yet
 no inventory/equipment UI yet
 no seed character data
@@ -503,7 +504,9 @@ Current TownRoom state:
 ```text
 roomKind: "town"
 zoneId: varies (currently "nightmarket")
-connectedPlayerCount: tracked on join/leave
+playerPresence: MapSchema<PlayerPresence> keyed by Colyseus sessionId
+  each entry: { sessionId, characterId, displayName }
+connectedPlayerCount: derived from playerPresence.size on join/leave
 ```
 
 Current TownRoom limitations:

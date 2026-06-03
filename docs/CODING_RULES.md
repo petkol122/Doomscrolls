@@ -212,12 +212,14 @@ Room join validation rules:
 
 ## TownRoom Rules
 
-`TownRoom` is registered as the Colyseus room name `town`. It exposes a minimal Colyseus schema state (`TownRoomState`) with:
+`TownRoom` is registered as the Colyseus room name `town`. It exposes a Colyseus schema state (`TownRoomState`) with:
 
 ```text
 roomKind: "town"
 zoneId: varies (currently "nightmarket")
-connectedPlayerCount: tracked on join/leave
+playerPresence: MapSchema<PlayerPresence> keyed by Colyseus sessionId
+  each entry: { sessionId, characterId, displayName }
+connectedPlayerCount: derived from playerPresence.size on join/leave
 ```
 
 No player entity list, no map, no movement, no combat, no gameplay state exists yet.
@@ -230,7 +232,11 @@ TownRoom rules:
 - invalid join cases must fail safely and must not leak another user's character data
 - invalid join cases were checked earlier through the room join validation flow and must remain covered as join behavior evolves
 - client code must not decide room access or claim join success without the server
-- the client renders roomKind, zoneId and connectedPlayerCount from room state only; no gameplay state is exposed
+- the server creates a `PlayerPresence` entry on `onJoin` with `sessionId`, `characterId` and `characterName` (as `displayName`)
+- the server removes the `PlayerPresence` entry on `onLeave`
+- `connectedPlayerCount` must derive from `playerPresence.size` on join/leave, never be set independently
+- the client renders roomKind, zoneId and connectedPlayerCount from room state; additionally it may extract player presence via a dedicated helper (`getTownRoomPresence`) to display connected player names
+- client presence extraction must live in a separate helper module (`apps/client/src/net/townRoomPresence.ts`), not inside `AccountShellScene`
 - do not add a player entity list, map, movement, combat, loot, XP, inventory, equipment, corpse behavior, gameplay messages or client UI gameplay connection to `TownRoom` without a dedicated task
 - empty room registration must not be presented as gameplay
 
