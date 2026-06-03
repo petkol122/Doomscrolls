@@ -73,6 +73,7 @@ export const en = {
   "character.origin": "Origin",
   "character.class": "Class",
   "character.level": "Level",
+  "character.create_success": "Character created.",
 
   "inventory.title": "Inventory",
   "equipment.title": "Equipment",
@@ -92,6 +93,8 @@ export const en = {
   "error.duplicate_username": "That username is already taken.",
   "error.invalid_credentials": "Invalid username or password.",
   "error.invalid_token": "Your session is invalid or expired. Please log in again.",
+  "error.invalid_character_create_input": "Please check the character name and try again.",
+  "error.duplicate_character_name": "That character name is already used by this account.",
   "error.missing_localization_key": "Missing localization key: {key}"
 } as const satisfies LocalizationDictionary;
 

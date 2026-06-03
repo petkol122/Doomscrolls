@@ -64,6 +64,12 @@ export type ApiErrorCode =
   | "INVALID_PASSWORD"
   | "INVALID_DISPLAY_NAME"
   | "USERNAME_TAKEN"
+  | "INVALID_CHARACTER_NAME"
+  | "CHARACTER_NAME_TAKEN"
+  | "INVALID_ORIGIN"
+  | "INVALID_CLASS"
+  | "ORIGIN_CLASS_NOT_ALLOWED"
+  | "CHARACTER_NOT_FOUND"
   | "INVALID_CREDENTIALS"
   | "SESSION_INVALID"
   | "SESSION_EXPIRED"
@@ -264,6 +270,12 @@ export class ApiClient {
         case "INVALID_PASSWORD":
         case "INVALID_DISPLAY_NAME":
         case "USERNAME_TAKEN":
+        case "INVALID_CHARACTER_NAME":
+        case "CHARACTER_NAME_TAKEN":
+        case "INVALID_ORIGIN":
+        case "INVALID_CLASS":
+        case "ORIGIN_CLASS_NOT_ALLOWED":
+        case "CHARACTER_NOT_FOUND":
         case "INVALID_CREDENTIALS":
         case "SESSION_INVALID":
         case "SESSION_EXPIRED":

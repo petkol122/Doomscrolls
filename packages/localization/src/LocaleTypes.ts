@@ -61,6 +61,7 @@ export const REQUIRED_LOCALIZATION_KEYS = [
   "character.origin",
   "character.class",
   "character.level",
+  "character.create_success",
   "inventory.title",
   "equipment.title",
   "equipment.slot.weapon",
@@ -78,6 +79,8 @@ export const REQUIRED_LOCALIZATION_KEYS = [
   "error.duplicate_username",
   "error.invalid_credentials",
   "error.invalid_token",
+  "error.invalid_character_create_input",
+  "error.duplicate_character_name",
   "error.missing_localization_key"
 ] as const;
 

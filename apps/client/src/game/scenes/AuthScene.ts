@@ -293,6 +293,13 @@ export class AuthScene extends Phaser.Scene {
         return mode === "register" ? t("error.invalid_register_input") : t("error.invalid_credentials");
       case "USERNAME_TAKEN":
         return t("error.duplicate_username");
+      case "INVALID_CHARACTER_NAME":
+      case "CHARACTER_NAME_TAKEN":
+      case "INVALID_ORIGIN":
+      case "INVALID_CLASS":
+      case "ORIGIN_CLASS_NOT_ALLOWED":
+      case "CHARACTER_NOT_FOUND":
+        return t("error.generic");
       case "INVALID_CREDENTIALS":
         return t("error.invalid_credentials");
       case "SESSION_INVALID":
