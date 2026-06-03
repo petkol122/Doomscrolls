@@ -176,7 +176,7 @@ After successful creation, the client refreshes real account state and resumes t
 
 `AccountShellScene` supports selected character state for real account characters. The first real character is selected by default, and the user can select another real character from the list. The selected character ID persists in `localStorage` under `doomscrolls.selectedCharacterId`; stored selection is restored only if that ID belongs to the current account's real `/me` characters. Logout clears selected character storage together with the local session token.
 
-Current client character UI limitations: there is no play button yet, no room join yet, no gameplay rooms, no movement, no combat, no inventory/equipment UI, no seed data and no fake characters. If the real `characters` array is empty, the shell shows `No characters yet.`
+Current client character UI limitations: there is no play button yet, no client room join yet, no gameplay connection, no movement, no combat, no inventory/equipment UI, no seed data and no fake characters. If the real `characters` array is empty, the shell shows `No characters yet.`
 
 Client character list/create runtime verification passed locally:
 
@@ -223,9 +223,9 @@ DATABASE_URL
 SESSION_SECRET
 ```
 
-The server uses Fastify with configured CORS, validates environment variables on startup, validates the `@doomscrolls/content` registry on startup, checks Redis with `PING`, initializes a Colyseus shell with no rooms registered, and exposes `GET /health` with a safe non-secret payload. Redis is required for startup. `DATABASE_URL` is used by Prisma CLI tooling and validated by the server config, but the server does not open a PostgreSQL connection or run database queries during startup yet.
+The server uses Fastify with configured CORS, validates environment variables on startup, validates the `@doomscrolls/content` registry on startup, checks Redis with `PING`, initializes a Colyseus shell, registers `TownRoom` as the Colyseus room name `town`, and exposes `GET /health` with a safe non-secret payload. Redis is required for startup. `DATABASE_URL` is used by Prisma CLI tooling and runtime account/character validation.
 
-The server currently does not implement profile routes, gameplay rooms, combat, loot, enemy spawning, fake users, fake characters or fake inventory.
+The server currently does not implement profile routes, player entities, room state schema, maps, movement, combat, loot, enemy spawning, gameplay, fake users, fake characters or fake inventory.
 
 A server-side `RoomJoinValidationService` now exists at `apps/server/src/realtime/RoomJoinValidationService.ts`. It is a safe validation helper for the future Colyseus room join flow. It verifies that a selected character belongs to the authenticated user through the existing `CharacterService.getCharacterForUser` ownership lookup, and it validates the requested `roomKind` (only `town` and `combat` are accepted) and the optional `zoneId` (empty string is rejected). On success it returns the validated `CharacterDetails` together with the resolved `roomKind` and resolved `zoneId`; on failure it returns a safe `RoomJoinFailureReason` code from `packages/shared/src/room/RoomJoinTypes`. The service does not register any Colyseus room, does not perform any actual join, and does not start gameplay. Its input/result types live in `apps/server/src/realtime/RoomJoinValidationTypes.ts` and are re-exported from `apps/server/src/realtime/index.ts`.
 
@@ -242,7 +242,18 @@ temp users cleaned up
 no temp script remains
 ```
 
-No Colyseus rooms are registered yet. No client room connection is implemented yet. No movement, combat, loot, inventory, equipment or gameplay exists yet.
+`TownRoom` is now registered as `town`. It is intentionally empty and validates joins with a real `sessionToken` plus `characterId` before allowing entry. A valid owned character can join the `town` room; invalid join cases were checked earlier through the room join validation service and returned safe failure reasons. There is no player entity yet, no room state schema yet, no map, movement, combat or gameplay yet, and no client UI connection yet.
+
+TownRoom valid-join runtime verification passed locally:
+
+```text
+health returned 200
+user townjoin_1780491898776
+character TownJoin91898776
+valid Colyseus join to "town" succeeded
+temp user/script cleaned up
+git status clean after test
+```
 
 Auth HTTP endpoints are now implemented:
 

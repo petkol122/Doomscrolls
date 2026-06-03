@@ -176,7 +176,24 @@ temp users cleaned up
 no temp script remains
 ```
 
-No Colyseus rooms are registered yet. No client room connection is implemented yet. No movement, combat, loot, inventory, equipment, flask, XP, corpse or reconnect behavior is implemented yet.
+This validation service now backs the empty TownRoom join gate. No client room connection is implemented yet. No movement, combat, loot, inventory, equipment, flask, XP, corpse or reconnect behavior is implemented yet.
+
+### Task 018.5 — TownRoom Docs Only
+
+Document empty `TownRoom` registration and valid join runtime verification. This is a documentation-only task and must not add code, player entities, room state schema, maps, movement, combat, gameplay, client UI connection or fake room behavior.
+
+Status: documented after local runtime verification. `TownRoom` is registered as the Colyseus room name `town`. It validates joins with a real `sessionToken` plus `characterId`, and a valid owned character can join. Invalid join cases were checked earlier through the room join validation flow. The room remains an empty shell: no player entity, no room state schema, no map, no movement, no combat, no gameplay and no client UI connection.
+
+Runtime verification summary:
+
+```text
+health returned 200
+user townjoin_1780491898776
+character TownJoin91898776
+valid Colyseus join to "town" succeeded
+temp user/script cleaned up
+git status clean after test
+```
 
 ### Task 011 — Profile and Settings
 

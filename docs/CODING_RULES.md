@@ -204,6 +204,21 @@ Room join validation rules:
 - shared room join contracts (`SelectedCharacterRoomJoinRequest`, `RoomJoinAuthPayload`, `RoomJoinFailureReason`) must live in `packages/shared/src/room/RoomJoinTypes.ts` and be re-exported from `packages/shared/src/index.ts`
 - Colyseus room registration, real client room connection, and any gameplay behavior must not be added to this layer
 
+## TownRoom Rules
+
+`TownRoom` is registered as the Colyseus room name `town`. It is currently an authenticated empty room shell only.
+
+TownRoom rules:
+
+- join options must include a real `sessionToken` and `characterId`
+- the server must validate the session token and selected character ownership before allowing the join
+- a valid owned character may join `town`
+- invalid join cases must fail safely and must not leak another user's character data
+- invalid join cases were checked earlier through the room join validation flow and must remain covered as join behavior evolves
+- client code must not decide room access or claim join success without the server
+- do not add a player entity, room state schema, map, movement, combat, loot, XP, inventory, equipment, corpse behavior, gameplay messages or client UI connection to `TownRoom` without a dedicated task
+- empty room registration must not be presented as gameplay
+
 ---
 
 ## Testing

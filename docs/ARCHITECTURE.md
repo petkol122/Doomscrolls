@@ -171,9 +171,9 @@ graceful SIGINT/SIGTERM shutdown
 
 `GET /health` returns only a safe service payload and does not expose secrets or internal stack traces.
 
-The Colyseus shell intentionally registers no rooms. `TownRoom`, `CombatRoom`, room authentication, movement, combat, enemy spawning, loot and gameplay messages are deferred to later Core 0.1 tasks.
+The Colyseus shell now registers an empty `TownRoom` with the room name `town`. `TownRoom` accepts join attempts only after validating a real `sessionToken` and `characterId`; the selected character must belong to the authenticated account. It has no player entity, no room state schema, no map, no movement, no combat, no enemy spawning, no loot, no gameplay messages and no client UI connection yet. `CombatRoom`, movement, combat, enemy spawning, loot and gameplay messages are deferred to later Core 0.1 tasks.
 
-The Prisma schema foundation exists, and the server validates `DATABASE_URL` so configuration is explicit. The current runtime still does not execute database queries on startup and does not implement repository classes, room persistence, inventory logic, corpse recovery logic or gameplay business logic.
+The Prisma schema foundation exists, and the server validates `DATABASE_URL` so configuration is explicit. The current runtime uses persistence for auth, character APIs and room join validation, but does not implement room persistence, inventory logic, corpse recovery logic or gameplay business logic.
 
 Auth HTTP endpoints (`POST /auth/register`, `POST /auth/login`, `GET /me`) are now registered in the Fastify app via `registerAuthRoutes`. Character HTTP endpoints (`GET /characters`, `POST /characters`, `GET /characters/:characterId`) are registered via `registerCharacterRoutes`. Auth and character routes use request validation with zod, a reusable Bearer token authentication middleware and centralized safe error-to-HTTP mapping. The server owns character creation and account state; it does not implement frontend behavior, gameplay rooms, movement, combat, loot, seed data or fake character data.
 
@@ -209,8 +209,8 @@ Current client character UI limitations:
 
 ```text
 no play button yet
-no room join yet
-no rooms/gameplay yet
+no client room join yet
+no gameplay connection yet
 no movement or combat yet
 no inventory/equipment UI yet
 no seed character data
@@ -477,6 +477,42 @@ explicit combat zone    -> success
 ```
 
 This verification does not register any Colyseus room, does not perform any real client room connection, and does not introduce any gameplay. It only proves that the future room-join gate can safely verify character ownership and validate room kind / zone. Any temp test users created during verification were cleaned up and no temp script remains in the repository.
+
+---
+
+## TownRoom Registration
+
+The first Colyseus room shell is registered on the server as:
+
+```text
+room name: town
+room class: TownRoom
+```
+
+`TownRoom` currently performs authenticated join validation only. Join options must include a real `sessionToken` and `characterId`; the server validates the session and verifies that the character is owned by the authenticated account before allowing the join. A valid owned character can join `town`. Invalid join cases were checked earlier through `RoomJoinValidationService` and must continue to fail with safe reasons rather than leaking ownership or persistence details.
+
+Current TownRoom limitations:
+
+```text
+no player entity yet
+no room state schema yet
+no map yet
+no movement yet
+no combat yet
+no gameplay yet
+no client UI connection yet
+```
+
+Runtime verification summary:
+
+```text
+health returned 200
+user townjoin_1780491898776
+character TownJoin91898776
+valid Colyseus join to "town" succeeded
+temp user/script cleaned up
+git status clean after test
+```
 
 ---
 
