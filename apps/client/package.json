@@ -12,6 +12,7 @@
     "test": "echo client test placeholder"
   },
   "dependencies": {
+    "@colyseus/sdk": "^0.17.42",
     "@doomscrolls/localization": "workspace:*",
     "@doomscrolls/shared": "workspace:*",
     "phaser": "^4.1.0"
