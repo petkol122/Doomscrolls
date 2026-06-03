@@ -1,4 +1,5 @@
 import { t } from "@doomscrolls/localization";
+import type { CharacterSummary } from "@doomscrolls/shared";
 import Phaser from "phaser";
 
 import { clearStoredSessionToken } from "../../auth/sessionStorage";
@@ -85,10 +86,7 @@ export class AccountShellScene extends Phaser.Scene {
     loaded.style.color = "#b9d49a";
     panel.appendChild(loaded);
 
-    const characters = document.createElement("p");
-    characters.textContent = account.characters.length === 0 ? t("auth.no_characters") : `${account.characters.length} character(s)`;
-    characters.style.margin = "0 0 22px";
-    panel.appendChild(characters);
+    panel.appendChild(this.createCharacterList(account.characters));
 
     const logout = document.createElement("button");
     logout.type = "button";
@@ -109,6 +107,69 @@ export class AccountShellScene extends Phaser.Scene {
 
     document.body.appendChild(root);
     return root;
+  }
+
+  private createCharacterList(characters: readonly CharacterSummary[]): HTMLElement {
+    const section = document.createElement("section");
+    section.style.margin = "18px 0 22px";
+
+    const title = document.createElement("h2");
+    title.textContent = t("character.list");
+    title.style.margin = "0 0 12px";
+    title.style.fontFamily = "Georgia, serif";
+    title.style.fontSize = "24px";
+    section.appendChild(title);
+
+    if (characters.length === 0) {
+      const empty = document.createElement("p");
+      empty.textContent = t("auth.no_characters");
+      empty.style.margin = "0";
+      empty.style.color = "#a88d63";
+      section.appendChild(empty);
+      return section;
+    }
+
+    const list = document.createElement("ul");
+    list.style.display = "flex";
+    list.style.flexDirection = "column";
+    list.style.gap = "10px";
+    list.style.margin = "0";
+    list.style.padding = "0";
+    list.style.listStyle = "none";
+
+    for (const character of characters) {
+      list.appendChild(this.createCharacterListItem(character));
+    }
+
+    section.appendChild(list);
+    return section;
+  }
+
+  private createCharacterListItem(character: CharacterSummary): HTMLElement {
+    const item = document.createElement("li");
+    item.style.padding = "12px";
+    item.style.border = "1px solid #3d3324";
+    item.style.borderRadius = "8px";
+    item.style.background = "rgba(25, 19, 14, 0.9)";
+
+    const name = document.createElement("strong");
+    name.textContent = character.characterName;
+    name.style.display = "block";
+    name.style.marginBottom = "6px";
+    name.style.color = "#ffe6bd";
+    item.appendChild(name);
+
+    const details = document.createElement("p");
+    details.textContent = [
+      `${t("character.origin")}: ${t(`origin.${character.originKey}.name`)}`,
+      `${t("character.class")}: ${t(`class.${character.classKey}.name`)}`,
+      `${t("character.level")}: ${character.level}`
+    ].join(" · ");
+    details.style.margin = "0";
+    details.style.color = "#c7ad84";
+    item.appendChild(details);
+
+    return item;
   }
 
   private createInfoLine(label: string, value: string): HTMLElement {

@@ -68,9 +68,11 @@ export const en = {
 
   "character.create": "Create character",
   "character.select": "Select character",
+  "character.list": "Characters",
   "character.name": "Character name",
   "character.origin": "Origin",
   "character.class": "Class",
+  "character.level": "Level",
 
   "inventory.title": "Inventory",
   "equipment.title": "Equipment",
