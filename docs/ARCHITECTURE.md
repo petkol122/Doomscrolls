@@ -425,6 +425,61 @@ Runtime verification also confirmed that `passwordHash` and `tokenHash` are not 
 
 ---
 
+## Room Join Validation Service
+
+The room join validation layer lives at:
+
+```text
+apps/server/src/realtime/
+```
+
+Core components:
+
+```text
+RoomJoinValidationService.ts   - Safe future-room-join validator
+RoomJoinValidationTypes.ts     - Input/output types for the validator
+index.ts                       - Public API exports (service + types)
+```
+
+Shared room join contracts live in `packages/shared/src/room/RoomJoinTypes.ts` and are re-exported from `packages/shared/src/index.ts`. They include:
+
+```text
+SelectedCharacterRoomJoinRequest  - characterId + requestedRoomKind + optional requestedZoneId
+RoomJoinAuthPayload               - SelectedCharacterRoomJoinRequest + sessionToken
+RoomJoinFailureReason             - not_authenticated | session_expired | character_not_found
+                                    | character_not_owned | invalid_room_kind
+                                    | invalid_zone | room_unavailable
+```
+
+`RoomKind` is defined in `packages/shared/src/room/RoomStateTypes.ts` as `"town" | "combat"`.
+
+`RoomJoinValidationService.validateJoin(input)` performs only safe pre-join checks:
+
+- rejects unknown `requestedRoomKind` values with `invalid_room_kind`
+- rejects explicitly empty `requestedZoneId` with `invalid_zone`
+- delegates character ownership lookup to `CharacterService.getCharacterForUser(characterId, userId)` so only characters owned by the authenticated user can be joined
+- treats `CHARACTER_NOT_FOUND` and any other ownership failure as `character_not_owned` to avoid leaking character existence
+- resolves the final `zoneId` from the explicit request or, when absent, from the persisted character record
+- returns a discriminated `RoomJoinValidationResult` with safe `RoomJoinFailureReason` codes on failure
+- on unknown errors returns the safe `room_unavailable` reason and never leaks Prisma details
+
+The service is intentionally not a Colyseus room, does not register any room handler, and does not perform any actual join. It is a pure validation helper that future authenticated room-join endpoints, room authentication middleware, and the Colyseus room shell will be able to call before allowing a real room join.
+
+Runtime verification status: implemented and locally verified against the real local PostgreSQL. The verified outcomes are:
+
+```text
+owned character         -> success
+missing character       -> character_not_owned
+not-owned character     -> character_not_owned
+invalid room kind       -> invalid_room_kind
+empty zoneId            -> invalid_zone
+explicit combat zone    -> success
+```
+
+This verification does not register any Colyseus room, does not perform any real client room connection, and does not introduce any gameplay. It only proves that the future room-join gate can safely verify character ownership and validate room kind / zone. Any temp test users created during verification were cleaned up and no temp script remains in the repository.
+
+---
+
 ## Core 0.1 Runtime Scope
 
 Core 0.1 must support:

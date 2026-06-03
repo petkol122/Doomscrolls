@@ -157,6 +157,27 @@ login restored valid selected character
 no play button, room join or gameplay added
 ```
 
+### Task 017.5 — Room Join Validation Docs Only
+
+Document the new `RoomJoinValidationService` and its runtime verification. This is a documentation-only task and must not change code, register any Colyseus room, perform any real client room connection, or add gameplay.
+
+Status: documented after local runtime verification against the real local PostgreSQL. `RoomJoinValidationService` exists at `apps/server/src/realtime/RoomJoinValidationService.ts` and re-exports its types from `apps/server/src/realtime/index.ts`. It verifies the selected character's ownership through `CharacterService.getCharacterForUser` before any future room join, validates the requested `roomKind` (only `town` and `combat` are accepted) and the optional `zoneId` (empty string is rejected), and returns a safe `RoomJoinFailureReason` code on failure. The service does not register any Colyseus room, does not perform any real join, and does not start gameplay. Shared room join contracts live in `packages/shared/src/room/RoomJoinTypes.ts` and are re-exported from `packages/shared/src/index.ts`.
+
+Runtime verification summary:
+
+```text
+owned character     -> success
+missing character   -> character_not_owned
+not-owned character -> character_not_owned
+invalid room kind   -> invalid_room_kind
+empty zoneId        -> invalid_zone
+explicit combat zone-> success
+temp users cleaned up
+no temp script remains
+```
+
+No Colyseus rooms are registered yet. No client room connection is implemented yet. No movement, combat, loot, inventory, equipment, flask, XP, corpse or reconnect behavior is implemented yet.
+
 ### Task 011 — Profile and Settings
 
 Implement public profile and functional settings.

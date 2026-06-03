@@ -222,6 +222,23 @@ The server uses Fastify with configured CORS, validates environment variables on
 
 The server currently does not implement profile routes, gameplay rooms, combat, loot, enemy spawning, fake users, fake characters or fake inventory.
 
+A server-side `RoomJoinValidationService` now exists at `apps/server/src/realtime/RoomJoinValidationService.ts`. It is a safe validation helper for the future Colyseus room join flow. It verifies that a selected character belongs to the authenticated user through the existing `CharacterService.getCharacterForUser` ownership lookup, and it validates the requested `roomKind` (only `town` and `combat` are accepted) and the optional `zoneId` (empty string is rejected). On success it returns the validated `CharacterDetails` together with the resolved `roomKind` and resolved `zoneId`; on failure it returns a safe `RoomJoinFailureReason` code from `packages/shared/src/room/RoomJoinTypes`. The service does not register any Colyseus room, does not perform any actual join, and does not start gameplay. Its input/result types live in `apps/server/src/realtime/RoomJoinValidationTypes.ts` and are re-exported from `apps/server/src/realtime/index.ts`.
+
+Room join validation runtime verification has passed locally against the real local PostgreSQL:
+
+```text
+owned character            -> success
+missing character          -> character_not_owned
+not-owned character        -> character_not_owned
+invalid room kind          -> invalid_room_kind
+empty zoneId               -> invalid_zone
+explicit combat zone       -> success
+temp users cleaned up
+no temp script remains
+```
+
+No Colyseus rooms are registered yet. No client room connection is implemented yet. No movement, combat, loot, inventory, equipment or gameplay exists yet.
+
 Auth HTTP endpoints are now implemented:
 
 ```text

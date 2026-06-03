@@ -188,6 +188,22 @@ Server foundation work may add Fastify routes for infrastructure observability s
 
 Production CORS must use configured origins rather than arbitrary wildcards. Logs must not include secrets such as session secrets, database URLs or Redis URLs.
 
+## Room Join Validation Rules
+
+The room join validation layer lives at `apps/server/src/realtime/`. It currently exposes only a safe pre-join validator. It does not register any Colyseus room, does not perform any actual join, and does not start gameplay.
+
+Room join validation rules:
+
+- `RoomJoinValidationService` may only be called from server-side code; client code must never decide whether a join is valid
+- ownership is checked through `CharacterService.getCharacterForUser(characterId, userId)` so only characters owned by the authenticated user can be joined
+- the only `roomKind` values accepted by the validator are `"town"` and `"combat"`; any other value must be rejected with `invalid_room_kind`
+- an explicitly empty `zoneId` string must be rejected with `invalid_zone`; a missing `zoneId` is resolved from the persisted character record
+- any ownership/lookup failure must be reported as `character_not_owned` to avoid leaking the existence of other users' characters
+- the service must never leak Prisma error details or stack traces; unknown failures must be mapped to the safe `room_unavailable` reason
+- the service must never accept client-sent damage, kills, XP, loot, inventory changes, equipment changes, level-up or quest completion; those remain out of scope
+- shared room join contracts (`SelectedCharacterRoomJoinRequest`, `RoomJoinAuthPayload`, `RoomJoinFailureReason`) must live in `packages/shared/src/room/RoomJoinTypes.ts` and be re-exported from `packages/shared/src/index.ts`
+- Colyseus room registration, real client room connection, and any gameplay behavior must not be added to this layer
+
 ---
 
 ## Testing
