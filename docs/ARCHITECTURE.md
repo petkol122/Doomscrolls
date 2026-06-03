@@ -590,6 +590,20 @@ git status clean after test
 
 ---
 
+### Client World Area Bounds from Content (Core 0.1)
+
+The client click-to-move input panel (`worldAreaInputView.ts`) resolves its zone bounds from the content registry via a dedicated helper:
+
+```text
+resolveWorldAreaBounds(zoneId)  - client helper at apps/client/src/game/scenes/accountShell/resolveWorldAreaBounds.ts
+reads ZoneContentDefinition.bounds from @doomscrolls/content
+falls back to safe 800x600 defaults if the zone is missing from content
+bounds are placeholder movement intent constraints — NOT collision geometry or map size
+no map rendering, pathfinding, collision, or speed checks yet
+```
+
+The client depends on `@doomscrolls/content` for this lookup. This is acceptable because the content package ships only pure TypeScript data and types — it imports nothing from Prisma, Fastify, Colyseus, PostgreSQL, or any Node-only runtime API. The dependency is the same pattern as the server-side `resolveZoneBounds()` helper, adapted for client-side use. If `@doomscrolls/content` ever gains Node-only imports, a future task should extract a shared public content snapshot for client use.
+
 ## Core 0.1 Runtime Scope
 
 Core 0.1 must support:

@@ -220,6 +220,20 @@ no movement input, no movement simulation, no pathfinding, no combat, no map, no
 
 The `x` and `y` fields on `PlayerPresence` are copied from the resolved spawn point at join time. They are not an active gameplay position yet: there is no movement input handler, no server-side movement simulation, no pathfinding, no facing/direction interpolation, and no updates after join. They are visible on the client only as debug `(x=..., y=...)` suffixes next to the player's display name. Movement, map rendering, scene-based entity placement, combat, and gameplay are deferred to later Core 0.1 tasks.
 
+### Client world area bounds from content (Core 0.1)
+
+The client "world area" click-to-move input panel now resolves its zone bounds from the content registry instead of hardcoded values:
+
+```text
+resolveWorldAreaBounds(zoneId)  - client helper at apps/client/src/game/scenes/accountShell/resolveWorldAreaBounds.ts
+bounds are read from ZoneContentDefinition.bounds in @doomscrolls/content
+fallback safety: 800x600 if content entry is missing
+bounds are placeholder movement constraints — NOT collision geometry or map size
+no map rendering, pathfinding, collision, or speed checks yet
+```
+
+The client depends on `@doomscrolls/content` for these bounds. This is safe because the content package contains only pure TypeScript data and types — no Node-only runtime APIs such as Prisma, Fastify, Colyseus, or PostgreSQL.
+
 ### Movement intent foundation (Core 0.1)
 
 The Core 0.1 movement intent foundation is in place. The network contract, server-side validation shell and position application are implemented. There is no movement simulation (speed, pathfinding, collision) yet.

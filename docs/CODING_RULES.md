@@ -317,6 +317,20 @@ Zone bounds content rules:
 - Zone bounds are placeholder zone constraints, not collision geometry or map size; they must not be used for map rendering, pathfinding, collision detection, or game world geometry
 - zone content validation must not be presented as gameplay
 
+## Client World Area Bounds Rules
+
+Core 0.1 ships a client-side helper at `apps/client/src/game/scenes/accountShell/resolveWorldAreaBounds.ts` that resolves zone bounds from the content registry for the click-to-move input panel. The bounds are placeholder movement constraints, not collision geometry or map size.
+
+Client world area bounds rules:
+
+- The client resolves zone world-area bounds through `resolveWorldAreaBounds(zoneId)`, which reads `ZoneContentDefinition.bounds` from the content registry
+- Falls back to safe 800x600 defaults if the zone is missing from content (should only happen if content data is missing, which would fail content validation)
+- The helper documents that bounds are placeholder movement intent constraints — NOT collision geometry or map size
+- The client now depends on `@doomscrolls/content`; this is acceptable because the content package contains only pure TypeScript data and types with no Node-only runtime imports (no Prisma, Fastify, Colyseus, PostgreSQL)
+- If `@doomscrolls/content` ever gains Node-only imports, a future task must extract a shared public content snapshot for client use
+- The client world area bounds must not be used for map rendering, collision detection, pathfinding, speed checks, or game world geometry
+- No map rendering, pathfinding, collision, or speed checks are implemented yet
+
 ## Movement Intent Foundation Rules
 
 Core 0.1 ships a movement intent foundation defined in `packages/shared/src/protocol/ClientMessages.ts`, `packages/shared/src/protocol/ServerMessages.ts`, the server helper `validateMovementIntent()` in `apps/server/src/realtime/rooms/movementIntentValidation.ts`, the `TownRoom` `request_move` message handler, and the client helper `sendMovementIntent()` in `apps/client/src/net/movementIntentClient.ts`. The intent contract and validation shell are in place; movement simulation itself is intentionally not part of this batch.

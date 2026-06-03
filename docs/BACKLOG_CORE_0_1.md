@@ -356,9 +356,17 @@ Apply validated movement intent position to PlayerPresence on the server and ref
 
 Status: implemented. A new server helper `applyMovementIntent()` lives at `apps/server/src/realtime/rooms/applyMovementIntent.ts`. It receives the validated targetX/targetY from the `request_move` handler and sets them on `PlayerPresence.x` and `PlayerPresence.y` in the Colyseus schema state. Colyseus broadcasts the updated position automatically through schema synchronization. On the client, the existing `onStateChange` handler in `AccountShellScene` re-renders the overlay, and `worldEntryView.ts` reads the fresh presence state — showing the new x/y values next to each player's display name as `(x=..., y=...)`. No code changes were needed on the client side because the full data flow (server `onStateChange` → overlay re-render → `worldEntryView` re-reads room state) was already wired by the cumulative work of Tasks 025-027. This is still not real gameplay movement: there is no speed check, cooldown, pathfinding, collision detection, map awareness, interpolation, or persistence. Typecheck and build pass.
 
-### Task 026 — Core 0.1 End-to-End Test
+### Task 034 — Movement Bounds UI From Content Constants
 
-Run and document the full manual Core 0.1 scenario.
+Remove hardcoded world area bounds from client UI and use shared/content-derived constants.
+
+Status: implemented. `apps/client/src/game/scenes/accountShell/resolveWorldAreaBounds.ts` is a new client helper that reads zone bounds from `@doomscrolls/content` zone definitions (placeholder movement constraints, not collision geometry or map size). Falls back to safe 800x600 defaults if content is missing. `worldAreaInputView.ts` was updated to call this helper instead of using hardcoded `DEFAULT_AREA_W=800`/`DEFAULT_AREA_H=600`. The client now depends on `@doomscrolls/content` — this is safe because the content package contains only pure TypeScript data and types, no Node-only runtime APIs. Typecheck and build pass for both client and content.
+
+### Task 035 — Movement Bounds Docs + Small Dependency Review
+
+Document client zone-bounds usage and review whether adding `@doomscrolls/content` to client is acceptable.
+
+Status: documented. README, ARCHITECTURE, BACKLOG and CODING_RULES docs now describe the client world area bounds from content. The dependency decision is: `@doomscrolls/content` is accepted as a client dependency because it has no Node-only runtime imports. If it ever gains such imports, a future task should extract a shared public content snapshot for client use. `pnpm lint` and `pnpm test` pass.
 
 ---
 
