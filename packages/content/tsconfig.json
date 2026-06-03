@@ -2,7 +2,11 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "../..",
+    "paths": {
+      "@doomscrolls/shared": ["../shared/src/index.ts"],
+      "@doomscrolls/localization": ["../localization/src/index.ts"]
+    }
   },
-  "include": ["src"]
+  "include": ["src", "../shared/src", "../localization/src"]
 }
