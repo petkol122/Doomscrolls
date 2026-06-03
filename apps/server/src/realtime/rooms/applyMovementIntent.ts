@@ -1,4 +1,5 @@
 import type { TownRoomState } from "./TownRoomState";
+import { clampMovementStep } from "./clampMovementStep";
 
 /**
  * Apply a validated movement intent by updating the player's world
@@ -7,11 +8,12 @@ import type { TownRoomState } from "./TownRoomState";
  * The change is broadcast automatically by Colyseus through the schema
  * synchronization mechanism — no manual broadcast is needed.
  *
- * This function mutates the state in-place. It only updates the
+ * This function mutates the state in-place. It clamps the requested
+ * movement target against the player's current position and updates the
  * `PlayerPresence.x` and `PlayerPresence.y` fields. It does NOT:
  *  - validate the intent (caller must have run
  *    {@link validateMovementIntent} first)
- *  - check speed, cooldown, collision, pathfinding or map bounds
+ *  - perform pathfinding, collision, interpolation or persistence
  *  - persist the new position to the database
  *  - trigger any gameplay events (combat, loot, etc.)
  *
@@ -21,23 +23,26 @@ import type { TownRoomState } from "./TownRoomState";
  * @param sessionId  The Colyseus session ID of the moving player.
  * @param targetX  The validated target X coordinate.
  * @param targetY  The validated target Y coordinate.
- * @returns `true` if the presence entry was found and updated;
- *          `false` if no presence entry exists for the given sessionId.
+ * @returns The applied coordinates if the presence entry was found and
+ *          updated; `null` if no presence entry exists for the given
+ *          sessionId.
  */
 export function applyMovementIntent(
   state: TownRoomState,
   sessionId: string,
   targetX: number,
   targetY: number,
-): boolean {
+): { readonly x: number; readonly y: number } | null {
   const presence = state.playerPresence.get(sessionId);
 
   if (presence === undefined) {
-    return false;
+    return null;
   }
 
-  presence.x = targetX;
-  presence.y = targetY;
+  const appliedTarget = clampMovementStep(presence, targetX, targetY);
 
-  return true;
+  presence.x = appliedTarget.x;
+  presence.y = appliedTarget.y;
+
+  return appliedTarget;
 }

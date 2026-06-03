@@ -136,8 +136,13 @@ export function createWorldAreaInput(options: WorldAreaInputOptions): WorldAreaI
   // room.onStateChange, so we only need to read once).
   const presence = getTownRoomPresence(room.state as unknown as Record<string, unknown>);
   if (presence !== null && presence.players.length > 0) {
-    const self = presence.players[0] as PlayerPresenceEntry;
-    updateDotAndPosition(dot, positionDisplay, self, bounds, scaleX, scaleY);
+    // Find the current client's player by matching Colyseus sessionId.
+    const self = presence.players.find((p) => p.sessionId === room.sessionId) ?? null;
+    if (self !== null) {
+      updateDotAndPosition(dot, positionDisplay, self, bounds, scaleX, scaleY);
+    } else {
+      positionDisplay.textContent = t("world_area.no_position");
+    }
   } else {
     positionDisplay.textContent = t("world_area.no_position");
   }

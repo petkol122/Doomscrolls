@@ -284,7 +284,7 @@ private movementIntentHandlerRegistered = false;
         result.targetY,
       );
 
-      if (applied) {
+      if (applied !== null) {
         log.debug?.(
           {
             roomId: this.roomId,
@@ -292,9 +292,11 @@ private movementIntentHandlerRegistered = false;
             sessionId: client.sessionId,
             targetX: result.targetX,
             targetY: result.targetY,
+            appliedX: applied.x,
+            appliedY: applied.y,
             clientTime: result.clientTime,
           },
-          "TownRoom request_move applied and broadcast via schema sync.",
+          "TownRoom request_move applied with per-request movement clamp and broadcast via schema sync.",
         );
       } else {
         log.warn?.(
