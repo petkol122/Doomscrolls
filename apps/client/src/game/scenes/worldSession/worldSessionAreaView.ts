@@ -6,6 +6,7 @@ import Phaser from "phaser";
 import { sendMovementIntent } from "../../../net/movementIntentClient";
 import { getTownRoomPresence } from "../../../net/townRoomPresence";
 import { resolveWorldAreaBounds } from "../accountShell/resolveWorldAreaBounds";
+import { createWorldSessionPlayerPlaceholderView } from "./worldSessionPlayerPlaceholderView";
 
 const AREA_WIDTH = 800;
 const AREA_HEIGHT = 600;
@@ -40,7 +41,7 @@ export function createWorldSessionAreaView(
 ): WorldSessionAreaView {
 const container = scene.add.container(0, 0);
 const frame = scene.add.graphics();
-const playerMarker = scene.add.circle(-9999, -9999, 7, 0x4a9eff, 1);
+  const playerPlaceholder = createWorldSessionPlayerPlaceholderView(scene);
 const targetMarker = scene.add.circle(-9999, -9999, 7, 0xff4a4a, 0.8);
 const targetLabel = scene.add.text(BOUNDS_ORIGIN_X, BOUNDS_ORIGIN_Y + AREA_HEIGHT + 112, "", {
   color: "#ff4a4a",
@@ -81,7 +82,7 @@ lineGraphic.lineStyle(1, 0xffffff, 0.5);
     fontSize: "14px",
   });
 
-container.add([frame, playerMarker, targetMarker, lineGraphic, title, instruction, boundsLabel, positionLabel, statusLabel, targetLabel]);
+ container.add([frame, targetMarker, lineGraphic, title, instruction, boundsLabel, positionLabel, statusLabel, targetLabel]);
 
   const inputZone = scene.add
     .zone(BOUNDS_ORIGIN_X, BOUNDS_ORIGIN_Y, AREA_WIDTH, AREA_HEIGHT)
@@ -117,7 +118,7 @@ container.add([frame, playerMarker, targetMarker, lineGraphic, title, instructio
     const self = presence?.players.find((player) => player.sessionId === nextRoom.sessionId) ?? null;
 
     if (self?.position === undefined) {
-      playerMarker.setPosition(-9999, -9999);
+      playerPlaceholder.hide();
       targetMarker.setPosition(-9999, -9999);
       targetLabel.setText("");
       lineGraphic.clear();
@@ -131,8 +132,8 @@ container.add([frame, playerMarker, targetMarker, lineGraphic, title, instructio
     const pixelX = BOUNDS_ORIGIN_X + ((x - bounds.minX) / (bounds.maxX - bounds.minX)) * AREA_WIDTH;
     const pixelY = BOUNDS_ORIGIN_Y + ((y - bounds.minY) / (bounds.maxY - bounds.minY)) * AREA_HEIGHT;
 
-    // Update player marker (authoritative position)
-    playerMarker.setPosition(pixelX, pixelY);
+    // Update placeholder using authoritative synced position only.
+    playerPlaceholder.setPosition(pixelX, pixelY);
 
     // Update target marker and line if a click target exists (debug, non-authoritative)
     if (lastClickTarget) {
@@ -143,6 +144,12 @@ container.add([frame, playerMarker, targetMarker, lineGraphic, title, instructio
       lineGraphic.clear();
       lineGraphic.lineStyle(1, 0xffffff, 0.5);
       lineGraphic.lineBetween(pixelX, pixelY, targetPixelX, targetPixelY);
+      
+      // Point marker toward target direction
+      const dx = targetPixelX - pixelX;
+      const dy = targetPixelY - pixelY;
+      const angle = Math.atan2(dy, dx) - Math.PI / 2;
+      playerPlaceholder.setMarkerDirection(angle);
     } else {
       targetMarker.setPosition(-9999, -9999);
       targetLabel.setText("");
@@ -164,6 +171,7 @@ container.add([frame, playerMarker, targetMarker, lineGraphic, title, instructio
     refreshFromRoomState,
     getDebugState: () => ({ lastClickTarget }),
     destroy: () => {
+      playerPlaceholder.destroy();
       container.destroy(true);
     },
   };
