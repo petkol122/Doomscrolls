@@ -308,21 +308,23 @@ Movement intent foundation rules:
 
 - The client may only send `RequestMoveClientMessage { type: "request_move", targetX, targetY, clientTime? }`. The server never accepts client-sent damage, kills, XP, loot, inventory changes, equipment changes, level-up or quest completion
 - `targetX` / `targetY` are required finite numbers; `clientTime` is optional and informational only and must never be trusted for any gameplay outcome
-- The server helper `validateMovementIntent({ message, bounds? })` returns a discriminated `{ ok: true, targetX, targetY, clientTime? } | { ok: false, reason }` result and never throws; it must not be used to mutate any player position
+- The server helper `validateMovementIntent({ message, bounds? })` returns a discriminated `{ ok: true, targetX, targetY, clientTime? } | { ok: false, reason }` result and never throws
 - Server-owned rejection reasons live in `RequestMoveRejectedReason = "invalid_shape" | "non_finite_target" | "out_of_range"`; the reason set is intentionally generic across future combat / dungeon / boss rooms
-- `TownRoom.onMessage("request_move", ...)` only runs the validator and, on rejection, sends a `request_move_rejected` message back to the originating client; it does NOT mutate any `PlayerPresence.x` / `PlayerPresence.y`, does NOT broadcast, and does NOT know about maps, collision or pathfinding
+- `TownRoom.onMessage("request_move", ...)` validates the intent and, on acceptance, applies the validated position to `PlayerPresence.x` / `PlayerPresence.y` via `applyMovementIntent()`; on rejection, sends a `request_move_rejected` message back
+- The server helper `applyMovementIntent(state, sessionId, targetX, targetY)` lives in `apps/server/src/realtime/rooms/applyMovementIntent.ts` and sets the player's `PlayerPresence.x` / `PlayerPresence.y` in the Colyseus schema state, which is broadcast automatically. It is a thin mutation helper and must not validate, check speed/cooldown/collision/pathfinding, persist to DB, or trigger gameplay events
+- The server still does NOT know about maps, collision or pathfinding; position application is the validated target copy only
 - Default movement intent bounds (`DEFAULT_MOVEMENT_INTENT_BOUNDS`) are a temporary, conservative numeric range, not a map size; real map-aware bounds will be introduced together with real map data in a later task
 - The client helper `sendMovementIntent(room, targetX, targetY, options?)` lives in its own module and is the only sanctioned way to send a `request_move` intent; it must not be wired to UI, mouse clicks, Phaser scene input or `AccountShellScene` until an explicit click-to-move task is added
 - `AccountShellScene` must not import `sendMovementIntent`; movement intent UI is deferred to later tasks
-- Movement intent foundation code must not implement movement simulation, position updates after join, pathfinding, collision detection, map rendering, scene-based entity placement, player sprite, combat, loot, XP, inventory, equipment, corpse behavior, or persistence
-- The movement intent foundation is a network contract and validation shell only and must not be presented as gameplay
+- Movement intent foundation code must not implement movement simulation, pathfinding, collision detection, map rendering, scene-based entity placement, player sprite, combat, loot, XP, inventory, equipment, corpse behavior, or persistence
+- The movement intent foundation is a network contract, validation shell and position-application layer only and must not be presented as gameplay
 - The client `AccountShellScene` must not import `sendMovementIntent`; movement intent UI is deferred to later tasks
   (the dev-only "Send test move intent" button introduced by Task 027 lives in
   `apps/client/src/game/scenes/accountShell/testMoveIntentView.ts` and is rendered by
   `worldEntryView.ts` only after Enter World, not in `AccountShellScene`)
 - The dev-only test move intent button must not update any local position, must not pretend movement
   happened, must not read mouse or keyboard input, and must not introduce any map, sprite, pathfinding,
-  collision, combat or persistence; the server still only validates intent shape and range
+  collision, combat or persistence; the server applies the validated position and Colyseus sync updates the client display
 
 ## Testing
 

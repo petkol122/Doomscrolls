@@ -222,21 +222,25 @@ The `x` and `y` fields on `PlayerPresence` are copied from the resolved spawn po
 
 ### Movement intent foundation (Core 0.1)
 
-The Core 0.1 movement intent foundation is in place but intentionally limited to the network contract and server-side validation shell. There is no movement simulation yet.
+The Core 0.1 movement intent foundation is in place. The network contract, server-side validation shell and position application are implemented. There is no movement simulation (speed, pathfinding, collision) yet.
 
 ```text
 RequestMoveClientMessage          - shared client intent: type "request_move", targetX, targetY, optional clientTime
 RequestMoveRejectedReason         - server-owned rejection codes: invalid_shape | non_finite_target | out_of_range
 RequestMoveRejectedServerMessage  - server-to-client rejection message
 validateMovementIntent()          - server helper that validates intent shape + range (apps/server/src/realtime/rooms/movementIntentValidation.ts)
-TownRoom.onMessage("request_move", ...) - validates intents, logs accept/reject, does NOT mutate player position, does NOT broadcast
+applyMovementIntent()             - server helper that applies validated target x/y to PlayerPresence (apps/server/src/realtime/rooms/applyMovementIntent.ts)
+TownRoom.onMessage("request_move", ...) - validates intents, on accept applies position to PlayerPresence via applyMovementIntent(), Colyseus schema sync broadcasts the update
 sendMovementIntent()              - client helper that sends request_move through an already-joined Colyseus room (apps/client/src/net/movementIntentClient.ts)
-no movement simulation, no position updates after join, no pathfinding, no collision, no map rendering, no player sprite, no combat, no persistence
+Colyseus sync on the client fires onStateChange which re-renders worldEntryView, showing updated x/y from presence list
+no movement simulation, no pathfinding, no collision, no map rendering, no player sprite, no combat, no persistence
 ```
 
-`TownRoom` is intentionally kept as a thin Colyseus shell. The movement intent validator lives in a dedicated helper module (`movementIntentValidation.ts`) so the room file does not become monolithic. The client helper lives in its own module (`movementIntentClient.ts`) and is NOT wired to UI or mouse clicks yet — later Core 0.1 tasks will own click-to-move UI and server-side movement simulation. The server validates intent shape and range only; it does not update any player position, does not broadcast, and does not know about maps, collision or pathfinding.
+`TownRoom` is intentionally kept as a thin Colyseus shell. The movement intent validator and position applicator live in dedicated helper modules (`movementIntentValidation.ts`, `applyMovementIntent.ts`) so the room file does not become monolithic. The client helper lives in its own module (`movementIntentClient.ts`) and is NOT wired to mouse clicks yet — later Core 0.1 tasks will own click-to-move UI and server-side movement simulation.
 
-A dev-only "Send test move intent" button is rendered in `worldEntryView.ts` only after Enter World, while the client is still connected to a town room. The button uses the existing `sendMovementIntent()` helper to dispatch a single hardcoded `request_move` intent (target 420, 320) through the already-joined Colyseus room. It exists purely to verify that the network contract from Task 026 wires up end-to-end through the client UI: the server only validates intent shape and range, the client does not move, and no local or server-side position update is performed. Click-to-move, map rendering, player sprite, movement simulation, position updates and combat are still deferred to later Core 0.1 tasks.
+When the server accepts a `request_move` intent, it calls `applyMovementIntent()` which sets the validated `targetX` / `targetY` on the player's `PlayerPresence.x` and `PlayerPresence.y`. Colyseus schema synchronization broadcasts the updated position to all clients. On the client, the existing `onStateChange` handler in `AccountShellScene` re-renders the overlay, and `worldEntryView.ts` reads the fresh presence state — showing the new x/y values next to each player's display name. This is still not real gameplay movement: there is no speed check, cooldown, pathfinding, collision detection, map awareness, interpolation, or persistence.
+
+A dev-only "Send test move intent" button is rendered in `worldEntryView.ts` only after Enter World, while the client is still connected to a town room. The button uses the existing `sendMovementIntent()` helper to dispatch a single hardcoded `request_move` intent (target 420, 320) through the already-joined Colyseus room. It exists purely to verify that the network contract from Task 026 wires up end-to-end through the client UI: the server validates, applies, and broadcasts the position update, and the client display refreshes to show the new x/y from room state. Click-to-move, map rendering, player sprite, movement simulation, server-side speed checks, pathfinding, collision, combat and persistence are still deferred to later Core 0.1 tasks.
 
 Client character list/create runtime verification passed locally:
 
