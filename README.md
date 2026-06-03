@@ -139,8 +139,11 @@ Exact commands may evolve as the repository is implemented. If commands change, 
 Run the browser client during local development:
 
 ```bash
-pnpm --filter @doomscrolls/client dev
+cp apps/client/.env.example apps/client/.env
+pnpm dev:client
 ```
+
+The client must be opened at `http://localhost:5173`. Its local `.env` sets `VITE_API_URL=http://localhost:2567` so browser API calls target the local server.
 
 The client is a Vite + Phaser foundation. It boots:
 
@@ -202,8 +205,10 @@ no play button, room join or gameplay added
 Run the Node.js server foundation during local development:
 
 ```bash
-cp .env.example .env
-pnpm --filter @doomscrolls/server dev
+cp infra/compose/.env.example infra/compose/.env
+docker compose -f infra/compose/docker-compose.local.yml --env-file infra/compose/.env up -d
+cp apps/server/.env.example apps/server/.env
+pnpm dev:server
 curl http://localhost:2567/health
 ```
 

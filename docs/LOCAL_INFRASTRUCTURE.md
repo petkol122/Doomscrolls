@@ -122,12 +122,25 @@ docker compose -f infra/compose/docker-compose.local.yml --env-file infra/compos
 The server foundation in `apps/server` requires Redis to be reachable through `REDIS_URL` during startup. With the committed examples, use:
 
 ```bash
-cp .env.example .env
 cp infra/compose/.env.example infra/compose/.env
 docker compose -f infra/compose/docker-compose.local.yml --env-file infra/compose/.env up -d
-pnpm --filter @doomscrolls/server dev
+cp apps/server/.env.example apps/server/.env
+pnpm dev:server
 curl http://localhost:2567/health
 ```
+
+`pnpm dev:server` runs `@doomscrolls/server` in watch mode. The server package loads `apps/server/.env` through `dotenv/config`, listens on `http://localhost:2567` with the example values, and exposes `GET /health` for local verification.
+
+## Client Runtime Dependency
+
+Run the browser client against the local server with:
+
+```bash
+cp apps/client/.env.example apps/client/.env
+pnpm dev:client
+```
+
+`apps/client/.env.example` sets `VITE_API_URL=http://localhost:2567`. The Vite dev server is configured to run at `http://localhost:5173`; use that URL for local client testing.
 
 `DATABASE_URL` is required for Prisma CLI commands and future runtime persistence. The Prisma schema foundation exists in `apps/server/prisma/schema.prisma`, but the current server runtime does not connect to PostgreSQL or run database queries on startup.
 
