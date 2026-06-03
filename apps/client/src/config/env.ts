@@ -4,7 +4,7 @@ export interface ClientEnv {
 }
 
 function readOptionalUrl(name: "VITE_API_URL" | "VITE_WS_URL"): URL | undefined {
-  const rawValue = import.meta.env[name];
+  const rawValue = import.meta.env?.[name];
 
   if (typeof rawValue !== "string" || rawValue.trim() === "") {
     return undefined;
