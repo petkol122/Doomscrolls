@@ -30,6 +30,11 @@ export interface WorldAreaInputElements {
   readonly container: HTMLElement;
 }
 
+interface PositionSnapshot {
+  readonly x: number;
+  readonly y: number;
+}
+
 interface WorldAreaInputOptions {
   readonly room: Room<DoomscrollsRoomState>;
   readonly zoneId?: string;
@@ -47,8 +52,8 @@ interface WorldAreaInputOptions {
  * NOT collision geometry or map size). Falls back to safe defaults if the
  * zone is missing from content.
  *
- * No local position faking — the dot only moves when the server confirms
- * a new position via Colyseus schema sync.
+ * No local position faking — the dot and status only update from Colyseus
+ * schema sync after the server applies movement.
  */
 export function createWorldAreaInput(options: WorldAreaInputOptions): WorldAreaInputElements {
   const { room } = options;
@@ -132,6 +137,13 @@ export function createWorldAreaInput(options: WorldAreaInputOptions): WorldAreaI
   positionDisplay.style.color = "#b9d49a";
   container.appendChild(positionDisplay);
 
+  const statusDisplay = document.createElement("p");
+  statusDisplay.id = "doomscrolls-world-area-status";
+  statusDisplay.style.margin = "4px 0 0";
+  statusDisplay.style.fontSize = "12px";
+  statusDisplay.style.color = "#8fb0d8";
+  container.appendChild(statusDisplay);
+
   // Snapshot current state (parent AccountShellScene re-renders on
   // room.onStateChange, so we only need to read once).
   const presence = getTownRoomPresence(room.state as unknown as Record<string, unknown>);
@@ -139,12 +151,14 @@ export function createWorldAreaInput(options: WorldAreaInputOptions): WorldAreaI
     // Find the current client's player by matching Colyseus sessionId.
     const self = presence.players.find((p) => p.sessionId === room.sessionId) ?? null;
     if (self !== null) {
-      updateDotAndPosition(dot, positionDisplay, self, bounds, scaleX, scaleY);
+      updateDotAndPosition(dot, positionDisplay, statusDisplay, self, bounds, scaleX, scaleY);
     } else {
       positionDisplay.textContent = t("world_area.no_position");
+      statusDisplay.textContent = "";
     }
   } else {
     positionDisplay.textContent = t("world_area.no_position");
+    statusDisplay.textContent = "";
   }
 
   return { container };
@@ -153,6 +167,7 @@ export function createWorldAreaInput(options: WorldAreaInputOptions): WorldAreaI
 function updateDotAndPosition(
   dot: HTMLDivElement,
   display: HTMLElement,
+  statusDisplay: HTMLElement,
   player: PlayerPresenceEntry,
   bounds: { readonly minX: number; readonly maxX: number; readonly minY: number; readonly maxY: number },
   scaleX: number,
@@ -162,15 +177,40 @@ function updateDotAndPosition(
     dot.style.left = "-999px";
     dot.style.top = "-999px";
     display.textContent = t("world_area.no_position");
+    statusDisplay.textContent = "";
     return;
   }
 
   const { x, y } = player.position;
+  const previousPosition = readPreviousPosition(dot);
   const px = (x - bounds.minX) * scaleX;
   const py = (y - bounds.minY) * scaleY;
 
   dot.style.left = `${Math.round(px)}px`;
   dot.style.top = `${Math.round(py)}px`;
+  dot.dataset.serverX = String(x);
+  dot.dataset.serverY = String(y);
 
   display.textContent = `x=${Math.round(x)}, y=${Math.round(y)}`;
+  statusDisplay.textContent =
+    previousPosition !== null && (previousPosition.x !== x || previousPosition.y !== y)
+      ? t("world_area.server_position_updated")
+      : "";
+}
+
+function readPreviousPosition(dot: HTMLDivElement): PositionSnapshot | null {
+  const rawX = dot.dataset.serverX;
+  const rawY = dot.dataset.serverY;
+
+  if (rawX === undefined || rawY === undefined) {
+    return null;
+  }
+
+  const x = Number(rawX);
+  const y = Number(rawY);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return null;
+  }
+
+  return { x, y };
 }

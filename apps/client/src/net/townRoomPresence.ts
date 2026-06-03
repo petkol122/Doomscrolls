@@ -35,11 +35,11 @@ export interface PlayerPresenceEntry {
    */
   readonly spawnPointId?: SpawnPointId;
   /**
-   * Initial world position copied from the resolved spawn point on join.
+   * Server-synced world position.
    * Optional because older / partial state objects may not carry the field
    * yet; callers must treat absence as "unknown", not as "no position".
-   * This is not an active gameplay position yet — there is no movement
-   * simulation, no pathing, and no updates after join.
+   * This is still not full gameplay movement — no animation, pathing,
+   * collision, or interpolation is implied by this display helper.
    */
   readonly position?: PlayerPosition;
 }

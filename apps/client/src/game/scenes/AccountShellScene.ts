@@ -1,6 +1,5 @@
 import { t } from "@doomscrolls/localization";
 import type { CharacterClassKey, CharacterId, CharacterSummary, OriginKey, SessionToken } from "@doomscrolls/shared";
-import type { Room } from "@colyseus/sdk";
 import Phaser from "phaser";
 
 import {
@@ -16,7 +15,6 @@ import {
   createRealtimeClient,
   joinTownRoom
 } from "../../net/RealtimeClient";
-import type { RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
 
 import { createInfoLine } from "./accountShell/accountShellDom";
 import { createCharacterList } from "./accountShell/characterListView";
@@ -36,8 +34,6 @@ export class AccountShellScene extends Phaser.Scene {
   private account: AccountState | null = null;
   private apiClient: ApiClient | null = null;
   private selectedCharacterId: CharacterId | null = null;
-  private room: Room<DoomscrollsRoomState> | null = null;
-  private entered: boolean = false;
 
   public constructor() {
     super("AccountShellScene");
@@ -147,13 +143,8 @@ export class AccountShellScene extends Phaser.Scene {
       createWorldEntryStub(
         account.characters,
         this.selectedCharacterId,
-        this.entered,
-        this.room,
         () => {
           void this.handleEnterWorld();
-        },
-        () => {
-          void this.handleLeaveWorld();
         }
       )
     );
@@ -206,24 +197,17 @@ export class AccountShellScene extends Phaser.Scene {
       return;
     }
 
-    if (this.room !== null) {
-      return;
-    }
-
     try {
       const client = createRealtimeClient();
       const joinedRoom = await joinTownRoom(client, sessionToken as SessionToken, this.selectedCharacterId);
-      this.room = joinedRoom;
-      this.entered = true;
-
-      joinedRoom.onStateChange(() => {
-        if (this.account !== null && this.room === joinedRoom) {
-          this.renderAccountOverlay(this.account);
-        }
-      });
 
       if (this.account !== null) {
-        this.renderAccountOverlay(this.account);
+        this.destroyOverlay();
+        this.scene.start("WorldSessionScene", {
+          account: this.account,
+          characterId: this.selectedCharacterId,
+          room: joinedRoom,
+        });
       }
     } catch {
       const status = document.getElementById("doomscrolls-world-entry-status");
@@ -231,23 +215,6 @@ export class AccountShellScene extends Phaser.Scene {
         status.textContent = t("world_entry.join_failed");
         status.style.color = "#ff9c8a";
       }
-    }
-  }
-
-  private async handleLeaveWorld(): Promise<void> {
-    if (this.room !== null) {
-      try {
-        this.room.leave();
-      } catch {
-        // Ignore leave errors
-      }
-      this.room = null;
-    }
-
-    this.entered = false;
-
-    if (this.account !== null) {
-      this.renderAccountOverlay(this.account);
     }
   }
 

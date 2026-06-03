@@ -86,6 +86,7 @@ export const en = {
   "world_area.title": "World Area",
   "world_area.click_instruction": "Click inside to move.",
   "world_area.no_position": "Waiting for server position...",
+  "world_area.server_position_updated": "Server position updated.",
 
   "inventory.title": "Inventory",
   "equipment.title": "Equipment",

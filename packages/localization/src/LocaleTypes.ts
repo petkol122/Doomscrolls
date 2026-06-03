@@ -72,6 +72,7 @@ export const REQUIRED_LOCALIZATION_KEYS = [
   "world_area.title",
   "world_area.click_instruction",
   "world_area.no_position",
+  "world_area.server_position_updated",
   "inventory.title",
   "equipment.title",
   "equipment.slot.weapon",
