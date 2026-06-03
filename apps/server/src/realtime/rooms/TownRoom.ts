@@ -8,6 +8,7 @@ import type { ServerLogger } from "../../config/logger";
 import { RoomJoinValidationService } from "../RoomJoinValidationService";
 import type { TownRoomJoinOptions } from "./townRoomTypes";
 import { TownRoomState } from "./TownRoomState";
+import { PlayerPresence } from "./PlayerPresence";
 
 /**
  * TownRoom with minimal Colyseus schema state.
@@ -140,27 +141,35 @@ export class TownRoom extends Room {
       throw new Error(`room_join_rejected:${result.reason}`);
     }
 
-    (this.state as TownRoomState).connectedPlayerCount += 1;
+    const state = this.state as TownRoomState;
+    const sessionId = _client.sessionId;
+    const characterId = result.character.id;
+    const characterName = result.character.characterName;
+
+    state.playerPresence.set(
+      sessionId,
+      new PlayerPresence(sessionId, characterId, characterName),
+    );
+    state.connectedPlayerCount = state.playerPresence.size;
 
     safeLog.info?.(
       {
         roomId: this.roomId,
         roomName: this.roomName,
+        sessionId,
         userId: result.character.ownerUserId,
-        characterId: result.character.id,
+        characterId,
         zoneId: result.resolvedZoneId,
-        connectedPlayerCount: (this.state as TownRoomState).connectedPlayerCount,
+        connectedPlayerCount: state.connectedPlayerCount,
       },
-      "TownRoom join accepted, connectedPlayerCount incremented.",
+      "TownRoom join accepted, player presence added.",
     );
   }
 
   public override async onLeave(_client: Client): Promise<void> {
     const state = this.state as TownRoomState;
-    state.connectedPlayerCount = Math.max(
-      0,
-      state.connectedPlayerCount - 1,
-    );
+    state.playerPresence.delete(_client.sessionId);
+    state.connectedPlayerCount = state.playerPresence.size;
   }
 
   /**

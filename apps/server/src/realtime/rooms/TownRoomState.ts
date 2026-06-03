@@ -1,20 +1,23 @@
-import { Schema, type } from "@colyseus/schema";
+import { Schema, type, MapSchema } from "@colyseus/schema";
 import type { ZoneId } from "@doomscrolls/shared";
+import { PlayerPresence } from "./PlayerPresence";
 
 /**
- * Minimal Colyseus schema/state for TownRoom.
+ * Colyseus schema/state for TownRoom.
  *
- * Contains only:
+ * Contains:
  *  - roomKind (always "town")
  *  - zoneId  (the zone this room instance belongs to)
- *  - connectedPlayerCount (tracked on join/leave)
+ *  - playerPresence (MapSchema keyed by sessionId)
+ *  - connectedPlayerCount (reflecting playerPresence.size)
  *
- * No player entity list, no map, no movement, no gameplay.
- * Task 021.1 — TownRoom Minimal State Schema.
+ * No position, movement, map, combat, chat, or gameplay.
+ * Task 021.1 / 022.1 — TownRoom State + Player Presence.
  */
 export class TownRoomState extends Schema {
   @type("string") public roomKind: string = "town";
   @type("string") public zoneId: ZoneId;
+  @type({ map: PlayerPresence }) public playerPresence = new MapSchema<PlayerPresence>();
   @type("number") public connectedPlayerCount: number = 0;
 
   constructor(zoneId: ZoneId) {
