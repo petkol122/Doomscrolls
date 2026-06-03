@@ -7,29 +7,37 @@ import type {
 import { RoomJoinValidationService } from "../RoomJoinValidationService";
 import type { TownRoomJoinOptions } from "./townRoomTypes";
 import { TownRoomState } from "./TownRoomState";
-import { PlayerPresence } from "./PlayerPresence";
-import { resolveTownSpawnPoint } from "./resolveTownSpawnPoint";
+import { buildTownPlayerPresence } from "./buildPlayerPresence";
 import { createRoomLogger } from "./roomLogger";
 
 /**
  * TownRoom with minimal Colyseus schema state.
  *
- * Task 021.1 scope:
+ * Task 021.1 / 022.1 / 023.2 / 025 scope:
  *  - Creates and sets a TownRoomState schema containing:
  *      roomKind = "town"
  *      zoneId
+ *      playerPresence (MapSchema<PlayerPresence>)
  *      connectedPlayerCount
- *  - On valid join, increments connectedPlayerCount.
- *  - On leave, decrements connectedPlayerCount (floor 0).
+ *  - On valid join, validates the session, validates character
+ *    ownership, resolves the spawn point, builds a PlayerPresence
+ *    entry with the initial world position copied from the spawn
+ *    point, and inserts it into the presence map.
+ *  - On leave, removes the presence entry.
+ *
+ * Player presence building is delegated to
+ * {@link buildTownPlayerPresence} so this room stays a thin Colyseus
+ * shell. See `docs/CODING_RULES.md` "Realtime Room File-Size Guard".
  *
  * Explicitly out of scope:
- *  - player entity
- *  - position / movement / combat
- *  - map
- *  - chat
+ *  - movement input / movement simulation / pathing
+ *  - map rendering
+ *  - combat
+ *  - player sprite / entity placement
+ *  - gameplay loop
  *  - persistence
- *  - client UI changes
- *  - fake gameplay
+ *  - chat
+ *  - position updates after join
  */
 export class TownRoom extends Room {
   public static readonly ROOM_NAME = "town";
@@ -120,10 +128,10 @@ export class TownRoom extends Room {
 
     if (!result.success) {
       safeLog.warn?.(
-        { 
-          roomId: this.roomId, 
-          roomName: this.roomName, 
-          reason: result.reason, 
+        {
+          roomId: this.roomId,
+          roomName: this.roomName,
+          reason: result.reason,
         },
         "TownRoom join rejected by validation service.",
       );
@@ -134,16 +142,19 @@ export class TownRoom extends Room {
     const sessionId = _client.sessionId;
     const characterId = result.character.id;
     const characterName = result.character.characterName;
+    const resolvedZoneId = result.resolvedZoneId;
 
-    // Task 023.2: resolve the spawn point for this TownRoom join from
-    // content. Only the id is stored on presence for now; no x/y is
-    // exposed as an active gameplay position, no movement, no entity.
-    const spawnPointId = resolveTownSpawnPoint(result.resolvedZoneId);
-
-    state.playerPresence.set(
+    // Delegate presence building (spawn point resolution + initial
+    // world position copy) to a dedicated helper so this room file
+    // stays a thin Colyseus shell.
+    const presence = buildTownPlayerPresence({
       sessionId,
-      new PlayerPresence(sessionId, characterId, characterName, spawnPointId),
-    );
+      characterId,
+      displayName: characterName,
+      resolvedZoneId,
+    });
+
+    state.playerPresence.set(sessionId, presence);
     state.connectedPlayerCount = state.playerPresence.size;
 
     safeLog.info?.(
@@ -153,11 +164,13 @@ export class TownRoom extends Room {
         sessionId,
         userId: result.character.ownerUserId,
         characterId,
-        zoneId: result.resolvedZoneId,
-        spawnPointId,
+        zoneId: resolvedZoneId,
+        spawnPointId: presence.spawnPointId,
+        x: presence.x,
+        y: presence.y,
         connectedPlayerCount: state.connectedPlayerCount,
       },
-      "TownRoom join accepted, player presence added with resolved spawn point.",
+      "TownRoom join accepted, player presence added with resolved spawn point and initial world position.",
     );
   }
 
@@ -200,7 +213,7 @@ export class TownRoom extends Room {
       };
       if (options.requestedZoneId !== undefined) {
         return { ...result, requestedZoneId: options.requestedZoneId };
-      } 
+      }
       return result;
     }
 

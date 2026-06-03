@@ -261,6 +261,7 @@ Extraction examples (already applied):
 ```text
 apps/server/src/realtime/rooms/roomLogger.ts             - shared Colyseus logger wrapper
 apps/server/src/realtime/rooms/resolveTownSpawnPoint.ts  - content-based spawn point lookup
+apps/server/src/realtime/rooms/buildPlayerPresence.ts    - presence builder (spawn + initial x/y copy)
 apps/client/src/net/townRoomPresence.ts                  - client presence extraction helper
 ```
 
@@ -284,6 +285,20 @@ Spawn point foundation rules:
 
 ---
 
+
+## Player Position Foundation Rules
+
+Core 0.1 ships a minimal player position foundation defined in `packages/shared/src/room/PlayerPosition.ts`, in the `PlayerPresence` Colyseus schema, and in the `buildTownPlayerPresence()` helper. Position is intentionally limited to data flow and a one-shot spawn-time copy; it is not movement.
+
+Player position foundation rules:
+
+- `PlayerPosition` is a shared type that intentionally reuses the `Vector2` shape (`{ x, y }`); no facing/direction/interpolation field is part of this type yet
+- `PlayerPresence` exposes `x` and `y` as number fields; the server must copy them from the resolved spawn point at join time and must never update them after join
+- `PlayerPresence` construction lives in `buildTownPlayerPresence()` (`apps/server/src/realtime/rooms/buildPlayerPresence.ts`) and must not be inlined into `TownRoom.ts`; the room file must stay a thin Colyseus shell
+- The `x`/`y` on `PlayerPresence` are the player's initial world position only; they are not an active gameplay position and must not be presented as one
+- The client `getTownRoomPresence()` helper exposes `position?: { x, y }` per player; callers may show x/y only as debug info next to the player's display name (e.g. `(x=..., y=...)` suffix) and must not imply movement, facing, animation or a map position
+- do not add movement input, server-side movement simulation, pathfinding, facing/direction interpolation, map rendering, scene-based player placement, player sprite, combat, loot, XP, inventory, equipment or corpse behavior to the player position foundation without a dedicated task
+- the player position foundation is data flow only and must not be presented as gameplay
 ## Testing
 
 Tests are required from the beginning.

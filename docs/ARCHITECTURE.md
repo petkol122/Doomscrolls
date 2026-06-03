@@ -505,7 +505,7 @@ Current TownRoom state:
 roomKind: "town"
 zoneId: varies (currently "nightmarket")
 playerPresence: MapSchema<PlayerPresence> keyed by Colyseus sessionId
-  each entry: { sessionId, characterId, displayName, spawnPointId }
+  each entry: { sessionId, characterId, displayName, spawnPointId, x, y }
 connectedPlayerCount: derived from playerPresence.size on join/leave
 ```
 
@@ -520,6 +520,20 @@ PlayerPresence stores spawnPointId only (no x/y, no active position)
 client PlayerPresenceEntry.spawnPointId? passes the field through for display
 x/y on SpawnPointDefinition are content data only and are not used as an active gameplay position yet
 ```
+
+Player position foundation (Core 0.1):
+
+```text
+PlayerPosition type lives in @doomscrolls/shared (reuses Vector2: { x, y })
+PlayerPresence Colyseus schema now stores x and y as number fields
+TownRoom.buildTownPlayerPresence() copies the resolved spawn point x/y into the presence entry on join
+x/y are copied from content once on join and are never updated after join
+client getTownRoomPresence() exposes position?: { x, y } per player
+client worldEntryView shows x/y next to each player's display name as debug info only
+no movement input, no movement simulation, no pathfinding, no combat, no map, no player sprite, no gameplay loop
+```
+
+x/y on `PlayerPresence` are the player's initial world position only. They are copied from the resolved spawn point at join time and are never updated. They are not an active gameplay position: there is no movement input, no server-side movement simulation, no pathfinding, no facing/direction, no map, no player sprite, and no combat. They are shown on the client only as debug `(x=..., y=...)` suffixes next to the player's display name. The `PlayerPosition` shared type is intentionally identical to `Vector2`; no facing field is part of this type yet.
 
 Current TownRoom limitations:
 

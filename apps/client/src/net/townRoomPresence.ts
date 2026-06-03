@@ -11,9 +11,14 @@
  *
  * Task 022.2 — Client Presence Display Types Only.
  * Task 023.3 — Client Spawn Point Display Helper Only.
+ * Task 025   — Client Position Read/Display Helper Only.
  */
 
-import type { CharacterId, SpawnPointId } from "@doomscrolls/shared";
+import type {
+  CharacterId,
+  PlayerPosition,
+  SpawnPointId,
+} from "@doomscrolls/shared";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -29,6 +34,14 @@ export interface PlayerPresenceEntry {
    * yet; callers must treat absence as "unknown", not as "no spawn".
    */
   readonly spawnPointId?: SpawnPointId;
+  /**
+   * Initial world position copied from the resolved spawn point on join.
+   * Optional because older / partial state objects may not carry the field
+   * yet; callers must treat absence as "unknown", not as "no position".
+   * This is not an active gameplay position yet — there is no movement
+   * simulation, no pathing, and no updates after join.
+   */
+  readonly position?: PlayerPosition;
 }
 
 export interface TownRoomPresence {
@@ -58,30 +71,54 @@ export function getTownRoomPresence(
   // Colyseus MapSchema objects expose a `forEach` method and forward `.size`.
   const presenceMap = pp as {
     readonly size: number;
-    forEach: (fn: (value: Record<string, string>, key: string) => void) => void;
+    forEach: (fn: (value: Record<string, unknown>, key: string) => void) => void;
   };
 
   const players: PlayerPresenceEntry[] = [];
   presenceMap.forEach((value) => {
-    const rawSpawnPointId = value.spawnPointId;
     const baseEntry: PlayerPresenceEntry = {
       sessionId: String(value.sessionId ?? ""),
       characterId: (value.characterId ?? "") as CharacterId,
       displayName: String(value.displayName ?? ""),
     };
-    if (typeof rawSpawnPointId === "string" && rawSpawnPointId.length > 0) {
-      const entryWithSpawn: PlayerPresenceEntry = {
-        ...baseEntry,
-        spawnPointId: rawSpawnPointId as SpawnPointId,
-      };
-      players.push(entryWithSpawn);
-    } else {
-      players.push(baseEntry);
-    }
+
+    const withSpawn = applyOptionalSpawnPoint(baseEntry, value);
+    const withPosition = applyOptionalPosition(withSpawn, value);
+    players.push(withPosition);
   });
 
   return {
     connectedPlayerCount: presenceMap.size,
     players,
   };
+}
+
+function applyOptionalSpawnPoint(
+  entry: PlayerPresenceEntry,
+  value: Record<string, unknown>,
+): PlayerPresenceEntry {
+  const rawSpawnPointId = value.spawnPointId;
+  if (typeof rawSpawnPointId !== "string" || rawSpawnPointId.length === 0) {
+    return entry;
+  }
+  return {
+    ...entry,
+    spawnPointId: rawSpawnPointId as SpawnPointId,
+  };
+}
+
+function applyOptionalPosition(
+  entry: PlayerPresenceEntry,
+  value: Record<string, unknown>,
+): PlayerPresenceEntry {
+  const rawX = value.x;
+  const rawY = value.y;
+  if (typeof rawX !== "number" || typeof rawY !== "number") {
+    return entry;
+  }
+  if (!Number.isFinite(rawX) || !Number.isFinite(rawY)) {
+    return entry;
+  }
+  const position: PlayerPosition = { x: rawX, y: rawY };
+  return { ...entry, position };
 }

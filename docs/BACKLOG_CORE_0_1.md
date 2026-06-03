@@ -332,6 +332,12 @@ Document the Core 0.1 spawn point foundation across `README.md`, `docs/ARCHITECT
 
 Status: documented. The four docs now state that `SpawnPointDefinition` exists in shared/content, Core 0.1 ships exactly one spawn point (`nightmarket_spawn`), `TownRoom` resolves the `spawnPointId` from content on join, `PlayerPresence` stores `spawnPointId` only, the client can display it in the presence list, x/y are content data only and are not used as an active gameplay position yet, and that movement, map, combat and gameplay are not implemented by these tasks. `docs/TECH_DEBT.md` was reviewed and no new debt entry was needed.
 
+
+### Task 025 - Player Position Foundation Batch
+
+Implement the minimal player position foundation: shared position type, server-side `PlayerPresence` x/y fields, spawn point x/y copied into the initial presence position, client helper that can read/display the position, and docs update. No movement input, no movement simulation, no pathfinding, no combat, no map, no player sprite, no gameplay loop, no persistence, no runtime smoke test.
+
+Status: implemented. `PlayerPosition` lives in `packages/shared/src/room/PlayerPosition.ts` and reuses the existing `Vector2` shape. `PlayerPresence` now exposes `x` and `y` number fields; both are copied from the resolved spawn point at join time via a dedicated `buildTownPlayerPresence()` helper that keeps `TownRoom.ts` a thin Colyseus shell. The client `getTownRoomPresence()` helper exposes `position?: { x, y }` on each `PlayerPresenceEntry`, and `worldEntryView.ts` shows x/y next to the player's display name as a debug-only `(x=..., y=...)` suffix. No movement, no pathing, no map, no combat, no player sprite, no facing/direction, no gameplay behavior, and no position updates after join were added. All four required checks pass.
 ### Task 026 — Core 0.1 End-to-End Test
 
 Run and document the full manual Core 0.1 scenario.

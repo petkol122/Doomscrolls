@@ -81,7 +81,11 @@ export function createWorldEntryStub(
           player.spawnPointId !== undefined && player.spawnPointId.length > 0
             ? ` @ ${player.spawnPointId}`
             : "";
-        li.textContent = `${player.displayName} (${player.characterId})${spawnSuffix}`;
+        const positionSuffix =
+          player.position !== undefined
+            ? ` (x=${player.position.x}, y=${player.position.y})`
+            : "";
+        li.textContent = `${player.displayName} (${player.characterId})${spawnSuffix}${positionSuffix}`;
         li.style.marginBottom = "2px";
         playerList.appendChild(li);
       }
