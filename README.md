@@ -136,6 +136,29 @@ Install dependencies:
 pnpm install
 ```
 
+Create local environment files from the committed examples:
+
+```bash
+copy infra\compose\.env.example infra\compose\.env
+copy apps\server\.env.example apps\server\.env
+copy apps\client\.env.example apps\client\.env
+```
+
+One-command local development startup:
+
+```bash
+pnpm dev:all
+```
+
+`pnpm dev:all` starts local Docker Compose infrastructure first when `infra/compose/.env` exists, then runs the backend and client together with visible prefixed logs using `concurrently`. This is intended for local development only and does not add any production deployment behavior.
+
+Local URLs:
+
+```text
+backend health: http://localhost:2567/health
+client:         http://localhost:5173
+```
+
 Run checks:
 
 ```bash
@@ -150,7 +173,6 @@ Exact commands may evolve as the repository is implemented. If commands change, 
 Run the browser client during local development:
 
 ```bash
-cp apps/client/.env.example apps/client/.env
 pnpm dev:client
 ```
 

@@ -107,8 +107,30 @@ docker compose -f infra/compose/docker-compose.local.yml --env-file infra/compos
 ## Full Local Setup Flow
 
 ```bash
-cp infra/compose/.env.example infra/compose/.env
+copy infra\compose\.env.example infra\compose\.env
+copy apps\server\.env.example apps\server\.env
+copy apps\client\.env.example apps\client\.env
+pnpm dev:all
+```
+
+`pnpm dev:all` is the simplest local startup path. It first runs:
+
+```bash
 docker compose -f infra/compose/docker-compose.local.yml --env-file infra/compose/.env up -d
+```
+
+and then starts both `pnpm dev:server` and `pnpm dev:client` together with visible prefixed logs via `concurrently`. This is local development orchestration only; it does not add production deployment containers or production process management.
+
+Local URLs after startup:
+
+```text
+backend health: http://localhost:2567/health
+client:         http://localhost:5173
+```
+
+You can still inspect or stop the local infrastructure separately with:
+
+```bash
 docker compose -f infra/compose/docker-compose.local.yml --env-file infra/compose/.env ps
 docker compose -f infra/compose/docker-compose.local.yml --env-file infra/compose/.env logs postgres
 docker compose -f infra/compose/docker-compose.local.yml --env-file infra/compose/.env logs redis
@@ -122,9 +144,9 @@ docker compose -f infra/compose/docker-compose.local.yml --env-file infra/compos
 The server foundation in `apps/server` requires Redis to be reachable through `REDIS_URL` during startup. With the committed examples, use:
 
 ```bash
-cp infra/compose/.env.example infra/compose/.env
+copy infra\compose\.env.example infra\compose\.env
 docker compose -f infra/compose/docker-compose.local.yml --env-file infra/compose/.env up -d
-cp apps/server/.env.example apps/server/.env
+copy apps\server\.env.example apps\server\.env
 pnpm dev:server
 curl http://localhost:2567/health
 ```
@@ -136,7 +158,7 @@ curl http://localhost:2567/health
 Run the browser client against the local server with:
 
 ```bash
-cp apps/client/.env.example apps/client/.env
+copy apps\client\.env.example apps\client\.env
 pnpm dev:client
 ```
 
