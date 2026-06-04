@@ -7,6 +7,11 @@ import { getTownRoomPresence } from "../../../net/townRoomPresence";
 import { createButton, createInfoLine } from "../accountShell/accountShellDom";
 import type { WorldSessionDebugState } from "./worldSessionAreaView";
 import {
+  createEmptyEquipmentLoadout,
+  createEquipmentPanelSection,
+} from "./worldSessionEquipmentView";
+import type { EquipmentLoadout } from "@doomscrolls/shared";
+import {
   applyWorldSessionOverlayPanelStyles,
   applyWorldSessionOverlayScrollablePanelStyles,
 } from "./worldSessionOverlayLayout";
@@ -16,6 +21,8 @@ export interface WorldSessionOverlayView {
   readonly statusPanel: HTMLElement | null;
   readonly utilityPanel: HTMLElement;
   readonly hudPanel: HTMLElement;
+  readonly getEquipmentLoadout: () => EquipmentLoadout;
+  readonly setEquipmentLoadout: (loadout: EquipmentLoadout) => void;
 }
 
 export function createWorldSessionOverlayView(
@@ -25,6 +32,8 @@ export function createWorldSessionOverlayView(
   onProjectionModeChange: (mode: WorldProjectionMode) => void,
   onRespawn: () => void,
   onLeaveWorld: () => void,
+  getEquipmentLoadout: () => EquipmentLoadout = () => createEmptyEquipmentLoadout(),
+  onEquipmentLoadoutChange?: (loadout: EquipmentLoadout) => void,
 ): WorldSessionOverlayView {
   let selectedInventoryItemId: InventorySummaryItem["itemInstanceId"] | null = character?.inventorySummaryItems?.[0]?.itemInstanceId ?? null;
 
@@ -43,6 +52,7 @@ export function createWorldSessionOverlayView(
   utilityPanel.style.gap = "8px";
   utilityPanel.style.alignContent = "start";
   utilityPanel.appendChild(createControlsSection());
+  utilityPanel.appendChild(createEquipmentPanelSection(getEquipmentLoadout));
   utilityPanel.appendChild(createInventoryPanelSection(character, {
     getSelectedItemId: () => selectedInventoryItemId,
     onSelectItem: (itemId) => {
@@ -90,6 +100,10 @@ export function createWorldSessionOverlayView(
     statusPanel,
     utilityPanel,
     hudPanel,
+    getEquipmentLoadout,
+    setEquipmentLoadout: (loadout: EquipmentLoadout) => {
+      onEquipmentLoadoutChange?.(loadout);
+    },
   };
 }
 
@@ -725,7 +739,7 @@ function createInventoryDetailSection(item: InventorySummaryItem | null): HTMLEl
   return createSectionBlock("Item Detail", children, { compact: true });
 }
 
-function createMutedText(text: string): HTMLElement {
+export function createMutedText(text: string): HTMLElement {
   const paragraph = document.createElement("p");
   paragraph.textContent = text;
   paragraph.style.margin = "0";

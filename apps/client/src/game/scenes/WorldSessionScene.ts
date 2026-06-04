@@ -2,6 +2,7 @@ import type { Room } from "@colyseus/sdk";
 import type {
   CharacterId,
   CharacterSummary,
+  EquipmentLoadout,
   PlayerRespawnedServerMessage,
   RoomState as DoomscrollsRoomState,
 } from "@doomscrolls/shared";
@@ -32,6 +33,10 @@ import {
   sendHealingFlaskIntent,
   registerHealingFlaskResponseListeners,
 } from "../../net/healingFlaskIntentClient";
+import {
+  createEmptyEquipmentLoadout,
+  registerEquipmentListener,
+} from "./worldSession/worldSessionEquipmentView";
 
 interface WorldSessionSceneData {
   readonly account: AccountState;
@@ -49,6 +54,7 @@ export class WorldSessionScene extends Phaser.Scene {
   private feedbackView: WorldSessionFeedbackView | null = null;
   private apiClient: ApiClient | null = null;
   private dodgeInput: WorldSessionDodgeInput | null = null;
+  private equipmentLoadout: EquipmentLoadout = createEmptyEquipmentLoadout();
 
   public constructor() {
     super("WorldSessionScene");
@@ -277,6 +283,12 @@ export class WorldSessionScene extends Phaser.Scene {
       }
     });
 
+    // Task 105 — listen for equipment updates from server
+    registerEquipmentListener(this.room, (loadout: EquipmentLoadout) => {
+      this.equipmentLoadout = loadout;
+      this.renderOverlay();
+    });
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.handleSceneTeardown());
     this.events.once(Phaser.Scenes.Events.DESTROY, () => this.handleSceneTeardown());
   }
@@ -330,6 +342,10 @@ export class WorldSessionScene extends Phaser.Scene {
       },
       () => {
         void this.handleLeaveWorld();
+      },
+      () => this.equipmentLoadout,
+      (loadout: EquipmentLoadout) => {
+        this.equipmentLoadout = loadout;
       },
     );
     utilityRegion.appendChild(overlayView.utilityPanel);
