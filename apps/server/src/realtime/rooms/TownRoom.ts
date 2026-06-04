@@ -1,6 +1,8 @@
 import { Room, Client } from "colyseus";
 import type {
   CharacterId,
+  DamageAppliedServerMessage,
+  EntityId,
   RequestAttackAcceptedServerMessage,
   RequestAttackRejectedServerMessage,
   DeferredActionQueuedServerMessage,
@@ -39,6 +41,11 @@ import { spawnWorldLootOnEnemyDefeat } from "./spawnWorldLootOnEnemyDefeat";
 import { persistPickedUpWorldLootToInventory } from "./pickupWorldLootInventory";
 import { validatePickupWorldLootIntent } from "./pickupWorldLootValidation";
 import { clearPendingAction, setPendingAction } from "./pendingActionState";
+
+const ENEMY_AGGRO_RANGE = 120;
+const ENEMY_ATTACK_RANGE = 44;
+const ENEMY_ATTACK_COOLDOWN_MS = 1200;
+const ENEMY_ATTACK_DAMAGE = 2;
 
 /**
  * TownRoom with minimal Colyseus schema state.
@@ -132,6 +139,7 @@ private pickupWorldLootHandlerRegistered = false;
           }
         },
       });
+      this.applyEnemyAggroDamage(Date.now());
       respawnTownEnemies(this.state as TownRoomState, Date.now());
     }, TOWN_MOVEMENT_TICK_RATE_MS);
 
@@ -231,6 +239,7 @@ private pickupWorldLootHandlerRegistered = false;
     const attackCooldownMs = resolveAttackCooldownMs(
       result.character.stats?.derived.attackCooldownMs,
     );
+    const maxHp = Math.max(0, result.character.stats?.derived.maxHp ?? 0);
 
     // Delegate presence building (spawn point resolution + initial
     // world position copy) to a dedicated helper so this room file
@@ -240,6 +249,8 @@ private pickupWorldLootHandlerRegistered = false;
       characterId,
       displayName: characterName,
       resolvedZoneId,
+      hp: maxHp,
+      maxHp,
       movementSpeed,
       attackCooldownMs,
       restoredLocationZoneId: result.character.lastLocationZoneId ?? undefined,
@@ -904,6 +915,69 @@ private pickupWorldLootHandlerRegistered = false;
         },
         "TownRoom request_pickup_world_loot accepted and synced loot removed from room state.",
       );
+    });
+  }
+
+  private applyEnemyAggroDamage(now: number): void {
+    const state = this.state as TownRoomState;
+
+    state.enemies.forEach((enemy) => {
+      if (enemy.defeated || enemy.hp <= 0) {
+        return;
+      }
+
+      let closestPlayerSessionId: string | null = null;
+      let closestDistance = Number.POSITIVE_INFINITY;
+
+      state.playerPresence.forEach((player, sessionId) => {
+        if (player.hp <= 0) {
+          return;
+        }
+
+        const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestPlayerSessionId = sessionId;
+        }
+      });
+
+      if (closestPlayerSessionId === null || closestDistance > ENEMY_AGGRO_RANGE) {
+        return;
+      }
+
+      if (closestDistance > ENEMY_ATTACK_RANGE) {
+        return;
+      }
+
+      const targetPlayer = state.playerPresence.get(closestPlayerSessionId);
+      if (targetPlayer === undefined || targetPlayer.hp <= 0) {
+        return;
+      }
+
+      if (now < enemy.nextAttackAtMs) {
+        return;
+      }
+
+      enemy.nextAttackAtMs = now + ENEMY_ATTACK_COOLDOWN_MS;
+      const nextHp = Math.max(0, targetPlayer.hp - ENEMY_ATTACK_DAMAGE);
+      targetPlayer.hp = nextHp;
+
+      const targetClient = this.clients.find((client) => client.sessionId === closestPlayerSessionId);
+      if (targetClient !== undefined) {
+        const message: DamageAppliedServerMessage = {
+          type: "damage_applied",
+          targetEntityId: targetPlayer.characterId as unknown as EntityId,
+          sourceEntityId: enemy.id as unknown as EntityId,
+          damage: ENEMY_ATTACK_DAMAGE,
+          remainingHp: nextHp,
+        };
+
+        try {
+          targetClient.send("damage_applied", message);
+        } catch {
+          // keep room state authoritative even if send fails
+        }
+      }
     });
   }
 }

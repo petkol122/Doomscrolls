@@ -28,6 +28,8 @@ export interface PlayerPresenceEntry {
   readonly sessionId: string;
   readonly characterId: CharacterId;
   readonly displayName: string;
+  readonly hp?: number;
+  readonly maxHp?: number;
   /**
    * Spawn point id assigned to the player by the server, when present.
    * Optional because older / partial state objects may not carry the field
@@ -89,7 +91,8 @@ export function getTownRoomPresence(
     };
 
     const withSpawn = applyOptionalSpawnPoint(baseEntry, value);
-    const withPosition = applyOptionalPosition(withSpawn, value);
+    const withVitality = applyOptionalVitality(withSpawn, value);
+    const withPosition = applyOptionalPosition(withVitality, value);
     const withMovementSpeed = applyOptionalMovementSpeed(withPosition, value);
     players.push(withMovementSpeed);
   });
@@ -97,6 +100,28 @@ export function getTownRoomPresence(
   return {
     connectedPlayerCount: presenceMap.size,
     players,
+  };
+}
+
+function applyOptionalVitality(
+  entry: PlayerPresenceEntry,
+  value: Record<string, unknown>,
+): PlayerPresenceEntry {
+  const rawHp = value.hp;
+  const rawMaxHp = value.maxHp;
+  if (
+    typeof rawHp !== "number" ||
+    typeof rawMaxHp !== "number" ||
+    !Number.isFinite(rawHp) ||
+    !Number.isFinite(rawMaxHp)
+  ) {
+    return entry;
+  }
+
+  return {
+    ...entry,
+    hp: Math.max(0, rawHp),
+    maxHp: Math.max(0, rawMaxHp),
   };
 }
 

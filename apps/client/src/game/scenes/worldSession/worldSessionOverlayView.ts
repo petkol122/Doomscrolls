@@ -224,6 +224,9 @@ function createPresenceSection(room: Room<DoomscrollsRoomState>): HTMLElement {
     if (player.spawnPointId !== undefined && player.spawnPointId.length > 0) {
       details.push(`spawn=${player.spawnPointId}`);
     }
+    if (player.hp !== undefined && player.maxHp !== undefined) {
+      details.push(`hp=${player.hp}/${player.maxHp}`);
+    }
 
     li.textContent = player.displayName + (details.length > 0 ? ` (${details.join(" | ")})` : "");
     playerList.appendChild(li);
@@ -241,6 +244,12 @@ function createMovementDebugSection(
   const self = presence?.players.find((player) => player.sessionId === room.sessionId) ?? null;
 
   return createSectionBlock(t("world_session.movement_debug"), [
+    createInfoLine(
+      t("world_session.player_hp"),
+      self?.hp !== undefined && self?.maxHp !== undefined
+        ? `${self.hp}/${self.maxHp}`
+        : t("world_session.awaiting_player_hp"),
+    ),
     createInfoLine(
       t("world_session.current_position"),
       self?.position !== undefined

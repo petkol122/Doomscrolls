@@ -31,6 +31,8 @@ export class PlayerPresence extends Schema {
   @type("string") public characterId: CharacterId;
   @type("string") public displayName: string;
   @type("string") public spawnPointId: SpawnPointId;
+  @type("number") public hp: number;
+  @type("number") public maxHp: number;
   @type("number") public x: number;
   @type("number") public y: number;
   @type("number") public movementSpeed: number;
@@ -51,6 +53,8 @@ export class PlayerPresence extends Schema {
     characterId: CharacterId,
     displayName: string,
     spawnPointId: SpawnPointId,
+    hp: number,
+    maxHp: number,
     x: number,
     y: number,
     movementSpeed: number,
@@ -61,6 +65,8 @@ export class PlayerPresence extends Schema {
     this.characterId = characterId;
     this.displayName = displayName;
     this.spawnPointId = spawnPointId;
+    this.hp = hp;
+    this.maxHp = maxHp;
     this.x = x;
     this.y = y;
     this.movementSpeed = movementSpeed;

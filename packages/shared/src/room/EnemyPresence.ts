@@ -10,6 +10,7 @@ export class EnemyPresence extends Schema {
   @type("number") hp!: number;
   @type("number") maxHp!: number;
   @type("boolean") defeated!: boolean;
+  @type("number") nextAttackAtMs!: number;
   @type("number") respawnAtMs!: number;
 }
 

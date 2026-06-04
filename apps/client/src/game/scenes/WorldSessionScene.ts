@@ -91,6 +91,14 @@ export class WorldSessionScene extends Phaser.Scene {
               : t("world_area.attack_unavailable"),
         );
       },
+      onDamageApplied: (message) => {
+        this.feedbackView?.showNotice(
+          t("world_area.player_damage_taken", {
+            damage: message.damage,
+            hp: message.remainingHp,
+          }),
+        );
+      },
     });
 
     registerPickupWorldLootResponseListeners(this.room, {

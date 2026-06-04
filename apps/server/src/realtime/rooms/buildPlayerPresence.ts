@@ -10,6 +10,8 @@ export interface BuildTownPlayerPresenceInput {
   readonly characterId: CharacterId;
   readonly displayName: string;
   readonly resolvedZoneId: ZoneId;
+  readonly hp: number;
+  readonly maxHp: number;
   readonly movementSpeed: number;
   readonly attackCooldownMs: number;
   readonly restoredLocationZoneId: string | undefined;
@@ -40,6 +42,8 @@ export function buildTownPlayerPresence(
     input.characterId,
     input.displayName,
     spawnPoint.spawnPointId,
+    input.hp,
+    input.maxHp,
     initialPosition.x,
     initialPosition.y,
     input.movementSpeed,

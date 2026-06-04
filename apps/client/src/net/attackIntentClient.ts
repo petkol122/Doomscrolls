@@ -1,5 +1,6 @@
 import type { Room } from "@colyseus/sdk";
 import type {
+  DamageAppliedServerMessage,
   RequestAttackAcceptedServerMessage,
   RequestAttackClientMessage,
   RequestAttackRejectedServerMessage,
@@ -38,6 +39,7 @@ export function registerAttackResponseListeners(
   callbacks: {
     readonly onAccepted: (message: RequestAttackAcceptedServerMessage) => void;
     readonly onRejected: (message: RequestAttackRejectedServerMessage) => void;
+    readonly onDamageApplied?: (message: DamageAppliedServerMessage) => void;
   },
 ): void {
   room.onMessage("request_attack_accepted", (raw: unknown) => {
@@ -52,6 +54,13 @@ export function registerAttackResponseListeners(
       return;
     }
     callbacks.onRejected(raw);
+  });
+
+  room.onMessage("damage_applied", (raw: unknown) => {
+    if (!isDamageAppliedServerMessage(raw)) {
+      return;
+    }
+    callbacks.onDamageApplied?.(raw);
   });
 }
 
@@ -90,4 +99,21 @@ function isRequestAttackRejectedServerMessage(
     return false;
   }
   return true;
+}
+
+function isDamageAppliedServerMessage(
+  value: unknown,
+): value is DamageAppliedServerMessage {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return (
+    candidate.type === "damage_applied" &&
+    typeof candidate.targetEntityId === "string" &&
+    typeof candidate.damage === "number" &&
+    typeof candidate.remainingHp === "number" &&
+    (candidate.sourceEntityId === undefined || typeof candidate.sourceEntityId === "string")
+  );
 }

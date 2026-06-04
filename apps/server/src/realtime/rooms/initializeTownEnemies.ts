@@ -31,6 +31,7 @@ export function initializeTownEnemies(
   enemy.hp = trashboarRuntContent.maxHp;
   enemy.maxHp = trashboarRuntContent.maxHp;
   enemy.defeated = false;
+  enemy.nextAttackAtMs = 0;
   enemy.respawnAtMs = 0;
 
   state.enemies.set(enemy.id, enemy);

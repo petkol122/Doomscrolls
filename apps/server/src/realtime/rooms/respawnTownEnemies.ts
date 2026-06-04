@@ -5,6 +5,7 @@ import type { TownRoomState } from "./TownRoomState";
 function resetEnemy(enemy: EnemyPresence): void {
   enemy.hp = enemy.maxHp;
   enemy.defeated = false;
+  enemy.nextAttackAtMs = 0;
   enemy.respawnAtMs = 0;
 }
 
