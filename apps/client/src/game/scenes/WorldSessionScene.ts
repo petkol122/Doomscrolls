@@ -83,8 +83,10 @@ export class WorldSessionScene extends Phaser.Scene {
     });
 
     registerAttackResponseListeners(this.room, {
-      onAccepted: () => {
+      onAccepted: (message) => {
         this.showAttackFeedback(t("world_area.attack_confirmed"));
+        // Task 091 — brief visual damage feedback; HP still comes from synced room state
+        this.worldAreaView?.showEnemyFloatingDamage(message.targetEnemyId, "-1");
       },
       onRejected: (message) => {
         this.showAttackFeedback(

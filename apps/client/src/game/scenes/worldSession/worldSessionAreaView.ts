@@ -34,6 +34,10 @@ import {
   createWorldSessionLootPlaceholderView,
   type WorldSessionLootPlaceholderView,
 } from "./worldSessionLootPlaceholderView";
+import {
+  createFloatingDamageNumberView,
+  type FloatingDamageNumberView,
+} from "./floatingDamageNumberView";
 
 interface PositionSnapshot {
   readonly x: number;
@@ -61,6 +65,7 @@ export interface WorldSessionAreaView {
   readonly refreshFromRoomState: (room: Room<DoomscrollsRoomState>) => void;
   readonly getDebugState: () => WorldSessionDebugState;
   readonly setProjectionMode: (mode: WorldProjectionMode) => void;
+  readonly showEnemyFloatingDamage: (enemyId: string, text: string) => void;
   readonly destroy: () => void;
 }
 
@@ -90,6 +95,9 @@ export function createWorldSessionAreaView(
   // Task 058 — Add enemy placeholder view
   const enemyPlaceholders = new Map<string, WorldSessionEnemyPlaceholderView>();
   const lootPlaceholders = new Map<string, WorldSessionLootPlaceholderView>();
+  // Task 091 — Floating damage number view (visual feedback only)
+  const floatingDamageView: FloatingDamageNumberView = createFloatingDamageNumberView(scene);
+  const enemyScreenPositions = new Map<string, { readonly x: number; readonly y: number }>();
 
   const targetMarker = scene.add.circle(-9999, -9999, 7, 0xff4a4a, 0.8);
   const targetLabel = scene.add.text(layout.originX + 10, layout.originY + layout.height - 20, "", {
@@ -182,6 +190,7 @@ export function createWorldSessionAreaView(
       if (!newEnemyIds.has(id)) {
         view.destroy();
         enemyPlaceholders.delete(id);
+        enemyScreenPositions.delete(id);
       }
     }
 
@@ -204,6 +213,9 @@ export function createWorldSessionAreaView(
       } else {
         enemyView.refresh(enemy);
       }
+
+      // Task 091 — remember last projected screen position for floating damage numbers
+      enemyScreenPositions.set(enemy.id, { x: enemy.x, y: enemy.y });
 
       const lastHp = previousEnemyHp.get(enemy.id);
       const lastDefeated = previousEnemyDefeated.get(enemy.id);
@@ -340,7 +352,7 @@ export function createWorldSessionAreaView(
       lineGraphic.clear();
       lineGraphic.lineStyle(1, 0xffffff, 0.5);
       lineGraphic.lineBetween(pixelX, pixelY, targetPixelX, targetPixelY);
-      
+
       // Point marker toward target direction
       const dx = targetPixelX - pixelX;
       const dy = targetPixelY - pixelY;
@@ -373,6 +385,14 @@ export function createWorldSessionAreaView(
     onDebugStateChange?.();
   };
 
+  const showEnemyFloatingDamage = (enemyId: string, text: string): void => {
+    const screenPos = enemyScreenPositions.get(enemyId);
+    if (screenPos === undefined) {
+      return;
+    }
+    floatingDamageView.show(screenPos.x, screenPos.y - 18, text);
+  };
+
   return {
     refreshFromRoomState,
     getDebugState: () => ({
@@ -381,6 +401,7 @@ export function createWorldSessionAreaView(
       isMovementInputEnabled: projectionMode === "debug_top_down",
     }),
     setProjectionMode,
+    showEnemyFloatingDamage,
     destroy: () => {
       playerPlaceholder.destroy();
       interactablesView.destroy();
@@ -389,10 +410,13 @@ export function createWorldSessionAreaView(
         view.destroy();
       }
       enemyPlaceholders.clear();
+      enemyScreenPositions.clear();
       for (const view of lootPlaceholders.values()) {
         view.destroy();
       }
       lootPlaceholders.clear();
+      // Task 091 — Destroy floating damage view
+      floatingDamageView.destroy();
       container.destroy(true);
     },
   };
@@ -451,6 +475,7 @@ function projectEnemyToArea(
 
   if (
     !Number.isFinite(normalizedX) ||
+   
     !Number.isFinite(normalizedY) ||
     normalizedX < 0 ||
     normalizedX > 1 ||
@@ -471,7 +496,6 @@ function projectEnemyToArea(
     ),
   };
 }
-
 function createAreaProjectionContext(
   layout: WorldSessionAreaLayout,
   bounds: WorldProjectionBounds,
