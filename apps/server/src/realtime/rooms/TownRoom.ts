@@ -44,6 +44,14 @@ import { applyEnemyDamage } from "./applyEnemyDamage";
 import { validateDodgeIntent } from "./dodgeIntentValidation";
 import { applyDodgeIntent } from "./applyDodgeIntent";
 import { consumeDodgeCooldown, isDodgeReady } from "./dodgeCooldown";
+import { validateHealingFlaskIntent } from "./healingFlaskValidation";
+import { applyHealingFlaskIntent } from "./applyHealingFlaskIntent";
+import { restoreFlaskToFull } from "./healingFlaskConfig";
+import type {
+  RequestUseHealingFlaskAcceptedServerMessage,
+  RequestUseHealingFlaskRejectedServerMessage,
+  RequestUseHealingFlaskClientMessage,
+} from "@doomscrolls/shared";
 import { respawnTownEnemies } from "./respawnTownEnemies";
 import { spawnWorldLootOnEnemyDefeat } from "./spawnWorldLootOnEnemyDefeat";
 import { persistPickedUpWorldLootToInventory } from "./pickupWorldLootInventory";
@@ -245,6 +253,7 @@ private attackHandlerRegistered = false;
 private pickupWorldLootHandlerRegistered = false;
 private respawnHandlerRegistered = false;
 private dodgeHandlerRegistered = false;
+private healingFlaskHandlerRegistered = false;
 
   public override async onCreate(options: TownRoomJoinOptions): Promise<void> {
     const log = createRoomLogger(
@@ -267,6 +276,7 @@ private dodgeHandlerRegistered = false;
     this.registerPickupWorldLootHandler(log);
     this.registerRespawnHandler(log);
     this.registerDodgeHandler(log);
+    this.registerHealingFlaskHandler(log);
     this.setSimulationInterval((deltaMs: number) => {
       stepTownRoomMovement(this.state as TownRoomState, deltaMs, {
         now: Date.now(),
@@ -1113,6 +1123,9 @@ private dodgeHandlerRegistered = false;
       player.targetX = respawnPosition.x;
       player.targetY = respawnPosition.y;
       player.hasMovementTarget = false;
+      // Task 096 -- respawn restores a full set of basic healing
+      // flask charges and resets the flask cooldown to "ready".
+      restoreFlaskToFull(player);
       clearPendingAction(player);
       state.enemies.forEach((enemy) => {
         if (enemy.targetPlayerSessionId === client.sessionId) {
@@ -1274,6 +1287,128 @@ private dodgeHandlerRegistered = false;
         },
         "TownRoom request_dodge accepted and player position updated; telegraphs cancelled.",
       );
+    });
+  }
+
+  /**
+   * Task 096 — Register the `request_use_healing_flask` message
+   * handler on the room.
+   *
+   * Scope:
+   *   - validate the intent shape via {@link validateHealingFlaskIntent}
+   *   - apply the flask use through {@link applyHealingFlaskIntent}
+   *     which decides alive / charges / cooldown / full-HP outcomes
+   *   - on acceptance, send `request_use_healing_flask_accepted`
+   *     with safe healed / remainingHp / charges / nextFlaskAt values
+   *   - on rejection, send `request_use_healing_flask_rejected`
+   *     with a safe reason code so the UI can show "full HP" /
+   *     "no charges" / "cooldown" / "downed" feedback
+   *
+   * The handler is registered once per room, never throws into
+   * Colyseus, and never trusts client-supplied heal amount,
+   * charges, cooldown or HP.
+   */
+  private registerHealingFlaskHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.healingFlaskHandlerRegistered) {
+      return;
+    }
+    this.healingFlaskHandlerRegistered = true;
+
+    this.onMessage("request_use_healing_flask", (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+
+      if (player === undefined) {
+        log.warn?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+          },
+          "TownRoom request_use_healing_flask rejected: player not found.",
+        );
+        return;
+      }
+
+      const validation = validateHealingFlaskIntent({ message: raw });
+      if (!validation.ok) {
+        const rejection: RequestUseHealingFlaskRejectedServerMessage = {
+          type: "request_use_healing_flask_rejected",
+          reason: validation.reason,
+        };
+        try {
+          client.send("request_use_healing_flask_rejected", rejection);
+        } catch {
+          // swallow send failures
+        }
+        log.warn?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            reason: validation.reason,
+          },
+          "TownRoom request_use_healing_flask rejected: invalid intent shape.",
+        );
+        return;
+      }
+
+      const now = Date.now();
+      const result = applyHealingFlaskIntent({ player, now });
+      if (!result.ok) {
+        const rejection: RequestUseHealingFlaskRejectedServerMessage = {
+          type: "request_use_healing_flask_rejected",
+          reason: result.reason,
+        };
+        try {
+          client.send("request_use_healing_flask_rejected", rejection);
+        } catch {
+          // swallow send failures
+        }
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            reason: result.reason,
+            flaskCharges: player.flaskCharges,
+            nextFlaskAt: player.nextFlaskAt,
+            hp: player.hp,
+            maxHp: player.maxHp,
+          },
+          "TownRoom request_use_healing_flask rejected by application.",
+        );
+        return;
+      }
+
+      const accepted: RequestUseHealingFlaskAcceptedServerMessage = {
+        type: "request_use_healing_flask_accepted",
+        healedAmount: result.healedAmount,
+        remainingHp: result.remainingHp,
+        flaskCharges: result.flaskCharges,
+        nextFlaskAt: result.nextFlaskAt,
+      };
+      try {
+        client.send("request_use_healing_flask_accepted", accepted);
+      } catch {
+        // swallow send failures; state sync remains authoritative
+      }
+
+      log.debug?.(
+        {
+          roomId: this.roomId,
+          roomName: this.roomName,
+          sessionId: client.sessionId,
+          healedAmount: result.healedAmount,
+          remainingHp: result.remainingHp,
+          flaskCharges: result.flaskCharges,
+          nextFlaskAt: result.nextFlaskAt,
+        },
+        "TownRoom request_use_healing_flask accepted and HP / charges synced.",
+      );
+      void (null as unknown as RequestUseHealingFlaskClientMessage);
     });
   }
 

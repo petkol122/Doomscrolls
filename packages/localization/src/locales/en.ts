@@ -151,6 +151,14 @@ export const en = {
     "Press Space in this scene to dodge in the last movement direction. Server decides cooldown and outcome.",
   "world_area.dodge_no_direction": "No recent movement direction; dodge ignored.",
 
+  "world_area.flask_sent": "Healing flask used.",
+  "world_area.flask_healed": "Healed +{healed} HP ({hp} remaining).",
+  "world_area.flask_full_hp": "Already at full HP.",
+  "world_area.flask_no_charges": "No flask charges left.",
+  "world_area.flask_on_cooldown": "Flask is on cooldown.",
+  "world_area.flask_downed": "Cannot use flask while downed.",
+  "world_area.flask_unavailable": "Flask unavailable.",
+
   "inventory.title": "Inventory",
   "equipment.title": "Equipment",
   "equipment.slot.weapon": "Weapon",

@@ -176,6 +176,34 @@ export interface RequestDodgeAcceptedServerMessage {
   readonly type: "request_dodge_accepted";
 }
 
+// ---------------------------------------------------------------------------
+// Task 096 — Basic Healing Flask Foundation.
+//
+// Safe server-owned rejection reasons for `request_use_healing_flask`
+// intents. The client never decides whether a flask charge is usable;
+// the server is the only authority for the heal, the cooldown, the
+// charge count, the full-HP / no-charges / cooldown / downed feedback
+// and the resulting synced HP / flask state.
+// ---------------------------------------------------------------------------
+export type RequestUseHealingFlaskRejectedReason =
+  | "player_downed"
+  | "already_full_hp"
+  | "no_charges"
+  | "flask_on_cooldown";
+
+export interface RequestUseHealingFlaskAcceptedServerMessage {
+  readonly type: "request_use_healing_flask_accepted";
+  readonly healedAmount: number;
+  readonly remainingHp: number;
+  readonly flaskCharges: number;
+  readonly nextFlaskAt: number;
+}
+
+export interface RequestUseHealingFlaskRejectedServerMessage {
+  readonly type: "request_use_healing_flask_rejected";
+  readonly reason: RequestUseHealingFlaskRejectedReason;
+}
+
 export type RequestPickupWorldLootRejectedReason =
   | "player_not_ready"
   | "player_downed"
@@ -251,4 +279,6 @@ export type ServerRoomMessage =
   | InteractResponseServerMessage
   | RequestDodgeAcceptedServerMessage
   | RequestDodgeRejectedServerMessage
+  | RequestUseHealingFlaskAcceptedServerMessage
+  | RequestUseHealingFlaskRejectedServerMessage
   | ErrorServerMessage;

@@ -100,6 +100,19 @@ export interface RequestDodgeClientMessage {
   readonly dirY: number;
 }
 
+// ---------------------------------------------------------------------------
+// Task 096 — Basic Healing Flask Foundation.
+//
+// Minimal client intent to ask the server to consume a healing-flask charge.
+// The client never decides whether the flask is usable, never tells the
+// server how much to heal and never tracks flask charges locally for any
+// gameplay outcome: the server is the sole authority for charge counts,
+// cooldown, heal amount, and the resulting HP state.
+// ---------------------------------------------------------------------------
+export interface RequestUseHealingFlaskClientMessage {
+  readonly type: "request_use_healing_flask";
+}
+
 export interface RequestRespawnClientMessage {
   readonly type: "request_respawn";
 }
@@ -155,4 +168,5 @@ export type ClientRoomMessage =
   | TransitionZoneClientMessage
   | DropInventoryItemClientMessage
   | RequestInteractClientMessage
-  | RequestDodgeClientMessage;
+  | RequestDodgeClientMessage
+  | RequestUseHealingFlaskClientMessage;

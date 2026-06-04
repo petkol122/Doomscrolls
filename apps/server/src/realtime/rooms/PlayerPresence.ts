@@ -52,6 +52,16 @@ export class PlayerPresence extends Schema {
   // 0 means "no dodge in progress / ready".
   @type("number") public nextDodgeAt: number;
 
+  // Task 096 -- server-owned basic healing flask state.
+  // flaskCharges  : current number of usable charges (0..maxFlaskCharges).
+  // maxFlaskCharges: total charges granted on respawn / join.
+  // nextFlaskAt   : cooldown timestamp (ms since epoch). 0 = ready now.
+  // The server is the sole authority for charge counts, cooldown and
+  // heal amount; the client only reads these values for display.
+  @type("number") public flaskCharges: number;
+  @type("number") public maxFlaskCharges: number;
+  @type("number") public nextFlaskAt: number;
+
   constructor(
     sessionId: string,
     characterId: CharacterId,
@@ -87,5 +97,12 @@ export class PlayerPresence extends Schema {
     this.pendingTargetX = x;
     this.pendingTargetY = y;
     this.nextDodgeAt = 0;
+    // Task 096 -- initialize server-owned basic healing flask state
+    // for a fresh presence entry. Respawn / join both go through this
+    // constructor path, so the player always starts with a full
+    // set of charges and a ready cooldown.
+    this.flaskCharges = 0;
+    this.maxFlaskCharges = 0;
+    this.nextFlaskAt = 0;
   }
 }

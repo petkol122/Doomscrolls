@@ -4,6 +4,7 @@ import type { CharacterId, ZoneId } from "@doomscrolls/shared";
 import { PlayerPresence } from "./PlayerPresence";
 import { NIGHTMARKET_DEFAULT_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
 import { resolvePlayerInitialPosition } from "./validateCharacterLocation";
+import { restoreFlaskToFull } from "./healingFlaskConfig";
 
 export interface BuildTownPlayerPresenceInput {
   readonly sessionId: string;
@@ -37,7 +38,7 @@ export function buildTownPlayerPresence(
     restoredLocationY: input.restoredLocationY,
   });
 
-  return new PlayerPresence(
+  const presence = new PlayerPresence(
     input.sessionId,
     input.characterId,
     input.displayName,
@@ -49,6 +50,9 @@ export function buildTownPlayerPresence(
     input.movementSpeed,
     input.attackCooldownMs,
   );
+  // Task 096 -- join grants a full set of basic healing flask charges.
+  restoreFlaskToFull(presence);
+  return presence;
 }
 
 function resolveTownSpawnPointDefinition(
