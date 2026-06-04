@@ -325,7 +325,7 @@ private healingFlaskHandlerRegistered = false;
         },
       });
       this.applyEnemyAggroDamage(Date.now(), deltaMs);
-      respawnTownEnemies(this.state as TownRoomState, Date.now());
+      respawnTownEnemies(this.state as TownRoomState, zoneId, Date.now());
     }, TOWN_MOVEMENT_TICK_RATE_MS);
 
     log.info(
