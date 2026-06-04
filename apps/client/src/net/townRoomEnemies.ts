@@ -8,6 +8,7 @@ export interface TownRoomEnemySnapshot {
   readonly x: number;
   readonly y: number;
   readonly state: EnemyState;
+  readonly targetPlayerSessionId: string;
   readonly hp: number;
   readonly maxHp: number;
   readonly defeated: boolean;
@@ -36,6 +37,7 @@ export function getTownRoomEnemies(
     const x = enemy.x;
     const y = enemy.y;
     const state = enemy.state;
+    const targetPlayerSessionId = enemy.targetPlayerSessionId;
     const hp = enemy.hp;
     const maxHp = enemy.maxHp;
     const defeated = enemy.defeated;
@@ -47,7 +49,8 @@ export function getTownRoomEnemies(
       typeof label !== "string" ||
       typeof x !== "number" ||
       typeof y !== "number" ||
-      (state !== "idle" && state !== "defeated") ||
+      (state !== "idle" && state !== "chasing" && state !== "defeated") ||
+      typeof targetPlayerSessionId !== "string" ||
       typeof hp !== "number" ||
       typeof maxHp !== "number" ||
       typeof defeated !== "boolean" ||
@@ -73,6 +76,7 @@ export function getTownRoomEnemies(
       x,
       y,
       state,
+      targetPlayerSessionId,
       hp,
       maxHp,
       defeated,

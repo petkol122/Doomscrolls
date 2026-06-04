@@ -29,6 +29,7 @@ export function initializeTownEnemies(
   enemy.x = 240;
   enemy.y = 160;
   enemy.state = "idle";
+  enemy.targetPlayerSessionId = "";
   enemy.hp = trashboarRuntContent.maxHp;
   enemy.maxHp = trashboarRuntContent.maxHp;
   enemy.defeated = false;

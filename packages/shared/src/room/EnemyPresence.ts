@@ -1,7 +1,7 @@
 import { Schema, type } from "@colyseus/schema";
 import type { LocalizationKey } from "@doomscrolls/localization";
 
-export type EnemyState = "idle" | "defeated";
+export type EnemyState = "idle" | "chasing" | "defeated";
 
 export class EnemyPresence extends Schema {
   @type("string") id!: string;
@@ -10,6 +10,7 @@ export class EnemyPresence extends Schema {
   @type("number") x!: number;
   @type("number") y!: number;
   @type("string") state!: EnemyState;
+  @type("string") targetPlayerSessionId!: string;
   @type("number") hp!: number;
   @type("number") maxHp!: number;
   @type("boolean") defeated!: boolean;
@@ -19,5 +20,15 @@ export class EnemyPresence extends Schema {
 
 export type WorldEnemy = Pick<
   EnemyPresence,
-  "id" | "enemyId" | "label" | "x" | "y" | "state" | "hp" | "maxHp" | "defeated" | "respawnAtMs"
+  | "id"
+  | "enemyId"
+  | "label"
+  | "x"
+  | "y"
+  | "state"
+  | "targetPlayerSessionId"
+  | "hp"
+  | "maxHp"
+  | "defeated"
+  | "respawnAtMs"
 >;

@@ -45,7 +45,7 @@ export function createWorldSessionEnemyPlaceholderView(
     })
     .setOrigin(0.5);
   const stateText = scene.add
-    .text(0, -38, `state=${enemy.state}`, {
+    .text(0, -38, "", {
       color: "#d7d7ff",
       fontFamily: "Arial, sans-serif",
       fontSize: "10px",
@@ -59,6 +59,11 @@ export function createWorldSessionEnemyPlaceholderView(
   body.on(Phaser.Input.Events.POINTER_DOWN, () => {
     onClick?.(enemy.id);
   });
+
+  const formatStateText = (nextEnemy: TownRoomEnemySnapshot): string =>
+    nextEnemy.targetPlayerSessionId.length > 0
+      ? `state=${nextEnemy.state} target=${nextEnemy.targetPlayerSessionId}`
+      : `state=${nextEnemy.state}`;
 
   const applyEnemyVisualState = (nextEnemy: TownRoomEnemySnapshot): void => {
     if (nextEnemy.defeated) {
@@ -74,7 +79,7 @@ export function createWorldSessionEnemyPlaceholderView(
       body.disableInteractive();
       core.setFillStyle(0x9c9c9c, 0.55);
       stateText.setColor("#b8b8b8");
-      stateText.setText(`state=${nextEnemy.state}`);
+      stateText.setText(formatStateText(nextEnemy));
       labelText.setColor("#b8b8b8");
       labelText.setText(
         `${t(nextEnemy.label)} (${t("world_area.enemy_defeated_label")})`,
@@ -89,14 +94,22 @@ export function createWorldSessionEnemyPlaceholderView(
     }
 
     shadow.setFillStyle(0x000000, 0.28);
-    ring.setFillStyle(0x6f1414, 0.26);
-    ring.setStrokeStyle(2, 0xff7a7a, 0.4);
-    body.setFillStyle(0xb12222, 0.95);
-    body.setStrokeStyle(2, 0xf0b0b0, 0.95);
+    if (nextEnemy.state === "chasing") {
+      ring.setFillStyle(0x8a4515, 0.32);
+      ring.setStrokeStyle(2, 0xffc27a, 0.5);
+      body.setFillStyle(0xc8611d, 0.95);
+      body.setStrokeStyle(2, 0xffd3a3, 0.95);
+      stateText.setColor("#ffe0aa");
+    } else {
+      ring.setFillStyle(0x6f1414, 0.26);
+      ring.setStrokeStyle(2, 0xff7a7a, 0.4);
+      body.setFillStyle(0xb12222, 0.95);
+      body.setStrokeStyle(2, 0xf0b0b0, 0.95);
+      stateText.setColor("#d7d7ff");
+    }
     body.setInteractive({ useHandCursor: true });
     core.setFillStyle(0xffd7d7, 0.9);
-    stateText.setColor("#d7d7ff");
-    stateText.setText(`state=${nextEnemy.state}`);
+    stateText.setText(formatStateText(nextEnemy));
     labelText.setColor("#ffffff");
     labelText.setText(`${t(nextEnemy.label)} (${nextEnemy.hp}/${nextEnemy.maxHp})`);
     hpText.setColor("#ffdddd");

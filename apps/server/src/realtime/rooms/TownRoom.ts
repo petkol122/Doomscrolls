@@ -999,7 +999,26 @@ private respawnHandlerRegistered = false;
 
     state.enemies.forEach((enemy) => {
       if (enemy.defeated || enemy.hp <= 0) {
+        enemy.state = "defeated";
+        enemy.targetPlayerSessionId = "";
         return;
+      }
+
+      const currentTargetSessionId =
+        typeof enemy.targetPlayerSessionId === "string" ? enemy.targetPlayerSessionId : "";
+
+      if (currentTargetSessionId.length > 0) {
+        const currentTarget = state.playerPresence.get(currentTargetSessionId);
+        if (currentTarget === undefined || currentTarget.hp <= 0) {
+          enemy.targetPlayerSessionId = "";
+          enemy.state = "idle";
+        } else {
+          const targetDistance = Math.hypot(enemy.x - currentTarget.x, enemy.y - currentTarget.y);
+          if (targetDistance > ENEMY_AGGRO_RANGE) {
+            enemy.targetPlayerSessionId = "";
+            enemy.state = "idle";
+          }
+        }
       }
 
       let closestPlayerSessionId: string | null = null;
@@ -1017,16 +1036,32 @@ private respawnHandlerRegistered = false;
         }
       });
 
-      if (closestPlayerSessionId === null || closestDistance > ENEMY_AGGRO_RANGE) {
-        return;
+      if (enemy.targetPlayerSessionId.length === 0) {
+        if (closestPlayerSessionId === null || closestDistance > ENEMY_AGGRO_RANGE) {
+          enemy.state = "idle";
+          return;
+        }
+
+        enemy.targetPlayerSessionId = closestPlayerSessionId;
       }
 
-      if (closestDistance > ENEMY_ATTACK_RANGE) {
-        return;
-      }
-
-      const targetPlayer = state.playerPresence.get(closestPlayerSessionId);
+      const targetPlayer = state.playerPresence.get(enemy.targetPlayerSessionId);
       if (targetPlayer === undefined || targetPlayer.hp <= 0) {
+        enemy.targetPlayerSessionId = "";
+        enemy.state = "idle";
+        return;
+      }
+
+      const targetDistance = Math.hypot(enemy.x - targetPlayer.x, enemy.y - targetPlayer.y);
+      if (targetDistance > ENEMY_AGGRO_RANGE) {
+        enemy.targetPlayerSessionId = "";
+        enemy.state = "idle";
+        return;
+      }
+
+      enemy.state = "chasing";
+
+      if (targetDistance > ENEMY_ATTACK_RANGE) {
         return;
       }
 
@@ -1043,9 +1078,13 @@ private respawnHandlerRegistered = false;
         targetPlayer.targetX = targetPlayer.x;
         targetPlayer.targetY = targetPlayer.y;
         clearPendingAction(targetPlayer);
+        enemy.targetPlayerSessionId = "";
+        enemy.state = "idle";
       }
 
-      const targetClient = this.clients.find((client) => client.sessionId === closestPlayerSessionId);
+      const targetClient = this.clients.find(
+        (client) => client.sessionId === targetPlayer.sessionId,
+      );
       if (targetClient !== undefined) {
         const message: DamageAppliedServerMessage = {
           type: "damage_applied",
