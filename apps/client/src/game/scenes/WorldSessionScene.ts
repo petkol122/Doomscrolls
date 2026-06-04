@@ -37,6 +37,7 @@ import {
   createEmptyEquipmentLoadout,
   registerEquipmentListener,
 } from "./worldSession/worldSessionEquipmentView";
+import type { WorldSessionUtilityPanelOpenState } from "./worldSession/worldSessionOverlayView";
 
 interface WorldSessionSceneData {
   readonly account: AccountState;
@@ -46,6 +47,7 @@ interface WorldSessionSceneData {
 
 export class WorldSessionScene extends Phaser.Scene {
   private overlay: HTMLDivElement | null = null;
+  private overlayView: ReturnType<typeof createWorldSessionOverlayView> | null = null;
   private account: AccountState | null = null;
   private characterId: CharacterId | null = null;
   private room: Room<DoomscrollsRoomState> | null = null;
@@ -55,6 +57,12 @@ export class WorldSessionScene extends Phaser.Scene {
   private apiClient: ApiClient | null = null;
   private dodgeInput: WorldSessionDodgeInput | null = null;
   private equipmentLoadout: EquipmentLoadout = createEmptyEquipmentLoadout();
+  private utilityPanelOpenState: WorldSessionUtilityPanelOpenState = {
+    controls: false,
+    equipment: false,
+    inventory: false,
+    debug: false,
+  };
 
   public constructor() {
     super("WorldSessionScene");
@@ -251,19 +259,29 @@ export class WorldSessionScene extends Phaser.Scene {
       return;
     }
 
-    this.destroyOverlay();
-    this.overlay = this.createOverlay(
-      this.account,
-      this.account.characters.find((character) => character.id === this.characterId) ?? null,
-      this.room,
-    );
+    const character = this.account.characters.find((nextCharacter) => nextCharacter.id === this.characterId) ?? null;
+    const debugState = this.worldAreaView?.getDebugState() ?? {
+      lastClickTarget: null,
+      projectionMode: defaultWorldProjection,
+      isMovementInputEnabled: true,
+      zoom: 1,
+    };
+
+    if (this.overlay === null || this.overlayView === null) {
+      const overlay = this.createOverlay(character, this.room, debugState);
+      this.overlay = overlay.root;
+      this.overlayView = overlay.view;
+      return;
+    }
+
+    this.overlayView.update(character, this.room, debugState);
   }
 
   private createOverlay(
-    _account: AccountState,
     character: CharacterSummary | null,
     room: Room<DoomscrollsRoomState>,
-  ): HTMLDivElement {
+    debugState: ReturnType<WorldSessionAreaView["getDebugState"]>,
+  ): { readonly root: HTMLDivElement; readonly view: ReturnType<typeof createWorldSessionOverlayView> } {
     const root = document.createElement("div");
     applyWorldSessionOverlayRootStyles(root);
 
@@ -282,11 +300,7 @@ export class WorldSessionScene extends Phaser.Scene {
     const overlayView = createWorldSessionOverlayView(
       character,
       room,
-      this.worldAreaView?.getDebugState() ?? {
-        lastClickTarget: null,
-        projectionMode: defaultWorldProjection,
-        isMovementInputEnabled: true,
-      },
+      debugState,
       (mode) => {
         this.handleProjectionModeChange(mode);
       },
@@ -295,6 +309,10 @@ export class WorldSessionScene extends Phaser.Scene {
       },
       () => {
         void this.handleLeaveWorld();
+      },
+      () => this.utilityPanelOpenState,
+      (nextState) => {
+        this.utilityPanelOpenState = nextState;
       },
       () => this.equipmentLoadout,
       (loadout: EquipmentLoadout) => {
@@ -311,7 +329,7 @@ export class WorldSessionScene extends Phaser.Scene {
     }
 
     document.body.appendChild(root);
-    return root;
+    return { root, view: overlayView };
   }
 
   private async handleLeaveWorld(): Promise<void> {
@@ -336,6 +354,7 @@ export class WorldSessionScene extends Phaser.Scene {
   }
 
   private destroyOverlay(): void {
+    this.overlayView = null;
     this.overlay?.remove();
     this.overlay = null;
   }

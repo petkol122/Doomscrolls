@@ -561,6 +561,19 @@ pnpm lint
 pnpm test
 ```
 
+### Task 110 — Spawn Zone + Enemy AI Docs Checkpoint
+
+Document the recent enemy spawn/wander/chase/leash/randomization work across `README.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG_CORE_0_1.md` and `docs/CODING_RULES.md`. This is a documentation-only task and must not add features.
+
+Status: documented. The docs now state that Nightmarket enemy spawning is content-driven through `SpawnZoneDefinition`, that one spawn zone may create multiple enemies (currently 3 `Trashboar Runt` placeholders), that initial spawn positions are chosen by deterministic server RNG, that respawn picks a new random position inside the same spawn zone, and that idle enemies wander while aggro/chase/leash return remain server-authoritative. They also explicitly state that collision, pathfinding, rarity tiers, enemy packs and persistence are still not implemented by this slice.
+
+Required checks for this checkpoint:
+
+```text
+pnpm lint
+pnpm test
+```
+
 ## Anti-Scope-Creep
 
 Do not implement before Core 0.1 is complete:

@@ -2,7 +2,12 @@ import Phaser from "phaser";
 import type { RoomState } from "@doomscrolls/shared";
 import type { Room } from "@colyseus/sdk";
 
-import { resolveWorldAreaBounds } from "../accountShell/resolveWorldAreaBounds";
+import {
+  worldToScreenActiveProjection,
+  type WorldProjectionBounds,
+  type WorldProjectionMode,
+  type WorldProjectionViewport,
+} from "../../worldProjection";
 import type { WorldSessionAreaLayout } from "./worldSessionAreaLayout";
 
 /**
@@ -12,7 +17,14 @@ import type { WorldSessionAreaLayout } from "./worldSessionAreaLayout";
  * Handle click to send interact intent.
  */
 export interface WorldSessionInteractablesView {
-  readonly refresh: (room: Room<RoomState>) => void;
+  readonly refresh: (
+    room: Room<RoomState>,
+    projection: {
+      readonly bounds: WorldProjectionBounds;
+      readonly viewport: WorldProjectionViewport;
+      readonly projectionMode: WorldProjectionMode;
+    },
+  ) => void;
   readonly destroy: () => void;
 }
 
@@ -26,7 +38,14 @@ export function createWorldSessionInteractablesView(
   const labelTexts = new Map<string, Phaser.GameObjects.Text>();
   const clickZones = new Map<string, Phaser.GameObjects.Zone>();
 
-  const refresh = (room: Room<RoomState>): void => {
+  const refresh = (
+    room: Room<RoomState>,
+    projection: {
+      readonly bounds: WorldProjectionBounds;
+      readonly viewport: WorldProjectionViewport;
+      readonly projectionMode: WorldProjectionMode;
+    },
+  ): void => {
     // Clear existing objects
     graphicsObjects.forEach((g) => g.destroy());
     labelTexts.forEach((t) => t.destroy());
@@ -45,8 +64,6 @@ export function createWorldSessionInteractablesView(
       return;
     }
 
-    const bounds = resolveWorldAreaBounds(String(room.state.zoneId));
-
     interactables.forEach((value) => {
       const objectId = String(value.id ?? "");
       const objectType = String(value.type ?? "");
@@ -54,9 +71,15 @@ export function createWorldSessionInteractablesView(
       const x = typeof value.x === "number" ? value.x : 0;
       const y = typeof value.y === "number" ? value.y : 0;
 
-      // Map world coordinates to pixel coordinates
-      const pixelX = layout.originX + ((x - bounds.minX) / (bounds.maxX - bounds.minX)) * layout.width;
-      const pixelY = layout.originY + ((y - bounds.minY) / (bounds.maxY - bounds.minY)) * layout.height;
+      const projectedPosition = worldToScreenActiveProjection(
+        x,
+        y,
+        projection.bounds,
+        projection.viewport,
+        projection.projectionMode,
+      );
+      const pixelX = projectedPosition.x;
+      const pixelY = projectedPosition.y;
 
       // Draw a simple square placeholder for the object
       const graphic = scene.add.graphics();

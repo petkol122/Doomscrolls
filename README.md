@@ -370,12 +370,17 @@ Server-authoritative movement:
   - newer clicks replace older movement targets; the client never teleports or predicts arrival locally
 
 Enemy AI (Trashboar Runt placeholder):
-  - aggro: enemy starts in idle; it aggros the first player that gets within aggro range
+  - content-driven spawn zones define enemy type, count and bounding rectangle per zone
+  - Nightmarket currently spawns 3 Trashboar Runt placeholders from one spawn zone
+  - deterministic server RNG (seeded mulberry32) chooses initial spawn positions inside the spawn zone
+  - idle: enemies wander near their spawn point at reduced speed
+  - aggro: enemy targets the closest alive player within aggro range
   - chase: while aggroed, the enemy moves toward its current target player using a server tick
   - attack: in melee range the enemy hits the player on its own attack cooldown, subtracting server-owned damage
   - leash: if the player runs far enough away, the enemy breaks aggro and walks back to its spawn position
   - defeat: when server-owned damage reduces HP to 0, the enemy becomes defeated and stops acting
-  - respawn: after a short delay, the same synced enemy resets to full HP at its original position so the loop is repeatable
+  - respawn: after a short delay, the enemy picks a new random position inside the same spawn zone and resets to full HP so the loop is repeatable
+  - still no collision, no pathfinding, no rarity tiers, no enemy packs, no persistence
 
 Player HP / downed / respawn foundation:
   - Each player has server-owned current HP and max HP stored on PlayerPresence

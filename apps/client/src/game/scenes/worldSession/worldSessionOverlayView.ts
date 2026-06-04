@@ -17,12 +17,31 @@ import {
 } from "./worldSessionOverlayLayout";
 import type { WorldProjectionMode } from "../../worldProjection";
 
+export interface WorldSessionUtilityPanelOpenState {
+  readonly controls: boolean;
+  readonly equipment: boolean;
+  readonly inventory: boolean;
+  readonly debug: boolean;
+}
+
+export const DEFAULT_WORLD_SESSION_UTILITY_PANEL_OPEN_STATE: WorldSessionUtilityPanelOpenState = {
+  controls: false,
+  equipment: false,
+  inventory: false,
+  debug: false,
+};
+
 export interface WorldSessionOverlayView {
   readonly statusPanel: HTMLElement | null;
   readonly utilityPanel: HTMLElement;
   readonly hudPanel: HTMLElement;
   readonly getEquipmentLoadout: () => EquipmentLoadout;
   readonly setEquipmentLoadout: (loadout: EquipmentLoadout) => void;
+  readonly update: (
+    character: CharacterSummary | null,
+    room: Room<DoomscrollsRoomState>,
+    debugState: WorldSessionDebugState,
+  ) => void;
 }
 
 export function createWorldSessionOverlayView(
@@ -32,70 +51,144 @@ export function createWorldSessionOverlayView(
   onProjectionModeChange: (mode: WorldProjectionMode) => void,
   onRespawn: () => void,
   onLeaveWorld: () => void,
+  getUtilityState: () => WorldSessionUtilityPanelOpenState = () =>
+    DEFAULT_WORLD_SESSION_UTILITY_PANEL_OPEN_STATE,
+  onUtilityStateChange?: (next: WorldSessionUtilityPanelOpenState) => void,
   getEquipmentLoadout: () => EquipmentLoadout = () => createEmptyEquipmentLoadout(),
   onEquipmentLoadoutChange?: (loadout: EquipmentLoadout) => void,
   onEquipItem?: (characterId: string, itemInstanceId: string, slot: string) => Promise<void>,
 ): WorldSessionOverlayView {
   let selectedInventoryItemId: InventorySummaryItem["itemInstanceId"] | null = character?.inventorySummaryItems?.[0]?.itemInstanceId ?? null;
 
-  const selfPresence = getTownRoomPresence(room.state as unknown as Record<string, unknown>)
-    ?.players.find((player) => player.sessionId === room.sessionId);
-  const selfHpSummary = formatPlayerHpSummary(selfPresence?.hp, selfPresence?.maxHp);
-  const selfHpRatio = resolvePlayerHpRatio(selfPresence?.hp, selfPresence?.maxHp);
-  const selfDisplayName = selfPresence?.displayName ?? character?.characterName ?? t("world_session.selected_character");
+  const buildStatusPanel = (
+    nextCharacter: CharacterSummary | null,
+    nextRoom: Room<DoomscrollsRoomState>,
+  ): HTMLElement | null => {
+    if (nextCharacter === null) {
+      return null;
+    }
+    const selfPresence = getTownRoomPresence(nextRoom.state as unknown as Record<string, unknown>)
+      ?.players.find((player) => player.sessionId === nextRoom.sessionId);
+    const selfDisplayName = selfPresence?.displayName
+      ?? nextCharacter.characterName
+      ?? t("world_session.selected_character");
+    return createCharacterChip(nextCharacter, selfDisplayName, onLeaveWorld);
+  };
 
-  const statusPanel = character === null
-    ? null
-    : createCharacterChip(character, selfDisplayName, onLeaveWorld);
+  const buildHudPanel = (
+    nextCharacter: CharacterSummary | null,
+    nextRoom: Room<DoomscrollsRoomState>,
+  ): HTMLElement => {
+    const selfPresence = getTownRoomPresence(nextRoom.state as unknown as Record<string, unknown>)
+      ?.players.find((player) => player.sessionId === nextRoom.sessionId);
+    const selfHpSummary = formatPlayerHpSummary(selfPresence?.hp, selfPresence?.maxHp);
+    const selfHpRatio = resolvePlayerHpRatio(selfPresence?.hp, selfPresence?.maxHp);
 
-  const utilityPanel = createScrollableCardSection();
-  utilityPanel.style.display = "grid";
-  utilityPanel.style.gap = "8px";
-  utilityPanel.style.alignContent = "start";
-  utilityPanel.appendChild(createControlsSection());
-  utilityPanel.appendChild(createEquipmentPanelSection(getEquipmentLoadout));
-  utilityPanel.appendChild(createInventoryPanelSection(character, {
-    getSelectedItemId: () => selectedInventoryItemId,
-    onSelectItem: (itemId) => {
-      selectedInventoryItemId = itemId;
-    },
-  }, character?.id ?? null, onEquipItem));
-  utilityPanel.appendChild(
-    createDebugPanel(
-      room,
-      formatTownRoomState(room.state),
-      debugState,
-      onProjectionModeChange,
-    ),
-  );
+    const panel = createCardSection();
+    panel.style.display = "grid";
+    panel.style.gap = "6px";
+    panel.style.padding = "8px 12px";
+    panel.appendChild(createHudSection(
+      selfHpSummary,
+      selfHpRatio,
+      selfPresence?.lifeState,
+      selfPresence?.flaskCharges,
+      selfPresence?.maxFlaskCharges,
+      selfPresence?.level ?? nextCharacter?.level ?? 1,
+      selfPresence?.xp ?? nextCharacter?.xp ?? 0,
+    ));
 
-  const hudPanel = createCardSection();
-  hudPanel.style.display = "grid";
-  hudPanel.style.gap = "6px";
-  hudPanel.style.padding = "8px 12px";
-  hudPanel.appendChild(createHudSection(
-    selfHpSummary,
-    selfHpRatio,
-    selfPresence?.lifeState,
-    selfPresence?.flaskCharges,
-    selfPresence?.maxFlaskCharges,
-    selfPresence?.level ?? character?.level ?? 1,
-    selfPresence?.xp ?? character?.xp ?? 0,
-  ));
+    if (selfPresence?.lifeState === "downed") {
+      const downedNotice = createMutedText(t("world_session.downed_notice"));
+      downedNotice.style.color = "#e3a6a6";
+      panel.appendChild(downedNotice);
 
-  if (selfPresence?.lifeState === "downed") {
-    const downedNotice = createMutedText(t("world_session.downed_notice"));
-    downedNotice.style.color = "#e3a6a6";
-    hudPanel.appendChild(downedNotice);
+      const respawnButton = createButton(t("world_session.respawn"));
+      respawnButton.style.marginTop = "4px";
+      respawnButton.style.width = "220px";
+      respawnButton.addEventListener("click", () => {
+        onRespawn();
+      });
+      panel.appendChild(respawnButton);
+    }
 
-    const respawnButton = createButton(t("world_session.respawn"));
-    respawnButton.style.marginTop = "4px";
-    respawnButton.style.width = "220px";
-    respawnButton.addEventListener("click", () => {
-      onRespawn();
-    });
-    hudPanel.appendChild(respawnButton);
-  }
+    return panel;
+  };
+
+  const buildUtilityPanel = (
+    nextCharacter: CharacterSummary | null,
+    nextRoom: Room<DoomscrollsRoomState>,
+    nextDebugState: WorldSessionDebugState,
+  ): HTMLElement => {
+    const panel = createScrollableCardSection();
+    panel.style.display = "grid";
+    panel.style.gap = "8px";
+    panel.style.alignContent = "start";
+
+    const utilityState = getUtilityState();
+
+    panel.appendChild(createControlsSection(utilityState.controls, (open) => {
+      onUtilityStateChange?.({ ...getUtilityState(), controls: open });
+    }));
+    panel.appendChild(createEquipmentPanelSection(
+      getEquipmentLoadout,
+      utilityState.equipment,
+      (open) => {
+        onUtilityStateChange?.({ ...getUtilityState(), equipment: open });
+      },
+    ));
+    panel.appendChild(createInventoryPanelSection(
+      nextCharacter,
+      {
+        getSelectedItemId: () => selectedInventoryItemId,
+        onSelectItem: (itemId) => {
+          selectedInventoryItemId = itemId;
+        },
+      },
+      nextCharacter?.id ?? null,
+      onEquipItem,
+      utilityState.inventory,
+      (open) => {
+        onUtilityStateChange?.({ ...getUtilityState(), inventory: open });
+      },
+    ));
+    panel.appendChild(
+      createDebugPanel(
+        nextRoom,
+        formatTownRoomState(nextRoom.state),
+        nextDebugState,
+        onProjectionModeChange,
+        utilityState.debug,
+        (open) => {
+          onUtilityStateChange?.({ ...getUtilityState(), debug: open });
+        },
+      ),
+    );
+    return panel;
+  };
+
+  const statusPanel = buildStatusPanel(character, room);
+  const utilityPanel = buildUtilityPanel(character, room, debugState);
+  const hudPanel = buildHudPanel(character, room);
+
+  const update = (
+    nextCharacter: CharacterSummary | null,
+    nextRoom: Room<DoomscrollsRoomState>,
+    nextDebugState: WorldSessionDebugState,
+  ): void => {
+    if (statusPanel !== null) {
+      const nextStatus = buildStatusPanel(nextCharacter, nextRoom);
+      if (nextStatus !== null) {
+        statusPanel.replaceWith(nextStatus);
+      }
+    }
+
+    const nextHud = buildHudPanel(nextCharacter, nextRoom);
+    hudPanel.replaceWith(nextHud);
+
+    const nextUtility = buildUtilityPanel(nextCharacter, nextRoom, nextDebugState);
+    utilityPanel.replaceWith(nextUtility);
+  };
 
   return {
     statusPanel,
@@ -105,6 +198,7 @@ export function createWorldSessionOverlayView(
     setEquipmentLoadout: (loadout: EquipmentLoadout) => {
       onEquipmentLoadoutChange?.(loadout);
     },
+    update,
   };
 }
 
@@ -153,12 +247,15 @@ function createCharacterChip(
   return panel;
 }
 
-function createControlsSection(): HTMLElement {
+function createControlsSection(isOpen: boolean, onOpenChange: (open: boolean) => void): HTMLElement {
   const details = document.createElement("details");
-  details.open = false;
+  details.open = isOpen;
   details.style.border = "1px solid #31271c";
   details.style.borderRadius = "8px";
   details.style.background = "rgba(12, 10, 8, 0.72)";
+  details.addEventListener("toggle", () => {
+    onOpenChange(details.open);
+  });
 
   const summary = document.createElement("summary");
   summary.textContent = `${t("world_session.controls")} / Help`;
@@ -568,10 +665,15 @@ function createInventoryPanelSection(
   },
   characterId: string | null,
   onEquipItem?: (characterId: string, itemInstanceId: string, slot: string) => Promise<void>,
+  isOpen: boolean = false,
+  onOpenChange?: (open: boolean) => void,
 ): HTMLElement {
   const items = character?.inventorySummaryItems ?? [];
   const wrapper = document.createElement("details");
-  wrapper.open = false;
+  wrapper.open = isOpen;
+  wrapper.addEventListener("toggle", () => {
+    onOpenChange?.(wrapper.open);
+  });
   wrapper.style.border = "1px solid #31271c";
   wrapper.style.borderRadius = "8px";
   wrapper.style.background = "rgba(12, 10, 8, 0.72)";
@@ -614,9 +716,14 @@ function createDebugPanel(
   roomState: ReturnType<typeof formatTownRoomState>,
   debugState: WorldSessionDebugState,
   onProjectionModeChange: (mode: WorldProjectionMode) => void,
+  isOpen: boolean = false,
+  onOpenChange?: (open: boolean) => void,
 ): HTMLElement {
   const details = document.createElement("details");
-  details.open = false;
+  details.open = isOpen;
+  details.addEventListener("toggle", () => {
+    onOpenChange?.(details.open);
+  });
   details.style.border = "1px solid #31271c";
   details.style.borderRadius = "8px";
   details.style.background = "rgba(12, 10, 8, 0.56)";

@@ -282,9 +282,12 @@ TownRoom rules:
 - the server creates a `PlayerPresence` entry on `onJoin` with `sessionId`, `characterId`, `characterName` (as `displayName`), the resolved `spawnPointId`, initial x/y and runtime `movementSpeed`
 - the server removes the `PlayerPresence` entry on `onLeave`
 - `connectedPlayerCount` must derive from `playerPresence.size` on join/leave, never be set independently
-- `TownRoomState` may include an `enemies` `MapSchema<EnemyPresence>` for strictly synced placeholder enemies only
-- Core 0.1 currently ships one static Nightmarket `Trashboar Runt` placeholder enemy with synced `id`, `enemyId`, `label`, `x`, `y`, `hp`, and `maxHp`
-- Core 0.1 currently ships one static Nightmarket `Trashboar Runt` placeholder enemy with synced `id`, `enemyId`, `label`, `x`, `y`, `hp`, `maxHp`, and `defeated`
+- `TownRoomState` may include an `enemies` `MapSchema<EnemyPresence>` for synced placeholder enemies spawned from content-driven spawn zones
+- `SpawnZoneDefinition` content data defines enemy type, count and bounding rectangle per zone; the content registry exposes `contentRegistry.spawnZones`
+- `initializeTownEnemies()` spawns enemies from spawn zone definitions using deterministic server RNG (seeded mulberry32) so the same zone always produces the same initial layout
+- `respawnTownEnemies()` picks a new random position inside the same spawn zone via the same seeded RNG when a defeated enemy's respawn timer elapses
+- `applyWanderMovement()` makes idle enemies wander near their spawn point at reduced speed with periodic random target pick-up
+- Core 0.1 currently ships multiple Nightmarket `Trashboar Runt` placeholder enemies (spawned from `nightmarket_trashboar_zone` with count 3) with synced `id`, `enemyId`, `label`, `x`, `y`, `hp`, `maxHp`, `defeated`, `state`, `spawnX`, `spawnY`
 - Core 0.1 basic attack intent may target only synced `TownRoomState.enemies` entries; the server validates player presence, enemy existence, non-defeated status and simple distance <= 64 before subtracting fixed damage, clamping hp at 0 and marking `defeated` when hp reaches 0
 - the client renders roomKind, zoneId and connectedPlayerCount from room state; additionally it may extract player presence via a dedicated helper (`getTownRoomPresence`) to display connected player names
 - client enemy extraction must live in a separate helper module (`apps/client/src/net/townRoomEnemies.ts`), not inside `WorldSessionScene` or `AccountShellScene`
@@ -319,6 +322,9 @@ Extraction examples (already applied):
 apps/server/src/realtime/rooms/roomLogger.ts             - shared Colyseus logger wrapper
 apps/server/src/realtime/rooms/resolveTownSpawnPoint.ts  - content-based spawn point lookup
 apps/server/src/realtime/rooms/buildPlayerPresence.ts    - presence builder (spawn + initial x/y copy)
+apps/server/src/realtime/rooms/initializeTownEnemies.ts  - content-driven enemy spawn from spawn zones
+apps/server/src/realtime/rooms/respawnTownEnemies.ts     - enemy respawn with new position inside spawn zone
+apps/server/src/realtime/rooms/wanderEnemies.ts          - idle enemy wander movement near spawn
 apps/client/src/net/townRoomPresence.ts                  - client presence extraction helper
 ```
 
@@ -558,7 +564,7 @@ Rules:
 
 - Server-authoritative movement remains mandatory: the client sends only `request_move` target intents, `TownRoom` stores the authoritative target and advances synced x/y on the server tick, and the client must not fake local arrival/teleportation
 - The targeted action approach is "move first, then act": when the client sends a click intent (attack / interact / pickup) against a target that is out of range, the server stores a pending action plus movement target and processes the original action only once the simulation tick brings the player in range; the client never decides whether the action succeeded
-- Enemy AI on the synced `Trashboar Runt` placeholder is intentionally limited to aggro, chase, leash return, melee attack windup/landing, defeat and respawn; no pathfinding, no projectiles, no multiple enemy types, no enemy ability bar, no enemy progression
+- Enemy AI on the synced `Trashboar Runt` placeholder is intentionally limited to content-driven spawn zones (multiple enemies per zone), idle wander near spawn, aggro, chase, leash return, melee attack windup/landing, defeat and respawn with a new position inside the spawn zone; no pathfinding, no projectiles, no enemy ability bar, no enemy progression, no rarity tiers, no enemy packs, no persistence
 - Player HP / downed / respawn foundation is server-owned: `PlayerPresence` holds current HP and max HP, enemy hits reduce HP server-side, HP updates reach the client only through synced room state, at 0 HP the player is marked as downed (movement and combat disabled), and respawn is a real server flow that restores HP/flask state and places the player at a server-resolved safe location (last in-zone persisted position or content spawn point); no XP loss, no item durability loss, no corpse inventory, no recovery flow, no permadeath
 - Dodge and healing flask are server-authoritative only: dodge validates direction/cooldown and applies an authoritative short displacement; flask validates alive/full-hp/charges/cooldown and heals server-side only. No stamina system, no mana/resource globe system, no refill vendor flow and no client-owned healing numbers
 - Loot pickup is server-authoritative: the client sends only a `worldLootId`; the server validates ownership, distance and that the loot still exists, then removes the synced room-state entry and persists the item into the real character inventory; current account/inventory summary/detail views must read real persisted state, not fake local reward state

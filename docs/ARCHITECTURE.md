@@ -325,9 +325,18 @@ Targeted actions:
   the client never decides hit/pickup/interact success locally
 
 Enemy loop:
-  placeholder Trashboar supports aggro, chase, leash return, melee attack windup/landing, defeat and respawn
+  content-driven spawn zones define enemy type, count and bounding rectangle per zone
+  multiple enemies per zone (Nightmarket spawns 3 Trashboar Runt placeholders)
+  deterministic server RNG (seeded mulberry32) places enemies within spawn zone bounds on room creation
+  respawn picks a new random position inside the same spawn zone via the same seeded RNG
+  idle enemies wander near their spawn point at reduced speed
+  aggro: enemy targets the closest alive player within aggro range
+  chase: aggroed enemy moves toward its target at full speed
+  leash: when the player exceeds leash range the enemy breaks aggro and walks back to spawn
+  attack: in melee range the enemy hits on its own cooldown with server-owned damage and telegraph windup
   enemy damage to players is server-owned
   enemy defeat may spawn synced world loot from server-owned loot rolling
+  still no collision, no pathfinding, no rarity tiers, no enemy packs, no persistence
 
 Player survival loop:
   PlayerPresence stores current hp, maxHp, lifeState, dodge cooldown and flask state
@@ -348,7 +357,7 @@ HUD state:
   final Diablo-like orb HUD is deferred
 ```
 
-The overlay groups room info, player presence, controls, hp/flask state and movement/combat debug into readable sections. It states clearly that it is temporary server-synced debug UI, not the final gameplay HUD. Movement debug may show the last click target sent by the client, but position still comes only from synced room state. TownRoom currently syncs one Nightmarket placeholder Trashboar in a reduced 480x320 test arena so movement/combat verification stays compact.
+The overlay groups room info, player presence, controls, hp/flask state and movement/combat debug into readable sections. It states clearly that it is temporary server-synced debug UI, not the final gameplay HUD. Movement debug may show the last click target sent by the client, but position still comes only from synced room state. TownRoom currently syncs multiple content-driven Nightmarket placeholder Trashboars (spawned from a zone definition) in a reduced 480x320 test arena so movement/combat verification stays compact.
 
 This is still placeholder visual UI, not final art or animation. Still deferred: XP, quests, equipment, drag/drop inventory, vendor/stash, the full corpse/death recovery loop, final Diablo-orb HUD art, sprites, map art, collision and pathfinding.
 
@@ -774,12 +783,17 @@ Targeted action approach:
   - once the simulation tick brings the player in range, the original action intent is processed server-side
   - the client never decides action success; it only sends intents and renders synced room state
 
-Enemy AI (Trashboar Runt placeholder):
-  - aggro: enemy starts idle, aggros the first player inside its aggro range
-  - chase: while aggroed the enemy moves toward its current target player via a server tick
-  - attack: in melee range the enemy hits the player on its own attack cooldown, subtracting server-owned damage
-  - leash return: when the player leaves leash range the enemy breaks aggro and walks back to its spawn
-  - respawn: after defeat the same synced enemy is kept in a defeated state for a short delay, then reset to full HP at its original position so the loop is repeatable
+Enemy AI (Trashboar Runt placeholder, multiple per zone):
+  - spawn zones are content-driven: each SpawnZoneDefinition defines enemy type, count and bounding rectangle per zone
+  - multiple enemies per zone (Nightmarket spawns 3 Trashboar Runt placeholders)
+  - deterministic server RNG (seeded mulberry32) places enemies within spawn zone bounds on room creation
+  - idle: enemies wander near their spawn point at reduced speed with random target pick-up
+  - aggro: enemy targets the closest alive player within aggro range
+  - chase: while aggroed the enemy moves toward its current target player at full speed via a server tick
+  - attack: in melee range the enemy hits the player on its own attack cooldown, subtracting server-owned damage with a telegraph windup
+  - leash return: when the player exceeds leash range the enemy breaks aggro and walks back to its spawn
+  - respawn: after defeat the enemy picks a new random position inside the same spawn zone and resets to full HP so the loop is repeatable
+  - still no collision, no pathfinding, no rarity tiers, no enemy packs, no persistence
 
 Player HP / downed / respawn foundation:
   - server-owned current HP and max HP live on PlayerPresence and are the only source of truth
