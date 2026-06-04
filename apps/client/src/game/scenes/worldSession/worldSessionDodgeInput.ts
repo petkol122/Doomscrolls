@@ -1,3 +1,4 @@
+import Phaser from "phaser";
 import type { Room } from "@colyseus/sdk";
 import type { RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
 

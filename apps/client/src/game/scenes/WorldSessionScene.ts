@@ -43,6 +43,7 @@ export class WorldSessionScene extends Phaser.Scene {
   private account: AccountState | null = null;
   private characterId: CharacterId | null = null;
   private room: Room<DoomscrollsRoomState> | null = null;
+  private bootMarker: Phaser.GameObjects.Text | null = null;
   private worldAreaView: WorldSessionAreaView | null = null;
   private feedbackView: WorldSessionFeedbackView | null = null;
   private apiClient: ApiClient | null = null;
@@ -60,6 +61,14 @@ export class WorldSessionScene extends Phaser.Scene {
 
   public create(): void {
     this.cameras.main.setBackgroundColor("#090706");
+    this.bootMarker = this.add.text(24, 24, "WORLD_SESSION_CREATE_STARTED", {
+      color: "#ff6b6b",
+      fontFamily: "Arial, sans-serif",
+      fontSize: "24px",
+      fontStyle: "bold",
+      backgroundColor: "#1a0000",
+      padding: { left: 8, right: 8, top: 6, bottom: 6 },
+    }).setDepth(10_000);
 
     if (this.account === null || this.room === null || this.characterId === null) {
       this.scene.start("AuthScene");
@@ -258,6 +267,8 @@ export class WorldSessionScene extends Phaser.Scene {
     });
 
     this.renderOverlay();
+    this.bootMarker?.destroy();
+    this.bootMarker = null;
     this.room.onStateChange(() => {
       if (this.room !== null) {
         this.worldAreaView?.refreshFromRoomState(this.room);
@@ -362,6 +373,8 @@ export class WorldSessionScene extends Phaser.Scene {
 
   private handleSceneTeardown(): void {
     this.apiClient = null;
+    this.bootMarker?.destroy();
+    this.bootMarker = null;
     this.dodgeInput?.destroy();
     this.dodgeInput = null;
     this.feedbackView?.destroy();

@@ -46,8 +46,8 @@ export function formatTownRoomState(state: RoomState): {
   const roomState = state as RoomState & { readonly roomKind?: string };
 
   return {
-    roomKind: roomState.roomKind ?? state.kind,
-    zoneId: state.zoneId,
-    playerCount: state.connectedPlayerCount,
+    roomKind: roomState.roomKind ?? state.kind ?? "town",
+    zoneId: typeof state.zoneId === "string" && state.zoneId.length > 0 ? state.zoneId : "nightmarket",
+    playerCount: typeof state.connectedPlayerCount === "number" ? state.connectedPlayerCount : 0,
   };
 }

@@ -182,7 +182,9 @@ export function createWorldSessionAreaView(
   const previousEnemyRespawnAtMs = new Map<string, number>();
 
   const refreshFromRoomState = (nextRoom: Room<DoomscrollsRoomState>): void => {
-    const zoneId = nextRoom.state.zoneId;
+    const zoneId = typeof nextRoom.state?.zoneId === "string" && nextRoom.state.zoneId.length > 0
+      ? nextRoom.state.zoneId
+      : "nightmarket";
     const bounds = resolveWorldAreaBounds(zoneId);
     const projection = createAreaProjectionContext(layout, bounds, projectionMode);
 
