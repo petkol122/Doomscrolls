@@ -80,6 +80,18 @@ Planned fix: Standardize on a supported Node LTS version, revisit the Vite upgra
 Status: Open
 ```
 
+## Server RNG helper test tooling
+
+```text
+Date: 2026-06-04
+Area: Server tooling
+Description: apps/server/src/realtime/rooms/serverRng.ts implements a deterministic RNG helper (createRng, nextFloat, nextInt, pickWeighted) with type-safe validation but does not include dedicated unit tests because the repository test runner is still placeholder-only.
+Reason: Avoid introducing new test infrastructure before the repo-wide testing approach is established.
+Risk: RNG behavior is currently verified by TypeScript checks and manual inspection rather than automated assertions.
+Planned fix: Add focused RNG unit tests when the project introduces a real test runner.
+Status: Open
+```
+
 ## Localization test tooling
 
 ```text

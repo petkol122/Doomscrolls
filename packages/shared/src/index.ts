@@ -1,6 +1,7 @@
 export * from "./ids";
 
 export * from "./math/Vector2";
+export * from "./math/RngTypes";
 
 export * from "./account/AuthTypes";
 export * from "./account/UserTypes";

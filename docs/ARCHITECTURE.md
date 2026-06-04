@@ -204,7 +204,7 @@ content defines weighted loot entries; the server consumes those definitions and
 no fake drops, fake reward popups, fake client-predicted loot, or visual-only loot entities
 ```
 
-The intended foundation is a small server-side RNG helper plus a reusable weighted-table roller. The helper should make deterministic tests practical without making runtime loot predictable to the client. Enemy defeat, loot table selection, item roll generation, room drop spawning and pickup ownership must continue to be decided by the server. This planning note does not add any RNG helper, loot roller, drop entity, pickup flow or persistence.
+The RNG foundation is now implemented as a small server-side helper (`apps/server/src/realtime/rooms/serverRng.ts`) with a reusable weighted-table roller. The helper uses a deterministic mulberry32 algorithm, making tests practical without making runtime loot predictable to the client. Enemy defeat, loot table selection, item roll generation, room drop spawning and pickup ownership remain decided by the server.
 
 The Prisma schema foundation exists, and the server validates `DATABASE_URL` so configuration is explicit. The current runtime uses persistence for auth, character APIs and room join validation, but does not implement room persistence, inventory logic, corpse recovery logic or gameplay business logic.
 
