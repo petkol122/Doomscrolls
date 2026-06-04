@@ -6,8 +6,17 @@ import { formatTownRoomState } from "../../../net/RealtimeClient";
 import { getTownRoomPresence } from "../../../net/townRoomPresence";
 import { createButton, createInfoLine } from "../accountShell/accountShellDom";
 import type { WorldSessionDebugState } from "./worldSessionAreaView";
-import { applyWorldSessionOverlayPanelStyles } from "./worldSessionOverlayLayout";
+import {
+  applyWorldSessionOverlayPanelStyles,
+  applyWorldSessionOverlayScrollablePanelStyles,
+} from "./worldSessionOverlayLayout";
 import type { WorldProjectionMode } from "../../worldProjection";
+
+export interface WorldSessionOverlayView {
+  readonly statusPanel: HTMLElement | null;
+  readonly utilityPanel: HTMLElement;
+  readonly hudPanel: HTMLElement;
+}
 
 export function createWorldSessionOverlayView(
   character: CharacterSummary | null,
@@ -16,193 +25,187 @@ export function createWorldSessionOverlayView(
   onProjectionModeChange: (mode: WorldProjectionMode) => void,
   onRespawn: () => void,
   onLeaveWorld: () => void,
-): HTMLElement {
-  const section = createCardSection();
+): WorldSessionOverlayView {
   let selectedInventoryItemId: InventorySummaryItem["itemInstanceId"] | null = character?.inventorySummaryItems?.[0]?.itemInstanceId ?? null;
-
-  const title = document.createElement("h2");
-  title.textContent = t("world_session.title");
-  title.style.margin = "0 0 4px";
-  title.style.fontFamily = "Georgia, serif";
-  title.style.fontSize = "18px";
-  section.appendChild(title);
-
-  const status = document.createElement("p");
-  status.textContent = t("world_entry.connected");
-  status.style.margin = "0 0 10px";
-  status.style.color = "#b9d49a";
-  status.style.fontSize = "13px";
-  section.appendChild(status);
-
-  const notice = document.createElement("p");
-  notice.textContent = t("world_session.debug_notice");
-  notice.style.margin = "0 0 10px";
-  notice.style.padding = "6px 8px";
-  notice.style.border = "1px solid #5f4a2f";
-  notice.style.borderRadius = "8px";
-  notice.style.background = "rgba(31, 24, 18, 0.95)";
-  notice.style.color = "#d6c29d";
-  notice.style.fontSize = "11px";
-  section.appendChild(notice);
-
-  section.appendChild(createControlsSection());
-
-  if (character !== null) {
-    section.appendChild(createSectionBlock(t("world_session.selected_character"), [
-      createCompactSummary([
-        character.characterName,
-        `${t(`origin.${character.originKey}.name`)} / ${t(`class.${character.classKey}.name`)}`,
-        `${t("character.level")} ${character.level}`,
-      ]),
-    ]));
-  }
-
-  let inventorySummarySection: HTMLElement | null = null;
-  let inventoryDetailSection: HTMLElement | null = null;
-
-  function rerenderInventorySections(): void {
-    if (character === null) {
-      return;
-    }
-
-    const items = character.inventorySummaryItems ?? [];
-    const nextSummary = createInventorySummarySection(items, () => selectedInventoryItemId, (itemId) => {
-      selectedInventoryItemId = itemId;
-      rerenderInventorySections();
-    });
-    const selectedItem = items.find((item) => item.itemInstanceId === selectedInventoryItemId) ?? items[0] ?? null;
-    if (selectedItem !== null) {
-      selectedInventoryItemId = selectedItem.itemInstanceId;
-    }
-    const nextDetail = createInventoryDetailSection(selectedItem);
-
-    if (inventorySummarySection !== null) {
-      section.replaceChild(nextSummary, inventorySummarySection);
-    } else {
-      section.appendChild(nextSummary);
-    }
-
-    if (inventoryDetailSection !== null) {
-      section.replaceChild(nextDetail, inventoryDetailSection);
-    } else {
-      section.appendChild(nextDetail);
-    }
-
-    inventorySummarySection = nextSummary;
-    inventoryDetailSection = nextDetail;
-  }
-
-  if (character !== null) {
-    rerenderInventorySections();
-  }
-
-  const roomState = formatTownRoomState(room.state);
-  section.appendChild(createSectionBlock(t("world_session.room_info"), [
-    createInfoLine(t("world_session.room_kind"), roomState.roomKind),
-    createInfoLine(t("world_session.zone_id"), roomState.zoneId),
-    createInfoLine(t("world_session.connected_players"), String(roomState.playerCount)),
-  ]));
-
-  section.appendChild(createPresenceSection(room));
-  section.appendChild(createProjectionSection(debugState, onProjectionModeChange));
-  section.appendChild(createMovementDebugSection(room, debugState));
 
   const selfPresence = getTownRoomPresence(room.state as unknown as Record<string, unknown>)
     ?.players.find((player) => player.sessionId === room.sessionId);
   const selfHpSummary = formatPlayerHpSummary(selfPresence?.hp, selfPresence?.maxHp);
   const selfHpRatio = resolvePlayerHpRatio(selfPresence?.hp, selfPresence?.maxHp);
+  const selfDisplayName = selfPresence?.displayName ?? character?.characterName ?? t("world_session.selected_character");
 
-  section.appendChild(createVitalitySection(
+  const statusPanel = character === null
+    ? null
+    : createCharacterChip(character, selfDisplayName, onLeaveWorld);
+
+  const utilityPanel = createScrollableCardSection();
+  utilityPanel.style.display = "grid";
+  utilityPanel.style.gap = "8px";
+  utilityPanel.style.alignContent = "start";
+  utilityPanel.appendChild(createControlsSection());
+  utilityPanel.appendChild(createInventoryPanelSection(character, {
+    getSelectedItemId: () => selectedInventoryItemId,
+    onSelectItem: (itemId) => {
+      selectedInventoryItemId = itemId;
+    },
+  }));
+  utilityPanel.appendChild(
+    createDebugPanel(
+      room,
+      formatTownRoomState(room.state),
+      debugState,
+      onProjectionModeChange,
+    ),
+  );
+
+  const hudPanel = createCardSection();
+  hudPanel.style.display = "grid";
+  hudPanel.style.gap = "6px";
+  hudPanel.style.padding = "8px 12px";
+  hudPanel.appendChild(createHudSection(
     selfHpSummary,
     selfHpRatio,
     selfPresence?.lifeState,
     selfPresence?.flaskCharges,
     selfPresence?.maxFlaskCharges,
+    selfPresence?.level ?? character?.level ?? 1,
+    selfPresence?.xp ?? character?.xp ?? 0,
   ));
-
-  section.appendChild(createSectionBlock(t("world_session.progression"), [
-    createInfoLine(
-      t("character.level"),
-      String(selfPresence?.level ?? character?.level ?? 1),
-    ),
-    createInfoLine(
-      t("world_session.player_xp"),
-      String(selfPresence?.xp ?? character?.xp ?? 0),
-    ),
-  ]));
-
-  // Future: Diablo-like right orb — placeholder until class resource (mana/rage/energy) system lands
-  section.appendChild(createResourcePlaceholderSection());
 
   if (selfPresence?.lifeState === "downed") {
     const downedNotice = createMutedText(t("world_session.downed_notice"));
     downedNotice.style.color = "#e3a6a6";
-    downedNotice.style.marginBottom = "8px";
-    section.appendChild(downedNotice);
+    hudPanel.appendChild(downedNotice);
 
     const respawnButton = createButton(t("world_session.respawn"));
     respawnButton.style.marginTop = "4px";
-    respawnButton.style.width = "100%";
+    respawnButton.style.width = "220px";
     respawnButton.addEventListener("click", () => {
       onRespawn();
     });
-    section.appendChild(respawnButton);
+    hudPanel.appendChild(respawnButton);
   }
 
+  return {
+    statusPanel,
+    utilityPanel,
+    hudPanel,
+  };
+}
+
+function createCharacterChip(
+  character: CharacterSummary,
+  displayName: string,
+  onLeaveWorld: () => void,
+): HTMLElement {
+  const panel = createCardSection();
+  panel.style.display = "flex";
+  panel.style.alignItems = "center";
+  panel.style.justifyContent = "space-between";
+  panel.style.gap = "10px";
+  panel.style.width = "min(260px, calc(100vw - 28px))";
+  panel.style.padding = "8px 10px";
+
+  const textBlock = document.createElement("div");
+  textBlock.style.display = "grid";
+  textBlock.style.gap = "2px";
+
+  const nameLine = document.createElement("div");
+  nameLine.textContent = character.characterName;
+  nameLine.style.fontSize = "14px";
+  nameLine.style.fontWeight = "bold";
+  nameLine.style.color = "#f0ddbb";
+  textBlock.appendChild(nameLine);
+
+  const subLine = document.createElement("div");
+  subLine.textContent = `${displayName} • ${t("character.level")} ${character.level}`;
+  subLine.style.fontSize = "11px";
+  subLine.style.color = "#b9d49a";
+  textBlock.appendChild(subLine);
+
+  panel.appendChild(textBlock);
+
   const leaveButton = createButton(t("world_entry.leave_world"));
-  leaveButton.style.marginTop = "8px";
-  leaveButton.style.width = "100%";
+  leaveButton.style.width = "auto";
+  leaveButton.style.flex = "0 0 auto";
+  leaveButton.style.padding = "4px 8px";
+  leaveButton.style.fontSize = "11px";
   leaveButton.addEventListener("click", () => {
     onLeaveWorld();
   });
-  section.appendChild(leaveButton);
+  panel.appendChild(leaveButton);
 
-  return section;
+  return panel;
 }
 
 function createControlsSection(): HTMLElement {
+  const details = document.createElement("details");
+  details.open = false;
+  details.style.border = "1px solid #31271c";
+  details.style.borderRadius = "8px";
+  details.style.background = "rgba(12, 10, 8, 0.72)";
+
+  const summary = document.createElement("summary");
+  summary.textContent = `${t("world_session.controls")} / Help`;
+  summary.style.cursor = "pointer";
+  summary.style.listStyle = "none";
+  summary.style.padding = "8px";
+  summary.style.fontSize = "12px";
+  summary.style.color = "#d8c6a3";
+  summary.style.fontWeight = "bold";
+  details.appendChild(summary);
+
   const controls = document.createElement("div");
-  controls.style.display = "grid";
-  controls.style.gridTemplateColumns = "max-content 1fr";
-  controls.style.gap = "4px 8px";
-  controls.style.fontSize = "12px";
-  controls.style.alignItems = "center";
+  controls.style.display = "flex";
+  controls.style.flexWrap = "wrap";
+  controls.style.gap = "6px";
+  controls.style.padding = "0 8px 8px";
 
   const bindings: readonly { readonly key: string; readonly action: string }[] = [
     { key: "Click", action: t("world_session.control_move") },
     { key: "Click (enemy)", action: t("world_session.control_attack") },
+    { key: "Click (loot)", action: "Pickup" },
+    { key: "Click (object)", action: "Interact" },
     { key: "Space", action: t("world_session.control_dodge") },
     { key: "Q", action: t("world_session.control_flask") },
   ];
 
   for (const binding of bindings) {
+    const chip = document.createElement("div");
+    chip.style.display = "inline-flex";
+    chip.style.alignItems = "center";
+    chip.style.gap = "6px";
+    chip.style.padding = "4px 7px";
+    chip.style.border = "1px solid #4d3f2a";
+    chip.style.borderRadius = "999px";
+    chip.style.background = "rgba(24, 18, 13, 0.88)";
+
     const keyLabel = document.createElement("span");
     keyLabel.textContent = binding.key;
     keyLabel.style.color = "#e0c88a";
     keyLabel.style.fontWeight = "bold";
-    keyLabel.style.fontSize = "11px";
+    keyLabel.style.fontSize = "10px";
     keyLabel.style.fontFamily = "monospace";
-    keyLabel.style.background = "rgba(63, 50, 30, 0.7)";
-    keyLabel.style.padding = "1px 5px";
-    keyLabel.style.borderRadius = "3px";
-    keyLabel.style.textAlign = "center";
-    controls.appendChild(keyLabel);
+    chip.appendChild(keyLabel);
 
     const actionLabel = document.createElement("span");
     actionLabel.textContent = binding.action;
     actionLabel.style.color = "#b9d49a";
-    actionLabel.style.fontSize = "11px";
-    controls.appendChild(actionLabel);
+    actionLabel.style.fontSize = "10px";
+    chip.appendChild(actionLabel);
+
+    controls.appendChild(chip);
   }
 
-  return createSectionBlock(t("world_session.controls"), [controls]);
+  details.appendChild(controls);
+  return details;
 }
 
 function createProjectionSection(
   debugState: WorldSessionDebugState,
   onProjectionModeChange: (mode: WorldProjectionMode) => void,
 ): HTMLElement {
-  const wrapper = createSectionBlock(t("world_session.projection_title"), []);
+  const wrapper = createSectionBlock(t("world_session.projection_title"), [], { compact: true });
 
   const description = createMutedText(t("world_session.projection_notice"));
   description.style.marginBottom = "8px";
@@ -257,18 +260,25 @@ function createCardSection(): HTMLElement {
   return section;
 }
 
-function createSectionBlock(titleText: string, children: readonly HTMLElement[]): HTMLElement {
+function createScrollableCardSection(): HTMLElement {
+  const section = document.createElement("section");
+  applyWorldSessionOverlayScrollablePanelStyles(section);
+  section.style.margin = "0";
+  return section;
+}
+
+function createSectionBlock(titleText: string, children: readonly HTMLElement[], options?: { readonly compact?: boolean }): HTMLElement {
   const wrapper = document.createElement("section");
-  wrapper.style.margin = "0 0 8px";
-  wrapper.style.padding = "8px";
+  wrapper.style.margin = "0";
+  wrapper.style.padding = options?.compact === true ? "7px 8px" : "8px";
   wrapper.style.border = "1px solid #31271c";
   wrapper.style.borderRadius = "8px";
-  wrapper.style.background = "rgba(12, 10, 8, 0.72)";
+  wrapper.style.background = "rgba(12, 10, 8, 0.56)";
 
   const title = document.createElement("h3");
   title.textContent = titleText;
   title.style.margin = "0 0 6px";
-  title.style.fontSize = "13px";
+  title.style.fontSize = options?.compact === true ? "12px" : "13px";
   title.style.color = "#d8c6a3";
   wrapper.appendChild(title);
 
@@ -285,12 +295,12 @@ function createPresenceSection(room: Room<DoomscrollsRoomState>): HTMLElement {
 
   if (presence === null) {
     content.push(createMutedText(t("world_session.no_presence")));
-    return createSectionBlock(t("world_session.player_presence"), content);
+    return createSectionBlock(t("world_session.player_presence"), content, { compact: true });
   }
 
   if (presence.players.length === 0) {
     content.push(createMutedText(t("world_session.players_empty")));
-    return createSectionBlock(t("world_session.player_presence"), content);
+    return createSectionBlock(t("world_session.player_presence"), content, { compact: true });
   }
 
   const playerList = document.createElement("ul");
@@ -319,7 +329,7 @@ function createPresenceSection(room: Room<DoomscrollsRoomState>): HTMLElement {
   }
 
   content.push(playerList);
-  return createSectionBlock(t("world_session.player_presence"), content);
+  return createSectionBlock(t("world_session.player_presence"), content, { compact: true });
 }
 
 function createMovementDebugSection(
@@ -360,19 +370,24 @@ function createMovementDebugSection(
         ? String(self.movementSpeed)
         : t("world_session.awaiting_movement_speed"),
     ),
-  ]);
+  ], { compact: true });
 }
 
-function createVitalitySection(
+function createHudSection(
   hpSummary: string,
   hpRatio: number | null,
   lifeState?: "alive" | "downed",
   flaskCharges?: number,
   maxFlaskCharges?: number,
+  level?: number,
+  xp?: number,
 ): HTMLElement {
-  const content: HTMLElement[] = [];
+  const wrapper = document.createElement("section");
+  wrapper.style.display = "grid";
+  wrapper.style.gap = "8px";
+  wrapper.style.gridTemplateColumns = "minmax(240px, 1.6fr) repeat(3, minmax(72px, auto))";
+  wrapper.style.alignItems = "center";
 
-  // HP summary inline
   const hpLine = document.createElement("div");
   hpLine.style.display = "flex";
   hpLine.style.justifyContent = "space-between";
@@ -389,21 +404,25 @@ function createVitalitySection(
   hpValue.textContent = hpSummary;
   hpValue.style.color = lifeState === "downed" ? "#e3a6a6" : "#c8aa7a";
   hpValue.style.fontWeight = "bold";
-  hpValue.style.fontSize = "12px";
+  hpValue.style.fontSize = "14px";
   hpValue.style.fontFamily = "monospace";
   hpLine.appendChild(hpValue);
 
-  content.push(hpLine);
+  const vitalityCard = document.createElement("div");
+  vitalityCard.style.padding = "8px 10px";
+  vitalityCard.style.border = "1px solid #4d2a2a";
+  vitalityCard.style.borderRadius = "12px";
+  vitalityCard.style.background = "linear-gradient(180deg, rgba(40, 12, 12, 0.92) 0%, rgba(20, 8, 8, 0.92) 100%)";
+  vitalityCard.appendChild(hpLine);
 
-  // HP bar
   const barFrame = document.createElement("div");
   barFrame.style.width = "100%";
-  barFrame.style.height = "18px";
+  barFrame.style.height = "14px";
   barFrame.style.border = "1px solid #5f4a2f";
   barFrame.style.borderRadius = "999px";
   barFrame.style.background = "rgba(22, 16, 14, 0.95)";
   barFrame.style.overflow = "hidden";
-  barFrame.style.marginBottom = "8px";
+  barFrame.style.marginBottom = "6px";
 
   const barFill = document.createElement("div");
   barFill.style.height = "100%";
@@ -416,45 +435,43 @@ function createVitalitySection(
   barFill.style.borderRadius = "999px";
   barFill.style.transition = "width 0.3s ease";
   barFrame.appendChild(barFill);
-  content.push(barFrame);
+  vitalityCard.appendChild(barFrame);
 
-  // Flask charges with visual bar
-  content.push(createFlaskChargesLine(flaskCharges, maxFlaskCharges));
+  vitalityCard.appendChild(createFlaskChargesLine(flaskCharges, maxFlaskCharges));
 
-  const stateLine = createMutedText(
-    lifeState === "downed"
-      ? t("world_session.downed_state_detail")
-      : t("world_session.alive_state_detail"),
-  );
-  stateLine.style.color = lifeState === "downed" ? "#e3a6a6" : "#b9d49a";
-  stateLine.style.marginTop = "4px";
-  content.push(stateLine);
+  wrapper.appendChild(vitalityCard);
 
-  return createSectionBlock(t("world_session.vitality"), content);
+  wrapper.appendChild(createMiniHudStat("Resource", t("world_session.resource_placeholder")));
+  wrapper.appendChild(createMiniHudStat(t("character.level"), String(level ?? 1)));
+  wrapper.appendChild(createMiniHudStat(t("world_session.player_xp"), String(xp ?? 0)));
+
+  return wrapper;
 }
 
-// Future: Diablo-like right orb — placeholder until class resource (mana/rage/energy) system lands
-function createResourcePlaceholderSection(): HTMLElement {
-  const line = document.createElement("div");
-  line.style.display = "flex";
-  line.style.justifyContent = "space-between";
-  line.style.alignItems = "center";
-  line.style.marginBottom = "4px";
+function createMiniHudStat(labelText: string, valueText: string): HTMLElement {
+  const card = document.createElement("div");
+  card.style.padding = "6px 8px";
+  card.style.border = "1px solid #3c3122";
+  card.style.borderRadius = "999px";
+  card.style.background = "rgba(18, 14, 10, 0.9)";
+  card.style.minWidth = "72px";
+  card.style.textAlign = "center";
 
-  const label = document.createElement("span");
-  label.textContent = t("world_session.resource");
-  label.style.color = "#d8c6a3";
-  label.style.fontSize = "12px";
-  line.appendChild(label);
+  const label = document.createElement("div");
+  label.textContent = labelText;
+  label.style.fontSize = "10px";
+  label.style.color = "#a88d63";
+  card.appendChild(label);
 
-  const value = document.createElement("span");
-  value.textContent = t("world_session.resource_placeholder");
-  value.style.color = "#7a5f4a";
-  value.style.fontSize = "12px";
+  const value = document.createElement("div");
+  value.textContent = valueText;
+  value.style.fontSize = "11px";
   value.style.fontFamily = "monospace";
-  line.appendChild(value);
+  value.style.fontWeight = "bold";
+  value.style.color = "#d8c6a3";
+  card.appendChild(value);
 
-  return createSectionBlock(t("world_session.resource"), [line]);
+  return card;
 }
 
 function createFlaskChargesLine(charges?: number, maxCharges?: number): HTMLElement {
@@ -487,6 +504,7 @@ function createFlaskChargesLine(charges?: number, maxCharges?: number): HTMLElem
   line.style.display = "flex";
   line.style.alignItems = "center";
   line.style.gap = "6px";
+  line.style.marginTop = "2px";
 
   const keyHint = document.createElement("span");
   keyHint.textContent = "[Q]";
@@ -527,6 +545,93 @@ function createFlaskChargesLine(charges?: number, maxCharges?: number): HTMLElem
   return line;
 }
 
+function createInventoryPanelSection(
+  character: CharacterSummary | null,
+  selection: {
+    readonly getSelectedItemId: () => InventorySummaryItem["itemInstanceId"] | null;
+    readonly onSelectItem: (itemId: InventorySummaryItem["itemInstanceId"]) => void;
+  },
+): HTMLElement {
+  const items = character?.inventorySummaryItems ?? [];
+  const wrapper = document.createElement("details");
+  wrapper.open = false;
+  wrapper.style.border = "1px solid #31271c";
+  wrapper.style.borderRadius = "8px";
+  wrapper.style.background = "rgba(12, 10, 8, 0.72)";
+  wrapper.style.padding = "0";
+
+  const summary = document.createElement("summary");
+  summary.textContent = `Inventory (${items.length})`;
+  summary.style.cursor = "pointer";
+  summary.style.listStyle = "none";
+  summary.style.padding = "8px";
+  summary.style.fontSize = "13px";
+  summary.style.color = "#d8c6a3";
+  summary.style.fontWeight = "bold";
+  wrapper.appendChild(summary);
+
+  const content = document.createElement("div");
+  content.style.padding = "0 8px 8px";
+
+  const render = (): void => {
+    content.replaceChildren();
+    const summarySection = createInventorySummarySection(items, () => selection.getSelectedItemId(), (itemId) => {
+      selection.onSelectItem(itemId);
+      render();
+    });
+    const selectedItem = items.find((item) => item.itemInstanceId === selection.getSelectedItemId()) ?? items[0] ?? null;
+    if (selectedItem !== null) {
+      selection.onSelectItem(selectedItem.itemInstanceId);
+    }
+    const detailSection = createInventoryDetailSection(selectedItem);
+    content.append(summarySection, detailSection);
+  };
+
+  render();
+  wrapper.appendChild(content);
+  return wrapper;
+}
+
+function createDebugPanel(
+  room: Room<DoomscrollsRoomState>,
+  roomState: ReturnType<typeof formatTownRoomState>,
+  debugState: WorldSessionDebugState,
+  onProjectionModeChange: (mode: WorldProjectionMode) => void,
+): HTMLElement {
+  const details = document.createElement("details");
+  details.open = false;
+  details.style.border = "1px solid #31271c";
+  details.style.borderRadius = "8px";
+  details.style.background = "rgba(12, 10, 8, 0.56)";
+
+  const summary = document.createElement("summary");
+  summary.textContent = "Debug Panel";
+  summary.style.cursor = "pointer";
+  summary.style.listStyle = "none";
+  summary.style.padding = "8px";
+  summary.style.fontSize = "12px";
+  summary.style.color = "#a88d63";
+  summary.style.fontWeight = "bold";
+  details.appendChild(summary);
+
+  const content = document.createElement("div");
+  content.style.padding = "0 8px 8px";
+  content.style.display = "grid";
+  content.style.gap = "8px";
+
+  content.appendChild(createSectionBlock(t("world_session.room_info"), [
+    createInfoLine(t("world_session.room_kind"), roomState.roomKind),
+    createInfoLine(t("world_session.zone_id"), roomState.zoneId),
+    createInfoLine(t("world_session.connected_players"), String(roomState.playerCount)),
+  ], { compact: true }));
+  content.appendChild(createMovementDebugSection(room, debugState));
+  content.appendChild(createPresenceSection(room));
+  content.appendChild(createProjectionSection(debugState, onProjectionModeChange));
+
+  details.appendChild(content);
+  return details;
+}
+
 function formatPlayerHpSummary(hp?: number, maxHp?: number): string {
   if (hp === undefined || maxHp === undefined) {
     return t("world_session.awaiting_player_hp");
@@ -552,7 +657,7 @@ function createInventorySummarySection(
   onSelectItem: (itemId: InventorySummaryItem["itemInstanceId"]) => void,
 ): HTMLElement {
   if (items.length === 0) {
-    return createSectionBlock("Inventory Summary", [createMutedText("No inventory items in bag.")]);
+    return createSectionBlock("Inventory Summary", [createMutedText("No inventory items in bag.")], { compact: true });
   }
 
   const list = document.createElement("ul");
@@ -584,12 +689,12 @@ function createInventorySummarySection(
     list.appendChild(row);
   }
 
-  return createSectionBlock("Inventory Summary", [list]);
+  return createSectionBlock("Inventory Summary", [list], { compact: true });
 }
 
 function createInventoryDetailSection(item: InventorySummaryItem | null): HTMLElement {
   if (item === null) {
-    return createSectionBlock("Item Detail", [createMutedText("Select an item to inspect it.")]);
+    return createSectionBlock("Item Detail", [createMutedText("Select an item to inspect it.")], { compact: true });
   }
 
   const children: HTMLElement[] = [
@@ -617,25 +722,7 @@ function createInventoryDetailSection(item: InventorySummaryItem | null): HTMLEl
     children.push(createMutedText("No item modifiers visible."));
   }
 
-  return createSectionBlock("Item Detail", children);
-}
-
-function createCompactSummary(lines: readonly string[]): HTMLElement {
-  const wrapper = document.createElement("div");
-  wrapper.style.display = "flex";
-  wrapper.style.flexDirection = "column";
-  wrapper.style.gap = "2px";
-
-  for (const line of lines) {
-    const text = document.createElement("p");
-    text.textContent = line;
-    text.style.margin = "0";
-    text.style.fontSize = "12px";
-    text.style.color = "#d8c6a3";
-    wrapper.appendChild(text);
-  }
-
-  return wrapper;
+  return createSectionBlock("Item Detail", children, { compact: true });
 }
 
 function createMutedText(text: string): HTMLElement {

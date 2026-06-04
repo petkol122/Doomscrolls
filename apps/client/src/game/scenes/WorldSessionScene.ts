@@ -15,7 +15,6 @@ import { registerAttackResponseListeners } from "../../net/attackIntentClient";
 import { registerInteractResponseListener } from "../../net/interactResponseClient";
 import { registerPickupWorldLootResponseListeners } from "../../net/pickupWorldLootClient";
 import { registerRespawnListeners, sendRespawnRequest } from "../../net/respawnClient";
-import { createAccountHeader } from "./accountShell/accountShellAccountHeader";
 import { createWorldSessionFeedbackView, type WorldSessionFeedbackView } from "./worldSession/worldSessionFeedbackView";
 import { createWorldSessionOverlayView } from "./worldSession/worldSessionOverlayView";
 import { createWorldSessionAreaView, type WorldSessionAreaView } from "./worldSession/worldSessionAreaView";
@@ -23,7 +22,9 @@ import { attachWorldSessionDodgeInput, type WorldSessionDodgeInput } from "./wor
 import {
   applyWorldSessionOverlayPanelStyles,
   applyWorldSessionOverlayRootStyles,
-  applyWorldSessionOverlaySidebarStyles,
+  applyWorldSessionOverlayHudStyles,
+  applyWorldSessionOverlayStatusStyles,
+  applyWorldSessionOverlayUtilityStyles,
 } from "./worldSession/worldSessionOverlayLayout";
 import type { WorldProjectionMode } from "../worldProjection";
 import { defaultWorldProjection } from "../worldProjection";
@@ -294,43 +295,48 @@ export class WorldSessionScene extends Phaser.Scene {
   }
 
   private createOverlay(
-    account: AccountState,
+    _account: AccountState,
     character: CharacterSummary | null,
     room: Room<DoomscrollsRoomState>,
   ): HTMLDivElement {
     const root = document.createElement("div");
     applyWorldSessionOverlayRootStyles(root);
 
-    const sidebar = document.createElement("div");
-    applyWorldSessionOverlaySidebarStyles(sidebar);
-    root.appendChild(sidebar);
+    const statusRegion = document.createElement("div");
+    applyWorldSessionOverlayStatusStyles(statusRegion);
+    root.appendChild(statusRegion);
 
-    const accountPanel = document.createElement("section");
-    applyWorldSessionOverlayPanelStyles(accountPanel);
-    accountPanel.style.width = "100%";
-    accountPanel.appendChild(createAccountHeader(account));
-    sidebar.appendChild(accountPanel);
+    const utilityRegion = document.createElement("div");
+    applyWorldSessionOverlayUtilityStyles(utilityRegion);
+    root.appendChild(utilityRegion);
 
-    sidebar.appendChild(
-      createWorldSessionOverlayView(
-        character,
-        room,
-        this.worldAreaView?.getDebugState() ?? {
-          lastClickTarget: null,
-          projectionMode: defaultWorldProjection,
-          isMovementInputEnabled: true,
-        },
-        (mode) => {
-          this.handleProjectionModeChange(mode);
-        },
-        () => {
-          this.handleRespawn();
-        },
-        () => {
-          void this.handleLeaveWorld();
-        },
-      ),
+    const hudRegion = document.createElement("div");
+    applyWorldSessionOverlayHudStyles(hudRegion);
+    root.appendChild(hudRegion);
+
+    const overlayView = createWorldSessionOverlayView(
+      character,
+      room,
+      this.worldAreaView?.getDebugState() ?? {
+        lastClickTarget: null,
+        projectionMode: defaultWorldProjection,
+        isMovementInputEnabled: true,
+      },
+      (mode) => {
+        this.handleProjectionModeChange(mode);
+      },
+      () => {
+        this.handleRespawn();
+      },
+      () => {
+        void this.handleLeaveWorld();
+      },
     );
+    utilityRegion.appendChild(overlayView.utilityPanel);
+    hudRegion.appendChild(overlayView.hudPanel);
+    if (overlayView.statusPanel !== null) {
+      statusRegion.appendChild(overlayView.statusPanel);
+    }
 
     document.body.appendChild(root);
     return root;

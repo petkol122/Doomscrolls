@@ -9,38 +9,39 @@ export interface WorldSessionFeedbackView {
 }
 
 export function createWorldSessionFeedbackView(scene: Phaser.Scene): WorldSessionFeedbackView {
-  const container = scene.add.container(scene.scale.width / 2, 26);
+  const container = scene.add.container(scene.scale.width / 2, 36);
   container.setDepth(1000);
 
   const noticeText = scene.add.text(0, 0, "", {
-    color: "#d8c6a3",
+    color: "#f0ddbb",
     fontFamily: "Arial, sans-serif",
     fontSize: "13px",
+    fontStyle: "bold",
     align: "center",
-    wordWrap: { width: 420 },
-    backgroundColor: "rgba(13, 10, 8, 0.88)",
+    wordWrap: { width: 460 },
+    backgroundColor: "rgba(20, 14, 10, 0.92)",
     padding: { left: 10, right: 10, top: 6, bottom: 6 },
   }).setOrigin(0.5, 0);
 
-  const attackText = scene.add.text(0, 30, "", {
-    color: "#e0b870",
+  const attackText = scene.add.text(0, 34, "", {
+    color: "#ffd27e",
     fontFamily: "Arial, sans-serif",
-    fontSize: "13px",
+    fontSize: "12px",
     align: "center",
-    wordWrap: { width: 320 },
-    backgroundColor: "rgba(32, 19, 10, 0.92)",
-    padding: { left: 10, right: 10, top: 6, bottom: 6 },
+    wordWrap: { width: 380 },
+    backgroundColor: "rgba(48, 28, 12, 0.92)",
+    padding: { left: 8, right: 8, top: 5, bottom: 5 },
   }).setOrigin(0.5, 0);
 
-  const damageText = scene.add.text(0, 60, "", {
+  const damageText = scene.add.text(0, 66, "", {
     color: "#ff9b9b",
     fontFamily: "Arial, sans-serif",
     fontSize: "15px",
     fontStyle: "bold",
     align: "center",
-    wordWrap: { width: 360 },
-    backgroundColor: "rgba(68, 12, 12, 0.94)",
-    padding: { left: 12, right: 12, top: 8, bottom: 8 },
+    wordWrap: { width: 320 },
+    backgroundColor: "rgba(68, 12, 12, 0.9)",
+    padding: { left: 10, right: 10, top: 7, bottom: 7 },
   }).setOrigin(0.5, 0);
 
   container.add([noticeText, attackText, damageText]);
