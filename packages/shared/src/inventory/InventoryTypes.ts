@@ -19,6 +19,14 @@ export interface InventoryGridItem {
   readonly y: number;
 }
 
+export interface InventorySummaryItem extends InventoryGridItem {
+  readonly label: string;
+  readonly size?: {
+    readonly width: number;
+    readonly height: number;
+  };
+}
+
 export interface InventoryGrid {
   readonly characterId: CharacterId;
   readonly config: InventoryGridConfig;

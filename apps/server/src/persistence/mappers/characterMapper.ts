@@ -5,12 +5,15 @@ import type {
   CharacterId,
   CharacterSummary,
   CharacterStats,
+  InventorySummaryItem,
   OriginKey,
   PassiveKey,
   UserId,
   ZoneId,
 } from "@doomscrolls/shared";
-import type { Character, CharacterPassive, CharacterStats as PrismaCharacterStats, Inventory } from "@prisma/client";
+import { t } from "@doomscrolls/localization";
+import { contentRegistry } from "@doomscrolls/content";
+import type { Character, CharacterPassive, CharacterStats as PrismaCharacterStats, Inventory, ItemInstance } from "@prisma/client";
 import { toIsoDateTimeString } from "./dateMapper";
 
 export function toCharacterStatsDto(character: Pick<Character, "currentHp">, stats: PrismaCharacterStats): CharacterStats {
@@ -44,6 +47,42 @@ export function toCharacterSummaryDto(character: Character): CharacterSummary {
     currentZoneId: character.currentZoneId as ZoneId,
     createdAt: toIsoDateTimeString(character.createdAt),
     updatedAt: toIsoDateTimeString(character.updatedAt),
+  };
+}
+
+export function toCharacterSummaryWithInventoryDto(
+  character: Character & { inventory: Inventory | null; items: readonly ItemInstance[] },
+): CharacterSummary {
+  const inventorySummaryItems: InventorySummaryItem[] = [];
+
+  if (character.inventory !== null) {
+    for (const item of character.items) {
+      if (item.inventoryPage === null || item.inventoryX === null || item.inventoryY === null) {
+        continue;
+      }
+
+      const definition = contentRegistry.items.get(item.definitionId as never);
+      if (definition === undefined) {
+        continue;
+      }
+
+      inventorySummaryItems.push({
+        itemInstanceId: item.id as never,
+        pageIndex: item.inventoryPage,
+        x: item.inventoryX,
+        y: item.inventoryY,
+        label: t(definition.nameKey),
+        size: {
+          width: definition.size.width,
+          height: definition.size.height,
+        },
+      });
+    }
+  }
+
+  return {
+    ...toCharacterSummaryDto(character),
+    inventorySummaryItems,
   };
 }
 

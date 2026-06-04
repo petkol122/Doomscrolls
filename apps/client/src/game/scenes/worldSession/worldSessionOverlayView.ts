@@ -1,6 +1,6 @@
 import type { Room } from "@colyseus/sdk";
 import { t } from "@doomscrolls/localization";
-import type { CharacterSummary, RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
+import type { CharacterSummary, InventorySummaryItem, RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
 
 import { formatTownRoomState } from "../../../net/RealtimeClient";
 import { getTownRoomPresence } from "../../../net/townRoomPresence";
@@ -51,6 +51,8 @@ export function createWorldSessionOverlayView(
         `${t("character.level")} ${character.level}`,
       ]),
     ]));
+
+    section.appendChild(createInventorySummarySection(character.inventorySummaryItems ?? []));
   }
 
   const roomState = formatTownRoomState(room.state);
@@ -232,6 +234,28 @@ function createMovementDebugSection(
         : t("world_session.awaiting_movement_speed"),
     ),
   ]);
+}
+
+function createInventorySummarySection(items: readonly InventorySummaryItem[]): HTMLElement {
+  if (items.length === 0) {
+    return createSectionBlock("Inventory Summary", [createMutedText("No inventory items visible.")]);
+  }
+
+  const list = document.createElement("ul");
+  list.style.margin = "0";
+  list.style.padding = "0 0 0 18px";
+  list.style.color = "#d8c6a3";
+  list.style.fontSize = "12px";
+
+  for (const item of items) {
+    const row = document.createElement("li");
+    row.style.marginBottom = "4px";
+    const sizeText = item.size === undefined ? "" : ` | ${item.size.width}x${item.size.height}`;
+    row.textContent = `${item.label} | x=${item.x}, y=${item.y}${sizeText}`;
+    list.appendChild(row);
+  }
+
+  return createSectionBlock("Inventory Summary", [list]);
 }
 
 function createCompactSummary(lines: readonly string[]): HTMLElement {

@@ -1,6 +1,6 @@
 import type { CharacterDeathState } from "./DeathTypes";
 import type { CharacterStats } from "./StatTypes";
-import type { InventoryGrid } from "../inventory/InventoryTypes";
+import type { InventoryGrid, InventorySummaryItem } from "../inventory/InventoryTypes";
 import type { CharacterId, IsoDateTimeString, UserId, ZoneId } from "../ids";
 
 export type CharacterName = string;
@@ -24,6 +24,7 @@ export interface CharacterSummary {
   readonly level: number;
   readonly xp: number;
   readonly currentZoneId: ZoneId;
+  readonly inventorySummaryItems?: readonly InventorySummaryItem[];
   readonly createdAt: IsoDateTimeString;
   readonly updatedAt: IsoDateTimeString;
 }
