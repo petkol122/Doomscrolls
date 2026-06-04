@@ -44,8 +44,17 @@ export function createWorldSessionEnemyPlaceholderView(
       strokeThickness: 3,
     })
     .setOrigin(0.5);
+  const stateText = scene.add
+    .text(0, -38, `state=${enemy.state}`, {
+      color: "#d7d7ff",
+      fontFamily: "Arial, sans-serif",
+      fontSize: "10px",
+      stroke: "#160909",
+      strokeThickness: 3,
+    })
+    .setOrigin(0.5);
 
-  container.add([shadow, ring, body, core, hpText, labelText]);
+  container.add([shadow, ring, body, core, stateText, hpText, labelText]);
 
   body.on(Phaser.Input.Events.POINTER_DOWN, () => {
     onClick?.(enemy.id);
@@ -64,6 +73,8 @@ export function createWorldSessionEnemyPlaceholderView(
       body.setStrokeStyle(2, 0x9a9a9a, 0.7);
       body.disableInteractive();
       core.setFillStyle(0x9c9c9c, 0.55);
+      stateText.setColor("#b8b8b8");
+      stateText.setText(`state=${nextEnemy.state}`);
       labelText.setColor("#b8b8b8");
       labelText.setText(
         `${t(nextEnemy.label)} (${t("world_area.enemy_defeated_label")})`,
@@ -84,6 +95,8 @@ export function createWorldSessionEnemyPlaceholderView(
     body.setStrokeStyle(2, 0xf0b0b0, 0.95);
     body.setInteractive({ useHandCursor: true });
     core.setFillStyle(0xffd7d7, 0.9);
+    stateText.setColor("#d7d7ff");
+    stateText.setText(`state=${nextEnemy.state}`);
     labelText.setColor("#ffffff");
     labelText.setText(`${t(nextEnemy.label)} (${nextEnemy.hp}/${nextEnemy.maxHp})`);
     hpText.setColor("#ffdddd");

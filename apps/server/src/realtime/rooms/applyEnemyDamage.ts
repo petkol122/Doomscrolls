@@ -17,6 +17,7 @@ export function applyEnemyDamage(
   const previousHp = Number.isFinite(enemy.hp) ? enemy.hp : 0;
 
   if (enemy.defeated || previousHp <= 0) {
+    enemy.state = "defeated";
     enemy.hp = 0;
     enemy.defeated = true;
     if (!Number.isFinite(enemy.respawnAtMs) || enemy.respawnAtMs <= 0) {
@@ -37,6 +38,7 @@ export function applyEnemyDamage(
     : 0;
   const remainingHp = Math.max(0, previousHp - normalizedDamage);
 
+  enemy.state = remainingHp <= 0 ? "defeated" : "idle";
   enemy.hp = remainingHp;
   enemy.defeated = remainingHp <= 0;
   enemy.respawnAtMs = enemy.defeated ? Date.now() + ENEMY_RESPAWN_DELAY_MS : 0;
