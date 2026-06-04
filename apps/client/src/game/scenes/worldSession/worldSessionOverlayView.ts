@@ -220,18 +220,12 @@ function createPresenceSection(room: Room<DoomscrollsRoomState>): HTMLElement {
     const li = document.createElement("li");
     li.style.marginBottom = "4px";
 
-    const details: string[] = [player.characterId];
+    const details: string[] = [];
     if (player.spawnPointId !== undefined && player.spawnPointId.length > 0) {
       details.push(`spawn=${player.spawnPointId}`);
     }
-    if (player.position !== undefined) {
-      details.push(`x=${Math.round(player.position.x)}, y=${Math.round(player.position.y)}`);
-    }
-    if (player.movementSpeed !== undefined) {
-      details.push(`speed=${player.movementSpeed}`);
-    }
 
-    li.textContent = `${player.displayName} (${details.join(" | ")})`;
+    li.textContent = player.displayName + (details.length > 0 ? ` (${details.join(" | ")})` : "");
     playerList.appendChild(li);
   }
 
@@ -280,7 +274,7 @@ function createInventorySummarySection(
   onSelectItem: (itemId: InventorySummaryItem["itemInstanceId"]) => void,
 ): HTMLElement {
   if (items.length === 0) {
-    return createSectionBlock("Inventory Summary", [createMutedText("No inventory items visible.")]);
+    return createSectionBlock("Inventory Summary", [createMutedText("No inventory items in bag.")]);
   }
 
   const list = document.createElement("ul");
@@ -304,7 +298,7 @@ function createInventorySummarySection(
     button.style.background = isSelected ? "rgba(63, 83, 49, 0.9)" : "rgba(31, 24, 18, 0.95)";
     button.setAttribute("aria-pressed", isSelected ? "true" : "false");
     const sizeText = item.size === undefined ? "" : ` | ${item.size.width}x${item.size.height}`;
-    button.textContent = `${item.label} | x=${item.x}, y=${item.y}${sizeText}`;
+    button.textContent = `${item.label}${sizeText}`;
     button.addEventListener("click", () => {
       onSelectItem(item.itemInstanceId);
     });
@@ -317,7 +311,7 @@ function createInventorySummarySection(
 
 function createInventoryDetailSection(item: InventorySummaryItem | null): HTMLElement {
   if (item === null) {
-    return createSectionBlock("Item Detail", [createMutedText("Select an inventory item to inspect it.")]);
+    return createSectionBlock("Item Detail", [createMutedText("Select an item to inspect it.")]);
   }
 
   const children: HTMLElement[] = [
@@ -344,12 +338,6 @@ function createInventoryDetailSection(item: InventorySummaryItem | null): HTMLEl
   } else {
     children.push(createMutedText("No item modifiers visible."));
   }
-
-  const equipButton = createButton("Equip (coming soon)");
-  equipButton.disabled = true;
-  equipButton.style.width = "100%";
-  equipButton.style.marginTop = "8px";
-  children.push(equipButton);
 
   return createSectionBlock("Item Detail", children);
 }
