@@ -155,6 +155,7 @@ export const en = {
   "world_area.enemy_respawned": "Enemy respawned and reset.",
   "world_area.xp_gained": "+{amount} XP.",
   "world_area.xp_gained_total": "+{amount} XP ({totalXp} total).",
+  "world_area.level_up": "Level up!",
 
   "world_area.dodge_sent": "Dodge sent.",
   "world_area.dodge_confirmed": "Dodge confirmed.",

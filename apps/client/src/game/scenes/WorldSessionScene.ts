@@ -145,12 +145,19 @@ export class WorldSessionScene extends Phaser.Scene {
       const totalXp = typeof message.totalXp === "number" && Number.isFinite(message.totalXp)
         ? Math.max(0, Math.floor(message.totalXp))
         : null;
+      const leveledUp = message !== null
+        && typeof message === "object"
+        && "leveledUp" in message
+        && message.leveledUp === true;
 
       this.feedbackView?.showNotice(
         totalXp === null
           ? t("world_area.xp_gained", { amount })
           : t("world_area.xp_gained_total", { amount, totalXp }),
       );
+      if (leveledUp) {
+        this.feedbackView?.showAttackFeedback(t("world_area.level_up"));
+      }
       this.renderOverlay();
     });
 

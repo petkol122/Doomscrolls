@@ -17,6 +17,7 @@ import { persistPickedUpWorldLootToInventory } from "./pickupWorldLootInventory"
 import { validatePickupWorldLootIntent } from "./pickupWorldLootValidation";
 import { spawnWorldLootOnEnemyDefeat } from "./spawnWorldLootOnEnemyDefeat";
 import type { TownRoomState } from "./TownRoomState";
+import { resolveLevelProgression } from "./levelProgression";
 
 export interface DeferredActionExecutionContext {
   readonly state: TownRoomState;
@@ -33,15 +34,19 @@ async function grantEnemyDefeatXp(player: PlayerPresence, enemyId: string, sendT
   }
 
   const nextXp = player.xp + TRASHBOAR_RUNT_XP_REWARD;
-  player.xp = nextXp;
+  const progression = resolveLevelProgression(player.level, nextXp);
+  player.xp = progression.xp;
+  player.level = progression.level;
 
-  await new CharacterRepository().updateXpAndLevel(player.characterId, nextXp, player.level);
+  await new CharacterRepository().updateXpAndLevel(player.characterId, progression.xp, progression.level);
 
   const xpGained: XpGainedServerMessage = {
     type: "xp_gained",
     characterId: player.characterId,
     amount: TRASHBOAR_RUNT_XP_REWARD,
-    totalXp: nextXp,
+    totalXp: progression.xp,
+    level: progression.level,
+    leveledUp: progression.leveledUp,
   };
   sendToClient("xp_gained", xpGained);
 }

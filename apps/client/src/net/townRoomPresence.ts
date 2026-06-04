@@ -86,14 +86,8 @@ export function getTownRoomPresence(
     return null;
   }
 
-  // Colyseus MapSchema objects expose a `forEach` method and forward `.size`.
-  const presenceMap = pp as {
-    readonly size: number;
-    forEach: (fn: (value: Record<string, unknown>, key: string) => void) => void;
-  };
-
   const players: PlayerPresenceEntry[] = [];
-  presenceMap.forEach((value) => {
+  for (const value of iteratePresenceEntries(pp)) {
     const baseEntry: PlayerPresenceEntry = {
       sessionId: String(value.sessionId ?? ""),
       characterId: (value.characterId ?? "") as CharacterId,
@@ -108,12 +102,53 @@ export function getTownRoomPresence(
     const withMovementSpeed = applyOptionalMovementSpeed(withPosition, value);
     const withFlask = applyOptionalFlaskState(withMovementSpeed, value);
     players.push(withFlask);
-  });
+  }
 
   return {
-    connectedPlayerCount: presenceMap.size,
+    connectedPlayerCount: players.length,
     players,
   };
+}
+
+function iteratePresenceEntries(source: unknown): readonly Record<string, unknown>[] {
+  if (source === null || source === undefined) {
+    return [];
+  }
+
+  const mapLike = source as {
+    forEach?: (fn: (value: unknown, key: string) => void) => void;
+    values?: () => IterableIterator<unknown>;
+  };
+
+  if (typeof mapLike.forEach === "function") {
+    const entries: Record<string, unknown>[] = [];
+    mapLike.forEach((value) => {
+      if (isRecord(value)) {
+        entries.push(value);
+      }
+    });
+    return entries;
+  }
+
+  if (typeof mapLike.values === "function") {
+    const entries: Record<string, unknown>[] = [];
+    for (const value of mapLike.values()) {
+      if (isRecord(value)) {
+        entries.push(value);
+      }
+    }
+    return entries;
+  }
+
+  if (isRecord(source)) {
+    return Object.values(source).filter(isRecord);
+  }
+
+  return [];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function applyOptionalProgression(
@@ -198,35 +233,35 @@ function applyOptionalPosition(
   return { ...entry, position };
 }
 
-  function applyOptionalMovementSpeed(
-    entry: PlayerPresenceEntry,
-    value: Record<string, unknown>,
-  ): PlayerPresenceEntry {
-    const rawMovementSpeed = value.movementSpeed;
-    if (typeof rawMovementSpeed !== "number") {
-      return entry;
-    }
-    if (!Number.isFinite(rawMovementSpeed) || rawMovementSpeed <= 0) {
-      return entry;
-    }
-    return { ...entry, movementSpeed: rawMovementSpeed };
+function applyOptionalMovementSpeed(
+  entry: PlayerPresenceEntry,
+  value: Record<string, unknown>,
+): PlayerPresenceEntry {
+  const rawMovementSpeed = value.movementSpeed;
+  if (typeof rawMovementSpeed !== "number") {
+    return entry;
   }
+  if (!Number.isFinite(rawMovementSpeed) || rawMovementSpeed <= 0) {
+    return entry;
+  }
+  return { ...entry, movementSpeed: rawMovementSpeed };
+}
 
-  function applyOptionalFlaskState(
-    entry: PlayerPresenceEntry,
-    value: Record<string, unknown>,
-  ): PlayerPresenceEntry {
-    const rawCharges = value.flaskCharges;
-    const rawMax = value.maxFlaskCharges;
-    if (typeof rawCharges !== "number" || typeof rawMax !== "number") {
-      return entry;
-    }
-    if (!Number.isFinite(rawCharges) || !Number.isFinite(rawMax)) {
-      return entry;
-    }
-    return {
-      ...entry,
-      flaskCharges: Math.max(0, rawCharges),
-      maxFlaskCharges: Math.max(0, rawMax),
-    };
+function applyOptionalFlaskState(
+  entry: PlayerPresenceEntry,
+  value: Record<string, unknown>,
+): PlayerPresenceEntry {
+  const rawCharges = value.flaskCharges;
+  const rawMax = value.maxFlaskCharges;
+  if (typeof rawCharges !== "number" || typeof rawMax !== "number") {
+    return entry;
   }
+  if (!Number.isFinite(rawCharges) || !Number.isFinite(rawMax)) {
+    return entry;
+  }
+  return {
+    ...entry,
+    flaskCharges: Math.max(0, rawCharges),
+    maxFlaskCharges: Math.max(0, rawMax),
+  };
+}

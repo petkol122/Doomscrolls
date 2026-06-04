@@ -51,6 +51,8 @@ export interface XpGainedServerMessage {
   readonly characterId: CharacterId;
   readonly amount: number;
   readonly totalXp: number;
+  readonly level?: number;
+  readonly leveledUp?: boolean;
 }
 
 export interface LootDroppedServerMessage {

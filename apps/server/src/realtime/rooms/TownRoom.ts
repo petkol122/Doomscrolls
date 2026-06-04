@@ -63,6 +63,7 @@ import { contentRegistry } from "@doomscrolls/content";
 import type { SpawnPointContentId } from "@doomscrolls/content";
 import { NIGHTMARKET_DEFAULT_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
 import { CharacterRepository } from "../../persistence/repositories";
+import { resolveLevelProgression } from "./levelProgression";
 
 const ENEMY_AGGRO_RANGE = 120;
 const ENEMY_LEASH_RANGE = 180;
@@ -89,15 +90,19 @@ async function grantEnemyDefeatXp(
   }
 
   const nextXp = player.xp + TRASHBOAR_RUNT_XP_REWARD;
-  player.xp = nextXp;
+  const progression = resolveLevelProgression(player.level, nextXp);
+  player.xp = progression.xp;
+  player.level = progression.level;
 
-  await new CharacterRepository().updateXpAndLevel(player.characterId, nextXp, player.level);
+  await new CharacterRepository().updateXpAndLevel(player.characterId, progression.xp, progression.level);
 
   const xpGained: XpGainedServerMessage = {
     type: "xp_gained",
     characterId: player.characterId,
     amount: TRASHBOAR_RUNT_XP_REWARD,
-    totalXp: nextXp,
+    totalXp: progression.xp,
+    level: progression.level,
+    leveledUp: progression.leveledUp,
   };
   sendToClient("xp_gained", xpGained);
 }
