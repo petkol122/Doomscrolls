@@ -155,6 +155,27 @@ export interface RequestAttackRejectedServerMessage {
   readonly targetEnemyId?: string;
 }
 
+/**
+ * Task 095 — Player Dodge Intent Foundation.
+ *
+ * Safe server-owned rejection reasons for `request_dodge` intents.
+ */
+export type RequestDodgeRejectedReason =
+  | "invalid_shape"
+  | "non_finite_direction"
+  | "zero_direction"
+  | "player_downed"
+  | "dodge_on_cooldown";
+
+export interface RequestDodgeRejectedServerMessage {
+  readonly type: "request_dodge_rejected";
+  readonly reason: RequestDodgeRejectedReason;
+}
+
+export interface RequestDodgeAcceptedServerMessage {
+  readonly type: "request_dodge_accepted";
+}
+
 export type RequestPickupWorldLootRejectedReason =
   | "player_not_ready"
   | "player_downed"
@@ -228,4 +249,6 @@ export type ServerRoomMessage =
   | RequestPickupWorldLootRejectedServerMessage
   | DeferredActionQueuedServerMessage
   | InteractResponseServerMessage
+  | RequestDodgeAcceptedServerMessage
+  | RequestDodgeRejectedServerMessage
   | ErrorServerMessage;

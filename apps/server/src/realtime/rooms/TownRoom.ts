@@ -17,6 +17,9 @@ import type {
   RequestInteractClientMessage,
   InteractResponseServerMessage,
   EnemyAttackTelegraphServerMessage,
+  RequestDodgeAcceptedServerMessage,
+  RequestDodgeRejectedServerMessage,
+  RequestDodgeClientMessage,
 } from "@doomscrolls/shared";
 import { RoomJoinValidationService } from "../RoomJoinValidationService";
 import { CharacterService } from "../../character/CharacterService";
@@ -38,6 +41,9 @@ import { validateInteractIntent, getInteractableResponseMessage } from "./intera
 import { validateAttackIntent } from "./attackIntentValidation";
 import { consumeAttackCooldown, resolveAttackCooldownMs } from "./attackCooldown";
 import { applyEnemyDamage } from "./applyEnemyDamage";
+import { validateDodgeIntent } from "./dodgeIntentValidation";
+import { applyDodgeIntent } from "./applyDodgeIntent";
+import { consumeDodgeCooldown, isDodgeReady } from "./dodgeCooldown";
 import { respawnTownEnemies } from "./respawnTownEnemies";
 import { spawnWorldLootOnEnemyDefeat } from "./spawnWorldLootOnEnemyDefeat";
 import { persistPickedUpWorldLootToInventory } from "./pickupWorldLootInventory";
@@ -238,6 +244,7 @@ private interactHandlerRegistered = false;
 private attackHandlerRegistered = false;
 private pickupWorldLootHandlerRegistered = false;
 private respawnHandlerRegistered = false;
+private dodgeHandlerRegistered = false;
 
   public override async onCreate(options: TownRoomJoinOptions): Promise<void> {
     const log = createRoomLogger(
@@ -259,6 +266,7 @@ private respawnHandlerRegistered = false;
     this.registerAttackHandler(log);
     this.registerPickupWorldLootHandler(log);
     this.registerRespawnHandler(log);
+    this.registerDodgeHandler(log);
     this.setSimulationInterval((deltaMs: number) => {
       stepTownRoomMovement(this.state as TownRoomState, deltaMs, {
         now: Date.now(),
@@ -1124,6 +1132,148 @@ private respawnHandlerRegistered = false;
       } catch {}
 
       log.debug?.({ roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, characterId: player.characterId }, "TownRoom player respawned.");
+    });
+  }
+
+  /**
+   * Task 095 -- Register the `request_dodge` message handler on the
+   * room.
+   *
+   * Scope:
+   *   - validate the intent shape + direction finiteness via
+   *     {@link validateDodgeIntent}
+   *   - reject with safe `request_dodge_rejected` reason on
+   *     shape/finite/zero failures
+   *   - reject with `player_downed` if the player is downed
+   *   - reject with `dodge_on_cooldown` if the player cannot yet
+   *     dodge again
+   *   - on acceptance, apply the dodge via {@link applyDodgeIntent}
+   *     (which both moves the player and cancels any enemy
+   *     telegraph targeting the player) and consume the dodge
+   *     cooldown
+   *   - send `request_dodge_accepted` back to the originating
+   *     client so the UI can show safe "dodge sent" feedback
+   *
+   * The handler is registered once per room, never throws into
+   * Colyseus, and never trusts client-supplied damage, kills, XP,
+   * loot, inventory changes, equipment changes, level-up or quest
+   * completion.
+   */
+  private registerDodgeHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.dodgeHandlerRegistered) {
+      return;
+    }
+    this.dodgeHandlerRegistered = true;
+
+    this.onMessage("request_dodge", (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+
+      if (player === undefined) {
+        log.warn?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+          },
+          "TownRoom request_dodge rejected: player not found.",
+        );
+        return;
+      }
+
+      if (player.lifeState !== "alive") {
+        const rejection: RequestDodgeRejectedServerMessage = {
+          type: "request_dodge_rejected",
+          reason: "player_downed",
+        };
+        try {
+          client.send("request_dodge_rejected", rejection);
+        } catch {
+          // swallow send failures
+        }
+        return;
+      }
+
+      const validation = validateDodgeIntent({ message: raw });
+      if (!validation.ok) {
+        const rejection: RequestDodgeRejectedServerMessage = {
+          type: "request_dodge_rejected",
+          reason: validation.reason,
+        };
+        try {
+          client.send("request_dodge_rejected", rejection);
+        } catch {
+          // swallow send failures
+        }
+        log.warn?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            reason: validation.reason,
+          },
+          "TownRoom request_dodge rejected: invalid intent shape/direction.",
+        );
+        return;
+      }
+
+      const now = Date.now();
+      if (!isDodgeReady(player, now)) {
+        const rejection: RequestDodgeRejectedServerMessage = {
+          type: "request_dodge_rejected",
+          reason: "dodge_on_cooldown",
+        };
+        try {
+          client.send("request_dodge_rejected", rejection);
+        } catch {
+          // swallow send failures
+        }
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            nextDodgeAt: player.nextDodgeAt,
+          },
+          "TownRoom request_dodge rejected: dodge on cooldown.",
+        );
+        return;
+      }
+
+      const applied = applyDodgeIntent({
+        state,
+        player,
+        dirX: validation.dirX,
+        dirY: validation.dirY,
+        now,
+      });
+      consumeDodgeCooldown(player, now);
+
+      const accepted: RequestDodgeAcceptedServerMessage = {
+        type: "request_dodge_accepted",
+      };
+      try {
+        client.send("request_dodge_accepted", accepted);
+      } catch {
+        // swallow send failures; state sync remains authoritative
+      }
+
+      log.debug?.(
+        {
+          roomId: this.roomId,
+          roomName: this.roomName,
+          sessionId: client.sessionId,
+          dirX: validation.dirX,
+          dirY: validation.dirY,
+          newX: applied.newX,
+          newY: applied.newY,
+          cancelledTelegraphEnemyIds: applied.cancelledTelegraphEnemyIds,
+          nextDodgeAt: player.nextDodgeAt,
+        },
+        "TownRoom request_dodge accepted and player position updated; telegraphs cancelled.",
+      );
     });
   }
 

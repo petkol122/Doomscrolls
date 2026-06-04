@@ -19,6 +19,7 @@ import { createAccountHeader } from "./accountShell/accountShellAccountHeader";
 import { createWorldSessionFeedbackView, type WorldSessionFeedbackView } from "./worldSession/worldSessionFeedbackView";
 import { createWorldSessionOverlayView } from "./worldSession/worldSessionOverlayView";
 import { createWorldSessionAreaView, type WorldSessionAreaView } from "./worldSession/worldSessionAreaView";
+import { attachWorldSessionDodgeInput, type WorldSessionDodgeInput } from "./worldSession/worldSessionDodgeInput";
 import {
   applyWorldSessionOverlayPanelStyles,
   applyWorldSessionOverlayRootStyles,
@@ -41,6 +42,7 @@ export class WorldSessionScene extends Phaser.Scene {
   private worldAreaView: WorldSessionAreaView | null = null;
   private feedbackView: WorldSessionFeedbackView | null = null;
   private apiClient: ApiClient | null = null;
+  private dodgeInput: WorldSessionDodgeInput | null = null;
 
   public constructor() {
     super("WorldSessionScene");
@@ -138,6 +140,34 @@ export class WorldSessionScene extends Phaser.Scene {
         this.feedbackView?.showNotice(t("world_session.respawned_notice", { hp: message.hp }));
       },
     });
+
+    // Task 095 — Spacebar -> server-authoritative dodge intent.
+    // The dodge helper owns its keyboard listener and the
+    // request_dodge_accepted / request_dodge_rejected message
+    // listeners, and forwards safe UI feedback to the feedback view.
+    this.dodgeInput = attachWorldSessionDodgeInput(
+      this,
+      this.room,
+      {
+        getLastClickTarget: () =>
+          this.worldAreaView?.getLastClickTarget() ?? null,
+        getSelfPosition: () => this.worldAreaView?.getSelfWorldPosition() ?? null,
+      },
+      {
+        onDodgeSentFeedback: (message) => {
+          this.feedbackView?.showNotice(message);
+        },
+        onDodgeConfirmedFeedback: (message) => {
+          this.feedbackView?.showNotice(message);
+        },
+        onDodgeRejectedFeedback: (message) => {
+          this.feedbackView?.showNotice(message);
+        },
+        onDodgeNoDirectionFeedback: (message) => {
+          this.feedbackView?.showNotice(message);
+        },
+      },
+    );
 
     registerPickupWorldLootResponseListeners(this.room, {
       onAccepted: (message) => {
@@ -262,6 +292,8 @@ export class WorldSessionScene extends Phaser.Scene {
 
   private handleSceneTeardown(): void {
     this.apiClient = null;
+    this.dodgeInput?.destroy();
+    this.dodgeInput = null;
     this.feedbackView?.destroy();
     this.feedbackView = null;
     this.worldAreaView?.destroy();

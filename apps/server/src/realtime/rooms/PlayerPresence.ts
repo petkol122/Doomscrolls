@@ -48,6 +48,9 @@ export class PlayerPresence extends Schema {
   @type("string") public pendingTargetId: string;
   @type("number") public pendingTargetX: number;
   @type("number") public pendingTargetY: number;
+  // Task 095 -- server-owned dodge cooldown timestamp (ms since epoch).
+  // 0 means "no dodge in progress / ready".
+  @type("number") public nextDodgeAt: number;
 
   constructor(
     sessionId: string,
@@ -83,5 +86,6 @@ export class PlayerPresence extends Schema {
     this.pendingTargetId = "";
     this.pendingTargetX = x;
     this.pendingTargetY = y;
+    this.nextDodgeAt = 0;
   }
 }

@@ -84,6 +84,22 @@ export interface RequestPickupWorldLootClientMessage {
   readonly worldLootId: string;
 }
 
+/**
+ * Task 095 — Player Dodge Intent Foundation.
+ *
+ * The client may only identify a desired unit direction (`dirX`, `dirY`)
+ * in which the player wants to roll. The server is the sole authority
+ * for whether the dodge happens, how far the player moves, and whether
+ * it interacts with combat telegraphs. The server never accepts
+ * client-sent damage, kills, XP, loot, inventory changes, equipment
+ * changes, level-up or quest completion.
+ */
+export interface RequestDodgeClientMessage {
+  readonly type: "request_dodge";
+  readonly dirX: number;
+  readonly dirY: number;
+}
+
 export interface RequestRespawnClientMessage {
   readonly type: "request_respawn";
 }
@@ -138,4 +154,5 @@ export type ClientRoomMessage =
   | ChatMessageClientMessage
   | TransitionZoneClientMessage
   | DropInventoryItemClientMessage
-  | RequestInteractClientMessage;
+  | RequestInteractClientMessage
+  | RequestDodgeClientMessage;

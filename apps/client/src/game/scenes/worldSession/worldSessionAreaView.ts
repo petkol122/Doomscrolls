@@ -69,6 +69,14 @@ export interface WorldSessionAreaView {
   readonly showPlayerFloatingDamage: (text: string) => void;
   // Task 094 - show the enemy attack telegraph warning marker.
   readonly showEnemyTelegraph: (enemyId: string) => void;
+  // Task 095 - expose the last server-synced self world position so
+  // the dodge input helper can compute a safe unit direction. Returns
+  // `null` while the self presence entry is not yet available.
+  readonly getSelfWorldPosition: () => { readonly x: number; readonly y: number } | null;
+  // Task 095 - expose the last debug click target the area view
+  // recorded (may be `null` until the player has clicked at least
+  // once in this scene).
+  readonly getLastClickTarget: () => ClickTargetSnapshot | null;
   readonly destroy: () => void;
 }
 
@@ -165,6 +173,10 @@ export function createWorldSessionAreaView(
   let lastClickTarget: ClickTargetSnapshot | null = null;
   let projectionMode: WorldProjectionMode = defaultWorldProjection;
   let selfScreenPosition: { readonly x: number; readonly y: number } | null = null;
+  // Task 095 - latest server-synced self world position. Tracked
+  // independently of screen-projection state so the dodge input
+  // helper can read a stable value even before the next render.
+  let selfWorldPosition: { readonly x: number; readonly y: number } | null = null;
   const previousEnemyHp = new Map<string, number>();
   const previousEnemyDefeated = new Map<string, boolean>();
   const previousEnemyRespawnAtMs = new Map<string, number>();
@@ -323,10 +335,12 @@ export function createWorldSessionAreaView(
       positionLabel.setText(t("world_area.no_position"));
       statusLabel.setText("");
       previousPosition = null;
+      selfWorldPosition = null;
       return;
     }
 
     const { x, y } = self.position;
+    selfWorldPosition = { x, y };
     const playerScreenPosition = worldToScreenActiveProjection(
       x,
       y,
@@ -427,6 +441,8 @@ export function createWorldSessionAreaView(
     showEnemyFloatingDamage,
     showPlayerFloatingDamage,
     showEnemyTelegraph,
+    getSelfWorldPosition: () => selfWorldPosition,
+    getLastClickTarget: () => lastClickTarget,
     destroy: () => {
       playerPlaceholder.destroy();
       interactablesView.destroy();

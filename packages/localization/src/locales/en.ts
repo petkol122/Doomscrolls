@@ -142,6 +142,15 @@ export const en = {
   "world_area.enemy_respawning_in": "Respawning in {seconds}s",
   "world_area.enemy_respawned": "Enemy respawned and reset.",
 
+  "world_area.dodge_sent": "Dodge sent.",
+  "world_area.dodge_confirmed": "Dodge confirmed.",
+  "world_area.dodge_on_cooldown": "Dodge is on cooldown.",
+  "world_area.dodge_unavailable": "Dodge unavailable.",
+  "world_area.dodge_test_button": "Send test dodge (Space)",
+  "world_area.dodge_test_help":
+    "Press Space in this scene to dodge in the last movement direction. Server decides cooldown and outcome.",
+  "world_area.dodge_no_direction": "No recent movement direction; dodge ignored.",
+
   "inventory.title": "Inventory",
   "equipment.title": "Equipment",
   "equipment.slot.weapon": "Weapon",
