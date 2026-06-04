@@ -74,6 +74,11 @@ export type ApiErrorCode =
   | "SESSION_INVALID"
   | "SESSION_EXPIRED"
   | "AUTH_ERROR"
+  | "ITEM_NOT_FOUND"
+  | "ITEM_NOT_IN_INVENTORY"
+  | "ITEM_NOT_EQUIPPABLE"
+  | "SLOT_MISMATCH"
+  | "INVENTORY_FULL"
   | "INTERNAL_ERROR"
   | "UNKNOWN_ERROR";
 
@@ -158,6 +163,19 @@ export class ApiClient {
     });
 
     return this.toCharacterSummary(response);
+  }
+
+  public async equipItem(
+    sessionToken: string,
+    characterId: string,
+    itemInstanceId: string,
+    slot: string,
+  ): Promise<{ readonly success: boolean }> {
+    return this.request<{ readonly success: boolean }>("/equip", {
+      method: "POST",
+      sessionToken,
+      body: { characterId, itemInstanceId, slot },
+    });
   }
 
   public async getCharacter(sessionToken: string, characterId: CharacterId): Promise<CharacterDetails> {

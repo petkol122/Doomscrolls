@@ -99,7 +99,6 @@ export class WorldSessionScene extends Phaser.Scene {
       },
     );
 
-    // Task 057 — Register interact response listener
     registerInteractResponseListener(this.room, (message: string) => {
       this.feedbackView?.showNotice(message);
     });
@@ -107,7 +106,6 @@ export class WorldSessionScene extends Phaser.Scene {
     registerAttackResponseListeners(this.room, {
       onAccepted: (message) => {
         this.showAttackFeedback(t("world_area.attack_confirmed"));
-        // Task 091 — brief visual damage feedback; HP still comes from synced room state
         this.worldAreaView?.showEnemyFloatingDamage(message.targetEnemyId, "-1");
       },
       onRejected: (message) => {
@@ -123,32 +121,20 @@ export class WorldSessionScene extends Phaser.Scene {
       },
       onDamageApplied: (message) => {
         const isDowned = message.remainingHp <= 0;
-        // Task 092 — brief visual damage feedback near player; HP still comes from synced room state
         this.worldAreaView?.showPlayerFloatingDamage(`-${message.damage}`);
         this.feedbackView?.showDamageFeedback(
           isDowned
-            ? t("world_session.downed_damage_feedback", {
-                damage: message.damage,
-              })
-            : t("world_session.damage_feedback", {
-                damage: message.damage,
-                hp: message.remainingHp,
-              }),
+            ? t("world_session.downed_damage_feedback", { damage: message.damage })
+            : t("world_session.damage_feedback", { damage: message.damage, hp: message.remainingHp }),
           { isDowned },
         );
         this.feedbackView?.showNotice(
-          t("world_area.player_damage_taken", {
-            damage: message.damage,
-            hp: message.remainingHp,
-          }),
+          t("world_area.player_damage_taken", { damage: message.damage, hp: message.remainingHp }),
         );
         if (isDowned) {
           this.feedbackView?.showNotice(t("world_session.downed_notice"));
         }
       },
-      // Task 094 — server-owned enemy attack telegraph. The server
-      // sends this before the damage lands; the client only uses it
-      // to show a brief warning marker on the enemy.
       onEnemyAttackTelegraph: (message) => {
         this.worldAreaView?.showEnemyTelegraph(message.enemyId);
       },
@@ -184,35 +170,21 @@ export class WorldSessionScene extends Phaser.Scene {
       },
     });
 
-    // Task 095 — Spacebar -> server-authoritative dodge intent.
-    // The dodge helper owns its keyboard listener and the
-    // request_dodge_accepted / request_dodge_rejected message
-    // listeners, and forwards safe UI feedback to the feedback view.
     this.dodgeInput = attachWorldSessionDodgeInput(
       this,
       this.room,
       {
-        getLastClickTarget: () =>
-          this.worldAreaView?.getLastClickTarget() ?? null,
+        getLastClickTarget: () => this.worldAreaView?.getLastClickTarget() ?? null,
         getSelfPosition: () => this.worldAreaView?.getSelfWorldPosition() ?? null,
       },
       {
-        onDodgeSentFeedback: (message) => {
-          this.feedbackView?.showNotice(message);
-        },
-        onDodgeConfirmedFeedback: (message) => {
-          this.feedbackView?.showNotice(message);
-        },
-        onDodgeRejectedFeedback: (message) => {
-          this.feedbackView?.showNotice(message);
-        },
-        onDodgeNoDirectionFeedback: (message) => {
-          this.feedbackView?.showNotice(message);
-        },
+        onDodgeSentFeedback: (message) => { this.feedbackView?.showNotice(message); },
+        onDodgeConfirmedFeedback: (message) => { this.feedbackView?.showNotice(message); },
+        onDodgeRejectedFeedback: (message) => { this.feedbackView?.showNotice(message); },
+        onDodgeNoDirectionFeedback: (message) => { this.feedbackView?.showNotice(message); },
       },
     );
 
-    // Task 096 — Q key -> server-authoritative healing flask intent
     const keyboard = this.input.keyboard;
     let qKey: Phaser.Input.Keyboard.Key | null = null;
     if (keyboard !== null) {
@@ -228,29 +200,14 @@ export class WorldSessionScene extends Phaser.Scene {
     registerHealingFlaskResponseListeners(this.room, {
       onAccepted: (message) => {
         this.feedbackView?.showNotice(
-          t("world_area.flask_healed", {
-            healed: message.healedAmount,
-            hp: message.remainingHp,
-          }),
+          t("world_area.flask_healed", { healed: message.healedAmount, hp: message.remainingHp }),
         );
       },
       onRejected: (message) => {
-        if (message.reason === "no_charges") {
-          this.feedbackView?.showNotice(t("world_area.flask_no_charges"));
-          return;
-        }
-        if (message.reason === "already_full_hp") {
-          this.feedbackView?.showNotice(t("world_area.flask_full_hp"));
-          return;
-        }
-        if (message.reason === "flask_on_cooldown") {
-          this.feedbackView?.showNotice(t("world_area.flask_on_cooldown"));
-          return;
-        }
-        if (message.reason === "player_downed") {
-          this.feedbackView?.showNotice(t("world_area.flask_downed"));
-          return;
-        }
+        if (message.reason === "no_charges") { this.feedbackView?.showNotice(t("world_area.flask_no_charges")); return; }
+        if (message.reason === "already_full_hp") { this.feedbackView?.showNotice(t("world_area.flask_full_hp")); return; }
+        if (message.reason === "flask_on_cooldown") { this.feedbackView?.showNotice(t("world_area.flask_on_cooldown")); return; }
+        if (message.reason === "player_downed") { this.feedbackView?.showNotice(t("world_area.flask_downed")); return; }
         this.feedbackView?.showNotice(t("world_area.flask_unavailable"));
       },
     });
@@ -262,13 +219,10 @@ export class WorldSessionScene extends Phaser.Scene {
       },
       onRejected: (message) => {
         this.feedbackView?.showNotice(
-          message.reason === "out_of_range"
-            ? t("world_area.moving_closer")
-            : message.reason === "inventory_full"
-              ? t("world_area.inventory_full")
-            : message.reason === "world_loot_not_found"
-              ? t("world_area.pickup_unavailable")
-              : t("world_area.pickup_unavailable"),
+          message.reason === "out_of_range" ? t("world_area.moving_closer")
+            : message.reason === "inventory_full" ? t("world_area.inventory_full")
+            : message.reason === "world_loot_not_found" ? t("world_area.pickup_unavailable")
+            : t("world_area.pickup_unavailable"),
         );
       },
     });
@@ -283,7 +237,6 @@ export class WorldSessionScene extends Phaser.Scene {
       }
     });
 
-    // Task 105 — listen for equipment updates from server
     registerEquipmentListener(this.room, (loadout: EquipmentLoadout) => {
       this.equipmentLoadout = loadout;
       this.renderOverlay();
@@ -346,6 +299,9 @@ export class WorldSessionScene extends Phaser.Scene {
       () => this.equipmentLoadout,
       (loadout: EquipmentLoadout) => {
         this.equipmentLoadout = loadout;
+      },
+      (characterId: string, itemInstanceId: string, slot: string) => {
+        return this.handleEquipItem(characterId, itemInstanceId, slot);
       },
     );
     utilityRegion.appendChild(overlayView.utilityPanel);
@@ -411,6 +367,31 @@ export class WorldSessionScene extends Phaser.Scene {
     const result = sendRespawnRequest(this.room);
     if (!result.dispatched) {
       this.feedbackView?.showNotice(t("world_session.respawn_unavailable"));
+    }
+  }
+
+  private async handleEquipItem(
+    characterId: string,
+    itemInstanceId: string,
+    slot: string,
+  ): Promise<void> {
+    if (this.apiClient === null) {
+      throw new Error("API client not available");
+    }
+
+    const sessionToken = window.localStorage.getItem("doomscrolls.sessionToken");
+    if (typeof sessionToken !== "string" || sessionToken.length === 0) {
+      throw new Error("Not authenticated");
+    }
+
+    await this.apiClient.equipItem(sessionToken, characterId, itemInstanceId, slot);
+
+    // Refresh account state to get updated inventory + equipment
+    try {
+      this.account = await this.apiClient.getMe(sessionToken);
+      this.renderOverlay();
+    } catch {
+      // Refresh happened best-effort
     }
   }
 

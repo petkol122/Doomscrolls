@@ -308,6 +308,11 @@ export class AuthScene extends Phaser.Scene {
         return t("error.invalid_token");
       case "API_URL_MISSING":
         return t("auth.api_url_missing");
+      case "ITEM_NOT_FOUND":
+      case "ITEM_NOT_IN_INVENTORY":
+      case "ITEM_NOT_EQUIPPABLE":
+      case "SLOT_MISMATCH":
+      case "INVENTORY_FULL":
       case "INTERNAL_ERROR":
       case "UNKNOWN_ERROR":
         return t("error.generic");

@@ -34,6 +34,7 @@ export function createWorldSessionOverlayView(
   onLeaveWorld: () => void,
   getEquipmentLoadout: () => EquipmentLoadout = () => createEmptyEquipmentLoadout(),
   onEquipmentLoadoutChange?: (loadout: EquipmentLoadout) => void,
+  onEquipItem?: (characterId: string, itemInstanceId: string, slot: string) => Promise<void>,
 ): WorldSessionOverlayView {
   let selectedInventoryItemId: InventorySummaryItem["itemInstanceId"] | null = character?.inventorySummaryItems?.[0]?.itemInstanceId ?? null;
 
@@ -58,7 +59,7 @@ export function createWorldSessionOverlayView(
     onSelectItem: (itemId) => {
       selectedInventoryItemId = itemId;
     },
-  }));
+  }, character?.id ?? null, onEquipItem));
   utilityPanel.appendChild(
     createDebugPanel(
       room,
@@ -565,6 +566,8 @@ function createInventoryPanelSection(
     readonly getSelectedItemId: () => InventorySummaryItem["itemInstanceId"] | null;
     readonly onSelectItem: (itemId: InventorySummaryItem["itemInstanceId"]) => void;
   },
+  characterId: string | null,
+  onEquipItem?: (characterId: string, itemInstanceId: string, slot: string) => Promise<void>,
 ): HTMLElement {
   const items = character?.inventorySummaryItems ?? [];
   const wrapper = document.createElement("details");
@@ -597,7 +600,7 @@ function createInventoryPanelSection(
     if (selectedItem !== null) {
       selection.onSelectItem(selectedItem.itemInstanceId);
     }
-    const detailSection = createInventoryDetailSection(selectedItem);
+    const detailSection = createInventoryDetailSection(selectedItem, characterId, onEquipItem);
     content.append(summarySection, detailSection);
   };
 
@@ -706,7 +709,11 @@ function createInventorySummarySection(
   return createSectionBlock("Inventory Summary", [list], { compact: true });
 }
 
-function createInventoryDetailSection(item: InventorySummaryItem | null): HTMLElement {
+function createInventoryDetailSection(
+  item: InventorySummaryItem | null,
+  characterId: string | null,
+  onEquipItem?: (characterId: string, itemInstanceId: string, slot: string) => Promise<void>,
+): HTMLElement {
   if (item === null) {
     return createSectionBlock("Item Detail", [createMutedText("Select an item to inspect it.")], { compact: true });
   }
@@ -734,6 +741,36 @@ function createInventoryDetailSection(item: InventorySummaryItem | null): HTMLEl
     children.push(modifierList);
   } else {
     children.push(createMutedText("No item modifiers visible."));
+  }
+
+  // Add Equip button if the item is equip-capable (has statModifiers or non-material category)
+  if (characterId !== null && onEquipItem !== undefined && item.category !== "flask" && item.category !== "material") {
+    const equipRow = document.createElement("div");
+    equipRow.style.marginTop = "8px";
+
+    const equipButton = createButton("Equip");
+    equipButton.style.width = "100%";
+    equipButton.style.fontSize = "12px";
+    equipButton.style.padding = "6px 8px";
+    equipButton.style.background = "rgba(49, 65, 38, 0.9)";
+    equipButton.style.border = "1px solid #6a8a4a";
+    equipButton.addEventListener("click", async () => {
+      equipButton.disabled = true;
+      equipButton.textContent = "Equipping...";
+      try {
+        const firstSlot = item.statModifiers?.[0] !== undefined ? "weapon" : "weapon";
+        await onEquipItem(characterId, item.itemInstanceId, firstSlot);
+        equipButton.textContent = "Equipped!";
+      } catch {
+        equipButton.textContent = "Failed";
+        setTimeout(() => {
+          equipButton.disabled = false;
+          equipButton.textContent = "Equip";
+        }, 2000);
+      }
+    });
+    equipRow.appendChild(equipButton);
+    children.push(equipRow);
   }
 
   return createSectionBlock("Item Detail", children, { compact: true });
