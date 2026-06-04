@@ -135,6 +135,23 @@ export interface RequestAttackRejectedServerMessage {
   readonly targetEnemyId?: string;
 }
 
+export type RequestPickupWorldLootRejectedReason =
+  | "player_not_ready"
+  | "world_loot_not_found"
+  | "out_of_range";
+
+export interface RequestPickupWorldLootAcceptedServerMessage {
+  readonly type: "request_pickup_world_loot_accepted";
+  readonly worldLootId: string;
+  readonly message: string;
+}
+
+export interface RequestPickupWorldLootRejectedServerMessage {
+  readonly type: "request_pickup_world_loot_rejected";
+  readonly reason: RequestPickupWorldLootRejectedReason;
+  readonly worldLootId?: string;
+}
+
 export type ServerErrorCode =
   | "invalid_message"
   | "not_authenticated"
@@ -177,5 +194,7 @@ export type ServerRoomMessage =
   | RequestMoveRejectedServerMessage
   | RequestAttackAcceptedServerMessage
   | RequestAttackRejectedServerMessage
+  | RequestPickupWorldLootAcceptedServerMessage
+  | RequestPickupWorldLootRejectedServerMessage
   | InteractResponseServerMessage
   | ErrorServerMessage;

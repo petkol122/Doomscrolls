@@ -9,7 +9,7 @@
   "types": "./src/index.ts",
   "scripts": {
     "dev": "echo localization dev placeholder",
-    "build": "tsc --noEmit",
+    "build": "tsc -b",
     "typecheck": "tsc --noEmit",
     "lint": "echo localization lint placeholder",
     "test": "node -e \"console.log('localization test placeholder: validation runs during typecheck/build')\""

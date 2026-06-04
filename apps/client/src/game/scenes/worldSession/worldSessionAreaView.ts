@@ -6,6 +6,7 @@ import Phaser from "phaser";
 import { sendMovementIntent } from "../../../net/movementIntentClient";
 import { sendInteractIntent } from "../../../net/interactIntentClient";
 import { sendAttackIntent } from "../../../net/attackIntentClient";
+import { sendPickupWorldLootIntent } from "../../../net/pickupWorldLootClient";
 import { getTownRoomPresence } from "../../../net/townRoomPresence";
 import {
   defaultWorldProjection,
@@ -67,6 +68,7 @@ export function createWorldSessionAreaView(
   scene: Phaser.Scene,
   room: Room<DoomscrollsRoomState>,
   onAttackFeedback?: (message: string) => void,
+  onPickupFeedback?: (message: string) => void,
   onDebugStateChange?: () => void,
 ): WorldSessionAreaView {
   const layout = resolveWorldSessionAreaLayout(scene);
@@ -240,7 +242,15 @@ export function createWorldSessionAreaView(
     for (const loot of projectedWorldLoot) {
       const existing = lootPlaceholders.get(loot.id);
       if (existing === undefined) {
-        lootPlaceholders.set(loot.id, createWorldSessionLootPlaceholderView(scene, loot));
+        lootPlaceholders.set(
+          loot.id,
+          createWorldSessionLootPlaceholderView(scene, loot, (worldLootId) => {
+            const result = sendPickupWorldLootIntent(nextRoom, worldLootId);
+            if (result.dispatched) {
+              onPickupFeedback?.(t("world_area.pickup_sent"));
+            }
+          }),
+        );
       } else {
         existing.refresh(loot);
       }

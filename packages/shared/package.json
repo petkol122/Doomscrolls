@@ -9,7 +9,7 @@
   "types": "./src/index.ts",
   "scripts": {
     "dev": "echo shared dev placeholder",
-    "build": "tsc --noEmit",
+    "build": "tsc -b",
     "typecheck": "tsc --noEmit",
     "lint": "echo shared lint placeholder",
     "test": "echo shared test placeholder"

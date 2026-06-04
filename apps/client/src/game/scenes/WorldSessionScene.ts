@@ -6,6 +6,7 @@ import Phaser from "phaser";
 import type { AccountState } from "../../net/ApiClient";
 import { registerAttackResponseListeners } from "../../net/attackIntentClient";
 import { registerInteractResponseListener } from "../../net/interactResponseClient";
+import { registerPickupWorldLootResponseListeners } from "../../net/pickupWorldLootClient";
 import { createAccountHeader } from "./accountShell/accountShellAccountHeader";
 import { createWorldSessionFeedbackView, type WorldSessionFeedbackView } from "./worldSession/worldSessionFeedbackView";
 import { createWorldSessionOverlayView } from "./worldSession/worldSessionOverlayView";
@@ -52,11 +53,19 @@ export class WorldSessionScene extends Phaser.Scene {
 
     this.feedbackView = createWorldSessionFeedbackView(this);
 
-    this.worldAreaView = createWorldSessionAreaView(this, this.room, (message: string) => {
-      this.showAttackFeedback(message);
-    }, () => {
-      this.renderOverlay();
-    });
+    this.worldAreaView = createWorldSessionAreaView(
+      this,
+      this.room,
+      (message: string) => {
+        this.showAttackFeedback(message);
+      },
+      (message: string) => {
+        this.feedbackView?.showNotice(message);
+      },
+      () => {
+        this.renderOverlay();
+      },
+    );
 
     // Task 057 — Register interact response listener
     registerInteractResponseListener(this.room, (message: string) => {
@@ -76,6 +85,21 @@ export class WorldSessionScene extends Phaser.Scene {
             : message.reason === "enemy_defeated"
               ? t("world_area.enemy_defeated")
               : t("world_area.attack_unavailable"),
+        );
+      },
+    });
+
+    registerPickupWorldLootResponseListeners(this.room, {
+      onAccepted: (message) => {
+        this.feedbackView?.showNotice(message.message);
+      },
+      onRejected: (message) => {
+        this.feedbackView?.showNotice(
+          message.reason === "out_of_range"
+            ? t("world_area.pickup_too_far")
+            : message.reason === "world_loot_not_found"
+              ? t("world_area.pickup_unavailable")
+              : t("world_area.pickup_unavailable"),
         );
       },
     });

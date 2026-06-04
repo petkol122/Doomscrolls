@@ -3,6 +3,9 @@ import type {
   CharacterId,
   RequestAttackAcceptedServerMessage,
   RequestAttackRejectedServerMessage,
+  RequestPickupWorldLootAcceptedServerMessage,
+  RequestPickupWorldLootClientMessage,
+  RequestPickupWorldLootRejectedServerMessage,
   RequestMoveRejectedServerMessage,
   RequestAttackClientMessage,
   UserId,
@@ -32,6 +35,7 @@ import { consumeAttackCooldown, resolveAttackCooldownMs } from "./attackCooldown
 import { applyEnemyDamage } from "./applyEnemyDamage";
 import { respawnTownEnemies } from "./respawnTownEnemies";
 import { spawnWorldLootOnEnemyDefeat } from "./spawnWorldLootOnEnemyDefeat";
+import { validatePickupWorldLootIntent } from "./pickupWorldLootValidation";
 
 /**
  * TownRoom with minimal Colyseus schema state.
@@ -89,6 +93,7 @@ export class TownRoom extends Room {
 private movementIntentHandlerRegistered = false;
 private interactHandlerRegistered = false;
 private attackHandlerRegistered = false;
+private pickupWorldLootHandlerRegistered = false;
 
   public override async onCreate(options: TownRoomJoinOptions): Promise<void> {
     const log = createRoomLogger(
@@ -108,6 +113,7 @@ private attackHandlerRegistered = false;
     this.registerMovementIntentHandler(log);
     this.registerInteractHandler(log);
     this.registerAttackHandler(log);
+    this.registerPickupWorldLootHandler(log);
     this.setSimulationInterval((deltaMs: number) => {
       stepTownRoomMovement(this.state as TownRoomState, deltaMs);
       respawnTownEnemies(this.state as TownRoomState, Date.now());
@@ -619,6 +625,77 @@ private attackHandlerRegistered = false;
           nextAttackAt: player.nextAttackAt,
         },
         "TownRoom request_attack accepted and synced enemy defeat/placeholder loot state updated.",
+      );
+    });
+  }
+
+  private registerPickupWorldLootHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.pickupWorldLootHandlerRegistered) {
+      return;
+    }
+    this.pickupWorldLootHandlerRegistered = true;
+
+    this.onMessage("request_pickup_world_loot", (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const message = raw as Partial<RequestPickupWorldLootClientMessage> | null;
+      const worldLootId = typeof message?.worldLootId === "string"
+        ? message.worldLootId
+        : undefined;
+      const player = state.playerPresence.get(client.sessionId);
+      const validation = validatePickupWorldLootIntent(state, player, worldLootId ?? "");
+
+      if (!validation.ok) {
+        const rejection: RequestPickupWorldLootRejectedServerMessage = {
+          type: "request_pickup_world_loot_rejected",
+          reason: validation.reason,
+          ...(worldLootId !== undefined ? { worldLootId } : {}),
+        };
+
+        try {
+          client.send("request_pickup_world_loot_rejected", rejection);
+        } catch {
+          // swallow send failures; never crash room on rejected pickup intent
+        }
+
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            worldLootId,
+            reason: validation.reason,
+          },
+          "TownRoom request_pickup_world_loot rejected.",
+        );
+        return;
+      }
+
+      state.worldLoot.delete(validation.worldLoot.id);
+
+      const accepted: RequestPickupWorldLootAcceptedServerMessage = {
+        type: "request_pickup_world_loot_accepted",
+        worldLootId: validation.worldLoot.id,
+        message: `Picked up ${validation.worldLoot.label}`,
+      };
+
+      try {
+        client.send("request_pickup_world_loot_accepted", accepted);
+      } catch {
+        // swallow send failures; state sync remains authoritative
+      }
+
+      log.debug?.(
+        {
+          roomId: this.roomId,
+          roomName: this.roomName,
+          sessionId: client.sessionId,
+          worldLootId: validation.worldLoot.id,
+          worldLootItemId: validation.worldLoot.itemId,
+          distance: validation.distance,
+        },
+        "TownRoom request_pickup_world_loot accepted and synced loot removed from room state.",
       );
     });
   }

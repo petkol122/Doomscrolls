@@ -71,6 +71,19 @@ export interface RequestAttackClientMessage {
   readonly targetEnemyId: string;
 }
 
+/**
+ * Server-authoritative loot pickup intent.
+ *
+ * The client may only identify which synced world-loot entry it wants
+ * to pick up. The server validates player presence, loot existence and
+ * pickup range, then decides whether the loot is removed from room state.
+ * No client-side reward authority, inventory write or persistence exists yet.
+ */
+export interface RequestPickupWorldLootClientMessage {
+  readonly type: "request_pickup_world_loot";
+  readonly worldLootId: string;
+}
+
 export interface RequestRespawnClientMessage {
   readonly type: "request_respawn";
 }
@@ -118,6 +131,7 @@ export type ClientRoomMessage =
   | UnequipItemClientMessage
   | RequestMoveClientMessage
   | RequestAttackClientMessage
+  | RequestPickupWorldLootClientMessage
   | RequestRespawnClientMessage
   | RetrieveCorpseClientMessage
   | ForceRecoverCorpseClientMessage
