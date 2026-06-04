@@ -1,8 +1,8 @@
-export const worldProjection = "debug_top_down" as const;
+export const defaultWorldProjection = "debug_top_down" as const;
 
-export const futureTargetProjection = "isometric_2_5d" as const;
+export const isometricPreviewWorldProjection = "isometric_preview" as const;
 
-export type WorldProjectionMode = typeof worldProjection | typeof futureTargetProjection;
+export type WorldProjectionMode = typeof defaultWorldProjection | typeof isometricPreviewWorldProjection;
 
 export interface WorldProjectionPoint {
   readonly x: number;
@@ -36,12 +36,12 @@ export interface WorldProjectionViewport {
  * rendering conversion, camera rotation or visual behavior changes.
  */
 export function getWorldProjectionConfig(): {
-  readonly worldProjection: typeof worldProjection;
-  readonly futureTargetProjection: typeof futureTargetProjection;
+  readonly worldProjection: typeof defaultWorldProjection;
+  readonly futureTargetProjection: typeof isometricPreviewWorldProjection;
 } {
   return {
-    worldProjection,
-    futureTargetProjection,
+    worldProjection: defaultWorldProjection,
+    futureTargetProjection: isometricPreviewWorldProjection,
   };
 }
 
@@ -116,8 +116,9 @@ export function worldToScreenActiveProjection(
   y: number,
   bounds: WorldProjectionBounds,
   viewport: WorldProjectionViewport,
+  mode: WorldProjectionMode = defaultWorldProjection,
 ): WorldProjectionPoint {
-  if (worldProjection === "debug_top_down") {
+  if (mode === "debug_top_down") {
     return worldToScreenDebugTopDown(x, y, bounds, viewport);
   }
 
@@ -129,8 +130,9 @@ export function screenToWorldActiveProjection(
   y: number,
   bounds: WorldProjectionBounds,
   viewport: WorldProjectionViewport,
+  mode: WorldProjectionMode = defaultWorldProjection,
 ): WorldProjectionPoint {
-  if (worldProjection === "debug_top_down") {
+  if (mode === "debug_top_down") {
     return screenToWorldDebugTopDown(x, y, bounds, viewport);
   }
 

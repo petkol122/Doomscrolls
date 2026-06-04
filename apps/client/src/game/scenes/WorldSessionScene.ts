@@ -15,6 +15,8 @@ import {
   applyWorldSessionOverlayRootStyles,
   applyWorldSessionOverlaySidebarStyles,
 } from "./worldSession/worldSessionOverlayLayout";
+import type { WorldProjectionMode } from "../worldProjection";
+import { defaultWorldProjection } from "../worldProjection";
 
 interface WorldSessionSceneData {
   readonly account: AccountState;
@@ -123,11 +125,18 @@ export class WorldSessionScene extends Phaser.Scene {
       createWorldSessionOverlayView(
         character,
         room,
-        this.worldAreaView?.getDebugState() ?? { lastClickTarget: null },
-        () => {
-        void this.handleLeaveWorld();
+        this.worldAreaView?.getDebugState() ?? {
+          lastClickTarget: null,
+          projectionMode: defaultWorldProjection,
+          isMovementInputEnabled: true,
         },
-      )
+        (mode) => {
+          this.handleProjectionModeChange(mode);
+        },
+        () => {
+          void this.handleLeaveWorld();
+        },
+      ),
     );
 
     document.body.appendChild(root);
@@ -162,6 +171,11 @@ export class WorldSessionScene extends Phaser.Scene {
 
   private showAttackFeedback(message: string): void {
     this.feedbackView?.showAttackFeedback(message);
+  }
+
+  private handleProjectionModeChange(mode: WorldProjectionMode): void {
+    this.worldAreaView?.setProjectionMode(mode);
+    this.renderOverlay();
   }
 
   private handleSceneTeardown(): void {

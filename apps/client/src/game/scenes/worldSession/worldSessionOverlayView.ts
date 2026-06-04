@@ -7,11 +7,13 @@ import { getTownRoomPresence } from "../../../net/townRoomPresence";
 import { createButton, createInfoLine } from "../accountShell/accountShellDom";
 import type { WorldSessionDebugState } from "./worldSessionAreaView";
 import { applyWorldSessionOverlayPanelStyles } from "./worldSessionOverlayLayout";
+import type { WorldProjectionMode } from "../../worldProjection";
 
 export function createWorldSessionOverlayView(
   character: CharacterSummary | null,
   room: Room<DoomscrollsRoomState>,
   debugState: WorldSessionDebugState,
+  onProjectionModeChange: (mode: WorldProjectionMode) => void,
   onLeaveWorld: () => void,
 ): HTMLElement {
   const section = createCardSection();
@@ -59,6 +61,7 @@ export function createWorldSessionOverlayView(
   ]));
 
   section.appendChild(createPresenceSection(room));
+  section.appendChild(createProjectionSection(debugState, onProjectionModeChange));
   section.appendChild(createMovementDebugSection(room, debugState));
 
   const leaveButton = createButton(t("world_entry.leave_world"));
@@ -70,6 +73,58 @@ export function createWorldSessionOverlayView(
   section.appendChild(leaveButton);
 
   return section;
+}
+
+function createProjectionSection(
+  debugState: WorldSessionDebugState,
+  onProjectionModeChange: (mode: WorldProjectionMode) => void,
+): HTMLElement {
+  const wrapper = createSectionBlock(t("world_session.projection_title"), []);
+
+  const description = createMutedText(t("world_session.projection_notice"));
+  description.style.marginBottom = "8px";
+  wrapper.appendChild(description);
+
+  const buttonRow = document.createElement("div");
+  buttonRow.style.display = "flex";
+  buttonRow.style.gap = "8px";
+  buttonRow.style.marginBottom = "8px";
+
+  const topDownButton = createButton(t("world_session.projection_top_down"));
+  topDownButton.style.flex = "1";
+  topDownButton.disabled = debugState.projectionMode === "debug_top_down";
+  topDownButton.addEventListener("click", () => {
+    onProjectionModeChange("debug_top_down");
+  });
+
+  const isometricButton = createButton(t("world_session.projection_isometric_preview"));
+  isometricButton.style.flex = "1";
+  isometricButton.disabled = debugState.projectionMode === "isometric_preview";
+  isometricButton.addEventListener("click", () => {
+    onProjectionModeChange("isometric_preview");
+  });
+
+  buttonRow.append(topDownButton, isometricButton);
+  wrapper.appendChild(buttonRow);
+
+  wrapper.appendChild(
+    createInfoLine(
+      t("world_session.projection_current"),
+      debugState.projectionMode === "debug_top_down"
+        ? t("world_session.projection_top_down")
+        : t("world_session.projection_isometric_preview"),
+    ),
+  );
+  wrapper.appendChild(
+    createInfoLine(
+      t("world_session.projection_click_mode"),
+      debugState.isMovementInputEnabled
+        ? t("world_session.projection_click_top_down_only")
+        : t("world_session.projection_click_disabled_preview"),
+    ),
+  );
+
+  return wrapper;
 }
 
 function createCardSection(): HTMLElement {
@@ -163,6 +218,12 @@ function createMovementDebugSection(
       debugState.lastClickTarget !== null
         ? `x=${debugState.lastClickTarget.x}, y=${debugState.lastClickTarget.y}`
         : t("world_session.awaiting_click_target"),
+    ),
+    createInfoLine(
+      t("world_session.projection_current"),
+      debugState.projectionMode === "debug_top_down"
+        ? t("world_session.projection_top_down")
+        : t("world_session.projection_isometric_preview"),
     ),
     createInfoLine(
       t("world_session.movement_speed"),

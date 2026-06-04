@@ -8,8 +8,10 @@ import { sendInteractIntent } from "../../../net/interactIntentClient";
 import { sendAttackIntent } from "../../../net/attackIntentClient";
 import { getTownRoomPresence } from "../../../net/townRoomPresence";
 import {
+  defaultWorldProjection,
   screenToWorldActiveProjection,
   worldToScreenActiveProjection,
+  type WorldProjectionMode,
   type WorldProjectionBounds,
   type WorldProjectionViewport,
 } from "../../worldProjection";
@@ -37,15 +39,19 @@ interface ClickTargetSnapshot {
 interface AreaProjectionContext {
   readonly bounds: WorldProjectionBounds;
   readonly viewport: WorldProjectionViewport;
+  readonly projectionMode: WorldProjectionMode;
 }
 
 export interface WorldSessionDebugState {
   readonly lastClickTarget: ClickTargetSnapshot | null;
+  readonly projectionMode: WorldProjectionMode;
+  readonly isMovementInputEnabled: boolean;
 }
 
 export interface WorldSessionAreaView {
   readonly refreshFromRoomState: (room: Room<DoomscrollsRoomState>) => void;
   readonly getDebugState: () => WorldSessionDebugState;
+  readonly setProjectionMode: (mode: WorldProjectionMode) => void;
   readonly destroy: () => void;
 }
 
@@ -127,13 +133,14 @@ export function createWorldSessionAreaView(
 
   let previousPosition: PositionSnapshot | null = null;
   let lastClickTarget: ClickTargetSnapshot | null = null;
+  let projectionMode: WorldProjectionMode = defaultWorldProjection;
   const previousEnemyHp = new Map<string, number>();
   const previousEnemyDefeated = new Map<string, boolean>();
 
   const refreshFromRoomState = (nextRoom: Room<DoomscrollsRoomState>): void => {
     const zoneId = nextRoom.state.zoneId;
     const bounds = resolveWorldAreaBounds(zoneId);
-    const projection = createAreaProjectionContext(layout, bounds);
+    const projection = createAreaProjectionContext(layout, bounds, projectionMode);
 
     drawBounds(frame, layout);
     boundsLabel.setText(
@@ -196,7 +203,17 @@ export function createWorldSessionAreaView(
 
     inputZone.removeAllListeners();
     inputZone.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
-      const screenPoint = screenToWorldActiveProjection(pointer.x, pointer.y, projection.bounds, projection.viewport);
+      if (projectionMode !== "debug_top_down") {
+        return;
+      }
+
+      const screenPoint = screenToWorldActiveProjection(
+        pointer.x,
+        pointer.y,
+        projection.bounds,
+        projection.viewport,
+        projectionMode,
+      );
       const worldX = screenPoint.x;
       const worldY = screenPoint.y;
       lastClickTarget = { x: Math.round(worldX), y: Math.round(worldY) };
@@ -219,7 +236,13 @@ export function createWorldSessionAreaView(
     }
 
     const { x, y } = self.position;
-    const playerScreenPosition = worldToScreenActiveProjection(x, y, projection.bounds, projection.viewport);
+    const playerScreenPosition = worldToScreenActiveProjection(
+      x,
+      y,
+      projection.bounds,
+      projection.viewport,
+      projectionMode,
+    );
     const pixelX = playerScreenPosition.x;
     const pixelY = playerScreenPosition.y;
 
@@ -233,6 +256,7 @@ export function createWorldSessionAreaView(
         lastClickTarget.y,
         projection.bounds,
         projection.viewport,
+        projectionMode,
       );
       const targetPixelX = targetScreenPosition.x;
       const targetPixelY = targetScreenPosition.y;
@@ -264,9 +288,24 @@ export function createWorldSessionAreaView(
 
   refreshFromRoomState(room);
 
+  const setProjectionMode = (mode: WorldProjectionMode): void => {
+    if (projectionMode === mode) {
+      return;
+    }
+
+    projectionMode = mode;
+    refreshFromRoomState(room);
+    onDebugStateChange?.();
+  };
+
   return {
     refreshFromRoomState,
-    getDebugState: () => ({ lastClickTarget }),
+    getDebugState: () => ({
+      lastClickTarget,
+      projectionMode,
+      isMovementInputEnabled: projectionMode === "debug_top_down",
+    }),
+    setProjectionMode,
     destroy: () => {
       playerPlaceholder.destroy();
       interactablesView.destroy();
@@ -307,16 +346,24 @@ function projectEnemyToArea(
 
   return {
     ...enemy,
-    ...worldToScreenActiveProjection(enemy.x, enemy.y, projection.bounds, projection.viewport),
+    ...worldToScreenActiveProjection(
+      enemy.x,
+      enemy.y,
+      projection.bounds,
+      projection.viewport,
+      projection.projectionMode,
+    ),
   };
 }
 
 function createAreaProjectionContext(
   layout: WorldSessionAreaLayout,
   bounds: WorldProjectionBounds,
+  projectionMode: WorldProjectionMode,
 ): AreaProjectionContext {
   return {
     bounds,
+    projectionMode,
     viewport: {
       originX: layout.originX,
       originY: layout.originY,
