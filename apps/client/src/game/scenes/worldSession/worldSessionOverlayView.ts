@@ -147,24 +147,38 @@ export function createWorldSessionOverlayView(
 }
 
 function createControlsSection(): HTMLElement {
-  const controls = document.createElement("ul");
-  controls.style.margin = "0";
-  controls.style.padding = "0 0 0 18px";
-  controls.style.color = "#b9d49a";
-  controls.style.fontSize = "11px";
-  controls.style.lineHeight = "1.6";
+  const controls = document.createElement("div");
+  controls.style.display = "grid";
+  controls.style.gridTemplateColumns = "max-content 1fr";
+  controls.style.gap = "4px 8px";
+  controls.style.fontSize = "12px";
+  controls.style.alignItems = "center";
 
-  const items = [
-    t("world_session.control_move"),
-    t("world_session.control_attack"),
-    t("world_session.control_dodge"),
-    t("world_session.control_flask"),
+  const bindings: readonly { readonly key: string; readonly action: string }[] = [
+    { key: "Click", action: t("world_session.control_move") },
+    { key: "Click (enemy)", action: t("world_session.control_attack") },
+    { key: "Space", action: t("world_session.control_dodge") },
+    { key: "Q", action: t("world_session.control_flask") },
   ];
 
-  for (const item of items) {
-    const li = document.createElement("li");
-    li.textContent = item;
-    controls.appendChild(li);
+  for (const binding of bindings) {
+    const keyLabel = document.createElement("span");
+    keyLabel.textContent = binding.key;
+    keyLabel.style.color = "#e0c88a";
+    keyLabel.style.fontWeight = "bold";
+    keyLabel.style.fontSize = "11px";
+    keyLabel.style.fontFamily = "monospace";
+    keyLabel.style.background = "rgba(63, 50, 30, 0.7)";
+    keyLabel.style.padding = "1px 5px";
+    keyLabel.style.borderRadius = "3px";
+    keyLabel.style.textAlign = "center";
+    controls.appendChild(keyLabel);
+
+    const actionLabel = document.createElement("span");
+    actionLabel.textContent = binding.action;
+    actionLabel.style.color = "#b9d49a";
+    actionLabel.style.fontSize = "11px";
+    controls.appendChild(actionLabel);
   }
 
   return createSectionBlock(t("world_session.controls"), [controls]);
@@ -344,16 +358,38 @@ function createVitalitySection(
 ): HTMLElement {
   const content: HTMLElement[] = [];
 
-  content.push(createInfoLine(t("world_session.player_hp"), hpSummary));
+  // HP summary inline
+  const hpLine = document.createElement("div");
+  hpLine.style.display = "flex";
+  hpLine.style.justifyContent = "space-between";
+  hpLine.style.alignItems = "center";
+  hpLine.style.marginBottom = "4px";
 
+  const hpLabel = document.createElement("span");
+  hpLabel.textContent = t("world_session.player_hp");
+  hpLabel.style.color = "#d8c6a3";
+  hpLabel.style.fontSize = "12px";
+  hpLine.appendChild(hpLabel);
+
+  const hpValue = document.createElement("span");
+  hpValue.textContent = hpSummary;
+  hpValue.style.color = lifeState === "downed" ? "#e3a6a6" : "#c8aa7a";
+  hpValue.style.fontWeight = "bold";
+  hpValue.style.fontSize = "12px";
+  hpValue.style.fontFamily = "monospace";
+  hpLine.appendChild(hpValue);
+
+  content.push(hpLine);
+
+  // HP bar
   const barFrame = document.createElement("div");
   barFrame.style.width = "100%";
-  barFrame.style.height = "14px";
+  barFrame.style.height = "18px";
   barFrame.style.border = "1px solid #5f4a2f";
   barFrame.style.borderRadius = "999px";
   barFrame.style.background = "rgba(22, 16, 14, 0.95)";
   barFrame.style.overflow = "hidden";
-  barFrame.style.marginBottom = "6px";
+  barFrame.style.marginBottom = "8px";
 
   const barFill = document.createElement("div");
   barFill.style.height = "100%";
@@ -362,9 +398,14 @@ function createVitalitySection(
     ? "linear-gradient(90deg, #7a1f1f 0%, #bf5252 100%)"
     : hpRatio !== null && hpRatio <= 0.25
       ? "linear-gradient(90deg, #8f2a2a 0%, #d46262 100%)"
-      : "linear-gradient(90deg, #7c2525 0%, #d07a5c 100%)";
+      : "linear-gradient(90deg, #6e2f1f 0%, #c46a3a 100%)";
+  barFill.style.borderRadius = "999px";
+  barFill.style.transition = "width 0.3s ease";
   barFrame.appendChild(barFill);
   content.push(barFrame);
+
+  // Flask charges with visual bar
+  content.push(createFlaskChargesLine(flaskCharges, maxFlaskCharges));
 
   const stateLine = createMutedText(
     lifeState === "downed"
@@ -372,17 +413,36 @@ function createVitalitySection(
       : t("world_session.alive_state_detail"),
   );
   stateLine.style.color = lifeState === "downed" ? "#e3a6a6" : "#b9d49a";
+  stateLine.style.marginTop = "4px";
   content.push(stateLine);
-
-  // Flask charges display
-  content.push(createFlaskChargesLine(flaskCharges, maxFlaskCharges));
 
   return createSectionBlock(t("world_session.vitality"), content);
 }
 
 function createFlaskChargesLine(charges?: number, maxCharges?: number): HTMLElement {
   if (charges === undefined || maxCharges === undefined) {
-    return createMutedText(t("world_session.awaiting_flask"));
+    const line = document.createElement("div");
+    line.style.display = "flex";
+    line.style.alignItems = "center";
+    line.style.gap = "6px";
+
+    const keyHint = document.createElement("span");
+    keyHint.textContent = "[Q]";
+    keyHint.style.color = "#7a5f4a";
+    keyHint.style.fontWeight = "bold";
+    keyHint.style.fontFamily = "monospace";
+    keyHint.style.fontSize = "11px";
+    keyHint.style.background = "rgba(63, 50, 30, 0.7)";
+    keyHint.style.padding = "1px 5px";
+    keyHint.style.borderRadius = "3px";
+    line.appendChild(keyHint);
+
+    const label = document.createElement("span");
+    label.textContent = t("world_session.awaiting_flask");
+    label.style.color = "#7a5f4a";
+    label.style.fontSize = "12px";
+    line.appendChild(label);
+    return line;
   }
 
   const line = document.createElement("div");
@@ -390,20 +450,41 @@ function createFlaskChargesLine(charges?: number, maxCharges?: number): HTMLElem
   line.style.alignItems = "center";
   line.style.gap = "6px";
 
-  const label = document.createElement("span");
-  label.textContent = t("world_session.flask_charges");
-  label.style.color = "#d8c6a3";
-  label.style.fontSize = "12px";
-  label.style.minWidth = "80px";
-  line.appendChild(label);
+  const keyHint = document.createElement("span");
+  keyHint.textContent = "[Q]";
+  keyHint.style.color = charges > 0 ? "#e0c88a" : "#7a5f4a";
+  keyHint.style.fontWeight = "bold";
+  keyHint.style.fontFamily = "monospace";
+  keyHint.style.fontSize = "11px";
+  keyHint.style.background = charges > 0 ? "rgba(63, 50, 30, 0.7)" : "rgba(40, 30, 20, 0.5)";
+  keyHint.style.padding = "1px 5px";
+  keyHint.style.borderRadius = "3px";
+  line.appendChild(keyHint);
 
-  const value = document.createElement("span");
-  const isReady = charges > 0;
-  value.textContent = `${charges} / ${maxCharges}`;
-  value.style.color = isReady ? "#b9d49a" : "#7a5f4a";
-  value.style.fontSize = "12px";
-  value.style.fontWeight = "bold";
-  line.appendChild(value);
+  // Mini flask charge dots
+  const dotsWrapper = document.createElement("div");
+  dotsWrapper.style.display = "flex";
+  dotsWrapper.style.gap = "4px";
+  dotsWrapper.style.alignItems = "center";
+
+  for (let i = 0; i < maxCharges; i++) {
+    const dot = document.createElement("span");
+    const isFilled = i < charges;
+    dot.textContent = "●";
+    dot.style.color = isFilled ? "#b4512a" : "#3a2a1a";
+    dot.style.fontSize = "14px";
+    dot.style.lineHeight = "1";
+    dotsWrapper.appendChild(dot);
+  }
+
+  line.appendChild(dotsWrapper);
+
+  const fracLabel = document.createElement("span");
+  fracLabel.textContent = `${charges} / ${maxCharges}`;
+  fracLabel.style.color = charges > 0 ? "#b9d49a" : "#7a5f4a";
+  fracLabel.style.fontSize = "11px";
+  fracLabel.style.fontFamily = "monospace";
+  line.appendChild(fracLabel);
 
   return line;
 }

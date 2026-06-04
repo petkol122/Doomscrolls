@@ -27,6 +27,10 @@ import {
 } from "./worldSession/worldSessionOverlayLayout";
 import type { WorldProjectionMode } from "../worldProjection";
 import { defaultWorldProjection } from "../worldProjection";
+import {
+  sendHealingFlaskIntent,
+  registerHealingFlaskResponseListeners,
+} from "../../net/healingFlaskIntentClient";
 
 interface WorldSessionSceneData {
   readonly account: AccountState;
@@ -168,6 +172,49 @@ export class WorldSessionScene extends Phaser.Scene {
         },
       },
     );
+
+    // Task 096 — Q key -> server-authoritative healing flask intent
+    const keyboard = this.input.keyboard;
+    let qKey: Phaser.Input.Keyboard.Key | null = null;
+    if (keyboard !== null) {
+      qKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
+      qKey.on("down", () => {
+        const result = sendHealingFlaskIntent(this.room);
+        if (result.dispatched) {
+          this.feedbackView?.showNotice(t("world_area.flask_sent"));
+        }
+      });
+    }
+
+    registerHealingFlaskResponseListeners(this.room, {
+      onAccepted: (message) => {
+        this.feedbackView?.showNotice(
+          t("world_area.flask_healed", {
+            healed: message.healedAmount,
+            hp: message.remainingHp,
+          }),
+        );
+      },
+      onRejected: (message) => {
+        if (message.reason === "no_charges") {
+          this.feedbackView?.showNotice(t("world_area.flask_no_charges"));
+          return;
+        }
+        if (message.reason === "already_full_hp") {
+          this.feedbackView?.showNotice(t("world_area.flask_full_hp"));
+          return;
+        }
+        if (message.reason === "flask_on_cooldown") {
+          this.feedbackView?.showNotice(t("world_area.flask_on_cooldown"));
+          return;
+        }
+        if (message.reason === "player_downed") {
+          this.feedbackView?.showNotice(t("world_area.flask_downed"));
+          return;
+        }
+        this.feedbackView?.showNotice(t("world_area.flask_unavailable"));
+      },
+    });
 
     registerPickupWorldLootResponseListeners(this.room, {
       onAccepted: (message) => {
