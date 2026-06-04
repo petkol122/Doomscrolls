@@ -11,6 +11,7 @@ function resetEnemy(enemy: EnemyPresence): void {
   enemy.defeated = false;
   enemy.nextAttackAtMs = 0;
   enemy.respawnAtMs = 0;
+  enemy.attackLandingAtMs = 0;
 }
 
 export function respawnTownEnemies(state: TownRoomState, now: number): void {
@@ -18,6 +19,12 @@ export function respawnTownEnemies(state: TownRoomState, now: number): void {
     if (!enemy.defeated) {
       if (!Number.isFinite(enemy.respawnAtMs) || enemy.respawnAtMs < 0) {
         enemy.respawnAtMs = 0;
+      }
+      // Guard against a stale telegraph from before the enemy was
+      // marked defeated; clients should not see a warning marker on
+      // a freshly respawned enemy.
+      if (enemy.attackLandingAtMs > 0 && enemy.attackLandingAtMs < now) {
+        enemy.attackLandingAtMs = 0;
       }
       return;
     }

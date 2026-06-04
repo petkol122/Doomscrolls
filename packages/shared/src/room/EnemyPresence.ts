@@ -18,6 +18,11 @@ export class EnemyPresence extends Schema {
   @type("boolean") defeated!: boolean;
   @type("number") nextAttackAtMs!: number;
   @type("number") respawnAtMs!: number;
+  // Task 094 — server-owned attack telegraph windup.
+  // Set to the server-side wall-clock time (Date.now()) at which a
+  // telegraphed attack will land; 0 means no telegraph is active.
+  // Clients only read this to drive a transient visual warning marker.
+  @type("number") attackLandingAtMs!: number;
 }
 
 export type WorldEnemy = Pick<
@@ -33,4 +38,5 @@ export type WorldEnemy = Pick<
   | "maxHp"
   | "defeated"
   | "respawnAtMs"
+  | "attackLandingAtMs"
 >;

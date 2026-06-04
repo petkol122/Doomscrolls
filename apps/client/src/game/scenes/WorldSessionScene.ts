@@ -124,6 +124,12 @@ export class WorldSessionScene extends Phaser.Scene {
           this.feedbackView?.showNotice(t("world_session.downed_notice"));
         }
       },
+      // Task 094 — server-owned enemy attack telegraph. The server
+      // sends this before the damage lands; the client only uses it
+      // to show a brief warning marker on the enemy.
+      onEnemyAttackTelegraph: (message) => {
+        this.worldAreaView?.showEnemyTelegraph(message.enemyId);
+      },
     });
 
     registerRespawnListeners(this.room, {

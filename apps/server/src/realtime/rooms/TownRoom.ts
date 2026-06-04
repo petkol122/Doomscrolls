@@ -16,6 +16,7 @@ import type {
   ZoneId,
   RequestInteractClientMessage,
   InteractResponseServerMessage,
+  EnemyAttackTelegraphServerMessage,
 } from "@doomscrolls/shared";
 import { RoomJoinValidationService } from "../RoomJoinValidationService";
 import { CharacterService } from "../../character/CharacterService";
@@ -51,10 +52,39 @@ const ENEMY_AGGRO_RANGE = 120;
 const ENEMY_LEASH_RANGE = 180;
 const ENEMY_ATTACK_RANGE = 44;
 const ENEMY_ATTACK_COOLDOWN_MS = 1200;
+// Task 094 -- server-owned enemy attack windup. The server sends
+// `enemy_attack_telegraph` to the target client when the windup starts;
+// damage is applied after this many ms only if the target is still alive
+// and in attack range.
+const ENEMY_ATTACK_WINDUP_MS = 350;
 const ENEMY_ATTACK_DAMAGE = 2;
 const ENEMY_RETURN_ARRIVAL_DISTANCE = 1;
 const ENEMY_RETURN_REACQUIRE_BUFFER = 8;
 type ContentEnemyId = Parameters<typeof contentRegistry.enemies.get>[0];
+
+/**
+ * Task 094 -- Send the `enemy_attack_telegraph` warning to the
+ * target client. The client only uses this for transient visual
+ * warning markers; damage outcome is decided by the server.
+ */
+function sendEnemyAttackTelegraph(
+  targetClient: Client,
+  enemyId: string,
+  targetCharacterId: string,
+  windupMs: number,
+): void {
+  const telegraph: EnemyAttackTelegraphServerMessage = {
+    type: "enemy_attack_telegraph",
+    enemyId,
+    targetEntityId: targetCharacterId as unknown as EntityId,
+    windupMs,
+  };
+  try {
+    targetClient.send("enemy_attack_telegraph", telegraph);
+  } catch {
+    // keep room state authoritative even if send fails
+  }
+}
 
 function moveEnemyTowardTarget(
   enemy: { x: number; y: number },
@@ -94,20 +124,24 @@ function clearEnemyTargetAndReturn(enemy: {
   state: "idle" | "chasing" | "returning" | "defeated";
   targetPlayerSessionId: string;
   nextAttackAtMs: number;
+  attackLandingAtMs: number;
 }): void {
   enemy.targetPlayerSessionId = "";
   enemy.state = "returning";
   enemy.nextAttackAtMs = 0;
+  enemy.attackLandingAtMs = 0;
 }
 
 function resetEnemyCombatState(enemy: {
   state: "idle" | "chasing" | "returning" | "defeated";
   targetPlayerSessionId: string;
   nextAttackAtMs: number;
+  attackLandingAtMs: number;
 }): void {
   enemy.targetPlayerSessionId = "";
   enemy.state = "idle";
   enemy.nextAttackAtMs = 0;
+  enemy.attackLandingAtMs = 0;
 }
 
 function moveEnemyTowardPoint(
@@ -1196,39 +1230,90 @@ private respawnHandlerRegistered = false;
         return;
       }
 
+      // Task 094 -- Server-owned attack telegraph. Two phases:
+      // (1) telegraph + windup: when the enemy is in attack range,
+      // the cooldown has elapsed and no attack is currently
+      // mid-windup, the server sends `enemy_attack_telegraph` to the
+      // target client and stores the landing time on the enemy.
+      // (2) landing: once the windup elapses and the target is still
+      // alive and in attack range, the actual damage is applied and
+      // the existing `damage_applied` message is sent. The client
+      // never decides when damage lands.
+
+      if (enemy.attackLandingAtMs > 0) {
+        if (now < enemy.attackLandingAtMs) {
+          // Windup not yet elapsed; nothing to do this tick.
+          return;
+        }
+        // Windup elapsed. Validate that the target is still alive
+        // and still in attack range; only then apply damage.
+        const landingTarget = state.playerPresence.get(enemy.targetPlayerSessionId);
+        if (
+          landingTarget === undefined ||
+          landingTarget.hp <= 0 ||
+          Math.hypot(enemy.x - landingTarget.x, enemy.y - landingTarget.y) > ENEMY_ATTACK_RANGE
+        ) {
+          // Target moved out of range or died during the windup:
+          // cancel the telegraphed attack and re-arm the cooldown.
+          enemy.attackLandingAtMs = 0;
+          enemy.nextAttackAtMs = now + ENEMY_ATTACK_COOLDOWN_MS;
+          return;
+        }
+
+        enemy.attackLandingAtMs = 0;
+        const nextHp = Math.max(0, landingTarget.hp - ENEMY_ATTACK_DAMAGE);
+        landingTarget.hp = nextHp;
+        if (nextHp <= 0) {
+          landingTarget.lifeState = "downed";
+          landingTarget.hasMovementTarget = false;
+          landingTarget.targetX = landingTarget.x;
+          landingTarget.targetY = landingTarget.y;
+          clearPendingAction(landingTarget);
+          clearEnemyTargetAndReturn(enemy);
+        } else {
+          enemy.nextAttackAtMs = now + ENEMY_ATTACK_COOLDOWN_MS;
+        }
+
+        const landingClient = this.clients.find(
+          (client) => client.sessionId === landingTarget.sessionId,
+        );
+        if (landingClient !== undefined) {
+          const damageMessage: DamageAppliedServerMessage = {
+            type: "damage_applied",
+            targetEntityId: landingTarget.characterId as unknown as EntityId,
+            sourceEntityId: enemy.id as unknown as EntityId,
+            damage: ENEMY_ATTACK_DAMAGE,
+            remainingHp: nextHp,
+          };
+
+          try {
+            landingClient.send("damage_applied", damageMessage);
+          } catch {
+            // keep room state authoritative even if send fails
+          }
+        }
+        return;
+      }
+
       if (now < enemy.nextAttackAtMs) {
         return;
       }
 
-      enemy.nextAttackAtMs = now + ENEMY_ATTACK_COOLDOWN_MS;
-      const nextHp = Math.max(0, targetPlayer.hp - ENEMY_ATTACK_DAMAGE);
-      targetPlayer.hp = nextHp;
-      if (nextHp <= 0) {
-        targetPlayer.lifeState = "downed";
-        targetPlayer.hasMovementTarget = false;
-        targetPlayer.targetX = targetPlayer.x;
-        targetPlayer.targetY = targetPlayer.y;
-        clearPendingAction(targetPlayer);
-        clearEnemyTargetAndReturn(enemy);
-      }
+      // Start a new telegraph + windup. Damage will only be applied
+      // after ENEMY_ATTACK_WINDUP_MS on a future tick.
+      enemy.attackLandingAtMs = now + ENEMY_ATTACK_WINDUP_MS;
+      enemy.nextAttackAtMs = enemy.attackLandingAtMs + ENEMY_ATTACK_COOLDOWN_MS;
 
-      const targetClient = this.clients.find(
+      const telegraphClient = this.clients.find(
         (client) => client.sessionId === targetPlayer.sessionId,
       );
-      if (targetClient !== undefined) {
-        const message: DamageAppliedServerMessage = {
-          type: "damage_applied",
-          targetEntityId: targetPlayer.characterId as unknown as EntityId,
-          sourceEntityId: enemy.id as unknown as EntityId,
-          damage: ENEMY_ATTACK_DAMAGE,
-          remainingHp: nextHp,
-        };
-
-        try {
-          targetClient.send("damage_applied", message);
-        } catch {
-          // keep room state authoritative even if send fails
-        }
+      if (telegraphClient !== undefined) {
+        sendEnemyAttackTelegraph(
+          telegraphClient,
+          enemy.id,
+          targetPlayer.characterId,
+          ENEMY_ATTACK_WINDUP_MS,
+        );
       }
     });
   }

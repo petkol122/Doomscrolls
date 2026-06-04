@@ -8,6 +8,8 @@ const HIDDEN_POSITION = -9999;
 export interface WorldSessionEnemyPlaceholderView {
   readonly refresh: (enemy: TownRoomEnemySnapshot) => void;
   readonly hide: () => void;
+  // Task 094 - show or hide the enemy attack telegraph warning marker.
+  readonly setTelegraphing: (active: boolean) => void;
   readonly destroy: () => void;
 }
 
@@ -54,7 +56,24 @@ export function createWorldSessionEnemyPlaceholderView(
     })
     .setOrigin(0.5);
 
-  container.add([shadow, ring, body, core, stateText, hpText, labelText]);
+  // Task 094 - telegraph warning marker. A pulsing yellow triangle
+  // above the enemy that is shown only during the enemy attack windup.
+  // The marker is purely visual; the server still decides when the
+  // actual damage lands. The marker is hidden by default.
+  const telegraphMarker = scene.add.triangle(0, -22, 0, 0, 18, 0, 9, 18, 0xffe14a, 0.95);
+  telegraphMarker.setStrokeStyle(2, 0x6b4a00, 0.9);
+  telegraphMarker.setVisible(false);
+  const telegraphExclaim = scene.add
+    .text(0, -19, "!", {
+      color: "#1a0e00",
+      fontFamily: "Arial, sans-serif",
+      fontSize: "13px",
+      fontStyle: "bold",
+    })
+    .setOrigin(0.5);
+  telegraphExclaim.setVisible(false);
+
+  container.add([shadow, ring, body, core, stateText, hpText, labelText, telegraphMarker, telegraphExclaim]);
 
   body.on(Phaser.Input.Events.POINTER_DOWN, () => {
     onClick?.(enemy.id);
@@ -142,12 +161,44 @@ export function createWorldSessionEnemyPlaceholderView(
     applyEnemyVisualState(nextEnemy);
   };
 
+  // Task 094 - show or hide the telegraph warning marker. Driven
+  // exclusively by the server-sent `enemy_attack_telegraph` event.
+  let telegraphTween: Phaser.Tweens.Tween | null = null;
+  const setTelegraphing = (active: boolean): void => {
+    telegraphMarker.setVisible(active);
+    telegraphExclaim.setVisible(active);
+    if (active) {
+      if (telegraphTween === null) {
+        telegraphTween = scene.tweens.add({
+          targets: [telegraphMarker, telegraphExclaim],
+          scaleX: 1.15,
+          scaleY: 1.15,
+          yoyo: true,
+          duration: 110,
+          repeat: -1,
+        });
+      } else if (!telegraphTween.isPlaying()) {
+        telegraphTween.restart();
+      }
+    } else if (telegraphTween !== null) {
+      telegraphTween.stop();
+      telegraphTween = null;
+      telegraphMarker.setScale(1);
+      telegraphExclaim.setScale(1);
+    }
+  };
+
   applyEnemyVisualState(enemy);
 
   return {
     refresh,
     hide,
+    setTelegraphing,
     destroy: () => {
+      if (telegraphTween !== null) {
+        telegraphTween.stop();
+        telegraphTween = null;
+      }
       container.destroy(true);
     },
   };

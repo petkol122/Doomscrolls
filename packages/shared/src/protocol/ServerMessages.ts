@@ -24,6 +24,23 @@ export interface DamageAppliedServerMessage {
   readonly remainingHp: number;
 }
 
+// ---------------------------------------------------------------------------
+// Enemy attack telegraph (Task 094)
+//
+// Server-only, time-bound warning sent to the target player right before
+// an enemy attack lands. The client must not derive damage outcome from
+// this message; the server is the sole authority for whether/when damage
+// is applied. The `windupMs` value is informational and describes how
+// long the windup phase is expected to last; clients may use it for
+// transient visual warning markers only.
+// ---------------------------------------------------------------------------
+export interface EnemyAttackTelegraphServerMessage {
+  readonly type: "enemy_attack_telegraph";
+  readonly enemyId: string;
+  readonly targetEntityId: EntityId;
+  readonly windupMs: number;
+}
+
 export interface EntityDiedServerMessage {
   readonly type: "entity_died";
   readonly entityId: EntityId;
@@ -192,6 +209,7 @@ export type ServerRoomMessage =
   | RoomStateSnapshotServerMessage
   | RoomStatePatchServerMessage
   | DamageAppliedServerMessage
+  | EnemyAttackTelegraphServerMessage
   | EntityDiedServerMessage
   | XpGainedServerMessage
   | LootDroppedServerMessage

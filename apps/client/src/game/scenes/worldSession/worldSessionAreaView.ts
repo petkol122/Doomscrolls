@@ -67,6 +67,8 @@ export interface WorldSessionAreaView {
   readonly setProjectionMode: (mode: WorldProjectionMode) => void;
   readonly showEnemyFloatingDamage: (enemyId: string, text: string) => void;
   readonly showPlayerFloatingDamage: (text: string) => void;
+  // Task 094 - show the enemy attack telegraph warning marker.
+  readonly showEnemyTelegraph: (enemyId: string) => void;
   readonly destroy: () => void;
 }
 
@@ -403,6 +405,17 @@ export function createWorldSessionAreaView(
     floatingDamageView.show(selfScreenPosition.x, selfScreenPosition.y - 18, text);
   };
 
+  // Task 094 - toggle the telegraph warning marker on a specific enemy
+  // view. Driven by the server-sent `enemy_attack_telegraph` event;
+  // damage outcome is still decided server-side.
+  const showEnemyTelegraph = (enemyId: string): void => {
+    const view = enemyPlaceholders.get(enemyId);
+    if (view === undefined) {
+      return;
+    }
+    view.setTelegraphing(true);
+  };
+
   return {
     refreshFromRoomState,
     getDebugState: () => ({
@@ -413,6 +426,7 @@ export function createWorldSessionAreaView(
     setProjectionMode,
     showEnemyFloatingDamage,
     showPlayerFloatingDamage,
+    showEnemyTelegraph,
     destroy: () => {
       playerPlaceholder.destroy();
       interactablesView.destroy();
