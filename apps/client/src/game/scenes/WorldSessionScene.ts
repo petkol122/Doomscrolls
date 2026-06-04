@@ -101,6 +101,8 @@ export class WorldSessionScene extends Phaser.Scene {
       },
       onDamageApplied: (message) => {
         const isDowned = message.remainingHp <= 0;
+        // Task 092 — brief visual damage feedback near player; HP still comes from synced room state
+        this.worldAreaView?.showPlayerFloatingDamage(`-${message.damage}`);
         this.feedbackView?.showDamageFeedback(
           isDowned
             ? t("world_session.downed_damage_feedback", {

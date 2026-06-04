@@ -66,6 +66,7 @@ export interface WorldSessionAreaView {
   readonly getDebugState: () => WorldSessionDebugState;
   readonly setProjectionMode: (mode: WorldProjectionMode) => void;
   readonly showEnemyFloatingDamage: (enemyId: string, text: string) => void;
+  readonly showPlayerFloatingDamage: (text: string) => void;
   readonly destroy: () => void;
 }
 
@@ -161,6 +162,7 @@ export function createWorldSessionAreaView(
   let previousPosition: PositionSnapshot | null = null;
   let lastClickTarget: ClickTargetSnapshot | null = null;
   let projectionMode: WorldProjectionMode = defaultWorldProjection;
+  let selfScreenPosition: { readonly x: number; readonly y: number } | null = null;
   const previousEnemyHp = new Map<string, number>();
   const previousEnemyDefeated = new Map<string, boolean>();
   const previousEnemyRespawnAtMs = new Map<string, number>();
@@ -332,6 +334,7 @@ export function createWorldSessionAreaView(
     );
     const pixelX = playerScreenPosition.x;
     const pixelY = playerScreenPosition.y;
+    selfScreenPosition = { x: pixelX, y: pixelY };
 
     // Update placeholder using authoritative synced position only.
     playerPlaceholder.setPosition(pixelX, pixelY);
@@ -393,6 +396,13 @@ export function createWorldSessionAreaView(
     floatingDamageView.show(screenPos.x, screenPos.y - 18, text);
   };
 
+  const showPlayerFloatingDamage = (text: string): void => {
+    if (selfScreenPosition === null) {
+      return;
+    }
+    floatingDamageView.show(selfScreenPosition.x, selfScreenPosition.y - 18, text);
+  };
+
   return {
     refreshFromRoomState,
     getDebugState: () => ({
@@ -402,6 +412,7 @@ export function createWorldSessionAreaView(
     }),
     setProjectionMode,
     showEnemyFloatingDamage,
+    showPlayerFloatingDamage,
     destroy: () => {
       playerPlaceholder.destroy();
       interactablesView.destroy();
@@ -417,6 +428,7 @@ export function createWorldSessionAreaView(
       lootPlaceholders.clear();
       // Task 091 — Destroy floating damage view
       floatingDamageView.destroy();
+      selfScreenPosition = null;
       container.destroy(true);
     },
   };
