@@ -45,15 +45,41 @@ export function createWorldSessionEnemyPlaceholderView(
     onClick?.(enemy.id);
   });
 
+  const applyEnemyVisualState = (nextEnemy: TownRoomEnemySnapshot): void => {
+    if (nextEnemy.defeated) {
+      shadow.setFillStyle(0x000000, 0.18);
+      body.setFillStyle(0x4a4a4a, 0.75);
+      body.setStrokeStyle(2, 0x9a9a9a, 0.7);
+      body.disableInteractive();
+      core.setFillStyle(0x9c9c9c, 0.55);
+      labelText.setColor("#b8b8b8");
+      labelText.setText(`${t(nextEnemy.label)} (${t("world_area.enemy_defeated_label")})`);
+      hpText.setColor("#b8b8b8");
+      hpText.setText(t("world_area.enemy_defeated_hp"));
+      return;
+    }
+
+    shadow.setFillStyle(0x000000, 0.28);
+    body.setFillStyle(0xb12222, 0.95);
+    body.setStrokeStyle(2, 0xf0b0b0, 0.95);
+    body.setInteractive({ useHandCursor: true });
+    core.setFillStyle(0xffd7d7, 0.9);
+    labelText.setColor("#ffffff");
+    labelText.setText(`${t(nextEnemy.label)} (${nextEnemy.hp}/${nextEnemy.maxHp})`);
+    hpText.setColor("#ffdddd");
+    hpText.setText(`HP ${nextEnemy.hp}/${nextEnemy.maxHp}`);
+  };
+
   const hide = (): void => {
     container.setPosition(HIDDEN_POSITION, HIDDEN_POSITION);
   };
 
   const refresh = (nextEnemy: TownRoomEnemySnapshot): void => {
     container.setPosition(nextEnemy.x, nextEnemy.y);
-    labelText.setText(`${t(nextEnemy.label)} (${nextEnemy.hp}/${nextEnemy.maxHp})`);
-    hpText.setText(`HP ${nextEnemy.hp}/${nextEnemy.maxHp}`);
+    applyEnemyVisualState(nextEnemy);
   };
+
+  applyEnemyVisualState(enemy);
 
   return {
     refresh,

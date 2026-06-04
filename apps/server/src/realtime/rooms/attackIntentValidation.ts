@@ -8,6 +8,7 @@ export const BASIC_ATTACK_RANGE = 64;
 export type AttackIntentRejectedReason =
   | "player_not_ready"
   | "enemy_not_found"
+  | "enemy_defeated"
   | "out_of_range";
 
 export type AttackIntentValidationResult =
@@ -37,6 +38,10 @@ export function validateAttackIntent(
   const enemy = state.enemies.get(targetEnemyId);
   if (enemy === undefined) {
     return { ok: false, reason: "enemy_not_found" };
+  }
+
+  if (enemy.defeated || enemy.hp <= 0) {
+    return { ok: false, reason: "enemy_defeated" };
   }
 
   const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);

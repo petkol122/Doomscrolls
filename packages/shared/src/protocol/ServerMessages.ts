@@ -120,6 +120,7 @@ export interface RequestMoveRejectedServerMessage {
 export type RequestAttackRejectedReason =
   | "player_not_ready"
   | "enemy_not_found"
+  | "enemy_defeated"
   | "out_of_range";
 
 export interface RequestAttackAcceptedServerMessage {

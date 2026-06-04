@@ -553,8 +553,9 @@ private attackHandlerRegistered = false;
           targetEnemyId: validation.enemy.id,
           remainingHp: damageResult.remainingHp,
           appliedDamage: damageResult.appliedDamage,
+          defeated: damageResult.defeated,
         },
-        "TownRoom request_attack accepted and enemy HP updated through synced state.",
+        "TownRoom request_attack accepted and enemy HP/defeated state updated through synced state.",
       );
     });
   }

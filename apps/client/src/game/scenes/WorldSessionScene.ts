@@ -1,5 +1,6 @@
 import type { Room } from "@colyseus/sdk";
 import type { CharacterId, CharacterSummary, RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
+import { t } from "@doomscrolls/localization";
 import Phaser from "phaser";
 
 import type { AccountState } from "../../net/ApiClient";
@@ -62,11 +63,15 @@ export class WorldSessionScene extends Phaser.Scene {
 
     registerAttackResponseListeners(this.room, {
       onAccepted: () => {
-        this.showAttackFeedback("Attack confirmed");
+        this.showAttackFeedback(t("world_area.attack_confirmed"));
       },
       onRejected: (message) => {
         this.showAttackFeedback(
-          message.reason === "out_of_range" ? "Too far away" : "Attack could not be used",
+          message.reason === "out_of_range"
+            ? t("world_area.attack_too_far")
+            : message.reason === "enemy_defeated"
+              ? t("world_area.enemy_defeated")
+              : t("world_area.attack_unavailable"),
         );
       },
     });

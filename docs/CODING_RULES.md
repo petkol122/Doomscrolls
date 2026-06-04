@@ -176,6 +176,9 @@ Client auth UI rules:
 - the player body position must come from server-synced PlayerPresence x/y only; no local prediction, no movement animation, no combat animation
 - player placeholder visual rules apply only when the server syncs PlayerPresence with position data; if position is missing, the placeholder must be hidden
 - no final art, sprite animation, or gameplay-coupled facing system is implemented in placeholder tasks
+- basic attack placeholder UX may show safe client text such as "Attack sent.", "Attack confirmed." or "Too far away.", but enemy HP must still update only from synced room state and never from local client mutation
+- the current basic attack slice must keep fixed server-owned damage of 1 until a dedicated combat task changes the formula and documents the new authority rules
+- placeholder enemy death state may mark synced enemies as `defeated` when server-owned HP reaches 0, but the slice must keep the enemy in room state for now and must not add loot, XP, corpse behavior, respawn, death animation, AI or persistence without a dedicated task
 
 ## Interactable Object Rules
 
@@ -264,11 +267,13 @@ TownRoom rules:
 - `connectedPlayerCount` must derive from `playerPresence.size` on join/leave, never be set independently
 - `TownRoomState` may include an `enemies` `MapSchema<EnemyPresence>` for strictly synced placeholder enemies only
 - Core 0.1 currently ships one static Nightmarket `Trashboar Runt` placeholder enemy with synced `id`, `enemyId`, `label`, `x`, `y`, `hp`, and `maxHp`
-- Core 0.1 basic attack intent may target only synced `TownRoomState.enemies` entries; the server validates player presence, enemy existence and simple distance <= 64 before subtracting fixed damage and clamping hp at 0
+- Core 0.1 currently ships one static Nightmarket `Trashboar Runt` placeholder enemy with synced `id`, `enemyId`, `label`, `x`, `y`, `hp`, `maxHp`, and `defeated`
+- Core 0.1 basic attack intent may target only synced `TownRoomState.enemies` entries; the server validates player presence, enemy existence, non-defeated status and simple distance <= 64 before subtracting fixed damage, clamping hp at 0 and marking `defeated` when hp reaches 0
 - the client renders roomKind, zoneId and connectedPlayerCount from room state; additionally it may extract player presence via a dedicated helper (`getTownRoomPresence`) to display connected player names
 - client enemy extraction must live in a separate helper module (`apps/client/src/net/townRoomEnemies.ts`), not inside `WorldSessionScene` or `AccountShellScene`
 - client presence extraction must live in a separate helper module (`apps/client/src/net/townRoomPresence.ts`), not inside `AccountShellScene`
-- do not add enemy AI, aggro, enemy attacks, player hp damage, loot, XP, death handling, persistence, rewards, collision, pathfinding, or combat animations to this basic attack foundation without a dedicated task
+- defeated enemies may render differently on the client and show safe feedback text only; the client must not invent local death, loot, XP or removal from state
+- do not add enemy AI, aggro, enemy attacks, player hp damage, loot, XP, corpse/death handling beyond the synced `defeated` flag, persistence, rewards, collision, pathfinding, or combat animations to this basic attack foundation without a dedicated task
 - do not add a player entity list, map, movement, combat, loot, XP, inventory, equipment, corpse behavior, gameplay messages or client UI gameplay connection to `TownRoom` without a dedicated task
 - empty room registration must not be presented as gameplay
 

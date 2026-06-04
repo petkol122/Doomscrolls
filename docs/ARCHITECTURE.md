@@ -173,6 +173,8 @@ graceful SIGINT/SIGTERM shutdown
 
 The Colyseus shell now registers an empty `TownRoom` with the room name `town`. `TownRoom` accepts join attempts only after validating a real `sessionToken` and `characterId`; the selected character must belong to the authenticated account. It has no player entity, no room state schema, no map, no movement, no combat, no enemy spawning, no loot, no gameplay messages and no client UI connection yet. `CombatRoom`, movement, combat, enemy spawning, loot and gameplay messages are deferred to later Core 0.1 tasks.
 
+The current `TownRoom` combat slice is still intentionally narrow. It now supports a synced placeholder-enemy defeated state only: a server-owned basic attack may reduce synced enemy HP to 0, clamps that HP at 0, marks the synced enemy as defeated, and leaves the enemy in the Colyseus state for now. Further attacks against a defeated enemy are rejected safely. This does not introduce loot, XP, corpse handling, respawn, enemy AI, enemy attacks, player damage, death animation or persistence.
+
 The Prisma schema foundation exists, and the server validates `DATABASE_URL` so configuration is explicit. The current runtime uses persistence for auth, character APIs and room join validation, but does not implement room persistence, inventory logic, corpse recovery logic or gameplay business logic.
 
 Auth HTTP endpoints (`POST /auth/register`, `POST /auth/login`, `GET /me`) are now registered in the Fastify app via `registerAuthRoutes`. Character HTTP endpoints (`GET /characters`, `POST /characters`, `GET /characters/:characterId`) are registered via `registerCharacterRoutes`. Auth and character routes use request validation with zod, a reusable Bearer token authentication middleware and centralized safe error-to-HTTP mapping. The server owns character creation and account state; it does not implement frontend behavior, gameplay rooms, movement, combat, loot, seed data or fake character data.
@@ -258,6 +260,7 @@ Current WorldSession visual layer status:
 ```text
 WorldSessionScene is the connected realtime-room scene
 worldSessionAreaView.ts is an extracted rendering/input helper to avoid god-file growth
+worldSessionEnemyPlaceholderView.ts renders synced placeholder enemies and now applies a distinct defeated visual state from room sync only
 worldSessionOverlayView.ts is an extracted DOM helper for the connected-room debug overlay
 worldSessionInteractablesView.ts is an extracted interactable object rendering/click helper
 the client renders content-derived zone bounds for the active room zone
@@ -289,8 +292,8 @@ Server-side:
 Client-side:
   sendAttackIntent(room, targetEnemyId): dispatches request_attack intent only
   registerAttackResponseListeners(room, ...): listens for safe accepted/rejected responses
-  worldSessionEnemyPlaceholderView.ts: exposes click handling for synced enemy placeholders
-  worldSessionAreaView.ts: sends attack intent on enemy click, no local hp mutation
+  worldSessionAreaView.ts: sends attack intent on enemy click, shows synced enemy hp changes, no local hp mutation
+  WorldSessionScene: shows safe feedback ("Attack sent" / "Attack confirmed" / "Too far away")
   WorldSessionScene: shows safe feedback ("Attack sent" / "Too far away")
 
 Core 0.1 Scope:

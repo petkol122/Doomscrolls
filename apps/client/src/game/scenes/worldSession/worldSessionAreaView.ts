@@ -116,6 +116,8 @@ export function createWorldSessionAreaView(
 
   let previousPosition: PositionSnapshot | null = null;
   let lastClickTarget: ClickTargetSnapshot | null = null;
+  const previousEnemyHp = new Map<string, number>();
+  const previousEnemyDefeated = new Map<string, boolean>();
 
   const refreshFromRoomState = (nextRoom: Room<DoomscrollsRoomState>): void => {
     const zoneId = nextRoom.state.zoneId;
@@ -151,13 +153,31 @@ export function createWorldSessionAreaView(
         enemyView = createWorldSessionEnemyPlaceholderView(scene, enemy, (enemyId) => {
           const result = sendAttackIntent(nextRoom, enemyId);
           if (result.dispatched) {
-              onAttackFeedback?.("Attack requested");
+            onAttackFeedback?.(t("world_area.attack_sent"));
           }
         });
         enemyPlaceholders.set(enemy.id, enemyView);
       } else {
         enemyView.refresh(enemy);
       }
+
+      const lastHp = previousEnemyHp.get(enemy.id);
+      const lastDefeated = previousEnemyDefeated.get(enemy.id);
+      if (lastHp !== undefined && lastHp !== enemy.hp) {
+        onAttackFeedback?.(
+          enemy.defeated
+            ? t("world_area.enemy_defeated")
+            : t("world_area.enemy_hp_synced", {
+                hp: enemy.hp,
+                maxHp: enemy.maxHp,
+              }),
+        );
+      }
+      if (lastDefeated !== true && enemy.defeated) {
+        onAttackFeedback?.(t("world_area.enemy_defeated"));
+      }
+      previousEnemyHp.set(enemy.id, enemy.hp);
+      previousEnemyDefeated.set(enemy.id, enemy.defeated);
     }
 
 

@@ -9,9 +9,10 @@ export class EnemyPresence extends Schema {
   @type("number") y!: number;
   @type("number") hp!: number;
   @type("number") maxHp!: number;
+  @type("boolean") defeated!: boolean;
 }
 
 export type WorldEnemy = Pick<
   EnemyPresence,
-  "id" | "enemyId" | "label" | "x" | "y" | "hp" | "maxHp"
+  "id" | "enemyId" | "label" | "x" | "y" | "hp" | "maxHp" | "defeated"
 >;
