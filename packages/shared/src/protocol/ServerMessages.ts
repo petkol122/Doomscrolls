@@ -117,6 +117,22 @@ export interface RequestMoveRejectedServerMessage {
   readonly clientTime?: number;
 }
 
+export type RequestAttackRejectedReason =
+  | "player_not_ready"
+  | "enemy_not_found"
+  | "out_of_range";
+
+export interface RequestAttackAcceptedServerMessage {
+  readonly type: "request_attack_accepted";
+  readonly targetEnemyId: string;
+}
+
+export interface RequestAttackRejectedServerMessage {
+  readonly type: "request_attack_rejected";
+  readonly reason: RequestAttackRejectedReason;
+  readonly targetEnemyId?: string;
+}
+
 export type ServerErrorCode =
   | "invalid_message"
   | "not_authenticated"
@@ -157,5 +173,7 @@ export type ServerRoomMessage =
   | ChatMessageServerMessage
   | ZoneTransitionApprovedServerMessage
   | RequestMoveRejectedServerMessage
+  | RequestAttackAcceptedServerMessage
+  | RequestAttackRejectedServerMessage
   | InteractResponseServerMessage
   | ErrorServerMessage;

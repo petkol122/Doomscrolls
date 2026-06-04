@@ -271,6 +271,34 @@ the client does not fake or predict local movement
 the marker updates only after room-state sync from the server
 interact response messages display for 3 seconds before clearing
 roomKind display reads synced roomKind from room state
+
+### Basic attack intent foundation (Core 0.1)
+
+```text
+Network contract:
+  RequestAttackClientMessage: { type: "request_attack", targetEnemyId }
+  RequestAttackAcceptedServerMessage: { type: "request_attack_accepted", targetEnemyId }
+  RequestAttackRejectedServerMessage: { type: "request_attack_rejected", reason, targetEnemyId? }
+
+Server-side:
+  validateAttackIntent(state, player, targetEnemyId): validates player presence, enemy existence and distance <= 64
+  applyEnemyDamage(enemy, 1): subtracts fixed damage, clamps hp at 0
+  TownRoom.onMessage("request_attack", ...): orchestrates validation, sends safe accept/reject response, updates synced enemy hp
+  enemy hp remains authoritative in TownRoomState.enemies MapSchema sync
+
+Client-side:
+  sendAttackIntent(room, targetEnemyId): dispatches request_attack intent only
+  registerAttackResponseListeners(room, ...): listens for safe accepted/rejected responses
+  worldSessionEnemyPlaceholderView.ts: exposes click handling for synced enemy placeholders
+  worldSessionAreaView.ts: sends attack intent on enemy click, no local hp mutation
+  WorldSessionScene: shows safe feedback ("Attack sent" / "Too far away")
+
+Core 0.1 Scope:
+  one-click basic attack intent against synced placeholder enemies
+  fixed server-owned damage of 1
+  hp text updates only through synced room state
+  no enemy AI, enemy attacks, player damage, loot, xp, death, persistence, animations or pathfinding/collision
+```
 the overlay groups room info, player presence and movement debug into readable sections
 the overlay states clearly that it is temporary server-synced debug state, not final gameplay UI
 movement debug may show the last click target sent by the client, but position still comes only from synced room state

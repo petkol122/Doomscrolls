@@ -255,6 +255,8 @@ Spawn Trashboar Runt from content and implement AI v1.
 
 Implement Heavy Strike, damage/armor/death and tests.
 
+Status: partially implemented as the current basic attack intent foundation batch. `request_attack` is now a real shared/network contract that carries only `targetEnemyId`. `TownRoom` delegates range/existence/presence checks to `validateAttackIntent()`, applies fixed server-owned damage through `applyEnemyDamage()`, clamps synced enemy hp at 0, and sends safe accepted/rejected responses. The client sends attack intent only by clicking a synced enemy placeholder, does not mutate hp locally, and shows safe feedback from server responses while hp text updates only from room-state sync. Enemy AI, enemy attacks, player damage, loot, XP, death, persistence, combat animation and pathfinding/collision remain deferred.
+
 ### Task 019 — Corpse and Respawn
 
 Implement player death, corpse creation, safe respawn, corpse retrieval and forced recovery with durability foundation.

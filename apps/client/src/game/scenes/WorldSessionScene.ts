@@ -3,6 +3,7 @@ import type { CharacterId, CharacterSummary, RoomState as DoomscrollsRoomState }
 import Phaser from "phaser";
 
 import type { AccountState } from "../../net/ApiClient";
+import { registerAttackResponseListeners } from "../../net/attackIntentClient";
 import { registerInteractResponseListener } from "../../net/interactResponseClient";
 import { createAccountHeader } from "./accountShell/accountShellAccountHeader";
 import { applyOverlayPanelStyles, applyOverlayRootStyles } from "./accountShell/accountShellOverlayStyling";
@@ -23,6 +24,8 @@ export class WorldSessionScene extends Phaser.Scene {
   private worldAreaView: WorldSessionAreaView | null = null;
   private interactResponseText: Phaser.GameObjects.Text | null = null;
   private interactResponseTimer: Phaser.Time.TimerEvent | null = null;
+  private attackFeedbackText: Phaser.GameObjects.Text | null = null;
+  private attackFeedbackTimer: Phaser.Time.TimerEvent | null = null;
 
   public constructor() {
     super("WorldSessionScene");
@@ -59,7 +62,17 @@ export class WorldSessionScene extends Phaser.Scene {
       wordWrap: { width: 400 },
     }).setOrigin(0.5);
 
-    this.worldAreaView = createWorldSessionAreaView(this, this.room, () => {
+    this.attackFeedbackText = this.add.text(640, 226, "", {
+      color: "#e0b870",
+      fontFamily: "Arial, sans-serif",
+      fontSize: "16px",
+      align: "center",
+      wordWrap: { width: 400 },
+    }).setOrigin(0.5);
+
+    this.worldAreaView = createWorldSessionAreaView(this, this.room, (message: string) => {
+      this.showAttackFeedback(message);
+    }, () => {
       this.renderOverlay();
     });
 
@@ -79,6 +92,17 @@ export class WorldSessionScene extends Phaser.Scene {
           this.interactResponseTimer = null;
         });
       }
+    });
+
+    registerAttackResponseListeners(this.room, {
+      onAccepted: () => {
+        this.showAttackFeedback("Attack sent");
+      },
+      onRejected: (message) => {
+        this.showAttackFeedback(
+          message.reason === "out_of_range" ? "Too far away" : "Attack could not be used",
+        );
+      },
     });
 
     this.renderOverlay();
@@ -161,12 +185,35 @@ export class WorldSessionScene extends Phaser.Scene {
     this.overlay = null;
   }
 
+  private showAttackFeedback(message: string): void {
+    if (this.attackFeedbackText === null) {
+      return;
+    }
+
+    this.attackFeedbackText.setText(message);
+    if (this.attackFeedbackTimer !== null) {
+      this.time.removeEvent(this.attackFeedbackTimer);
+    }
+
+    this.attackFeedbackTimer = this.time.delayedCall(1500, () => {
+      if (this.attackFeedbackText !== null) {
+        this.attackFeedbackText.setText("");
+      }
+      this.attackFeedbackTimer = null;
+    });
+  }
+
   private handleSceneTeardown(): void {
     if (this.interactResponseTimer !== null) {
       this.time.removeEvent(this.interactResponseTimer);
       this.interactResponseTimer = null;
     }
     this.interactResponseText = null;
+    if (this.attackFeedbackTimer !== null) {
+      this.time.removeEvent(this.attackFeedbackTimer);
+      this.attackFeedbackTimer = null;
+    }
+    this.attackFeedbackText = null;
     this.worldAreaView?.destroy();
     this.worldAreaView = null;
     this.destroyOverlay();

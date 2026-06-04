@@ -1,7 +1,10 @@
 import { Room, Client } from "colyseus";
 import type {
   CharacterId,
+  RequestAttackAcceptedServerMessage,
+  RequestAttackRejectedServerMessage,
   RequestMoveRejectedServerMessage,
+  RequestAttackClientMessage,
   UserId,
   ZoneId,
   RequestInteractClientMessage,
@@ -23,6 +26,8 @@ import {
 import { initializeTownInteractables } from "./initializeTownInteractables";
 import { initializeTownEnemies } from "./initializeTownEnemies";
 import { validateInteractIntent, getInteractableResponseMessage } from "./interactValidation";
+import { validateAttackIntent } from "./attackIntentValidation";
+import { applyEnemyDamage } from "./applyEnemyDamage";
 
 /**
  * TownRoom with minimal Colyseus schema state.
@@ -79,6 +84,7 @@ export class TownRoom extends Room {
  */
 private movementIntentHandlerRegistered = false;
 private interactHandlerRegistered = false;
+private attackHandlerRegistered = false;
 
   public override async onCreate(options: TownRoomJoinOptions): Promise<void> {
     const log = createRoomLogger(
@@ -97,6 +103,7 @@ private interactHandlerRegistered = false;
 
     this.registerMovementIntentHandler(log);
     this.registerInteractHandler(log);
+    this.registerAttackHandler(log);
     this.setSimulationInterval((deltaMs: number) => {
       stepTownRoomMovement(this.state as TownRoomState, deltaMs);
     }, TOWN_MOVEMENT_TICK_RATE_MS);
@@ -479,6 +486,75 @@ private interactHandlerRegistered = false;
           objectId: message.objectId,
         },
         "TownRoom request_interact accepted and response sent.",
+      );
+    });
+  }
+
+  private registerAttackHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.attackHandlerRegistered) {
+      return;
+    }
+    this.attackHandlerRegistered = true;
+
+    this.onMessage("request_attack", (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const message = raw as Partial<RequestAttackClientMessage> | null;
+      const targetEnemyId = typeof message?.targetEnemyId === "string"
+        ? message.targetEnemyId
+        : undefined;
+      const player = state.playerPresence.get(client.sessionId);
+      const validation = validateAttackIntent(state, player, targetEnemyId ?? "");
+
+      if (!validation.ok) {
+        const rejection: RequestAttackRejectedServerMessage = {
+          type: "request_attack_rejected",
+          reason: validation.reason,
+          ...(targetEnemyId !== undefined ? { targetEnemyId } : {}),
+        };
+
+        try {
+          client.send("request_attack_rejected", rejection);
+        } catch {
+          // swallow send failures; never crash room on rejected attack intent
+        }
+
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            targetEnemyId,
+            reason: validation.reason,
+          },
+          "TownRoom request_attack rejected.",
+        );
+        return;
+      }
+
+      const damageResult = applyEnemyDamage(validation.enemy, 1);
+      const accepted: RequestAttackAcceptedServerMessage = {
+        type: "request_attack_accepted",
+        targetEnemyId: validation.enemy.id,
+      };
+
+      try {
+        client.send("request_attack_accepted", accepted);
+      } catch {
+        // swallow send failures; state sync remains authoritative
+      }
+
+      log.debug?.(
+        {
+          roomId: this.roomId,
+          roomName: this.roomName,
+          sessionId: client.sessionId,
+          targetEnemyId: validation.enemy.id,
+          remainingHp: damageResult.remainingHp,
+          appliedDamage: damageResult.appliedDamage,
+        },
+        "TownRoom request_attack accepted and enemy HP updated through synced state.",
       );
     });
   }

@@ -59,6 +59,18 @@ export interface RequestMoveClientMessage {
   readonly clientTime?: number;
 }
 
+/**
+ * Basic server-authoritative attack intent foundation.
+ *
+ * The client may only identify which synced enemy it wants to attack.
+ * The server validates presence, enemy existence and range, then decides
+ * whether HP changes. No client-sent damage is accepted.
+ */
+export interface RequestAttackClientMessage {
+  readonly type: "request_attack";
+  readonly targetEnemyId: string;
+}
+
 export interface RequestRespawnClientMessage {
   readonly type: "request_respawn";
 }
@@ -105,6 +117,7 @@ export type ClientRoomMessage =
   | EquipItemClientMessage
   | UnequipItemClientMessage
   | RequestMoveClientMessage
+  | RequestAttackClientMessage
   | RequestRespawnClientMessage
   | RetrieveCorpseClientMessage
   | ForceRecoverCorpseClientMessage

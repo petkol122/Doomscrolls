@@ -5,6 +5,7 @@ import Phaser from "phaser";
 
 import { sendMovementIntent } from "../../../net/movementIntentClient";
 import { sendInteractIntent } from "../../../net/interactIntentClient";
+import { sendAttackIntent } from "../../../net/attackIntentClient";
 import { getTownRoomPresence } from "../../../net/townRoomPresence";
 import { resolveWorldAreaBounds } from "../accountShell/resolveWorldAreaBounds";
 import { createWorldSessionPlayerPlaceholderView } from "./worldSessionPlayerPlaceholderView";
@@ -45,6 +46,7 @@ export interface WorldSessionAreaView {
 export function createWorldSessionAreaView(
   scene: Phaser.Scene,
   room: Room<DoomscrollsRoomState>,
+  onAttackFeedback?: (message: string) => void,
   onDebugStateChange?: () => void,
 ): WorldSessionAreaView {
   const container = scene.add.container(0, 0);
@@ -150,7 +152,12 @@ export function createWorldSessionAreaView(
     for (const enemy of projectedEnemies) {
       let enemyView = enemyPlaceholders.get(enemy.id);
       if (enemyView === undefined) {
-        enemyView = createWorldSessionEnemyPlaceholderView(scene, enemy);
+        enemyView = createWorldSessionEnemyPlaceholderView(scene, enemy, (enemyId) => {
+          const result = sendAttackIntent(nextRoom, enemyId);
+          if (result.dispatched) {
+            onAttackFeedback?.("Attack sent");
+          }
+        });
         enemyPlaceholders.set(enemy.id, enemyView);
       } else {
         enemyView.refresh(enemy);

@@ -264,10 +264,11 @@ TownRoom rules:
 - `connectedPlayerCount` must derive from `playerPresence.size` on join/leave, never be set independently
 - `TownRoomState` may include an `enemies` `MapSchema<EnemyPresence>` for strictly synced placeholder enemies only
 - Core 0.1 currently ships one static Nightmarket `Trashboar Runt` placeholder enemy with synced `id`, `enemyId`, `label`, `x`, `y`, `hp`, and `maxHp`
+- Core 0.1 basic attack intent may target only synced `TownRoomState.enemies` entries; the server validates player presence, enemy existence and simple distance <= 64 before subtracting fixed damage and clamping hp at 0
 - the client renders roomKind, zoneId and connectedPlayerCount from room state; additionally it may extract player presence via a dedicated helper (`getTownRoomPresence`) to display connected player names
 - client enemy extraction must live in a separate helper module (`apps/client/src/net/townRoomEnemies.ts`), not inside `WorldSessionScene` or `AccountShellScene`
 - client presence extraction must live in a separate helper module (`apps/client/src/net/townRoomPresence.ts`), not inside `AccountShellScene`
-- do not add enemy AI, aggro, attacks, damage, loot, XP, death, persistence, rewards, collision, pathfinding, or gameplay coupling to this placeholder enemy foundation without a dedicated task
+- do not add enemy AI, aggro, enemy attacks, player hp damage, loot, XP, death handling, persistence, rewards, collision, pathfinding, or combat animations to this basic attack foundation without a dedicated task
 - do not add a player entity list, map, movement, combat, loot, XP, inventory, equipment, corpse behavior, gameplay messages or client UI gameplay connection to `TownRoom` without a dedicated task
 - empty room registration must not be presented as gameplay
 

@@ -36,3 +36,12 @@ export {
   resolvePlayerMovementSpeed,
   TOWN_MOVEMENT_SPEED_FALLBACK_UNITS_PER_SECOND,
 } from "./resolvePlayerMovementSpeed";
+
+export {
+  BASIC_ATTACK_RANGE,
+  validateAttackIntent,
+} from "./attackIntentValidation";
+export type {
+  AttackIntentRejectedReason,
+  AttackIntentValidationResult,
+} from "./attackIntentValidation";
