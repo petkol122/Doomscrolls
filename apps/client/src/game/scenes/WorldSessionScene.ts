@@ -6,9 +6,13 @@ import type { AccountState } from "../../net/ApiClient";
 import { registerAttackResponseListeners } from "../../net/attackIntentClient";
 import { registerInteractResponseListener } from "../../net/interactResponseClient";
 import { createAccountHeader } from "./accountShell/accountShellAccountHeader";
-import { applyOverlayPanelStyles, applyOverlayRootStyles } from "./accountShell/accountShellOverlayStyling";
 import { createWorldSessionOverlayView } from "./worldSession/worldSessionOverlayView";
 import { createWorldSessionAreaView, type WorldSessionAreaView } from "./worldSession/worldSessionAreaView";
+import {
+  applyWorldSessionOverlayGroupStyles,
+  applyWorldSessionOverlayPanelStyles,
+  applyWorldSessionOverlayRootStyles,
+} from "./worldSession/worldSessionOverlayLayout";
 
 interface WorldSessionSceneData {
   readonly account: AccountState;
@@ -46,28 +50,28 @@ export class WorldSessionScene extends Phaser.Scene {
     }
 
     this.add
-      .text(640, 96, "Doomscrolls", {
+      .text(640, 34, "Doomscrolls", {
         color: "#d8c6a3",
         fontFamily: "Georgia, serif",
-        fontSize: "44px"
+        fontSize: "28px"
       })
       .setOrigin(0.5);
 
     // Task 057 — Create interact response message display
-    this.interactResponseText = this.add.text(640, 200, "", {
+    this.interactResponseText = this.add.text(640, 64, "", {
       color: "#d8c6a3",
       fontFamily: "Arial, sans-serif",
-      fontSize: "16px",
+      fontSize: "14px",
       align: "center",
-      wordWrap: { width: 400 },
+      wordWrap: { width: 520 },
     }).setOrigin(0.5);
 
-    this.attackFeedbackText = this.add.text(640, 226, "", {
+    this.attackFeedbackText = this.add.text(640, 86, "", {
       color: "#e0b870",
       fontFamily: "Arial, sans-serif",
-      fontSize: "16px",
+      fontSize: "14px",
       align: "center",
-      wordWrap: { width: 400 },
+      wordWrap: { width: 520 },
     }).setOrigin(0.5);
 
     this.worldAreaView = createWorldSessionAreaView(this, this.room, (message: string) => {
@@ -136,15 +140,25 @@ export class WorldSessionScene extends Phaser.Scene {
     room: Room<DoomscrollsRoomState>,
   ): HTMLDivElement {
     const root = document.createElement("div");
-    applyOverlayRootStyles(root);
+    applyWorldSessionOverlayRootStyles(root);
 
-    const panel = document.createElement("section");
-    applyOverlayPanelStyles(panel);
-    root.appendChild(panel);
+    const leftGroup = document.createElement("div");
+    applyWorldSessionOverlayGroupStyles(leftGroup);
+    root.appendChild(leftGroup);
 
-    panel.appendChild(createAccountHeader(account));
+    const accountPanel = document.createElement("section");
+    applyWorldSessionOverlayPanelStyles(accountPanel);
+    accountPanel.style.width = "fit-content";
+    accountPanel.style.minWidth = "220px";
+    accountPanel.appendChild(createAccountHeader(account));
+    leftGroup.appendChild(accountPanel);
 
-    panel.appendChild(
+    const rightGroup = document.createElement("div");
+    applyWorldSessionOverlayGroupStyles(rightGroup);
+    rightGroup.style.alignItems = "flex-end";
+    root.appendChild(rightGroup);
+
+    rightGroup.appendChild(
       createWorldSessionOverlayView(
         character,
         room,

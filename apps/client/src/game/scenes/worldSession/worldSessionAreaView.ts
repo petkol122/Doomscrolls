@@ -8,6 +8,7 @@ import { sendInteractIntent } from "../../../net/interactIntentClient";
 import { sendAttackIntent } from "../../../net/attackIntentClient";
 import { getTownRoomPresence } from "../../../net/townRoomPresence";
 import { resolveWorldAreaBounds } from "../accountShell/resolveWorldAreaBounds";
+import { resolveWorldSessionAreaLayout, type WorldSessionAreaLayout } from "./worldSessionAreaLayout";
 import { createWorldSessionPlayerPlaceholderView } from "./worldSessionPlayerPlaceholderView";
 import { createWorldSessionInteractablesView } from "./worldSessionInteractablesView";
 import { createWorldSessionEnemyPlaceholderView } from "./worldSessionEnemyPlaceholderView";
@@ -16,12 +17,6 @@ import {
   type TownRoomEnemySnapshot,
 } from "../../../net/townRoomEnemies";
 import type { WorldSessionEnemyPlaceholderView } from "./worldSessionEnemyPlaceholderView";
-
-const AREA_WIDTH = 800;
-const AREA_HEIGHT = 600;
-
-const BOUNDS_ORIGIN_X = 84;
-const BOUNDS_ORIGIN_Y = 84;
 
 interface PositionSnapshot {
   readonly x: number;
@@ -49,10 +44,11 @@ export function createWorldSessionAreaView(
   onAttackFeedback?: (message: string) => void,
   onDebugStateChange?: () => void,
 ): WorldSessionAreaView {
+  const layout = resolveWorldSessionAreaLayout(scene);
   const container = scene.add.container(0, 0);
   const frame = scene.add.graphics();
   const playerPlaceholder = createWorldSessionPlayerPlaceholderView(scene);
-  const interactablesView = createWorldSessionInteractablesView(scene, (objectId) => {
+  const interactablesView = createWorldSessionInteractablesView(scene, layout, (objectId) => {
     sendInteractIntent(room, objectId);
   });
 
@@ -60,22 +56,22 @@ export function createWorldSessionAreaView(
   const enemyPlaceholders = new Map<string, WorldSessionEnemyPlaceholderView>();
 
   const targetMarker = scene.add.circle(-9999, -9999, 7, 0xff4a4a, 0.8);
-  const targetLabel = scene.add.text(BOUNDS_ORIGIN_X, BOUNDS_ORIGIN_Y + AREA_HEIGHT + 112, "", {
+  const targetLabel = scene.add.text(layout.originX, layout.originY + layout.height + 86, "", {
     color: "#ff4a4a",
     fontFamily: "Arial, sans-serif",
     fontSize: "14px",
   });
   const lineGraphic = scene.add.graphics();
   lineGraphic.lineStyle(1, 0xffffff, 0.5);
-  const title = scene.add.text(BOUNDS_ORIGIN_X, 48, t("world_area.title"), {
+  const title = scene.add.text(layout.originX, 80, t("world_area.title"), {
     color: "#d8c6a3",
     fontFamily: "Arial, sans-serif",
     fontSize: "20px",
     fontStyle: "bold",
   });
   const instruction = scene.add.text(
-    BOUNDS_ORIGIN_X,
-    BOUNDS_ORIGIN_Y + AREA_HEIGHT + 14,
+    layout.originX,
+    layout.originY + layout.height + 14,
     t("world_area.click_instruction"),
     {
       color: "#8d7958",
@@ -83,17 +79,17 @@ export function createWorldSessionAreaView(
       fontSize: "14px",
     },
   );
-  const boundsLabel = scene.add.text(BOUNDS_ORIGIN_X, BOUNDS_ORIGIN_Y + AREA_HEIGHT + 40, "", {
+  const boundsLabel = scene.add.text(layout.originX, layout.originY + layout.height + 38, "", {
     color: "#a88d63",
     fontFamily: "Arial, sans-serif",
     fontSize: "14px",
   });
-  const positionLabel = scene.add.text(BOUNDS_ORIGIN_X, BOUNDS_ORIGIN_Y + AREA_HEIGHT + 64, "", {
+  const positionLabel = scene.add.text(layout.originX, layout.originY + layout.height + 62, "", {
     color: "#b9d49a",
     fontFamily: "Arial, sans-serif",
     fontSize: "15px",
   });
-  const statusLabel = scene.add.text(BOUNDS_ORIGIN_X, BOUNDS_ORIGIN_Y + AREA_HEIGHT + 88, "", {
+  const statusLabel = scene.add.text(layout.originX, layout.originY + layout.height + 86, "", {
     color: "#8fb0d8",
     fontFamily: "Arial, sans-serif",
     fontSize: "14px",
@@ -112,7 +108,7 @@ export function createWorldSessionAreaView(
   ]);
 
   const inputZone = scene.add
-    .zone(BOUNDS_ORIGIN_X, BOUNDS_ORIGIN_Y, AREA_WIDTH, AREA_HEIGHT)
+    .zone(layout.originX, layout.originY, layout.width, layout.height)
     .setOrigin(0, 0)
     .setInteractive({ useHandCursor: true });
 
@@ -125,7 +121,7 @@ export function createWorldSessionAreaView(
     const zoneId = nextRoom.state.zoneId;
     const bounds = resolveWorldAreaBounds(zoneId);
 
-    drawBounds(frame);
+    drawBounds(frame, layout);
     boundsLabel.setText(
       `zone=${zoneId} bounds: x=${bounds.minX}..${bounds.maxX}, y=${bounds.minY}..${bounds.maxY}`,
     );
@@ -136,7 +132,7 @@ export function createWorldSessionAreaView(
     // Task 058 — Refresh enemies view
     const currentEnemies = getTownRoomEnemies(nextRoom.state);
     const projectedEnemies = currentEnemies
-      .map((enemy: TownRoomEnemySnapshot) => projectEnemyToArea(enemy, bounds))
+      .map((enemy: TownRoomEnemySnapshot) => projectEnemyToArea(enemy, layout, bounds))
       .filter((enemy: TownRoomEnemySnapshot | null): enemy is TownRoomEnemySnapshot => enemy !== null);
     const newEnemyIds = new Set(projectedEnemies.map((enemy: TownRoomEnemySnapshot) => enemy.id));
 
@@ -168,10 +164,10 @@ export function createWorldSessionAreaView(
 
     inputZone.removeAllListeners();
     inputZone.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
-      const localX = Phaser.Math.Clamp(pointer.x - BOUNDS_ORIGIN_X, 0, AREA_WIDTH);
-      const localY = Phaser.Math.Clamp(pointer.y - BOUNDS_ORIGIN_Y, 0, AREA_HEIGHT);
-      const worldX = bounds.minX + (localX / AREA_WIDTH) * (bounds.maxX - bounds.minX);
-      const worldY = bounds.minY + (localY / AREA_HEIGHT) * (bounds.maxY - bounds.minY);
+      const localX = Phaser.Math.Clamp(pointer.x - layout.originX, 0, layout.width);
+      const localY = Phaser.Math.Clamp(pointer.y - layout.originY, 0, layout.height);
+      const worldX = bounds.minX + (localX / layout.width) * (bounds.maxX - bounds.minX);
+      const worldY = bounds.minY + (localY / layout.height) * (bounds.maxY - bounds.minY);
       lastClickTarget = { x: Math.round(worldX), y: Math.round(worldY) };
       onDebugStateChange?.();
       sendMovementIntent(nextRoom, lastClickTarget.x, lastClickTarget.y);
@@ -192,16 +188,16 @@ export function createWorldSessionAreaView(
     }
 
     const { x, y } = self.position;
-    const pixelX = BOUNDS_ORIGIN_X + ((x - bounds.minX) / (bounds.maxX - bounds.minX)) * AREA_WIDTH;
-    const pixelY = BOUNDS_ORIGIN_Y + ((y - bounds.minY) / (bounds.maxY - bounds.minY)) * AREA_HEIGHT;
+    const pixelX = layout.originX + ((x - bounds.minX) / (bounds.maxX - bounds.minX)) * layout.width;
+    const pixelY = layout.originY + ((y - bounds.minY) / (bounds.maxY - bounds.minY)) * layout.height;
 
     // Update placeholder using authoritative synced position only.
     playerPlaceholder.setPosition(pixelX, pixelY);
 
     // Update target marker and line if a click target exists (debug, non-authoritative)
     if (lastClickTarget) {
-      const targetPixelX = BOUNDS_ORIGIN_X + ((lastClickTarget.x - bounds.minX) / (bounds.maxX - bounds.minX)) * AREA_WIDTH;
-      const targetPixelY = BOUNDS_ORIGIN_Y + ((lastClickTarget.y - bounds.minY) / (bounds.maxY - bounds.minY)) * AREA_HEIGHT;
+      const targetPixelX = layout.originX + ((lastClickTarget.x - bounds.minX) / (bounds.maxX - bounds.minX)) * layout.width;
+      const targetPixelY = layout.originY + ((lastClickTarget.y - bounds.minY) / (bounds.maxY - bounds.minY)) * layout.height;
       targetMarker.setPosition(targetPixelX, targetPixelY);
       targetLabel.setText(`Target: ${lastClickTarget.x}, ${lastClickTarget.y} (non-auth)`);
       lineGraphic.clear();
@@ -246,16 +242,9 @@ export function createWorldSessionAreaView(
   };
 }
 
-function drawBounds(graphics: Phaser.GameObjects.Graphics): void {
-  graphics.clear();
-  graphics.fillStyle(0x1a1510, 1);
-  graphics.fillRect(BOUNDS_ORIGIN_X, BOUNDS_ORIGIN_Y, AREA_WIDTH, AREA_HEIGHT);
-  graphics.lineStyle(2, 0x5f4a2f, 1);
-  graphics.strokeRect(BOUNDS_ORIGIN_X, BOUNDS_ORIGIN_Y, AREA_WIDTH, AREA_HEIGHT);
-}
-
 function projectEnemyToArea(
   enemy: TownRoomEnemySnapshot,
+  layout: WorldSessionAreaLayout,
   bounds: { readonly minX: number; readonly maxX: number; readonly minY: number; readonly maxY: number },
 ): TownRoomEnemySnapshot | null {
   const width = bounds.maxX - bounds.minX;
@@ -281,7 +270,15 @@ function projectEnemyToArea(
 
   return {
     ...enemy,
-    x: BOUNDS_ORIGIN_X + normalizedX * AREA_WIDTH,
-    y: BOUNDS_ORIGIN_Y + normalizedY * AREA_HEIGHT,
+    x: layout.originX + normalizedX * layout.width,
+    y: layout.originY + normalizedY * layout.height,
   };
+}
+
+function drawBounds(graphics: Phaser.GameObjects.Graphics, layout: WorldSessionAreaLayout): void {
+  graphics.clear();
+  graphics.fillStyle(0x1a1510, 1);
+  graphics.fillRect(layout.originX, layout.originY, layout.width, layout.height);
+  graphics.lineStyle(2, 0x5f4a2f, 1);
+  graphics.strokeRect(layout.originX, layout.originY, layout.width, layout.height);
 }

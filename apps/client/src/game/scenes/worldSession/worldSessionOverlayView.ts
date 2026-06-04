@@ -6,6 +6,7 @@ import { formatTownRoomState } from "../../../net/RealtimeClient";
 import { getTownRoomPresence } from "../../../net/townRoomPresence";
 import { createButton, createInfoLine } from "../accountShell/accountShellDom";
 import type { WorldSessionDebugState } from "./worldSessionAreaView";
+import { applyWorldSessionOverlayPanelStyles } from "./worldSessionOverlayLayout";
 
 export function createWorldSessionOverlayView(
   character: CharacterSummary | null,
@@ -17,9 +18,9 @@ export function createWorldSessionOverlayView(
 
   const title = document.createElement("h2");
   title.textContent = t("world_session.title");
-  title.style.margin = "0 0 12px";
+  title.style.margin = "0 0 8px";
   title.style.fontFamily = "Georgia, serif";
-  title.style.fontSize = "24px";
+  title.style.fontSize = "20px";
   section.appendChild(title);
 
   const status = document.createElement("p");
@@ -30,13 +31,13 @@ export function createWorldSessionOverlayView(
 
   const notice = document.createElement("p");
   notice.textContent = t("world_session.debug_notice");
-  notice.style.margin = "0 0 14px";
-  notice.style.padding = "10px 12px";
+  notice.style.margin = "0 0 12px";
+  notice.style.padding = "8px 10px";
   notice.style.border = "1px solid #5f4a2f";
   notice.style.borderRadius = "8px";
   notice.style.background = "rgba(31, 24, 18, 0.95)";
   notice.style.color = "#d6c29d";
-  notice.style.fontSize = "13px";
+  notice.style.fontSize = "12px";
   section.appendChild(notice);
 
   if (character !== null) {
@@ -59,7 +60,7 @@ export function createWorldSessionOverlayView(
   section.appendChild(createMovementDebugSection(room, debugState));
 
   const leaveButton = createButton(t("world_entry.leave_world"));
-  leaveButton.style.marginTop = "14px";
+  leaveButton.style.marginTop = "12px";
   leaveButton.addEventListener("click", () => {
     onLeaveWorld();
   });
@@ -70,26 +71,24 @@ export function createWorldSessionOverlayView(
 
 function createCardSection(): HTMLElement {
   const section = document.createElement("section");
-  section.style.margin = "18px 0 22px";
-  section.style.padding = "16px";
-  section.style.border = "1px solid #3d3324";
-  section.style.borderRadius = "8px";
-  section.style.background = "rgba(18, 14, 11, 0.9)";
+  applyWorldSessionOverlayPanelStyles(section);
+  section.style.margin = "0";
+  section.style.width = "320px";
   return section;
 }
 
 function createSectionBlock(titleText: string, children: readonly HTMLElement[]): HTMLElement {
   const wrapper = document.createElement("section");
-  wrapper.style.margin = "0 0 14px";
-  wrapper.style.padding = "12px";
+  wrapper.style.margin = "0 0 10px";
+  wrapper.style.padding = "10px";
   wrapper.style.border = "1px solid #31271c";
   wrapper.style.borderRadius = "8px";
   wrapper.style.background = "rgba(12, 10, 8, 0.72)";
 
   const title = document.createElement("h3");
   title.textContent = titleText;
-  title.style.margin = "0 0 10px";
-  title.style.fontSize = "15px";
+  title.style.margin = "0 0 8px";
+  title.style.fontSize = "14px";
   title.style.color = "#d8c6a3";
   wrapper.appendChild(title);
 
@@ -118,7 +117,7 @@ function createPresenceSection(room: Room<DoomscrollsRoomState>): HTMLElement {
   playerList.style.margin = "0";
   playerList.style.padding = "0 0 0 18px";
   playerList.style.color = "#b9d49a";
-  playerList.style.fontSize = "13px";
+  playerList.style.fontSize = "12px";
 
   for (const player of presence.players) {
     const li = document.createElement("li");
@@ -177,6 +176,6 @@ function createMutedText(text: string): HTMLElement {
   paragraph.textContent = text;
   paragraph.style.margin = "0";
   paragraph.style.color = "#a88d63";
-  paragraph.style.fontSize = "13px";
+  paragraph.style.fontSize = "12px";
   return paragraph;
 }

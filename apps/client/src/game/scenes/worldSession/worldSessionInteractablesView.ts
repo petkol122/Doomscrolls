@@ -2,6 +2,9 @@ import Phaser from "phaser";
 import type { RoomState } from "@doomscrolls/shared";
 import type { Room } from "@colyseus/sdk";
 
+import { resolveWorldAreaBounds } from "../accountShell/resolveWorldAreaBounds";
+import type { WorldSessionAreaLayout } from "./worldSessionAreaLayout";
+
 /**
  * Task 057 — Interactable Object Foundation Batch
  *
@@ -13,13 +16,9 @@ export interface WorldSessionInteractablesView {
   readonly destroy: () => void;
 }
 
-const BOUNDS_ORIGIN_X = 84;
-const BOUNDS_ORIGIN_Y = 84;
-const AREA_WIDTH = 800;
-const AREA_HEIGHT = 600;
-
 export function createWorldSessionInteractablesView(
   scene: Phaser.Scene,
+  layout: WorldSessionAreaLayout,
   onInteractClick: (objectId: string) => void,
 ): WorldSessionInteractablesView {
   const container = scene.add.container(0, 0);
@@ -46,9 +45,7 @@ export function createWorldSessionInteractablesView(
       return;
     }
 
-    // Get zone bounds for coordinate mapping (reuse from area view logic)
-    const defaultBounds = { minX: 0, maxX: 800, minY: 0, maxY: 600 };
-    const bounds = defaultBounds; // In a real scenario, resolve from content
+    const bounds = resolveWorldAreaBounds(String(room.state.zoneId));
 
     interactables.forEach((value) => {
       const objectId = String(value.id ?? "");
@@ -58,8 +55,8 @@ export function createWorldSessionInteractablesView(
       const y = typeof value.y === "number" ? value.y : 0;
 
       // Map world coordinates to pixel coordinates
-      const pixelX = BOUNDS_ORIGIN_X + ((x - bounds.minX) / (bounds.maxX - bounds.minX)) * AREA_WIDTH;
-      const pixelY = BOUNDS_ORIGIN_Y + ((y - bounds.minY) / (bounds.maxY - bounds.minY)) * AREA_HEIGHT;
+      const pixelX = layout.originX + ((x - bounds.minX) / (bounds.maxX - bounds.minX)) * layout.width;
+      const pixelY = layout.originY + ((y - bounds.minY) / (bounds.maxY - bounds.minY)) * layout.height;
 
       // Draw a simple square placeholder for the object
       const graphic = scene.add.graphics();
