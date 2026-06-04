@@ -55,6 +55,7 @@ import type {
 } from "@doomscrolls/shared";
 import { respawnTownEnemies } from "./respawnTownEnemies";
 import { spawnWorldLootOnEnemyDefeat } from "./spawnWorldLootOnEnemyDefeat";
+import { applyWanderMovement, clearWanderState } from "./wanderEnemies";
 import { persistPickedUpWorldLootToInventory } from "./pickupWorldLootInventory";
 import { validatePickupWorldLootIntent } from "./pickupWorldLootValidation";
 import { clearPendingAction, setPendingAction } from "./pendingActionState";
@@ -1525,6 +1526,8 @@ private healingFlaskHandlerRegistered = false;
           || !canReacquireWhileReturning
         ) {
           enemy.state = "idle";
+          // Task 107 — idle enemies wander near their spawn point
+          applyWanderMovement(enemy, enemyMoveSpeed, deltaMs, now);
           return;
         }
 

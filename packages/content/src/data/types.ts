@@ -25,6 +25,17 @@ export type ZoneRoomType = "town" | "combat";
 export type SpawnPointContentId = "nightmarket_spawn";
 export type EquipmentSlotCategory = "weapon" | "armor" | "accessory" | "belt" | "flask";
 
+export interface SpawnZoneDefinition {
+  readonly id: string;
+  readonly zoneId: string;
+  readonly enemyId: EnemyId;
+  readonly count: number;
+  readonly minX: number;
+  readonly maxX: number;
+  readonly minY: number;
+  readonly maxY: number;
+}
+
 export interface LocalizedContentDefinition {
   readonly id: string;
   readonly nameKey: ContentLocalizationKey;

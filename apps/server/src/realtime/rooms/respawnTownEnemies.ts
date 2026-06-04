@@ -1,6 +1,7 @@
 import type { EnemyPresence } from "@doomscrolls/shared";
 
 import type { TownRoomState } from "./TownRoomState";
+import { clearWanderState } from "./wanderEnemies";
 
 function resetEnemy(enemy: EnemyPresence): void {
   enemy.state = "idle";
@@ -12,6 +13,7 @@ function resetEnemy(enemy: EnemyPresence): void {
   enemy.nextAttackAtMs = 0;
   enemy.respawnAtMs = 0;
   enemy.attackLandingAtMs = 0;
+  clearWanderState(enemy.id);
 }
 
 export function respawnTownEnemies(state: TownRoomState, now: number): void {

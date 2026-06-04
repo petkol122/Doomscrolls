@@ -3,41 +3,49 @@ import { EnemyPresence, type ZoneId } from "@doomscrolls/shared";
 
 import type { TownRoomState } from "./TownRoomState";
 
-const NIGHTMARKET_TRASHBOAR_PLACEHOLDER_ID = "nightmarket_trashboar_runt_01";
+function randomInRange(min: number, max: number): number {
+  return min + Math.random() * (max - min);
+}
 
 /**
- * Task 058 — Basic Enemy Placeholder Foundation Batch
- *
- * Adds a single static synced enemy placeholder to the room state.
- * This is intentionally data/display only:
- * no AI, aggro, movement, combat, damage, loot, XP, death, or persistence.
+ * Spawns enemies from content-driven spawn zone definitions.
+ * Each enemy gets a deterministic id based on the zone and enemy type.
+ * Positions are randomly placed within the spawn zone bounds.
  */
 export function initializeTownEnemies(
   state: TownRoomState,
   zoneId: ZoneId,
 ): void {
-  if (zoneId !== "nightmarket") {
-    return;
+  for (const zone of contentRegistry.spawnZones) {
+    if (zone.zoneId !== zoneId) {
+      continue;
+    }
+
+    const enemyContent = contentRegistry.enemies.require(zone.enemyId);
+
+    for (let i = 0; i < zone.count; i++) {
+      const x = Math.round(randomInRange(zone.minX, zone.maxX));
+      const y = Math.round(randomInRange(zone.minY, zone.maxY));
+      const id = `${zone.id}_${i}`;
+
+      const enemy = new EnemyPresence();
+      enemy.id = id;
+      enemy.enemyId = enemyContent.id;
+      enemy.label = enemyContent.nameKey;
+      enemy.spawnX = x;
+      enemy.spawnY = y;
+      enemy.x = x;
+      enemy.y = y;
+      enemy.state = "idle";
+      enemy.targetPlayerSessionId = "";
+      enemy.hp = enemyContent.maxHp;
+      enemy.maxHp = enemyContent.maxHp;
+      enemy.defeated = false;
+      enemy.nextAttackAtMs = 0;
+      enemy.respawnAtMs = 0;
+      enemy.attackLandingAtMs = 0;
+
+      state.enemies.set(enemy.id, enemy);
+    }
   }
-
-  const trashboarRuntContent = contentRegistry.enemies.require("trashboar_runt");
-
-  const enemy = new EnemyPresence();
-  enemy.id = NIGHTMARKET_TRASHBOAR_PLACEHOLDER_ID;
-  enemy.enemyId = trashboarRuntContent.id;
-  enemy.label = trashboarRuntContent.nameKey;
-  enemy.spawnX = 240;
-  enemy.spawnY = 160;
-  enemy.x = 240;
-  enemy.y = 160;
-  enemy.state = "idle";
-  enemy.targetPlayerSessionId = "";
-  enemy.hp = trashboarRuntContent.maxHp;
-  enemy.maxHp = trashboarRuntContent.maxHp;
-  enemy.defeated = false;
-  enemy.nextAttackAtMs = 0;
-  enemy.respawnAtMs = 0;
-  enemy.attackLandingAtMs = 0;
-
-  state.enemies.set(enemy.id, enemy);
 }

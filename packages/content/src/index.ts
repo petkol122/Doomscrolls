@@ -20,6 +20,7 @@ export { items } from "./data/items";
 export { lootTables } from "./data/lootTables";
 export { zones } from "./data/zones";
 export { spawnPoints } from "./data/spawnPoints";
+export { spawnZones } from "./data/spawnZones";
 export { levelTables } from "./data/levelTables";
 export { equipmentSlots } from "./data/equipmentSlots";
 
@@ -41,6 +42,7 @@ export type {
   SkillTargetingMode,
   SpawnPointContentDefinition,
   SpawnPointContentId,
+  SpawnZoneDefinition,
   ZoneContentBounds,
   ZoneContentDefinition,
   ZoneContentId,
