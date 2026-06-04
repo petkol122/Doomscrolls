@@ -10,6 +10,7 @@ import {
   createEmptyEquipmentLoadout,
   createEquipmentPanelSection,
 } from "./worldSessionEquipmentView";
+import { makeInteractive } from "./worldSessionPointerEvents";
 import type { EquipmentLoadout } from "@doomscrolls/shared";
 import {
   applyWorldSessionOverlayPanelStyles,
@@ -109,6 +110,7 @@ export function createWorldSessionOverlayView(
       respawnButton.addEventListener("click", () => {
         onRespawn();
       });
+      makeInteractive(respawnButton);
       panel.appendChild(respawnButton);
     }
 
@@ -242,6 +244,7 @@ function createCharacterChip(
   leaveButton.addEventListener("click", () => {
     onLeaveWorld();
   });
+  makeInteractive(leaveButton);
   panel.appendChild(leaveButton);
 
   return panel;
@@ -253,6 +256,7 @@ function createControlsSection(isOpen: boolean, onOpenChange: (open: boolean) =>
   details.style.border = "1px solid #31271c";
   details.style.borderRadius = "8px";
   details.style.background = "rgba(12, 10, 8, 0.72)";
+  makeInteractive(details);
   details.addEventListener("toggle", () => {
     onOpenChange(details.open);
   });
@@ -265,6 +269,7 @@ function createControlsSection(isOpen: boolean, onOpenChange: (open: boolean) =>
   summary.style.fontSize = "12px";
   summary.style.color = "#d8c6a3";
   summary.style.fontWeight = "bold";
+  makeInteractive(summary);
   details.appendChild(summary);
 
   const controls = document.createElement("div");
@@ -334,6 +339,7 @@ function createProjectionSection(
   topDownButton.addEventListener("click", () => {
     onProjectionModeChange("debug_top_down");
   });
+  makeInteractive(topDownButton);
 
   const isometricButton = createButton(t("world_session.projection_isometric_preview"));
   isometricButton.style.flex = "1";
@@ -341,6 +347,7 @@ function createProjectionSection(
   isometricButton.addEventListener("click", () => {
     onProjectionModeChange("isometric_preview");
   });
+  makeInteractive(isometricButton);
 
   buttonRow.append(topDownButton, isometricButton);
   wrapper.appendChild(buttonRow);
@@ -678,6 +685,7 @@ function createInventoryPanelSection(
   wrapper.style.borderRadius = "8px";
   wrapper.style.background = "rgba(12, 10, 8, 0.72)";
   wrapper.style.padding = "0";
+  makeInteractive(wrapper);
 
   const summary = document.createElement("summary");
   summary.textContent = `Inventory (${items.length})`;
@@ -687,6 +695,7 @@ function createInventoryPanelSection(
   summary.style.fontSize = "13px";
   summary.style.color = "#d8c6a3";
   summary.style.fontWeight = "bold";
+  makeInteractive(summary);
   wrapper.appendChild(summary);
 
   const content = document.createElement("div");
@@ -727,6 +736,7 @@ function createDebugPanel(
   details.style.border = "1px solid #31271c";
   details.style.borderRadius = "8px";
   details.style.background = "rgba(12, 10, 8, 0.56)";
+  makeInteractive(details);
 
   const summary = document.createElement("summary");
   summary.textContent = "Debug Panel";
@@ -736,6 +746,7 @@ function createDebugPanel(
   summary.style.fontSize = "12px";
   summary.style.color = "#a88d63";
   summary.style.fontWeight = "bold";
+  makeInteractive(summary);
   details.appendChild(summary);
 
   const content = document.createElement("div");
@@ -795,6 +806,7 @@ function createInventorySummarySection(
     const isSelected = getSelectedItemId() === item.itemInstanceId;
     row.style.marginBottom = "6px";
     row.style.listStyle = "none";
+    makeInteractive(row);
 
     const button = createButton(item.label);
     button.style.width = "100%";
@@ -809,6 +821,7 @@ function createInventorySummarySection(
     button.addEventListener("click", () => {
       onSelectItem(item.itemInstanceId);
     });
+    makeInteractive(button);
     row.appendChild(button);
     list.appendChild(row);
   }
@@ -861,6 +874,7 @@ function createInventoryDetailSection(
     equipButton.style.padding = "6px 8px";
     equipButton.style.background = "rgba(49, 65, 38, 0.9)";
     equipButton.style.border = "1px solid #6a8a4a";
+    makeInteractive(equipButton);
     equipButton.addEventListener("click", async () => {
       equipButton.disabled = true;
       equipButton.textContent = "Equipping...";

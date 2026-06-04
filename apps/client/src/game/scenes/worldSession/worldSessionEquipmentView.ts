@@ -8,6 +8,7 @@ import type {
 } from "@doomscrolls/shared";
 import type { EquipmentUpdatedServerMessage } from "@doomscrolls/shared";
 import { createMutedText } from "./worldSessionOverlayView";
+import { makeInteractive } from "./worldSessionPointerEvents";
 
 export const EQUIPMENT_SLOTS: readonly EquipmentSlot[] = [
   "weapon",
@@ -75,7 +76,7 @@ export function createEquipmentPanelSection(
   wrapper.style.borderRadius = "8px";
   wrapper.style.background = "rgba(12, 10, 8, 0.72)";
   wrapper.style.padding = "0";
-  wrapper.style.pointerEvents = "auto";
+  makeInteractive(wrapper);
   wrapper.addEventListener("toggle", () => {
     onOpenChange?.(wrapper.open);
   });
@@ -88,7 +89,7 @@ export function createEquipmentPanelSection(
   summary.style.fontSize = "13px";
   summary.style.color = "#d8c6a3";
   summary.style.fontWeight = "bold";
-  summary.style.pointerEvents = "auto";
+  makeInteractive(summary);
   wrapper.appendChild(summary);
 
   const content = document.createElement("div");
@@ -132,7 +133,7 @@ export function updateEquipmentPanelSection(
     row.style.borderRadius = "6px";
     row.style.background = "rgba(18, 14, 10, 0.88)";
     row.style.fontSize = "11px";
-    row.style.pointerEvents = "auto";
+    makeInteractive(row);
 
     const slotLabel = document.createElement("span");
     slotLabel.textContent = t(SLOT_LABEL_KEYS[slot]);

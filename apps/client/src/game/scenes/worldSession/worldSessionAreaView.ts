@@ -653,6 +653,26 @@ function drawBounds(graphics: Phaser.GameObjects.Graphics, layout: WorldSessionA
   graphics.clear();
   graphics.fillStyle(0x1a1510, 1);
   graphics.fillRect(layout.originX, layout.originY, layout.width, layout.height);
+
+  // Subtle debug/world backdrop grid. Clearly placeholder: drawn on the same
+  // graphics as the area fill, lives at the back of the container that owns
+  // `frame`, and all player/enemy/loot/interactable views are children of
+  // the scene (not the container) so they render above this backdrop with
+  // no z-order changes. Screen-space grid: it gives visual scale to the
+  // visible world area without implying any world-space grid, collision,
+  // pathfinding, tilesets, or real map art. Camera/zoom/click math is
+  // untouched.
+  const cellSize = 50;
+  graphics.lineStyle(1, 0x6b5436, 0.18);
+  const right = layout.originX + layout.width;
+  const bottom = layout.originY + layout.height;
+  for (let x = layout.originX + cellSize; x < right; x += cellSize) {
+    graphics.lineBetween(x, layout.originY, x, bottom);
+  }
+  for (let y = layout.originY + cellSize; y < bottom; y += cellSize) {
+    graphics.lineBetween(layout.originX, y, right, y);
+  }
+
   graphics.lineStyle(2, 0x5f4a2f, 1);
   graphics.strokeRect(layout.originX, layout.originY, layout.width, layout.height);
 }

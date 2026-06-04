@@ -6,6 +6,9 @@ export function applyWorldSessionOverlayRootStyles(root: HTMLDivElement): void {
   root.style.gridTemplateRows = "auto minmax(0, 1fr) auto";
   root.style.gridTemplateAreas = '"status utility" ". utility" "hud hud"';
   root.style.alignItems = "start";
+  // Root overlay stays passive so ground clicks still reach the Phaser canvas
+  // through empty space. Interactive children opt back in via
+  // `makeInteractive()` from `worldSessionPointerEvents`.
   root.style.pointerEvents = "none";
   root.style.fontFamily = "Arial, sans-serif";
   root.style.padding = "12px 14px 16px";
