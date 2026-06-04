@@ -2,7 +2,10 @@ import type {
   InteractResponseServerMessage,
   RequestAttackAcceptedServerMessage,
   RequestPickupWorldLootAcceptedServerMessage,
+  XpGainedServerMessage,
 } from "@doomscrolls/shared";
+
+import { CharacterRepository } from "../../persistence/repositories";
 
 import { consumeAttackCooldown } from "./attackCooldown";
 import { validateAttackIntent } from "./attackIntentValidation";
@@ -20,6 +23,27 @@ export interface DeferredActionExecutionContext {
   readonly player: PlayerPresence;
   readonly now: number;
   readonly sendToClient: (type: string, payload: unknown) => void;
+}
+
+const TRASHBOAR_RUNT_XP_REWARD = 5;
+
+async function grantEnemyDefeatXp(player: PlayerPresence, enemyId: string, sendToClient: (type: string, payload: unknown) => void): Promise<void> {
+  if (enemyId !== "trashboar_runt") {
+    return;
+  }
+
+  const nextXp = player.xp + TRASHBOAR_RUNT_XP_REWARD;
+  player.xp = nextXp;
+
+  await new CharacterRepository().updateXpAndLevel(player.characterId, nextXp, player.level);
+
+  const xpGained: XpGainedServerMessage = {
+    type: "xp_gained",
+    characterId: player.characterId,
+    amount: TRASHBOAR_RUNT_XP_REWARD,
+    totalXp: nextXp,
+  };
+  sendToClient("xp_gained", xpGained);
 }
 
 export async function tryExecutePendingAction(context: DeferredActionExecutionContext): Promise<void> {
@@ -68,6 +92,7 @@ export async function tryExecutePendingAction(context: DeferredActionExecutionCo
     const damageResult = applyEnemyDamage(validation.enemy, 1);
     if (damageResult.defeated) {
       spawnWorldLootOnEnemyDefeat(state, validation.enemy, now);
+      await grantEnemyDefeatXp(player, validation.enemy.enemyId, sendToClient);
     }
 
     const accepted: RequestAttackAcceptedServerMessage = {

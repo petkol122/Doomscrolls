@@ -28,6 +28,8 @@ export interface PlayerPresenceEntry {
   readonly sessionId: string;
   readonly characterId: CharacterId;
   readonly displayName: string;
+  readonly level?: number;
+  readonly xp?: number;
   readonly lifeState?: "alive" | "downed";
   readonly hp?: number;
   readonly maxHp?: number;
@@ -99,7 +101,8 @@ export function getTownRoomPresence(
     };
 
     const withSpawn = applyOptionalSpawnPoint(baseEntry, value);
-    const withLifeState = applyOptionalLifeState(withSpawn, value);
+    const withProgression = applyOptionalProgression(withSpawn, value);
+    const withLifeState = applyOptionalLifeState(withProgression, value);
     const withVitality = applyOptionalVitality(withLifeState, value);
     const withPosition = applyOptionalPosition(withVitality, value);
     const withMovementSpeed = applyOptionalMovementSpeed(withPosition, value);
@@ -110,6 +113,25 @@ export function getTownRoomPresence(
   return {
     connectedPlayerCount: presenceMap.size,
     players,
+  };
+}
+
+function applyOptionalProgression(
+  entry: PlayerPresenceEntry,
+  value: Record<string, unknown>,
+): PlayerPresenceEntry {
+  const rawLevel = value.level;
+  const rawXp = value.xp;
+  if (typeof rawLevel !== "number" || typeof rawXp !== "number") {
+    return entry;
+  }
+  if (!Number.isFinite(rawLevel) || !Number.isFinite(rawXp)) {
+    return entry;
+  }
+  return {
+    ...entry,
+    level: Math.max(1, Math.floor(rawLevel)),
+    xp: Math.max(0, Math.floor(rawXp)),
   };
 }
 

@@ -120,6 +120,17 @@ export function createWorldSessionOverlayView(
     selfPresence?.maxFlaskCharges,
   ));
 
+  section.appendChild(createSectionBlock(t("world_session.progression"), [
+    createInfoLine(
+      t("character.level"),
+      String(selfPresence?.level ?? character?.level ?? 1),
+    ),
+    createInfoLine(
+      t("world_session.player_xp"),
+      String(selfPresence?.xp ?? character?.xp ?? 0),
+    ),
+  ]));
+
   // Future: Diablo-like right orb — placeholder until class resource (mana/rage/energy) system lands
   section.appendChild(createResourcePlaceholderSection());
 

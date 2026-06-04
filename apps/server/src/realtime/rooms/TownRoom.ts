@@ -20,6 +20,7 @@ import type {
   RequestDodgeAcceptedServerMessage,
   RequestDodgeRejectedServerMessage,
   RequestDodgeClientMessage,
+  XpGainedServerMessage,
 } from "@doomscrolls/shared";
 import { RoomJoinValidationService } from "../RoomJoinValidationService";
 import { CharacterService } from "../../character/CharacterService";
@@ -61,6 +62,7 @@ import { resolvePlayerInitialPosition } from "./validateCharacterLocation";
 import { contentRegistry } from "@doomscrolls/content";
 import type { SpawnPointContentId } from "@doomscrolls/content";
 import { NIGHTMARKET_DEFAULT_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
+import { CharacterRepository } from "../../persistence/repositories";
 
 const ENEMY_AGGRO_RANGE = 120;
 const ENEMY_LEASH_RANGE = 180;
@@ -74,7 +76,31 @@ const ENEMY_ATTACK_WINDUP_MS = 350;
 const ENEMY_ATTACK_DAMAGE = 2;
 const ENEMY_RETURN_ARRIVAL_DISTANCE = 1;
 const ENEMY_RETURN_REACQUIRE_BUFFER = 8;
+const TRASHBOAR_RUNT_XP_REWARD = 5;
 type ContentEnemyId = Parameters<typeof contentRegistry.enemies.get>[0];
+
+async function grantEnemyDefeatXp(
+  player: { characterId: CharacterId; xp: number; level: number },
+  enemyId: string,
+  sendToClient: (type: string, payload: unknown) => void,
+): Promise<void> {
+  if (enemyId !== "trashboar_runt") {
+    return;
+  }
+
+  const nextXp = player.xp + TRASHBOAR_RUNT_XP_REWARD;
+  player.xp = nextXp;
+
+  await new CharacterRepository().updateXpAndLevel(player.characterId, nextXp, player.level);
+
+  const xpGained: XpGainedServerMessage = {
+    type: "xp_gained",
+    characterId: player.characterId,
+    amount: TRASHBOAR_RUNT_XP_REWARD,
+    totalXp: nextXp,
+  };
+  sendToClient("xp_gained", xpGained);
+}
 
 /**
  * Task 094 -- Send the `enemy_attack_telegraph` warning to the
@@ -401,6 +427,8 @@ private healingFlaskHandlerRegistered = false;
       sessionId,
       characterId,
       displayName: characterName,
+      level: result.character.level,
+      xp: result.character.xp,
       resolvedZoneId,
       hp: maxHp,
       maxHp,
@@ -878,6 +906,15 @@ private healingFlaskHandlerRegistered = false;
       const spawnedLoot = damageResult.defeated
         ? spawnWorldLootOnEnemyDefeat(state, validation.enemy, now)
         : null;
+      if (damageResult.defeated) {
+        void grantEnemyDefeatXp(player, validation.enemy.enemyId, (type, payload) => {
+          try {
+            client.send(type, payload);
+          } catch {
+            // ignore send failures; authoritative state persists
+          }
+        });
+      }
       const accepted: RequestAttackAcceptedServerMessage = {
         type: "request_attack_accepted",
         targetEnemyId: validation.enemy.id,

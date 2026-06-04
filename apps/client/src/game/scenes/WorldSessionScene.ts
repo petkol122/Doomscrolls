@@ -138,6 +138,22 @@ export class WorldSessionScene extends Phaser.Scene {
       },
     });
 
+    this.room.onMessage("xp_gained", (message: { amount?: unknown; totalXp?: unknown }) => {
+      const amount = typeof message.amount === "number" && Number.isFinite(message.amount)
+        ? Math.max(0, Math.floor(message.amount))
+        : 0;
+      const totalXp = typeof message.totalXp === "number" && Number.isFinite(message.totalXp)
+        ? Math.max(0, Math.floor(message.totalXp))
+        : null;
+
+      this.feedbackView?.showNotice(
+        totalXp === null
+          ? t("world_area.xp_gained", { amount })
+          : t("world_area.xp_gained_total", { amount, totalXp }),
+      );
+      this.renderOverlay();
+    });
+
     registerRespawnListeners(this.room, {
       onRespawned: (message: PlayerRespawnedServerMessage) => {
         this.feedbackView?.clearDamageFeedback();
