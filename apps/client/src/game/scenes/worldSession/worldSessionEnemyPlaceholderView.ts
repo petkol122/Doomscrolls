@@ -47,15 +47,25 @@ export function createWorldSessionEnemyPlaceholderView(
 
   const applyEnemyVisualState = (nextEnemy: TownRoomEnemySnapshot): void => {
     if (nextEnemy.defeated) {
+      const remainingSeconds = Math.max(
+        0,
+        Math.ceil((nextEnemy.respawnAtMs - Date.now()) / 1000),
+      );
       shadow.setFillStyle(0x000000, 0.18);
       body.setFillStyle(0x4a4a4a, 0.75);
       body.setStrokeStyle(2, 0x9a9a9a, 0.7);
       body.disableInteractive();
       core.setFillStyle(0x9c9c9c, 0.55);
       labelText.setColor("#b8b8b8");
-      labelText.setText(`${t(nextEnemy.label)} (${t("world_area.enemy_defeated_label")})`);
+      labelText.setText(
+        `${t(nextEnemy.label)} (${t("world_area.enemy_defeated_label")})`,
+      );
       hpText.setColor("#b8b8b8");
-      hpText.setText(t("world_area.enemy_defeated_hp"));
+      hpText.setText(
+        t("world_area.enemy_respawning_in", {
+          seconds: remainingSeconds,
+        }),
+      );
       return;
     }
 

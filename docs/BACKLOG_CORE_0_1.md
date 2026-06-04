@@ -259,7 +259,9 @@ Status: partially implemented as the current basic attack intent foundation batc
 
 Task 062 milestone cleanup note: the current click-enemy UX now explicitly communicates dispatch (`Attack sent.`), out-of-range rejection (`Too far away.`), and acceptance (`Attack confirmed. Enemy HP updates from synced room state.`). Enemy HP remains visibly updated only through synced room-state changes. Damage remains fixed at 1 and server-owned.
 
-Task 063 status note: the same synced placeholder-enemy slice now includes a minimal defeated state. When enemy HP reaches 0, the server marks that synced enemy as defeated, keeps it in room state, clamps HP at 0, and safely rejects further attacks against it. The client renders defeated enemies differently and may show `Enemy defeated.` as safe feedback. Loot, XP, corpse handling, respawn, AI, player damage, death animation and persistence remain deferred.
+Task 063 status note: the same synced placeholder-enemy slice now includes a minimal defeated state. When enemy HP reaches 0, the server marks that synced enemy as defeated, keeps it in room state, clamps HP at 0, and safely rejects further attacks against it. The client renders defeated enemies differently and may show `Enemy defeated.` as safe feedback.
+
+Task 071 status note: the placeholder Trashboar now supports a basic server-owned dev respawn loop. After defeat it remains visibly defeated for a short delay, then the same synced enemy resets to full HP, clears `defeated`, and becomes attackable again at the same static position. This remains a narrow debug loop only: no loot, XP, enemy AI, enemy attacks, player damage, corpse system or persistence was added.
 
 ### Task 019 — Corpse and Respawn
 

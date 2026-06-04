@@ -10,6 +10,7 @@ export interface TownRoomEnemySnapshot {
   readonly hp: number;
   readonly maxHp: number;
   readonly defeated: boolean;
+  readonly respawnAtMs: number;
 }
 
 export function getTownRoomEnemies(
@@ -36,6 +37,7 @@ export function getTownRoomEnemies(
     const hp = enemy.hp;
     const maxHp = enemy.maxHp;
     const defeated = enemy.defeated;
+    const respawnAtMs = enemy.respawnAtMs;
 
     if (
       typeof id !== "string" ||
@@ -45,7 +47,8 @@ export function getTownRoomEnemies(
       typeof y !== "number" ||
       typeof hp !== "number" ||
       typeof maxHp !== "number" ||
-      typeof defeated !== "boolean"
+      typeof defeated !== "boolean" ||
+      typeof respawnAtMs !== "number"
     ) {
       return;
     }
@@ -54,7 +57,8 @@ export function getTownRoomEnemies(
       !Number.isFinite(x) ||
       !Number.isFinite(y) ||
       !Number.isFinite(hp) ||
-      !Number.isFinite(maxHp)
+      !Number.isFinite(maxHp) ||
+      !Number.isFinite(respawnAtMs)
     ) {
       return;
     }
@@ -68,6 +72,7 @@ export function getTownRoomEnemies(
       hp,
       maxHp,
       defeated,
+      respawnAtMs,
     });
   });
 

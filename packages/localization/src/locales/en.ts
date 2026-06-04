@@ -121,6 +121,9 @@ export const en = {
   "world_area.enemy_defeated": "Enemy defeated.",
   "world_area.enemy_defeated_label": "defeated",
   "world_area.enemy_defeated_hp": "Defeated",
+  "world_area.enemy_defeated_respawn": "Enemy defeated. Respawning in {seconds}s.",
+  "world_area.enemy_respawning_in": "Respawning in {seconds}s",
+  "world_area.enemy_respawned": "Enemy respawned and reset.",
 
   "inventory.title": "Inventory",
   "equipment.title": "Equipment",

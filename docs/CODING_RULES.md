@@ -195,7 +195,7 @@ Client auth UI rules:
 - no final art, sprite animation, or gameplay-coupled facing system is implemented in placeholder tasks
 - basic attack placeholder UX may show safe client text such as "Attack sent.", "Attack confirmed." or "Too far away.", but enemy HP must still update only from synced room state and never from local client mutation
 - the current basic attack slice must keep fixed server-owned damage of 1 until a dedicated combat task changes the formula and documents the new authority rules
-- placeholder enemy death state may mark synced enemies as `defeated` when server-owned HP reaches 0, but the slice must keep the enemy in room state for now and must not add loot, XP, corpse behavior, respawn, death animation, AI or persistence without a dedicated task
+- placeholder enemy death state may mark synced enemies as `defeated` when server-owned HP reaches 0; dedicated respawn-loop tasks may keep that defeated state briefly and then reset the same synced placeholder enemy back to full HP at the same static position through a server-owned timer. Such tasks still must not add loot, XP, corpse behavior, enemy AI, enemy attacks, player damage, death animation or persistence
 
 ## Interactable Object Rules
 

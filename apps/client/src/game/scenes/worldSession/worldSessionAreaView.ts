@@ -136,6 +136,7 @@ export function createWorldSessionAreaView(
   let projectionMode: WorldProjectionMode = defaultWorldProjection;
   const previousEnemyHp = new Map<string, number>();
   const previousEnemyDefeated = new Map<string, boolean>();
+  const previousEnemyRespawnAtMs = new Map<string, number>();
 
   const refreshFromRoomState = (nextRoom: Room<DoomscrollsRoomState>): void => {
     const zoneId = nextRoom.state.zoneId;
@@ -182,6 +183,7 @@ export function createWorldSessionAreaView(
 
       const lastHp = previousEnemyHp.get(enemy.id);
       const lastDefeated = previousEnemyDefeated.get(enemy.id);
+      const lastRespawnAtMs = previousEnemyRespawnAtMs.get(enemy.id);
       if (lastHp !== undefined && lastHp !== enemy.hp) {
         onAttackFeedback?.(
           enemy.defeated
@@ -193,10 +195,24 @@ export function createWorldSessionAreaView(
         );
       }
       if (lastDefeated !== true && enemy.defeated) {
-        onAttackFeedback?.(t("world_area.enemy_defeated"));
+        const remainingSeconds = Math.max(0, Math.ceil((enemy.respawnAtMs - Date.now()) / 1000));
+        onAttackFeedback?.(
+          t("world_area.enemy_defeated_respawn", {
+            seconds: remainingSeconds,
+          }),
+        );
+      }
+      if (
+        lastDefeated === true &&
+        enemy.defeated === false &&
+        lastRespawnAtMs !== undefined &&
+        lastRespawnAtMs > 0
+      ) {
+        onAttackFeedback?.(t("world_area.enemy_respawned"));
       }
       previousEnemyHp.set(enemy.id, enemy.hp);
       previousEnemyDefeated.set(enemy.id, enemy.defeated);
+      previousEnemyRespawnAtMs.set(enemy.id, enemy.respawnAtMs);
     }
 
 

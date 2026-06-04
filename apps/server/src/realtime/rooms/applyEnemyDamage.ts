@@ -5,7 +5,10 @@ export interface ApplyEnemyDamageResult {
   readonly appliedDamage: number;
   readonly remainingHp: number;
   readonly defeated: boolean;
+  readonly respawnAtMs: number;
 }
+
+export const ENEMY_RESPAWN_DELAY_MS = 5_000;
 
 export function applyEnemyDamage(
   enemy: EnemyPresence,
@@ -16,12 +19,16 @@ export function applyEnemyDamage(
   if (enemy.defeated || previousHp <= 0) {
     enemy.hp = 0;
     enemy.defeated = true;
+    if (!Number.isFinite(enemy.respawnAtMs) || enemy.respawnAtMs <= 0) {
+      enemy.respawnAtMs = Date.now() + ENEMY_RESPAWN_DELAY_MS;
+    }
 
     return {
       previousHp,
       appliedDamage: 0,
       remainingHp: 0,
       defeated: true,
+      respawnAtMs: enemy.respawnAtMs,
     };
   }
 
@@ -32,11 +39,13 @@ export function applyEnemyDamage(
 
   enemy.hp = remainingHp;
   enemy.defeated = remainingHp <= 0;
+  enemy.respawnAtMs = enemy.defeated ? Date.now() + ENEMY_RESPAWN_DELAY_MS : 0;
 
   return {
     previousHp,
     appliedDamage: Math.max(0, previousHp - remainingHp),
     remainingHp,
     defeated: enemy.defeated,
+    respawnAtMs: enemy.respawnAtMs,
   };
 }

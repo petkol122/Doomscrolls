@@ -29,6 +29,7 @@ import { validateInteractIntent, getInteractableResponseMessage } from "./intera
 import { validateAttackIntent } from "./attackIntentValidation";
 import { consumeAttackCooldown, resolveAttackCooldownMs } from "./attackCooldown";
 import { applyEnemyDamage } from "./applyEnemyDamage";
+import { respawnTownEnemies } from "./respawnTownEnemies";
 
 /**
  * TownRoom with minimal Colyseus schema state.
@@ -107,6 +108,7 @@ private attackHandlerRegistered = false;
     this.registerAttackHandler(log);
     this.setSimulationInterval((deltaMs: number) => {
       stepTownRoomMovement(this.state as TownRoomState, deltaMs);
+      respawnTownEnemies(this.state as TownRoomState, Date.now());
     }, TOWN_MOVEMENT_TICK_RATE_MS);
 
     log.info(
@@ -575,9 +577,10 @@ private attackHandlerRegistered = false;
           remainingHp: damageResult.remainingHp,
           appliedDamage: damageResult.appliedDamage,
           defeated: damageResult.defeated,
+          respawnAtMs: damageResult.respawnAtMs,
           nextAttackAt: player.nextAttackAt,
         },
-        "TownRoom request_attack accepted and enemy HP/defeated state updated through synced state.",
+        "TownRoom request_attack accepted and enemy HP/defeated/respawn state updated through synced state.",
       );
     });
   }
