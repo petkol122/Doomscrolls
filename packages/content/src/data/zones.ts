@@ -13,7 +13,8 @@ export const zones = [
     maxPlayers: 30,
     enemyIds: [],
     transitionZoneIds: ["blackwire_sewers"],
-    mapKey: "map_nightmarket_placeholder"
+    mapKey: "map_nightmarket_placeholder",
+    bounds: { minX: 0, maxX: 480, minY: 0, maxY: 320 }
   },
   {
     id: "blackwire_sewers",
@@ -24,6 +25,7 @@ export const zones = [
     maxPlayers: 4,
     enemyIds: ["trashboar_runt"],
     transitionZoneIds: ["nightmarket"],
-    mapKey: "map_blackwire_sewers_placeholder"
+    mapKey: "map_blackwire_sewers_placeholder",
+    bounds: { minX: 0, maxX: 800, minY: 0, maxY: 600 }
   }
 ] as const satisfies readonly ZoneContentDefinition[];

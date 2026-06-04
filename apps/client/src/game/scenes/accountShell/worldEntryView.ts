@@ -1,16 +1,11 @@
 import { t } from "@doomscrolls/localization";
-import type { CharacterId, CharacterSummary, RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
-import type { Room } from "@colyseus/sdk";
-import { formatTownRoomState } from "../../../net/RealtimeClient";
+import type { CharacterId, CharacterSummary } from "@doomscrolls/shared";
 import { createButton, createInfoLine } from "./accountShellDom";
 
 export function createWorldEntryStub(
   characters: readonly CharacterSummary[],
   selectedCharacterId: CharacterId | null,
-  entered: boolean,
-  room: Room<DoomscrollsRoomState> | null,
   onEnterWorld: () => void,
-  onLeaveWorld: () => void
 ): HTMLElement {
   const selectedCharacter = characters.find((character) => character.id === selectedCharacterId) ?? null;
   const section = document.createElement("section");
@@ -38,13 +33,13 @@ export function createWorldEntryStub(
   }
 
   const playButton = createButton(t("world_entry.enter_world"));
-  const isDisabled = selectedCharacter === null || entered;
+  const isDisabled = selectedCharacter === null;
   playButton.disabled = isDisabled;
   playButton.style.cursor = isDisabled ? "not-allowed" : "pointer";
   playButton.style.opacity = isDisabled ? "0.62" : "1";
   playButton.setAttribute("aria-describedby", "doomscrolls-world-entry-status");
 
-  if (!entered && selectedCharacter !== null) {
+  if (selectedCharacter !== null) {
     playButton.addEventListener("click", () => {
       onEnterWorld();
     });
@@ -54,26 +49,10 @@ export function createWorldEntryStub(
 
   const status = document.createElement("p");
   status.id = "doomscrolls-world-entry-status";
-  status.textContent = entered ? t("world_entry.connected") : t("world_entry.coming_next");
+  status.textContent = t("world_entry.coming_next");
   status.style.margin = "10px 0 0";
-  status.style.color = entered ? "#b9d49a" : "#c7ad84";
+  status.style.color = "#c7ad84";
   section.appendChild(status);
-
-  if (entered && room !== null) {
-    const roomState = formatTownRoomState(room.state);
-    section.appendChild(createInfoLine("Room Kind", roomState.roomKind));
-    section.appendChild(createInfoLine("Zone ID", roomState.zoneId));
-    section.appendChild(createInfoLine("Connected Players", String(roomState.playerCount)));
-  }
-
-  if (entered) {
-    const leaveButton = createButton(t("world_entry.leave_world"));
-    leaveButton.style.marginTop = "12px";
-    leaveButton.addEventListener("click", () => {
-      onLeaveWorld();
-    });
-    section.appendChild(leaveButton);
-  }
 
   return section;
 }

@@ -1,4 +1,4 @@
-import type { Character, CharacterPassive, CharacterStats, Inventory, Prisma, PrismaClient } from "@prisma/client";
+import { ItemLocationType, type Character, type CharacterPassive, type CharacterStats, type Inventory, type Prisma, type PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "../prisma";
 
 type CharacterRepositoryClient = PrismaClient | Prisma.TransactionClient;
@@ -42,8 +42,20 @@ export interface CreateCharacterWithInitialStateData {
 
 const characterWithInitialStateInclude = { stats: true, passives: true, inventory: true } satisfies Prisma.CharacterInclude;
 
+const characterAccountStateInclude = {
+  inventory: true,
+  items: {
+    where: { locationType: ItemLocationType.INVENTORY },
+    orderBy: [{ inventoryPage: "asc" }, { inventoryY: "asc" }, { inventoryX: "asc" }, { createdAt: "asc" }],
+  },
+} satisfies Prisma.CharacterInclude;
+
 export type CharacterWithInitialState = Prisma.CharacterGetPayload<{
   include: typeof characterWithInitialStateInclude;
+}>;
+
+export type CharacterForAccountState = Prisma.CharacterGetPayload<{
+  include: typeof characterAccountStateInclude;
 }>;
 
 export class CharacterRepository {
@@ -60,6 +72,14 @@ export class CharacterRepository {
     return this.db.character.findMany({
       where: { userId },
       orderBy: { createdAt: "asc" },
+    });
+  }
+
+  public listByUserIdForAccountState(userId: string): Promise<readonly CharacterForAccountState[]> {
+    return this.db.character.findMany({
+      where: { userId },
+      orderBy: { createdAt: "asc" },
+      include: characterAccountStateInclude,
     });
   }
 
@@ -110,5 +130,17 @@ export class CharacterRepository {
 
   public updateXpAndLevel(characterId: string, xp: number, level: number) {
     return this.db.character.update({ where: { id: characterId }, data: { xp, level } });
+  }
+
+  public updateCharacterLocation(
+    characterId: string,
+    lastLocationZoneId: string,
+    lastLocationX: number,
+    lastLocationY: number,
+  ) {
+    return this.db.character.update({
+      where: { id: characterId },
+      data: { lastLocationZoneId, lastLocationX, lastLocationY },
+    });
   }
 }

@@ -6,6 +6,8 @@
   "packageManager": "pnpm@9.0.0",
   "scripts": {
     "dev": "pnpm -r dev",
+    "dev:infra": "docker compose -f infra/compose/docker-compose.local.yml --env-file infra/compose/.env up -d",
+    "dev:all": "pnpm run dev:infra && pnpm exec concurrently -k -n server,client -c blue,green \"pnpm dev:server\" \"pnpm dev:client\"",
     "dev:server": "pnpm --filter @doomscrolls/server dev",
     "dev:client": "pnpm --filter @doomscrolls/client dev",
     "build": "pnpm -r build",
@@ -14,6 +16,7 @@
     "test": "pnpm -r test"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "typescript": "^5.6.0",
     "eslint": "^9.0.0",
     "prettier": "^3.3.0"

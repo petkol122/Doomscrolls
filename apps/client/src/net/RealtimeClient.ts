@@ -43,8 +43,10 @@ export function formatTownRoomState(state: RoomState): {
   zoneId: string;
   playerCount: number;
 } {
+  const roomState = state as RoomState & { readonly roomKind?: string };
+
   return {
-    roomKind: state.kind,
+    roomKind: roomState.roomKind ?? state.kind,
     zoneId: state.zoneId,
     playerCount: state.connectedPlayerCount,
   };

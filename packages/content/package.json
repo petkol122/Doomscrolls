@@ -9,14 +9,14 @@
   "types": "./src/index.ts",
   "scripts": {
     "dev": "echo content dev placeholder",
-    "build": "tsc --noEmit",
+    "build": "tsc -b",
     "typecheck": "tsc --noEmit",
     "lint": "echo content lint placeholder",
     "test": "tsc --noEmit"
   },
   "dependencies": {
     "@doomscrolls/localization": "workspace:*",
-    "@doomscrolls/shared": "workspace:*"
-  },
-  "devDependencies": {}
+    "@doomscrolls/shared": "workspace:*",
+    "uuid": "^14.0.0"
+  }
 }

@@ -5,12 +5,15 @@ import type {
   CharacterId,
   CharacterSummary,
   CharacterStats,
+  InventorySummaryItem,
   OriginKey,
   PassiveKey,
   UserId,
   ZoneId,
 } from "@doomscrolls/shared";
-import type { Character, CharacterPassive, CharacterStats as PrismaCharacterStats, Inventory } from "@prisma/client";
+import { t } from "@doomscrolls/localization";
+import { contentRegistry } from "@doomscrolls/content";
+import type { Character, CharacterPassive, CharacterStats as PrismaCharacterStats, Inventory, ItemInstance } from "@prisma/client";
 import { toIsoDateTimeString } from "./dateMapper";
 
 export function toCharacterStatsDto(character: Pick<Character, "currentHp">, stats: PrismaCharacterStats): CharacterStats {
@@ -47,6 +50,45 @@ export function toCharacterSummaryDto(character: Character): CharacterSummary {
   };
 }
 
+export function toCharacterSummaryWithInventoryDto(
+  character: Character & { inventory: Inventory | null; items: readonly ItemInstance[] },
+): CharacterSummary {
+  const inventorySummaryItems: InventorySummaryItem[] = [];
+
+  if (character.inventory !== null) {
+    for (const item of character.items) {
+      if (item.inventoryPage === null || item.inventoryX === null || item.inventoryY === null) {
+        continue;
+      }
+
+      const definition = contentRegistry.items.get(item.definitionId as never);
+      if (definition === undefined) {
+        continue;
+      }
+
+      inventorySummaryItems.push({
+        itemInstanceId: item.id as never,
+        definitionId: definition.id,
+        pageIndex: item.inventoryPage,
+        x: item.inventoryX,
+        y: item.inventoryY,
+        label: t(definition.nameKey),
+        category: definition.category,
+        size: {
+          width: definition.size.width,
+          height: definition.size.height,
+        },
+        statModifiers: definition.statModifiers,
+      });
+    }
+  }
+
+  return {
+    ...toCharacterSummaryDto(character),
+    inventorySummaryItems,
+  };
+}
+
 export function toCharacterDetailsDto(
   character: Character & { stats: PrismaCharacterStats; passives: readonly CharacterPassive[]; inventory: Inventory },
   deathState: CharacterDeathState,
@@ -65,5 +107,10 @@ export function toCharacterDetailsDto(
       items: [],
     },
     deathState,
+    ...(character.lastLocationZoneId !== null
+      ? { lastLocationZoneId: character.lastLocationZoneId as ZoneId }
+      : {}),
+    ...(character.lastLocationX !== null ? { lastLocationX: character.lastLocationX } : {}),
+    ...(character.lastLocationY !== null ? { lastLocationY: character.lastLocationY } : {}),
   };
 }

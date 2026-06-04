@@ -140,6 +140,20 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
         errors.push({ category: "zone", id: zone.id, message: `Unknown transition zone id: ${transitionZoneId}` });
       }
     }
+
+    const bounds = zone.bounds;
+
+    if (bounds.minX >= bounds.maxX) {
+      errors.push({ category: "zone", id: zone.id, message: `Bounds minX (${bounds.minX}) must be less than maxX (${bounds.maxX}).` });
+    }
+
+    if (bounds.minY >= bounds.maxY) {
+      errors.push({ category: "zone", id: zone.id, message: `Bounds minY (${bounds.minY}) must be less than maxY (${bounds.maxY}).` });
+    }
+
+    if (!Number.isFinite(bounds.minX) || !Number.isFinite(bounds.maxX) || !Number.isFinite(bounds.minY) || !Number.isFinite(bounds.maxY)) {
+      errors.push({ category: "zone", id: zone.id, message: "Bounds values must be finite numbers." });
+    }
   }
 
   for (const item of registry.items.all) {

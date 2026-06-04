@@ -1,0 +1,11 @@
+- [ ] Add shared `RequestMoveClientMessage` + `MovementIntentFailureReason` + `RequestMoveRejectedServerMessage` to `packages/shared/src/protocol/`
+- [ ] Add server `validateMovementIntent` helper in `apps/server/src/realtime/rooms/movementIntentValidation.ts` (shape + finite range, generic across rooms)
+- [ ] Wire `TownRoom.onMessage` handler for `"request_move"` that calls validator, logs only, no position mutation, no broadcast
+- [ ] Export new helper from `apps/server/src/realtime/rooms/index.ts`
+- [ ] Add client `sendMovementIntent` helper in `apps/client/src/net/movementIntentClient.ts` (no UI wiring)
+- [ ] Update docs: README.md, docs/ARCHITECTURE.md, docs/BACKLOG_CORE_0_1.md, docs/CODING_RULES.md
+- [ ] Run `pnpm --filter @doomscrolls/shared typecheck`
+- [ ] Run `pnpm --filter @doomscrolls/server typecheck`
+- [ ] Run `pnpm --filter @doomscrolls/client typecheck`
+- [ ] Run `pnpm --filter @doomscrolls/client build`
+- [ ] Final report

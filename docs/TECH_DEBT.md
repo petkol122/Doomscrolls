@@ -80,6 +80,18 @@ Planned fix: Standardize on a supported Node LTS version, revisit the Vite upgra
 Status: Open
 ```
 
+## Server RNG helper test tooling
+
+```text
+Date: 2026-06-04
+Area: Server tooling
+Description: apps/server/src/realtime/rooms/serverRng.ts and apps/server/src/realtime/rooms/lootRoller.ts implement deterministic weighted RNG / loot-roll helpers with type-safe validation but do not include dedicated unit tests because the repository test runner is still placeholder-only.
+Reason: Avoid introducing new test infrastructure before the repo-wide testing approach is established.
+Risk: RNG and loot-roll behavior are currently verified by TypeScript checks and manual inspection rather than automated assertions.
+Planned fix: Add focused RNG and loot-roll unit tests when the project introduces a real test runner.
+Status: Open
+```
+
 ## Localization test tooling
 
 ```text
@@ -131,6 +143,18 @@ Reason: Current repositories do not support a shared transaction client. Impleme
 Risk: Partial user records could be created if a later step fails during registration.
 Planned fix: Refactor repositories to accept a shared transaction client and wrap registration in a Prisma transaction.
 Status: Resolved in Task 010A — AuthService.register() now wraps user/profile/settings/session creation in a single Prisma $transaction. Repositories already accepted Prisma.TransactionClient. PrismaDatabaseClient type was updated to reflect the union.
+```
+
+## TownRoom state encoder TypeError on every state change
+
+```text
+Date: 2026-06-03
+Area: Server realtime / @colyseus/schema 4.0.26
+Description: After a client joins the town room, every TownRoom.broadcastPatch / SchemaSerializer.encodeAll call throws `TypeError: Cannot read properties of undefined (reading 'Symbol(Symbol.metadata)')` from @colyseus/schema's encodeValue path (EncodeOperation.ts:37). The error fires on the very first state send (room creation broadcast) and recurs on every patch tick, blocking the connected-state UI feedback and any future state-driven client work.
+Reason: Root cause is that the @colyseus/schema 4.0.26 encoder relies on TypeScript decorator metadata (`Symbol.metadata`) on the schema class fields, but `apps/server/tsconfig.json` has `experimentalDecorators: true` without `emitDecoratorMetadata: true`. The presence of TS 5.9 metadata reflection combined with the missing emit flag leaves the encoder with `undefined` for some field type lookups. Discovered during Task 028 runtime milestone.
+Risk: The connected state and any future room state UI cannot be observed by the client. TownRoom join itself still succeeds (server logs `TownRoom join accepted`) and the `request_move` validator runs, but the client never receives a usable state snapshot.
+Planned fix: A dedicated server-tooling / server-realtime task should set `emitDecoratorMetadata: true` (and verify the rest of the server build still passes typecheck/build) so @colyseus/schema can resolve the per-field `Symbol.metadata` it expects. Validate via the same runtime milestone flow after the config change.
+Status: Open
 ```
 
 ## Auth HTTP routes runtime verification unblocked by Node 24.x

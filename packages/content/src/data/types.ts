@@ -6,6 +6,7 @@ import type {
   OriginKey,
   PassiveKey,
   PrimaryStats,
+  SpawnPointId,
   StatModifier,
   ZoneId
 } from "@doomscrolls/shared";
@@ -21,6 +22,7 @@ export type ZoneContentId = "nightmarket" | "blackwire_sewers";
 export type ItemRarity = "common";
 export type SkillTargetingMode = "target";
 export type ZoneRoomType = "town" | "combat";
+export type SpawnPointContentId = "nightmarket_spawn";
 export type EquipmentSlotCategory = "weapon" | "armor" | "accessory" | "belt" | "flask";
 
 export interface LocalizedContentDefinition {
@@ -70,6 +72,13 @@ export interface EnemyContentDefinition extends LocalizedContentDefinition {
   readonly spriteKey: string;
 }
 
+export interface ZoneContentBounds {
+  readonly minX: number;
+  readonly maxX: number;
+  readonly minY: number;
+  readonly maxY: number;
+}
+
 export interface ZoneContentDefinition extends LocalizedContentDefinition {
   readonly id: ZoneContentId;
   readonly zoneId: ZoneId;
@@ -78,6 +87,7 @@ export interface ZoneContentDefinition extends LocalizedContentDefinition {
   readonly enemyIds: readonly EnemyId[];
   readonly transitionZoneIds: readonly ZoneContentId[];
   readonly mapKey: string;
+  readonly bounds: ZoneContentBounds;
 }
 
 export interface ItemUseEffectDefinition {
@@ -118,6 +128,15 @@ export interface LevelThresholdDefinition {
 export interface LevelTableDefinition {
   readonly id: LevelTableId;
   readonly levels: readonly LevelThresholdDefinition[];
+}
+
+export interface SpawnPointContentDefinition {
+  readonly id: SpawnPointContentId;
+  readonly spawnPointId: SpawnPointId;
+  readonly zoneId: ZoneContentId;
+  readonly x: number;
+  readonly y: number;
+  readonly labelKey?: ContentLocalizationKey;
 }
 
 export interface EquipmentSlotContentDefinition {

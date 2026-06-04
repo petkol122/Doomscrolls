@@ -49,6 +49,17 @@ No fake mechanics. No client-only gameplay outcomes. No hardcoded game content i
 - **Main antagonistic force:** Moloch
 - **Architecture:** server-authoritative, room-based, data-driven
 
+Visual direction lock:
+
+```text
+target presentation: fixed isometric / 2.5D ARPG camera
+runtime engine: Phaser 2D
+current world view: temporary top-down debug projection
+no free 3D camera
+no engine switch
+future visual language: depth sorting, shadows, layered objects, pre-rendered / 2D sprite assets
+```
+
 ---
 
 ## Core 0.1 Locked Content
@@ -125,6 +136,29 @@ Install dependencies:
 pnpm install
 ```
 
+Create local environment files from the committed examples:
+
+```bash
+copy infra\compose\.env.example infra\compose\.env
+copy apps\server\.env.example apps\server\.env
+copy apps\client\.env.example apps\client\.env
+```
+
+One-command local development startup:
+
+```bash
+pnpm dev:all
+```
+
+`pnpm dev:all` starts local Docker Compose infrastructure first when `infra/compose/.env` exists, then runs the backend and client together with visible prefixed logs using `concurrently`. This is intended for local development only and does not add any production deployment behavior.
+
+Local URLs:
+
+```text
+backend health: http://localhost:2567/health
+client:         http://localhost:5173
+```
+
 Run checks:
 
 ```bash
@@ -139,7 +173,6 @@ Exact commands may evolve as the repository is implemented. If commands change, 
 Run the browser client during local development:
 
 ```bash
-cp apps/client/.env.example apps/client/.env
 pnpm dev:client
 ```
 
@@ -174,15 +207,114 @@ class:  gravewalker / Gravewalker
 
 After successful creation, the client refreshes real account state and resumes the character list from `/me`. Browser refresh also restores the authenticated account shell and character list through `/me` when the stored session token is still valid. Duplicate character names on the same account show a safe error from the real `409 Conflict` response.
 
-`AccountShellScene` supports selected character state for real account characters. The first real character is selected by default, and the user can select another real character from the list. The selected character ID persists in `localStorage` under `doomscrolls.selectedCharacterId`; stored selection is restored only if that ID belongs to the current account's real `/me` characters. Logout clears selected character storage together with the local session token.
+`AccountShellScene` supports selected character state for real account characters. The first real character is selected by default, and the user can select another real character from the list. The selected character ID persists in `localStorage` under `doomscrolls.selectedCharacterId`; stored selection is restored only if that ID belongs to the current account's real `/me` characters. Logout clears selected character storage together with the local session token. `AccountShellScene` is the authenticated account/character shell only: it owns account info, the real character list, character creation and character selection before any room connection exists.
 
-The authenticated `AccountShellScene` now has a working **Enter World** button. It is enabled only when a character is selected. On click, it calls `RealtimeClient.joinTownRoom(sessionToken, selectedCharacterId)`. On successful join, the status shows `"Connected to The Nightmarket."` and a Leave button appears. On failure, it shows a safe error `"Could not enter world."`. The room reference is stored in client memory only.
+The authenticated `AccountShellScene` now has a working **Enter World** button. It is enabled only when a character is selected. On click, it calls `RealtimeClient.joinTownRoom(sessionToken, selectedCharacterId)`. On successful join, the client switches into `WorldSessionScene`, which is the connected room shell only. On failure, it shows a safe error `"Could not enter world."`. The room reference is stored in client memory only.
 
-The client now renders the minimal `TownRoom` state after successful join: `roomKind` (`"town"`), `zoneId` (currently `"nightmarket"`), and `connectedPlayerCount`. These are displayed as read-only info lines under the status message. No player entity list, no map, no movement, no combat, no gameplay state is exposed yet.
+The client now renders the minimal `TownRoom` state after successful join: `roomKind` (`"town"`), `zoneId` (currently `"nightmarket"`), and `connectedPlayerCount`. `WorldSessionScene` presents this as a temporary server-synced debug shell with grouped room info, player presence and movement-debug sections. Additionally, a helper module (`townRoomPresence.ts`) extracts player presence from the Colyseus schema state so the connected-room overlay can show each player's display name, character ID and already-synced debug fields. This is not final gameplay UI.
+
+The current `WorldSessionScene` area view is also a temporary top-down debug projection only. Doomscrolls still targets a fixed Diablo-like isometric / 2.5D presentation, but the runtime remains Phaser 2D. No free 3D camera, no 3D engine switch, and no visual conversion layer are introduced in the current batch. Later visual tasks may add depth sorting, shadows, layered objects and pre-rendered / 2D sprite assets while keeping the game on the 2D runtime.
 
 If the real `characters` array is empty, the shell shows `No characters yet.`
 
-`AccountShellScene` was refactored to extract DOM helpers into `accountShell/accountShellDom.ts`, character list view into `accountShell/characterListView.ts`, character create form into `accountShell/characterCreateFormView.ts`, and world entry view into `accountShell/worldEntryView.ts`. This keeps the scene file lean and avoids god-file growth. The rule is: scene files should not grow into monoliths; extract view/helper modules as the scene accumulates functionality.
+`AccountShellScene` was refactored to extract DOM helpers into `accountShell/accountShellDom.ts`, shared account header rendering into `accountShell/accountShellAccountHeader.ts`, character list view into `accountShell/characterListView.ts`, character create form into `accountShell/characterCreateFormView.ts`, and world entry view into `accountShell/worldEntryView.ts`. This keeps the scene file lean and avoids god-file growth. The rule is: `AccountShellScene` remains the account/character shell, while `WorldSessionScene` remains the connected room shell; shared tiny DOM pieces should be extracted before either scene starts drifting into a god file.
+
+The current basic attack slice now includes a minimal synced enemy death state. When fixed server-owned damage reduces a synced placeholder enemy to 0 HP, the server clamps HP at 0, marks the enemy as defeated, and keeps that enemy in the room state instead of removing it. Further attacks against a defeated enemy are safely rejected. On the client, defeated enemies render in a muted/disabled style and show safe feedback (`Enemy defeated.`) only. There is still no loot, XP, corpse system, respawn, enemy AI, player damage, death animation or persistence in this slice.
+
+A dedicated client helper (`apps/client/src/net/townRoomPresence.ts`) now extracts player presence data from the Colyseus `TownRoomState` schema at runtime. It returns `connectedPlayerCount` plus an array of `{ sessionId, characterId, displayName, spawnPointId?, position? }` entries. When the server-side `PlayerPresence` entry carries a `spawnPointId` (currently the resolved `nightmarket_spawn` for TownRoom joins), the helper passes it through so `worldEntryView.ts` can show it next to the player's display name. Presence rendering logic is kept out of `AccountShellScene` — the scene only calls `getTownRoomPresence()` via the view module.
+
+The TownRoom presence helper also forwards `movementSpeed` when the synced `PlayerPresence` schema carries it. The current connected-world debug shell may show this speed value together with spawn/position debug text, and it may show the last click target the client sent if available. Synced position display still comes only from Colyseus room state; the click target is debug intent text only and does not fake arrival or local movement. This remains debug state only — not gameplay HUD, not prediction, and not client-owned movement.
+
+### Spawn point foundation (Core 0.1)
+
+The Core 0.1 spawn point foundation is in place but intentionally limited to data flow, not gameplay:
+
+```text
+SpawnPointDefinition lives in @doomscrolls/shared (zoneId, id, x, y, optional labelKey)
+SpawnPointContentDefinition lives in @doomscrolls/content
+Core 0.1 ships exactly one spawn point: nightmarket_spawn (zoneId = "nightmarket")
+TownRoom.resolveTownSpawnPoint() resolves the spawnPointId from content on join
+PlayerPresence stores spawnPointId only (no x/y, no active position)
+client can display spawnPointId in the presence list (PlayerPresenceEntry.spawnPointId?)
+x/y are content data only and are not used as an active gameplay position yet
+no movement, no map, no combat, no gameplay behavior
+```
+
+The x/y fields on `SpawnPointDefinition` are stored in the content registry as static data. On TownRoom join the server copies them into the player's `PlayerPresence` as the initial world position, but the server does not update them after join. They are not an active gameplay position yet and must not be presented as such. Movement, map rendering, scene-based entity placement and gameplay are deferred to later Core 0.1 tasks.
+
+
+### Player position foundation (Core 0.1)
+
+The Core 0.1 player position foundation is in place but intentionally limited to data flow, not movement:
+
+```text
+PlayerPosition type lives in @doomscrolls/shared (reuses Vector2: { x, y })
+PlayerPresence Colyseus schema now stores x and y as number fields
+TownRoom.buildTownPlayerPresence() copies the resolved spawn point x/y into the presence entry on join
+x/y are copied from content once on join and are never updated after join
+client getTownRoomPresence() exposes position?: { x, y } per player
+client worldEntryView shows x/y next to each player's display name as debug info only
+no movement input, no movement simulation, no pathfinding, no combat, no map, no player sprite, no gameplay loop
+```
+
+The `x` and `y` fields on `PlayerPresence` are copied from the resolved spawn point at join time. They are not an active gameplay position yet: there is no movement input handler, no server-side movement simulation, no pathfinding, no facing/direction interpolation, and no updates after join. They are visible on the client only as debug `(x=..., y=...)` suffixes next to the player's display name. Movement, map rendering, scene-based entity placement, combat, and gameplay are deferred to later Core 0.1 tasks.
+
+### Client world area bounds from content (Core 0.1)
+
+The client "world area" click-to-move input panel now resolves its zone bounds from the content registry instead of hardcoded values:
+
+```text
+resolveWorldAreaBounds(zoneId)  - client helper at apps/client/src/game/scenes/accountShell/resolveWorldAreaBounds.ts
+bounds are read from ZoneContentDefinition.bounds in @doomscrolls/content
+fallback safety: 800x600 if content entry is missing
+bounds are placeholder movement constraints — NOT collision geometry or map size
+no map rendering, pathfinding, collision, or speed checks yet
+```
+
+The client depends on `@doomscrolls/content` for these bounds. This is safe because the content package contains only pure TypeScript data and types — no Node-only runtime APIs such as Prisma, Fastify, Colyseus, or PostgreSQL.
+
+### Movement intent + movement step foundation (Core 0.1)
+
+The Core 0.1 movement intent and movement-step foundation is in place. The network contract, server-side validation shell, server-owned target storage, server tick stepping and the first WorldSession visual layer are implemented. It is still intentionally limited and is not full gameplay movement yet.
+
+```text
+RequestMoveClientMessage          - shared client intent: type "request_move", targetX, targetY, optional clientTime
+RequestMoveRejectedReason         - server-owned rejection codes: invalid_shape | non_finite_target | out_of_range
+RequestMoveRejectedServerMessage  - server-to-client rejection message
+validateMovementIntent()          - server helper that validates intent shape + range (apps/server/src/realtime/rooms/movementIntentValidation.ts)
+applyMovementIntent()             - server helper that stores validated targetX/targetY on PlayerPresence (apps/server/src/realtime/rooms/applyMovementIntent.ts)
+stepTownRoomMovement()            - server helper that advances x/y toward the stored target every simulation tick (apps/server/src/realtime/rooms/stepTownRoomMovement.ts)
+TownRoom.onMessage("request_move", ...) - validates intents, on accept stores the movement target via applyMovementIntent(); Colyseus schema sync broadcasts later x/y changes from the server tick
+TownRoom.setSimulationInterval()  - runs every 50 ms and steps authoritative x/y toward the latest stored target
+sendMovementIntent()              - client helper that sends request_move through an already-joined Colyseus room (apps/client/src/net/movementIntentClient.ts)
+WorldSessionScene                 - connected-room scene that renders the current visual layer
+worldSessionAreaView.ts          - extracted rendering/input helper for the world area, kept separate to avoid scene god-file growth
+worldSessionOverlayView.ts       - extracted DOM overlay helper for grouped room/presence/movement debug sections
+worldSessionPlayerPlaceholderView.ts - extracted player shape view (circle body + triangle marker + ellipse shadow)
+worldSessionAreaView draws content-derived zone bounds and a player placeholder from synced TownRoom presence x/y only
+the direction marker (triangle) rotates to point toward the last movement target / click direction
+click/tap inside the world area sends a real request_move intent through the joined room; a newer click replaces the previous target
+client does not fake local movement; the placeholder changes only after synced room-state updates arrive
+no collision, no pathfinding, no speed stats, no client interpolation/smoothing, no combat coupling, no persistence yet
+no sprites, no map art, no animation system, no inventory UI
+```
+
+`TownRoom` is intentionally kept as a thin Colyseus shell. The movement intent validator and position applicator live in dedicated helper modules (`movementIntentValidation.ts`, `applyMovementIntent.ts`) so the room file does not become monolithic. On the client, the rendering/input helper lives in its own module (`worldSessionAreaView.ts`) so `WorldSessionScene` stays orchestration-focused rather than growing into a god file.
+
+When the server accepts a `request_move` intent, it calls `applyMovementIntent()` which stores the validated `targetX` / `targetY` on the player's authoritative `PlayerPresence` movement-target fields. On join, `TownRoom` resolves a runtime `movementSpeed` from the selected character's derived stats and stores that speed in the joined `PlayerPresence`. The room simulation tick then runs every 50 ms and `stepTownRoomMovement()` advances each player's synced `x` / `y` toward the stored target using that player's own synced `movementSpeed`. If a player's stored speed is missing or invalid at runtime, the step helper falls back to a safe server constant (`TOWN_MOVEMENT_SPEED_FALLBACK_UNITS_PER_SECOND`) rather than trusting bad state. If the player clicks again before arrival, the new `request_move` replaces the previously stored target. Colyseus schema synchronization broadcasts the authoritative x/y updates to clients. On the client, `WorldSessionScene` listens for room `onStateChange`, refreshes `worldSessionAreaView`, redraws the content-derived zone bounds and repositions the player placeholder from synced `TownRoom` presence x/y only. The client does not predict, interpolate or invent local movement. This is still not full gameplay movement: there is no collision detection, no pathfinding, no combat coupling, and no persistence.
+
+In the current WorldSession visual layer, click/tap inside the rendered world area uses the existing `sendMovementIntent()` helper to dispatch a real `request_move` intent through the already-joined Colyseus room. The area bounds come from content, and the player placeholder updates only from synced room state after the server accepts the target and the server tick gradually steps the authoritative position toward it. The player body remains server-synced only; the direction marker rotates toward the last click target as a visual-only facing indicator. The connected-room overlay explicitly labels itself as temporary server-synced debug state, groups room info/player presence/movement debug into readable sections, keeps synced x/y and movementSpeed visible, and may show the last click target sent by the client when available. This remains a visual/network layer only: collision, pathfinding, stat-driven speed, interpolation/smoothing, combat, inventory UI and persistence are still deferred to later Core 0.1 tasks.
+
+Movement runtime sanity verification passed locally:
+
+```text
+account movecheck044
+character Mover044
+server-synced movement advanced gradually, not as an instant local teleport
+second click retargeting worked before arrival
+roomKind display bug fixed by reading roomKind from synced room state
+still no map art, collision, pathfinding, combat, persistence, or real gameplay loop
+```
 
 Client character list/create runtime verification passed locally:
 
@@ -195,6 +327,32 @@ duplicate Karel returned 409
 logout/login preserved character visibility
 no fake character data appeared
 ```
+
+### Interactable object foundation (Core 0.1)
+
+The Core 0.1 interactable object foundation is in place but intentionally limited to world object rendering and basic interaction messaging:
+
+```text
+InteractableObject type lives in @doomscrolls/shared (fields: id, type, label, x, y)
+Colyseus schema Interactable class with @type decorators for all fields
+TownRoomState holds interactables as MapSchema<Interactable>
+RequestInteractClientMessage protocol message: type "request_interact", objectId
+InteractResponseServerMessage protocol message: type "interact_response", objectId, message
+initializeTownInteractables() server helper initializes zone-specific objects (apps/server/src/realtime/rooms/initializeTownInteractables.ts)
+validateInteractIntent() server helper validates objectId existence and distance <= 50 units (apps/server/src/realtime/rooms/interactValidation.ts)
+getInteractableResponseMessage() server helper returns safe response text per object
+TownRoom.onMessage("request_interact", ...) validates requests and sends InteractResponseServerMessage to requesting client
+sendInteractIntent() client helper dispatches request_interact through joined Colyseus room (apps/client/src/net/interactIntentClient.ts)
+registerInteractResponseListener() client helper listens for interact_response messages (apps/client/src/net/interactResponseClient.ts)
+worldSessionInteractablesView.ts client rendering helper that draws object shapes + labels and handles click detection
+WorldSessionScene listens for interact_response and displays message for 3 seconds
+Core 0.1 Nightmarket has one visible interactable: notice board at world coords (120, 140)
+notice board responds with safe message: "The notice board hums quietly."
+no quests, loot, inventory, NPC dialogue, combat, collision detection, persistence or fake rewards
+no character level, stat scaling or gameplay-affecting behavior
+```
+
+Interactable objects are intentionally limited. They have no active gameplay behavior, no rewards, no persistence, no collision and no rich dialogue. The server validates distance (50-unit radius from player) and returns safe text responses only. The client renders simple placeholder shapes (gold rectangles with labels) as standin visuals, handles click-to-interact input, and displays the server response message in the center of the screen for 3 seconds before clearing. This is a network + rendering layer only: quests, rewards, loot, inventory effects, NPC dialogue, combat coupling, collision geometry, and persistence are deferred to later Core 0.1 tasks.
 
 Selected character state runtime verification passed locally:
 

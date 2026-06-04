@@ -4,6 +4,8 @@
 
 Doomscrolls is a modern dark-fantasy online ARPG with Diablo 2-like pacing, click-to-move identity, persistent characters, loot-driven progression and scalable room-based online world architecture.
 
+Its visual target is a fixed Diablo-like isometric / 2.5D presentation. The current top-down debug world view is temporary and exists only to support early foundation and verification work.
+
 The game starts in the Czech Republic, but the long-term world is planetary.
 
 ---
@@ -17,6 +19,21 @@ dark fantasy with dry black humor
 Think cyberpunk, but 2026 rather than distant sci-fi.
 
 The world should feel serious, bleak, urban, strange and occasionally funny.
+
+---
+
+## Visual Presentation Direction
+
+```text
+fixed isometric / 2.5D ARPG presentation
+Phaser 2D runtime
+no free 3D camera
+no engine switch
+later asset direction may use pre-rendered / 2D sprite art
+later scene depth comes from depth sorting, layered objects and shadows
+```
+
+The intended feel is Diablo-like readability, atmosphere and spatial clarity from a locked viewpoint rather than from camera freedom. Early placeholder/debug views may remain top-down while networking, rooms, movement, combat and interaction foundations are being built, but that debug presentation is not the intended final player-facing camera language.
 
 ---
 
@@ -191,6 +208,35 @@ amulet
 belt
 flask_1
 ```
+
+---
+
+## Loot and RNG Direction
+
+Loot must be real, server-authoritative and content-driven.
+
+Core direction for future implementation:
+
+```text
+loot rolls happen on the server only
+clients never decide or simulate drop outcomes
+weighted drop tables come from content definitions
+RNG helpers must support deterministic tests and repeatable verification
+enemy death alone does not imply loot unless the server actually rolled and spawned it
+no fake drops, fake item beams, fake reward toasts or client-only loot previews
+```
+
+The long-term loop is:
+
+```text
+enemy defeated on server
+server selects the appropriate weighted drop table
+server performs the roll through a reusable RNG helper
+server creates real loot state only if the roll succeeds
+client renders only synced loot that actually exists on the server
+```
+
+This task adds design direction only. It does not add loot entities, pickup flow, item generation, inventory placement, rarity rules or any visible drop behavior.
 
 ---
 

@@ -15,7 +15,7 @@ import { CharacterRepository } from "../persistence/repositories/CharacterReposi
 import { toSafeUserDto } from "../persistence/mappers/userMapper";
 import { toPublicProfileDto } from "../persistence/mappers/profileMapper";
 import { toUserSettingsDto } from "../persistence/mappers/settingsMapper";
-import { toCharacterSummaryDto } from "../persistence/mappers/characterMapper";
+import { toCharacterSummaryDto, toCharacterSummaryWithInventoryDto } from "../persistence/mappers/characterMapper";
 import { toIsoDateTimeString } from "../persistence/mappers/dateMapper";
 import { AuthErrorCode, AuthError } from "./AuthErrors";
 import { UsernameService } from "./UsernameService";
@@ -222,7 +222,7 @@ export class AuthService {
     // 6. Load profile/settings/characters
     const profile = await this.profileRepository.findByUserId(user.id);
     const settings = await this.settingsRepository.findByUserId(user.id);
-    const characters = await this.characterRepository.listByUserId(user.id);
+    const characters = await this.characterRepository.listByUserIdForAccountState(user.id);
 
     if (!profile || !settings) {
       // This should not happen for a valid user, but handle it gracefully
@@ -230,7 +230,7 @@ export class AuthService {
     }
 
     // 7. Return safe auth response DTO
-    const characterSummaries = characters.map(toCharacterSummaryDto) as readonly CharacterSummary[];
+    const characterSummaries = characters.map(toCharacterSummaryWithInventoryDto) as readonly CharacterSummary[];
     return this.buildSafeAuthResponse(user, profile, settings, session, rawToken, characterSummaries);
   }
 
@@ -262,14 +262,14 @@ export class AuthService {
     const user = sessionWithUser.user;
     const profile = await this.profileRepository.findByUserId(user.id);
     const settings = await this.settingsRepository.findByUserId(user.id);
-    const characters = await this.characterRepository.listByUserId(user.id);
+    const characters = await this.characterRepository.listByUserIdForAccountState(user.id);
 
     if (!profile || !settings) {
       throw new AuthError(AuthErrorCode.INTERNAL_ERROR);
     }
 
     // 5. Return safe account state DTO
-    const characterSummaries = characters.map(toCharacterSummaryDto) as readonly CharacterSummary[];
+    const characterSummaries = characters.map(toCharacterSummaryWithInventoryDto) as readonly CharacterSummary[];
     return {
       user: toSafeUserDto(user),
       profile: toPublicProfileDto({ ...profile, user: { username: user.username } }),

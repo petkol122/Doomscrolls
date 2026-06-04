@@ -95,6 +95,9 @@ model Character {
   xp                      Int      @default(0)
   currentZoneId           String
   currentHp               Int
+  lastLocationZoneId      String?
+  lastLocationX           Float?
+  lastLocationY           Float?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
   lastPlayedAt            DateTime?
