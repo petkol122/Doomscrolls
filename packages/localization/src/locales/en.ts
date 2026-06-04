@@ -125,6 +125,9 @@ export const en = {
   "world_session.control_flask": "Q: healing flask",
   "world_session.flask_charges": "Flask charges",
   "world_session.awaiting_flask": "Waiting for synced flask state...",
+  // Future: Diablo-like right orb resource (mana/class resource) — placeholder until class resource system lands
+  "world_session.resource": "Resource",
+  "world_session.resource_placeholder": "Coming later",
 
   "world_area.title": "World Area",
   "world_area.click_instruction": "Click inside to move.",

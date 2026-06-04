@@ -120,6 +120,9 @@ export function createWorldSessionOverlayView(
     selfPresence?.maxFlaskCharges,
   ));
 
+  // Future: Diablo-like right orb — placeholder until class resource (mana/rage/energy) system lands
+  section.appendChild(createResourcePlaceholderSection());
+
   if (selfPresence?.lifeState === "downed") {
     const downedNotice = createMutedText(t("world_session.downed_notice"));
     downedNotice.style.color = "#e3a6a6";
@@ -417,6 +420,30 @@ function createVitalitySection(
   content.push(stateLine);
 
   return createSectionBlock(t("world_session.vitality"), content);
+}
+
+// Future: Diablo-like right orb — placeholder until class resource (mana/rage/energy) system lands
+function createResourcePlaceholderSection(): HTMLElement {
+  const line = document.createElement("div");
+  line.style.display = "flex";
+  line.style.justifyContent = "space-between";
+  line.style.alignItems = "center";
+  line.style.marginBottom = "4px";
+
+  const label = document.createElement("span");
+  label.textContent = t("world_session.resource");
+  label.style.color = "#d8c6a3";
+  label.style.fontSize = "12px";
+  line.appendChild(label);
+
+  const value = document.createElement("span");
+  value.textContent = t("world_session.resource_placeholder");
+  value.style.color = "#7a5f4a";
+  value.style.fontSize = "12px";
+  value.style.fontFamily = "monospace";
+  line.appendChild(value);
+
+  return createSectionBlock(t("world_session.resource"), [line]);
 }
 
 function createFlaskChargesLine(charges?: number, maxCharges?: number): HTMLElement {
