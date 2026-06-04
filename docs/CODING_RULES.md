@@ -290,6 +290,7 @@ TownRoom rules:
 - client enemy extraction must live in a separate helper module (`apps/client/src/net/townRoomEnemies.ts`), not inside `WorldSessionScene` or `AccountShellScene`
 - client presence extraction must live in a separate helper module (`apps/client/src/net/townRoomPresence.ts`), not inside `AccountShellScene`
 - defeated enemies may render differently on the client and show safe feedback text only; the client must not invent local death, loot, XP or removal from state
+- synced placeholder world loot may be created by the server on real enemy defeat using content-driven loot tables; client rendering may show only server-synced placeholder drops (`id`, `itemId`, `label`, `x`, `y`) and must not add pickup success, inventory changes, persistence, currency, XP, or client-side loot rolls without a dedicated follow-up task
 - do not add enemy AI, aggro, enemy attacks, player hp damage, loot, XP, corpse/death handling beyond the synced `defeated` flag, persistence, rewards, collision, pathfinding, or combat animations to this basic attack foundation without a dedicated task
 - do not add a player entity list, map, movement, combat, loot, XP, inventory, equipment, corpse behavior, gameplay messages or client UI gameplay connection to `TownRoom` without a dedicated task
 - empty room registration must not be presented as gameplay

@@ -31,6 +31,7 @@ import { validateAttackIntent } from "./attackIntentValidation";
 import { consumeAttackCooldown, resolveAttackCooldownMs } from "./attackCooldown";
 import { applyEnemyDamage } from "./applyEnemyDamage";
 import { respawnTownEnemies } from "./respawnTownEnemies";
+import { spawnWorldLootOnEnemyDefeat } from "./spawnWorldLootOnEnemyDefeat";
 
 /**
  * TownRoom with minimal Colyseus schema state.
@@ -589,6 +590,9 @@ private attackHandlerRegistered = false;
 
       consumeAttackCooldown(player, now);
       const damageResult = applyEnemyDamage(validation.enemy, 1);
+      const spawnedLoot = damageResult.defeated
+        ? spawnWorldLootOnEnemyDefeat(state, validation.enemy, now)
+        : null;
       const accepted: RequestAttackAcceptedServerMessage = {
         type: "request_attack_accepted",
         targetEnemyId: validation.enemy.id,
@@ -610,9 +614,11 @@ private attackHandlerRegistered = false;
           appliedDamage: damageResult.appliedDamage,
           defeated: damageResult.defeated,
           respawnAtMs: damageResult.respawnAtMs,
+          worldLootId: spawnedLoot?.id,
+          worldLootItemId: spawnedLoot?.itemId,
           nextAttackAt: player.nextAttackAt,
         },
-        "TownRoom request_attack accepted and enemy HP/defeated/respawn state updated through synced state.",
+        "TownRoom request_attack accepted and synced enemy defeat/placeholder loot state updated.",
       );
     });
   }

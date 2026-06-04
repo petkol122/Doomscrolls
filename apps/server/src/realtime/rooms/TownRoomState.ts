@@ -3,6 +3,7 @@ import type { ZoneId } from "@doomscrolls/shared";
 import { PlayerPresence } from "./PlayerPresence";
 import { Interactable } from "./Interactable";
 import { EnemyPresence } from "@doomscrolls/shared";
+import { WorldLoot } from "./WorldLoot";
 
 /**
  * Colyseus schema/state for TownRoom.
@@ -25,6 +26,7 @@ export class TownRoomState extends Schema {
   @type("number") public connectedPlayerCount: number = 0;
   @type({ map: Interactable }) public interactables = new MapSchema<Interactable>();
   @type({ map: EnemyPresence }) public enemies = new MapSchema<EnemyPresence>();
+  @type({ map: WorldLoot }) public worldLoot = new MapSchema<WorldLoot>();
 
   constructor(zoneId: ZoneId) {
     super();

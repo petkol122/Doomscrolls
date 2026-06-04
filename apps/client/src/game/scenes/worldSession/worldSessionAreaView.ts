@@ -24,7 +24,15 @@ import {
   getTownRoomEnemies,
   type TownRoomEnemySnapshot,
 } from "../../../net/townRoomEnemies";
+import {
+  getTownRoomWorldLoot,
+  type TownRoomWorldLootSnapshot,
+} from "../../../net/townRoomWorldLoot";
 import type { WorldSessionEnemyPlaceholderView } from "./worldSessionEnemyPlaceholderView";
+import {
+  createWorldSessionLootPlaceholderView,
+  type WorldSessionLootPlaceholderView,
+} from "./worldSessionLootPlaceholderView";
 
 interface PositionSnapshot {
   readonly x: number;
@@ -71,6 +79,7 @@ export function createWorldSessionAreaView(
 
   // Task 058 — Add enemy placeholder view
   const enemyPlaceholders = new Map<string, WorldSessionEnemyPlaceholderView>();
+  const lootPlaceholders = new Map<string, WorldSessionLootPlaceholderView>();
 
   const targetMarker = scene.add.circle(-9999, -9999, 7, 0xff4a4a, 0.8);
   const targetLabel = scene.add.text(layout.originX + 10, layout.originY + layout.height - 20, "", {
@@ -215,6 +224,28 @@ export function createWorldSessionAreaView(
       previousEnemyRespawnAtMs.set(enemy.id, enemy.respawnAtMs);
     }
 
+    const currentWorldLoot = getTownRoomWorldLoot(nextRoom.state);
+    const projectedWorldLoot = currentWorldLoot
+      .map((loot: TownRoomWorldLootSnapshot) => projectWorldLootToArea(loot, projection))
+      .filter((loot: TownRoomWorldLootSnapshot | null): loot is TownRoomWorldLootSnapshot => loot !== null);
+    const newWorldLootIds = new Set(projectedWorldLoot.map((loot: TownRoomWorldLootSnapshot) => loot.id));
+
+    for (const [id, view] of lootPlaceholders.entries()) {
+      if (!newWorldLootIds.has(id)) {
+        view.destroy();
+        lootPlaceholders.delete(id);
+      }
+    }
+
+    for (const loot of projectedWorldLoot) {
+      const existing = lootPlaceholders.get(loot.id);
+      if (existing === undefined) {
+        lootPlaceholders.set(loot.id, createWorldSessionLootPlaceholderView(scene, loot));
+      } else {
+        existing.refresh(loot);
+      }
+    }
+
 
 
     inputZone.removeAllListeners();
@@ -330,8 +361,49 @@ export function createWorldSessionAreaView(
         view.destroy();
       }
       enemyPlaceholders.clear();
+      for (const view of lootPlaceholders.values()) {
+        view.destroy();
+      }
+      lootPlaceholders.clear();
       container.destroy(true);
     },
+  };
+}
+
+function projectWorldLootToArea(
+  loot: TownRoomWorldLootSnapshot,
+  projection: AreaProjectionContext,
+): TownRoomWorldLootSnapshot | null {
+  const width = projection.bounds.maxX - projection.bounds.minX;
+  const height = projection.bounds.maxY - projection.bounds.minY;
+
+  if (width <= 0 || height <= 0) {
+    return null;
+  }
+
+  const normalizedX = (loot.x - projection.bounds.minX) / width;
+  const normalizedY = (loot.y - projection.bounds.minY) / height;
+
+  if (
+    !Number.isFinite(normalizedX) ||
+    !Number.isFinite(normalizedY) ||
+    normalizedX < 0 ||
+    normalizedX > 1 ||
+    normalizedY < 0 ||
+    normalizedY > 1
+  ) {
+    return null;
+  }
+
+  return {
+    ...loot,
+    ...worldToScreenActiveProjection(
+      loot.x,
+      loot.y,
+      projection.bounds,
+      projection.viewport,
+      projection.projectionMode,
+    ),
   };
 }
 

@@ -25,6 +25,7 @@ export * from "./room/PlayerPosition";
 export * from "./room/RoomJoinTypes";
 export * from "./room/InteractableObjectTypes";
 export * from "./room/EnemyPresence";
+export * from "./room/WorldLootTypes";
 
 export * from "./protocol/ClientMessages";
 export * from "./protocol/ServerMessages";
