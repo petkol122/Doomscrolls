@@ -21,6 +21,7 @@ import { resolveWorldSessionAreaLayout, type WorldSessionAreaLayout } from "./wo
 import { createWorldSessionPlayerPlaceholderView } from "./worldSessionPlayerPlaceholderView";
 import { createWorldSessionInteractablesView } from "./worldSessionInteractablesView";
 import { createWorldSessionEnemyPlaceholderView } from "./worldSessionEnemyPlaceholderView";
+import { createWorldSessionStaticPropsView } from "./worldSessionStaticPropsView";
 import {
   getTownRoomEnemies,
   type TownRoomEnemySnapshot,
@@ -84,6 +85,7 @@ export function createWorldSessionAreaView(
   const layout = resolveWorldSessionAreaLayout(scene);
   const container = scene.add.container(0, 0);
   const frame = scene.add.graphics();
+  const staticPropsView = createWorldSessionStaticPropsView(scene);
   const playerPlaceholder = createWorldSessionPlayerPlaceholderView(scene);
   const interactablesView = createWorldSessionInteractablesView(scene, layout, (objectId) => {
     pointerHandledByTarget = true;
@@ -262,6 +264,13 @@ export function createWorldSessionAreaView(
     boundsLabel.setText(
       `zone=${zoneId} bounds: x=${bounds.minX}..${bounds.maxX}, y=${bounds.minY}..${bounds.maxY}`,
     );
+
+    staticPropsView.refresh({
+      zoneId,
+      bounds: followProjection.bounds,
+      viewport: followProjection.viewport,
+      projectionMode: followProjection.projectionMode,
+    });
 
     interactablesView.refresh(nextRoom, followProjection);
 
@@ -518,6 +527,7 @@ export function createWorldSessionAreaView(
     getLastClickTarget: () => lastClickTarget,
     destroy: () => {
       scene.input.off(Phaser.Input.Events.POINTER_WHEEL);
+      staticPropsView.destroy();
       playerPlaceholder.destroy();
       interactablesView.destroy();
       for (const view of enemyPlaceholders.values()) {
