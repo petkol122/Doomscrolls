@@ -24,7 +24,7 @@ export function createWorldSessionInteractablesView(
   const container = scene.add.container(0, 0);
   const graphicsObjects = new Map<string, Phaser.GameObjects.Graphics>();
   const labelTexts = new Map<string, Phaser.GameObjects.Text>();
-  const clickZones = new Map<string, Phaser.Input.Keyboard.Key>();
+  const clickZones = new Map<string, Phaser.GameObjects.Zone>();
 
   const refresh = (room: Room<RoomState>): void => {
     // Clear existing objects
@@ -78,17 +78,14 @@ export function createWorldSessionInteractablesView(
 
       // Create a clickable zone
       const clickZone = scene.add.zone(pixelX, pixelY, 32, 32).setInteractive();
-      (clickZone as Phaser.GameObjects.Zone & { onClickCallback?: () => void }).setData(
-        "objectId",
-        objectId,
-      );
+      clickZone.setData("objectId", objectId);
 
       clickZone.on("pointerdown", () => {
         onInteractClick(objectId);
       });
 
       container.add(clickZone);
-      clickZones.set(objectId, clickZone as unknown as Phaser.Input.Keyboard.Key);
+      clickZones.set(objectId, clickZone);
     });
   };
 
@@ -97,7 +94,7 @@ export function createWorldSessionInteractablesView(
     destroy: () => {
       graphicsObjects.forEach((g) => g.destroy());
       labelTexts.forEach((t) => t.destroy());
-      clickZones.forEach((z) => (z as unknown as Phaser.GameObjects.Zone).destroy?.());
+      clickZones.forEach((z) => z.destroy());
       container.destroy(true);
     },
   };

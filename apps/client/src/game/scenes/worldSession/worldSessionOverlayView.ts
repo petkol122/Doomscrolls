@@ -18,34 +18,36 @@ export function createWorldSessionOverlayView(
 
   const title = document.createElement("h2");
   title.textContent = t("world_session.title");
-  title.style.margin = "0 0 8px";
+  title.style.margin = "0 0 4px";
   title.style.fontFamily = "Georgia, serif";
-  title.style.fontSize = "20px";
+  title.style.fontSize = "18px";
   section.appendChild(title);
 
   const status = document.createElement("p");
   status.textContent = t("world_entry.connected");
-  status.style.margin = "0 0 8px";
+  status.style.margin = "0 0 10px";
   status.style.color = "#b9d49a";
+  status.style.fontSize = "13px";
   section.appendChild(status);
 
   const notice = document.createElement("p");
   notice.textContent = t("world_session.debug_notice");
-  notice.style.margin = "0 0 12px";
-  notice.style.padding = "8px 10px";
+  notice.style.margin = "0 0 10px";
+  notice.style.padding = "6px 8px";
   notice.style.border = "1px solid #5f4a2f";
   notice.style.borderRadius = "8px";
   notice.style.background = "rgba(31, 24, 18, 0.95)";
   notice.style.color = "#d6c29d";
-  notice.style.fontSize = "12px";
+  notice.style.fontSize = "11px";
   section.appendChild(notice);
 
   if (character !== null) {
     section.appendChild(createSectionBlock(t("world_session.selected_character"), [
-      createInfoLine(t("character.name"), character.characterName),
-      createInfoLine(t("character.origin"), t(`origin.${character.originKey}.name`)),
-      createInfoLine(t("character.class"), t(`class.${character.classKey}.name`)),
-      createInfoLine(t("character.level"), String(character.level)),
+      createCompactSummary([
+        character.characterName,
+        `${t(`origin.${character.originKey}.name`)} / ${t(`class.${character.classKey}.name`)}`,
+        `${t("character.level")} ${character.level}`,
+      ]),
     ]));
   }
 
@@ -60,7 +62,8 @@ export function createWorldSessionOverlayView(
   section.appendChild(createMovementDebugSection(room, debugState));
 
   const leaveButton = createButton(t("world_entry.leave_world"));
-  leaveButton.style.marginTop = "12px";
+  leaveButton.style.marginTop = "8px";
+  leaveButton.style.width = "100%";
   leaveButton.addEventListener("click", () => {
     onLeaveWorld();
   });
@@ -73,22 +76,21 @@ function createCardSection(): HTMLElement {
   const section = document.createElement("section");
   applyWorldSessionOverlayPanelStyles(section);
   section.style.margin = "0";
-  section.style.width = "320px";
   return section;
 }
 
 function createSectionBlock(titleText: string, children: readonly HTMLElement[]): HTMLElement {
   const wrapper = document.createElement("section");
-  wrapper.style.margin = "0 0 10px";
-  wrapper.style.padding = "10px";
+  wrapper.style.margin = "0 0 8px";
+  wrapper.style.padding = "8px";
   wrapper.style.border = "1px solid #31271c";
   wrapper.style.borderRadius = "8px";
   wrapper.style.background = "rgba(12, 10, 8, 0.72)";
 
   const title = document.createElement("h3");
   title.textContent = titleText;
-  title.style.margin = "0 0 8px";
-  title.style.fontSize = "14px";
+  title.style.margin = "0 0 6px";
+  title.style.fontSize = "13px";
   title.style.color = "#d8c6a3";
   wrapper.appendChild(title);
 
@@ -117,18 +119,18 @@ function createPresenceSection(room: Room<DoomscrollsRoomState>): HTMLElement {
   playerList.style.margin = "0";
   playerList.style.padding = "0 0 0 18px";
   playerList.style.color = "#b9d49a";
-  playerList.style.fontSize = "12px";
+  playerList.style.fontSize = "11px";
 
   for (const player of presence.players) {
     const li = document.createElement("li");
-    li.style.marginBottom = "6px";
+    li.style.marginBottom = "4px";
 
     const details: string[] = [player.characterId];
     if (player.spawnPointId !== undefined && player.spawnPointId.length > 0) {
       details.push(`spawn=${player.spawnPointId}`);
     }
     if (player.position !== undefined) {
-      details.push(`x=${player.position.x}, y=${player.position.y}`);
+      details.push(`x=${Math.round(player.position.x)}, y=${Math.round(player.position.y)}`);
     }
     if (player.movementSpeed !== undefined) {
       details.push(`speed=${player.movementSpeed}`);
@@ -157,18 +159,36 @@ function createMovementDebugSection(
         : t("world_area.no_position"),
     ),
     createInfoLine(
-      t("world_session.movement_speed"),
-      self?.movementSpeed !== undefined
-        ? String(self.movementSpeed)
-        : t("world_session.awaiting_movement_speed"),
-    ),
-    createInfoLine(
       t("world_session.last_click_target"),
       debugState.lastClickTarget !== null
         ? `x=${debugState.lastClickTarget.x}, y=${debugState.lastClickTarget.y}`
         : t("world_session.awaiting_click_target"),
     ),
+    createInfoLine(
+      t("world_session.movement_speed"),
+      self?.movementSpeed !== undefined
+        ? String(self.movementSpeed)
+        : t("world_session.awaiting_movement_speed"),
+    ),
   ]);
+}
+
+function createCompactSummary(lines: readonly string[]): HTMLElement {
+  const wrapper = document.createElement("div");
+  wrapper.style.display = "flex";
+  wrapper.style.flexDirection = "column";
+  wrapper.style.gap = "2px";
+
+  for (const line of lines) {
+    const text = document.createElement("p");
+    text.textContent = line;
+    text.style.margin = "0";
+    text.style.fontSize = "12px";
+    text.style.color = "#d8c6a3";
+    wrapper.appendChild(text);
+  }
+
+  return wrapper;
 }
 
 function createMutedText(text: string): HTMLElement {

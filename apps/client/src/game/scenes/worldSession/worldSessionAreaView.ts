@@ -56,43 +56,43 @@ export function createWorldSessionAreaView(
   const enemyPlaceholders = new Map<string, WorldSessionEnemyPlaceholderView>();
 
   const targetMarker = scene.add.circle(-9999, -9999, 7, 0xff4a4a, 0.8);
-  const targetLabel = scene.add.text(layout.originX, layout.originY + layout.height + 86, "", {
+  const targetLabel = scene.add.text(layout.originX + 10, layout.originY + layout.height - 20, "", {
     color: "#ff4a4a",
     fontFamily: "Arial, sans-serif",
-    fontSize: "14px",
+    fontSize: "12px",
   });
   const lineGraphic = scene.add.graphics();
   lineGraphic.lineStyle(1, 0xffffff, 0.5);
-  const title = scene.add.text(layout.originX, 80, t("world_area.title"), {
+  const title = scene.add.text(layout.originX, layout.originY - 28, t("world_area.title"), {
     color: "#d8c6a3",
     fontFamily: "Arial, sans-serif",
-    fontSize: "20px",
+    fontSize: "16px",
     fontStyle: "bold",
   });
   const instruction = scene.add.text(
-    layout.originX,
-    layout.originY + layout.height + 14,
+    layout.originX + 10,
+    layout.originY + layout.height - 40,
     t("world_area.click_instruction"),
     {
       color: "#8d7958",
       fontFamily: "Arial, sans-serif",
-      fontSize: "14px",
+      fontSize: "12px",
     },
   );
-  const boundsLabel = scene.add.text(layout.originX, layout.originY + layout.height + 38, "", {
+  const boundsLabel = scene.add.text(layout.originX + 10, layout.originY + 10, "", {
     color: "#a88d63",
     fontFamily: "Arial, sans-serif",
-    fontSize: "14px",
+    fontSize: "11px",
   });
-  const positionLabel = scene.add.text(layout.originX, layout.originY + layout.height + 62, "", {
+  const positionLabel = scene.add.text(layout.originX + 10, layout.originY + 28, "", {
     color: "#b9d49a",
     fontFamily: "Arial, sans-serif",
-    fontSize: "15px",
+    fontSize: "12px",
   });
-  const statusLabel = scene.add.text(layout.originX, layout.originY + layout.height + 86, "", {
+  const statusLabel = scene.add.text(layout.originX + 10, layout.originY + 46, "", {
     color: "#8fb0d8",
     fontFamily: "Arial, sans-serif",
-    fontSize: "14px",
+    fontSize: "12px",
   });
 
   container.add([
@@ -151,7 +151,7 @@ export function createWorldSessionAreaView(
         enemyView = createWorldSessionEnemyPlaceholderView(scene, enemy, (enemyId) => {
           const result = sendAttackIntent(nextRoom, enemyId);
           if (result.dispatched) {
-            onAttackFeedback?.("Attack sent");
+              onAttackFeedback?.("Attack requested");
           }
         });
         enemyPlaceholders.set(enemy.id, enemyView);

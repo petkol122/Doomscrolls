@@ -6,12 +6,13 @@ import type { AccountState } from "../../net/ApiClient";
 import { registerAttackResponseListeners } from "../../net/attackIntentClient";
 import { registerInteractResponseListener } from "../../net/interactResponseClient";
 import { createAccountHeader } from "./accountShell/accountShellAccountHeader";
+import { createWorldSessionFeedbackView, type WorldSessionFeedbackView } from "./worldSession/worldSessionFeedbackView";
 import { createWorldSessionOverlayView } from "./worldSession/worldSessionOverlayView";
 import { createWorldSessionAreaView, type WorldSessionAreaView } from "./worldSession/worldSessionAreaView";
 import {
-  applyWorldSessionOverlayGroupStyles,
   applyWorldSessionOverlayPanelStyles,
   applyWorldSessionOverlayRootStyles,
+  applyWorldSessionOverlaySidebarStyles,
 } from "./worldSession/worldSessionOverlayLayout";
 
 interface WorldSessionSceneData {
@@ -26,10 +27,7 @@ export class WorldSessionScene extends Phaser.Scene {
   private characterId: CharacterId | null = null;
   private room: Room<DoomscrollsRoomState> | null = null;
   private worldAreaView: WorldSessionAreaView | null = null;
-  private interactResponseText: Phaser.GameObjects.Text | null = null;
-  private interactResponseTimer: Phaser.Time.TimerEvent | null = null;
-  private attackFeedbackText: Phaser.GameObjects.Text | null = null;
-  private attackFeedbackTimer: Phaser.Time.TimerEvent | null = null;
+  private feedbackView: WorldSessionFeedbackView | null = null;
 
   public constructor() {
     super("WorldSessionScene");
@@ -49,30 +47,7 @@ export class WorldSessionScene extends Phaser.Scene {
       return;
     }
 
-    this.add
-      .text(640, 34, "Doomscrolls", {
-        color: "#d8c6a3",
-        fontFamily: "Georgia, serif",
-        fontSize: "28px"
-      })
-      .setOrigin(0.5);
-
-    // Task 057 — Create interact response message display
-    this.interactResponseText = this.add.text(640, 64, "", {
-      color: "#d8c6a3",
-      fontFamily: "Arial, sans-serif",
-      fontSize: "14px",
-      align: "center",
-      wordWrap: { width: 520 },
-    }).setOrigin(0.5);
-
-    this.attackFeedbackText = this.add.text(640, 86, "", {
-      color: "#e0b870",
-      fontFamily: "Arial, sans-serif",
-      fontSize: "14px",
-      align: "center",
-      wordWrap: { width: 520 },
-    }).setOrigin(0.5);
+    this.feedbackView = createWorldSessionFeedbackView(this);
 
     this.worldAreaView = createWorldSessionAreaView(this, this.room, (message: string) => {
       this.showAttackFeedback(message);
@@ -82,25 +57,12 @@ export class WorldSessionScene extends Phaser.Scene {
 
     // Task 057 — Register interact response listener
     registerInteractResponseListener(this.room, (message: string) => {
-      if (this.interactResponseText !== null) {
-        this.interactResponseText.setText(message);
-        
-        // Clear message after 3 seconds
-        if (this.interactResponseTimer !== null) {
-          this.time.removeEvent(this.interactResponseTimer);
-        }
-        this.interactResponseTimer = this.time.delayedCall(3000, () => {
-          if (this.interactResponseText !== null) {
-            this.interactResponseText.setText("");
-          }
-          this.interactResponseTimer = null;
-        });
-      }
+      this.feedbackView?.showNotice(message);
     });
 
     registerAttackResponseListeners(this.room, {
       onAccepted: () => {
-        this.showAttackFeedback("Attack sent");
+        this.showAttackFeedback("Attack confirmed");
       },
       onRejected: (message) => {
         this.showAttackFeedback(
@@ -142,23 +104,17 @@ export class WorldSessionScene extends Phaser.Scene {
     const root = document.createElement("div");
     applyWorldSessionOverlayRootStyles(root);
 
-    const leftGroup = document.createElement("div");
-    applyWorldSessionOverlayGroupStyles(leftGroup);
-    root.appendChild(leftGroup);
+    const sidebar = document.createElement("div");
+    applyWorldSessionOverlaySidebarStyles(sidebar);
+    root.appendChild(sidebar);
 
     const accountPanel = document.createElement("section");
     applyWorldSessionOverlayPanelStyles(accountPanel);
-    accountPanel.style.width = "fit-content";
-    accountPanel.style.minWidth = "220px";
+    accountPanel.style.width = "100%";
     accountPanel.appendChild(createAccountHeader(account));
-    leftGroup.appendChild(accountPanel);
+    sidebar.appendChild(accountPanel);
 
-    const rightGroup = document.createElement("div");
-    applyWorldSessionOverlayGroupStyles(rightGroup);
-    rightGroup.style.alignItems = "flex-end";
-    root.appendChild(rightGroup);
-
-    rightGroup.appendChild(
+    sidebar.appendChild(
       createWorldSessionOverlayView(
         character,
         room,
@@ -200,34 +156,12 @@ export class WorldSessionScene extends Phaser.Scene {
   }
 
   private showAttackFeedback(message: string): void {
-    if (this.attackFeedbackText === null) {
-      return;
-    }
-
-    this.attackFeedbackText.setText(message);
-    if (this.attackFeedbackTimer !== null) {
-      this.time.removeEvent(this.attackFeedbackTimer);
-    }
-
-    this.attackFeedbackTimer = this.time.delayedCall(1500, () => {
-      if (this.attackFeedbackText !== null) {
-        this.attackFeedbackText.setText("");
-      }
-      this.attackFeedbackTimer = null;
-    });
+    this.feedbackView?.showAttackFeedback(message);
   }
 
   private handleSceneTeardown(): void {
-    if (this.interactResponseTimer !== null) {
-      this.time.removeEvent(this.interactResponseTimer);
-      this.interactResponseTimer = null;
-    }
-    this.interactResponseText = null;
-    if (this.attackFeedbackTimer !== null) {
-      this.time.removeEvent(this.attackFeedbackTimer);
-      this.attackFeedbackTimer = null;
-    }
-    this.attackFeedbackText = null;
+    this.feedbackView?.destroy();
+    this.feedbackView = null;
     this.worldAreaView?.destroy();
     this.worldAreaView = null;
     this.destroyOverlay();

@@ -51,7 +51,7 @@ export function createWorldSessionEnemyPlaceholderView(
 
   const refresh = (nextEnemy: TownRoomEnemySnapshot): void => {
     container.setPosition(nextEnemy.x, nextEnemy.y);
-    labelText.setText(t(nextEnemy.label));
+    labelText.setText(`${t(nextEnemy.label)} (${nextEnemy.hp}/${nextEnemy.maxHp})`);
     hpText.setText(`HP ${nextEnemy.hp}/${nextEnemy.maxHp}`);
   };
 
