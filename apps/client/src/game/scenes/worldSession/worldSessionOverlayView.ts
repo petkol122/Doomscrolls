@@ -45,6 +45,8 @@ export function createWorldSessionOverlayView(
   notice.style.fontSize = "11px";
   section.appendChild(notice);
 
+  section.appendChild(createControlsSection());
+
   if (character !== null) {
     section.appendChild(createSectionBlock(t("world_session.selected_character"), [
       createCompactSummary([
@@ -110,7 +112,13 @@ export function createWorldSessionOverlayView(
   const selfHpSummary = formatPlayerHpSummary(selfPresence?.hp, selfPresence?.maxHp);
   const selfHpRatio = resolvePlayerHpRatio(selfPresence?.hp, selfPresence?.maxHp);
 
-  section.appendChild(createVitalitySection(selfHpSummary, selfHpRatio, selfPresence?.lifeState));
+  section.appendChild(createVitalitySection(
+    selfHpSummary,
+    selfHpRatio,
+    selfPresence?.lifeState,
+    selfPresence?.flaskCharges,
+    selfPresence?.maxFlaskCharges,
+  ));
 
   if (selfPresence?.lifeState === "downed") {
     const downedNotice = createMutedText(t("world_session.downed_notice"));
@@ -136,6 +144,30 @@ export function createWorldSessionOverlayView(
   section.appendChild(leaveButton);
 
   return section;
+}
+
+function createControlsSection(): HTMLElement {
+  const controls = document.createElement("ul");
+  controls.style.margin = "0";
+  controls.style.padding = "0 0 0 18px";
+  controls.style.color = "#b9d49a";
+  controls.style.fontSize = "11px";
+  controls.style.lineHeight = "1.6";
+
+  const items = [
+    t("world_session.control_move"),
+    t("world_session.control_attack"),
+    t("world_session.control_dodge"),
+    t("world_session.control_flask"),
+  ];
+
+  for (const item of items) {
+    const li = document.createElement("li");
+    li.textContent = item;
+    controls.appendChild(li);
+  }
+
+  return createSectionBlock(t("world_session.controls"), [controls]);
 }
 
 function createProjectionSection(
@@ -307,6 +339,8 @@ function createVitalitySection(
   hpSummary: string,
   hpRatio: number | null,
   lifeState?: "alive" | "downed",
+  flaskCharges?: number,
+  maxFlaskCharges?: number,
 ): HTMLElement {
   const content: HTMLElement[] = [];
 
@@ -340,7 +374,38 @@ function createVitalitySection(
   stateLine.style.color = lifeState === "downed" ? "#e3a6a6" : "#b9d49a";
   content.push(stateLine);
 
+  // Flask charges display
+  content.push(createFlaskChargesLine(flaskCharges, maxFlaskCharges));
+
   return createSectionBlock(t("world_session.vitality"), content);
+}
+
+function createFlaskChargesLine(charges?: number, maxCharges?: number): HTMLElement {
+  if (charges === undefined || maxCharges === undefined) {
+    return createMutedText(t("world_session.awaiting_flask"));
+  }
+
+  const line = document.createElement("div");
+  line.style.display = "flex";
+  line.style.alignItems = "center";
+  line.style.gap = "6px";
+
+  const label = document.createElement("span");
+  label.textContent = t("world_session.flask_charges");
+  label.style.color = "#d8c6a3";
+  label.style.fontSize = "12px";
+  label.style.minWidth = "80px";
+  line.appendChild(label);
+
+  const value = document.createElement("span");
+  const isReady = charges > 0;
+  value.textContent = `${charges} / ${maxCharges}`;
+  value.style.color = isReady ? "#b9d49a" : "#7a5f4a";
+  value.style.fontSize = "12px";
+  value.style.fontWeight = "bold";
+  line.appendChild(value);
+
+  return line;
 }
 
 function formatPlayerHpSummary(hp?: number, maxHp?: number): string {

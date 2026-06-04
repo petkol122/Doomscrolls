@@ -51,6 +51,13 @@ export interface PlayerPresenceEntry {
    * yet; callers must treat absence as "unknown", not as zero speed.
    */
   readonly movementSpeed?: number;
+  /**
+   * Server-owned basic healing flask charges count, when present.
+   * Optional because older / partial state objects may not carry the field
+   * yet; callers must treat absence as "unknown".
+   */
+  readonly flaskCharges?: number;
+  readonly maxFlaskCharges?: number;
 }
 
 export interface TownRoomPresence {
@@ -96,7 +103,8 @@ export function getTownRoomPresence(
     const withVitality = applyOptionalVitality(withLifeState, value);
     const withPosition = applyOptionalPosition(withVitality, value);
     const withMovementSpeed = applyOptionalMovementSpeed(withPosition, value);
-    players.push(withMovementSpeed);
+    const withFlask = applyOptionalFlaskState(withMovementSpeed, value);
+    players.push(withFlask);
   });
 
   return {
@@ -168,16 +176,35 @@ function applyOptionalPosition(
   return { ...entry, position };
 }
 
-function applyOptionalMovementSpeed(
-  entry: PlayerPresenceEntry,
-  value: Record<string, unknown>,
-): PlayerPresenceEntry {
-  const rawMovementSpeed = value.movementSpeed;
-  if (typeof rawMovementSpeed !== "number") {
-    return entry;
+  function applyOptionalMovementSpeed(
+    entry: PlayerPresenceEntry,
+    value: Record<string, unknown>,
+  ): PlayerPresenceEntry {
+    const rawMovementSpeed = value.movementSpeed;
+    if (typeof rawMovementSpeed !== "number") {
+      return entry;
+    }
+    if (!Number.isFinite(rawMovementSpeed) || rawMovementSpeed <= 0) {
+      return entry;
+    }
+    return { ...entry, movementSpeed: rawMovementSpeed };
   }
-  if (!Number.isFinite(rawMovementSpeed) || rawMovementSpeed <= 0) {
-    return entry;
+
+  function applyOptionalFlaskState(
+    entry: PlayerPresenceEntry,
+    value: Record<string, unknown>,
+  ): PlayerPresenceEntry {
+    const rawCharges = value.flaskCharges;
+    const rawMax = value.maxFlaskCharges;
+    if (typeof rawCharges !== "number" || typeof rawMax !== "number") {
+      return entry;
+    }
+    if (!Number.isFinite(rawCharges) || !Number.isFinite(rawMax)) {
+      return entry;
+    }
+    return {
+      ...entry,
+      flaskCharges: Math.max(0, rawCharges),
+      maxFlaskCharges: Math.max(0, rawMax),
+    };
   }
-  return { ...entry, movementSpeed: rawMovementSpeed };
-}

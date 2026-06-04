@@ -118,6 +118,13 @@ export const en = {
   "world_session.respawn": "Respawn",
   "world_session.respawned_notice": "You respawn with {hp} HP.",
   "world_session.respawn_unavailable": "Respawn unavailable.",
+  "world_session.controls": "Controls",
+  "world_session.control_move": "Click ground: move",
+  "world_session.control_attack": "Click enemy: attack / approach",
+  "world_session.control_dodge": "Space: dodge",
+  "world_session.control_flask": "Q: healing flask",
+  "world_session.flask_charges": "Flask charges",
+  "world_session.awaiting_flask": "Waiting for synced flask state...",
 
   "world_area.title": "World Area",
   "world_area.click_instruction": "Click inside to move.",
