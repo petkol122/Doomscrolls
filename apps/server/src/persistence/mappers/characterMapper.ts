@@ -65,5 +65,10 @@ export function toCharacterDetailsDto(
       items: [],
     },
     deathState,
+    ...(character.lastLocationZoneId !== null
+      ? { lastLocationZoneId: character.lastLocationZoneId as ZoneId }
+      : {}),
+    ...(character.lastLocationX !== null ? { lastLocationX: character.lastLocationX } : {}),
+    ...(character.lastLocationY !== null ? { lastLocationY: character.lastLocationY } : {}),
   };
 }

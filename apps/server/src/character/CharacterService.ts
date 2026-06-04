@@ -128,4 +128,21 @@ export class CharacterService {
       throw new CharacterError(CharacterErrorCode.INTERNAL_ERROR);
     }
   }
+
+  public async updateCharacterLocation(
+    characterId: CharacterId | string,
+    zoneId: string,
+    x: number,
+    y: number,
+  ): Promise<void> {
+    try {
+      const characterRepository = new CharacterRepository(this.db);
+      await characterRepository.updateCharacterLocation(characterId.toString(), zoneId, x, y);
+    } catch (error: unknown) {
+      if (error instanceof CharacterError) {
+        throw error;
+      }
+      throw new CharacterError(CharacterErrorCode.INTERNAL_ERROR);
+    }
+  }
 }

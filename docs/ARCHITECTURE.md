@@ -669,6 +669,19 @@ no movement input, no movement simulation, no pathfinding, no combat, no map, no
 ```
 
 x/y on `PlayerPresence` are the player's initial world position only. They are copied from the resolved spawn point at join time and are never updated. They are not an active gameplay position: there is no movement input, no server-side movement simulation, no pathfinding, no facing/direction, no map, no player sprite, and no combat. They are shown on the client only as debug `(x=..., y=...)` suffixes next to the player's display name. The `PlayerPosition` shared type is intentionally identical to `Vector2`; no facing field is part of this type yet.
+Character location persistence (Core 0.1 — Task 075):
+
+Character schema stores optional `lastLocationZoneId`, `lastLocationX`, and `lastLocationY` fields.
+On `TownRoom.onLeave`, the server persists the latest synced `PlayerPresence.x` / `y` together with the current room `zoneId`.
+On the next `TownRoom` join, `buildTownPlayerPresence()` restores that saved location only when the saved zone matches the resolved room zone and the saved x/y are inside the zone bounds from content.
+If the saved location is missing, cross-zone, or outside bounds, the server falls back to the resolved content spawn point.
+Validation helper: `isPositionInsideZoneBounds(zoneId, x, y)`.
+Initial position helper: `resolvePlayerInitialPosition()`.
+Helper location: `apps/server/src/realtime/rooms/validateCharacterLocation.ts`.
+Initial position resolution: resolvePlayerInitialPosition() returns spawn point or restored location
+Helper location: apps/server/src/realtime/rooms/validateCharacterLocation.ts
+No map persistence, inventory changes, death/corpse logic, or teleport system added
+```
 
 Movement intent foundation:
 

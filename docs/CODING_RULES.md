@@ -348,6 +348,7 @@ Player position foundation rules:
 
 - `PlayerPosition` is a shared type that intentionally reuses the `Vector2` shape (`{ x, y }`); no facing/direction/interpolation field is part of this type yet
 - `PlayerPresence` exposes `x` and `y` as number fields; the server must copy them from the resolved spawn point at join time and must never update them after join
+- persisted character runtime location may override the join-time spawn fallback only when the saved `lastLocationZoneId` matches the resolved room zone and the saved x/y are inside that zone's content bounds; otherwise the server must fall back to the resolved spawn point
 - `PlayerPresence` construction lives in `buildTownPlayerPresence()` (`apps/server/src/realtime/rooms/buildPlayerPresence.ts`) and must not be inlined into `TownRoom.ts`; the room file must stay a thin Colyseus shell
 - The `x`/`y` on `PlayerPresence` are the player's initial world position only; they are not an active gameplay position and must not be presented as one
 - The client `getTownRoomPresence()` helper exposes `position?: { x, y }` per player; callers may show x/y only as debug info next to the player's display name (e.g. `(x=..., y=...)` suffix) and must not imply movement, facing, animation or a map position
@@ -399,6 +400,7 @@ Movement intent foundation rules:
 - The server helper `applyMovementIntent(state, sessionId, targetX, targetY)` lives in `apps/server/src/realtime/rooms/applyMovementIntent.ts` and stores `hasMovementTarget` / `targetX` / `targetY` in the Colyseus schema state. It must not validate, move instantly, check speed/cooldown/collision/pathfinding, persist to DB, or trigger gameplay events
 - `TownRoom` runs a server-owned simulation interval every 50 ms and delegates movement stepping to `stepTownRoomMovement(state, deltaMs)` in `apps/server/src/realtime/rooms/stepTownRoomMovement.ts`
 - `stepTownRoomMovement()` is the only place in this foundation that may mutate synced `PlayerPresence.x` / `y` after join; it moves them gradually toward the stored target and clears the target when close enough
+- `TownRoom.onLeave()` must persist the latest synced `PlayerPresence` x/y plus the current room zone to the character's optional `lastLocationZoneId` / `lastLocationX` / `lastLocationY` fields so reconnect can restore the last valid in-zone location
 - `TownRoom` must resolve runtime movement speed from the joined character's derived stats on join and store it in `PlayerPresence.movementSpeed`
 - `stepTownRoomMovement()` must use each player's stored `movementSpeed` for per-player authoritative step distance; it must not invent client-owned speed
 - `TOWN_MOVEMENT_SPEED_FALLBACK_UNITS_PER_SECOND` exists only as a server safety guard when runtime speed is missing or invalid; it must not be documented or treated as the primary gameplay speed source

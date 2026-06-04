@@ -33,4 +33,7 @@ export interface CharacterDetails extends CharacterSummary {
   readonly stats: CharacterStats;
   readonly inventory: InventoryGrid;
   readonly deathState: CharacterDeathState;
+  readonly lastLocationZoneId?: ZoneId;
+  readonly lastLocationX?: number;
+  readonly lastLocationY?: number;
 }

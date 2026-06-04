@@ -11,6 +11,7 @@ import type {
   InteractResponseServerMessage,
 } from "@doomscrolls/shared";
 import { RoomJoinValidationService } from "../RoomJoinValidationService";
+import { CharacterService } from "../../character/CharacterService";
 import type { TownRoomJoinOptions } from "./townRoomTypes";
 import { TownRoomState } from "./TownRoomState";
 import { buildTownPlayerPresence } from "./buildPlayerPresence";
@@ -218,6 +219,9 @@ private attackHandlerRegistered = false;
       resolvedZoneId,
       movementSpeed,
       attackCooldownMs,
+      restoredLocationZoneId: result.character.lastLocationZoneId ?? undefined,
+      restoredLocationX: result.character.lastLocationX ?? undefined,
+      restoredLocationY: result.character.lastLocationY ?? undefined,
     });
 
     state.playerPresence.set(sessionId, presence);
@@ -243,7 +247,35 @@ private attackHandlerRegistered = false;
   }
 
   public override async onLeave(_client: Client): Promise<void> {
+    const safeLog = createRoomLogger(
+      (this as unknown as { logger?: unknown }).logger,
+    );
     const state = this.state as TownRoomState;
+    const presence = state.playerPresence.get(_client.sessionId);
+
+    if (presence !== undefined) {
+      const characterService = new CharacterService();
+      try {
+        await characterService.updateCharacterLocation(
+          presence.characterId,
+          state.zoneId,
+          presence.x,
+          presence.y,
+        );
+      } catch (error: unknown) {
+        safeLog.error?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: _client.sessionId,
+            characterId: presence.characterId,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          "Failed to persist character location on leave.",
+        );
+      }
+    }
+
     state.playerPresence.delete(_client.sessionId);
     state.connectedPlayerCount = state.playerPresence.size;
   }

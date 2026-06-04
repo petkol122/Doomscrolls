@@ -111,4 +111,16 @@ export class CharacterRepository {
   public updateXpAndLevel(characterId: string, xp: number, level: number) {
     return this.db.character.update({ where: { id: characterId }, data: { xp, level } });
   }
+
+  public updateCharacterLocation(
+    characterId: string,
+    lastLocationZoneId: string,
+    lastLocationX: number,
+    lastLocationY: number,
+  ) {
+    return this.db.character.update({
+      where: { id: characterId },
+      data: { lastLocationZoneId, lastLocationX, lastLocationY },
+    });
+  }
 }
