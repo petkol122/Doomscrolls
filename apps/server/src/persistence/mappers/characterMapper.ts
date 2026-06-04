@@ -68,14 +68,17 @@ export function toCharacterSummaryWithInventoryDto(
 
       inventorySummaryItems.push({
         itemInstanceId: item.id as never,
+        definitionId: definition.id,
         pageIndex: item.inventoryPage,
         x: item.inventoryX,
         y: item.inventoryY,
         label: t(definition.nameKey),
+        category: definition.category,
         size: {
           width: definition.size.width,
           height: definition.size.height,
         },
+        statModifiers: definition.statModifiers,
       });
     }
   }

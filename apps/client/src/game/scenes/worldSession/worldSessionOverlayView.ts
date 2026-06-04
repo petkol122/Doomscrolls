@@ -17,6 +17,7 @@ export function createWorldSessionOverlayView(
   onLeaveWorld: () => void,
 ): HTMLElement {
   const section = createCardSection();
+  let selectedInventoryItemId: InventorySummaryItem["itemInstanceId"] | null = character?.inventorySummaryItems?.[0]?.itemInstanceId ?? null;
 
   const title = document.createElement("h2");
   title.textContent = t("world_session.title");
@@ -51,8 +52,45 @@ export function createWorldSessionOverlayView(
         `${t("character.level")} ${character.level}`,
       ]),
     ]));
+  }
 
-    section.appendChild(createInventorySummarySection(character.inventorySummaryItems ?? []));
+  let inventorySummarySection: HTMLElement | null = null;
+  let inventoryDetailSection: HTMLElement | null = null;
+
+  function rerenderInventorySections(): void {
+    if (character === null) {
+      return;
+    }
+
+    const items = character.inventorySummaryItems ?? [];
+    const nextSummary = createInventorySummarySection(items, () => selectedInventoryItemId, (itemId) => {
+      selectedInventoryItemId = itemId;
+      rerenderInventorySections();
+    });
+    const selectedItem = items.find((item) => item.itemInstanceId === selectedInventoryItemId) ?? items[0] ?? null;
+    if (selectedItem !== null) {
+      selectedInventoryItemId = selectedItem.itemInstanceId;
+    }
+    const nextDetail = createInventoryDetailSection(selectedItem);
+
+    if (inventorySummarySection !== null) {
+      section.replaceChild(nextSummary, inventorySummarySection);
+    } else {
+      section.appendChild(nextSummary);
+    }
+
+    if (inventoryDetailSection !== null) {
+      section.replaceChild(nextDetail, inventoryDetailSection);
+    } else {
+      section.appendChild(nextDetail);
+    }
+
+    inventorySummarySection = nextSummary;
+    inventoryDetailSection = nextDetail;
+  }
+
+  if (character !== null) {
+    rerenderInventorySections();
   }
 
   const roomState = formatTownRoomState(room.state);
@@ -236,26 +274,84 @@ function createMovementDebugSection(
   ]);
 }
 
-function createInventorySummarySection(items: readonly InventorySummaryItem[]): HTMLElement {
+function createInventorySummarySection(
+  items: readonly InventorySummaryItem[],
+  getSelectedItemId: () => InventorySummaryItem["itemInstanceId"] | null,
+  onSelectItem: (itemId: InventorySummaryItem["itemInstanceId"]) => void,
+): HTMLElement {
   if (items.length === 0) {
     return createSectionBlock("Inventory Summary", [createMutedText("No inventory items visible.")]);
   }
 
   const list = document.createElement("ul");
   list.style.margin = "0";
-  list.style.padding = "0 0 0 18px";
+  list.style.padding = "0";
   list.style.color = "#d8c6a3";
   list.style.fontSize = "12px";
 
   for (const item of items) {
     const row = document.createElement("li");
-    row.style.marginBottom = "4px";
+    const isSelected = getSelectedItemId() === item.itemInstanceId;
+    row.style.marginBottom = "6px";
+    row.style.listStyle = "none";
+
+    const button = createButton(item.label);
+    button.style.width = "100%";
+    button.style.textAlign = "left";
+    button.style.fontSize = "12px";
+    button.style.padding = "6px 8px";
+    button.style.border = isSelected ? "1px solid #b9d49a" : "1px solid #5f4a2f";
+    button.style.background = isSelected ? "rgba(63, 83, 49, 0.9)" : "rgba(31, 24, 18, 0.95)";
+    button.setAttribute("aria-pressed", isSelected ? "true" : "false");
     const sizeText = item.size === undefined ? "" : ` | ${item.size.width}x${item.size.height}`;
-    row.textContent = `${item.label} | x=${item.x}, y=${item.y}${sizeText}`;
+    button.textContent = `${item.label} | x=${item.x}, y=${item.y}${sizeText}`;
+    button.addEventListener("click", () => {
+      onSelectItem(item.itemInstanceId);
+    });
+    row.appendChild(button);
     list.appendChild(row);
   }
 
   return createSectionBlock("Inventory Summary", [list]);
+}
+
+function createInventoryDetailSection(item: InventorySummaryItem | null): HTMLElement {
+  if (item === null) {
+    return createSectionBlock("Item Detail", [createMutedText("Select an inventory item to inspect it.")]);
+  }
+
+  const children: HTMLElement[] = [
+    createInfoLine("Label", item.label),
+    createInfoLine("Category", item.category),
+    createInfoLine("Size", item.size === undefined ? "Unknown" : `${item.size.width}x${item.size.height}`),
+    createInfoLine("Grid Position", `page=${item.pageIndex}, x=${item.x}, y=${item.y}`),
+  ];
+
+  if ((item.statModifiers?.length ?? 0) > 0) {
+    const modifierList = document.createElement("ul");
+    modifierList.style.margin = "0";
+    modifierList.style.padding = "0 0 0 18px";
+    modifierList.style.color = "#d8c6a3";
+    modifierList.style.fontSize = "12px";
+
+    for (const modifier of item.statModifiers ?? []) {
+      const entry = document.createElement("li");
+      entry.textContent = `${modifier.operation === "add" ? "+" : "×"}${modifier.value} ${modifier.target}`;
+      modifierList.appendChild(entry);
+    }
+
+    children.push(modifierList);
+  } else {
+    children.push(createMutedText("No item modifiers visible."));
+  }
+
+  const equipButton = createButton("Equip (coming soon)");
+  equipButton.disabled = true;
+  equipButton.style.width = "100%";
+  equipButton.style.marginTop = "8px";
+  children.push(equipButton);
+
+  return createSectionBlock("Item Detail", children);
 }
 
 function createCompactSummary(lines: readonly string[]): HTMLElement {

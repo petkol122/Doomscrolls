@@ -1,4 +1,6 @@
-import type { CharacterId, ItemInstanceId } from "../ids";
+import type { StatModifier } from "../character/StatTypes";
+import type { ItemCategory } from "./ItemTypes";
+import type { CharacterId, ItemDefinitionId, ItemInstanceId } from "../ids";
 
 export interface InventoryGridConfig {
   readonly pageCount: number;
@@ -21,10 +23,13 @@ export interface InventoryGridItem {
 
 export interface InventorySummaryItem extends InventoryGridItem {
   readonly label: string;
+  readonly definitionId: ItemDefinitionId;
+  readonly category: ItemCategory;
   readonly size?: {
     readonly width: number;
     readonly height: number;
   };
+  readonly statModifiers?: readonly StatModifier[];
 }
 
 export interface InventoryGrid {
