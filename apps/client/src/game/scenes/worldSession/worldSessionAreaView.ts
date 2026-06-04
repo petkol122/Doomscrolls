@@ -7,6 +7,12 @@ import { sendMovementIntent } from "../../../net/movementIntentClient";
 import { sendInteractIntent } from "../../../net/interactIntentClient";
 import { sendAttackIntent } from "../../../net/attackIntentClient";
 import { getTownRoomPresence } from "../../../net/townRoomPresence";
+import {
+  screenToWorldActiveProjection,
+  worldToScreenActiveProjection,
+  type WorldProjectionBounds,
+  type WorldProjectionViewport,
+} from "../../worldProjection";
 import { resolveWorldAreaBounds } from "../accountShell/resolveWorldAreaBounds";
 import { resolveWorldSessionAreaLayout, type WorldSessionAreaLayout } from "./worldSessionAreaLayout";
 import { createWorldSessionPlayerPlaceholderView } from "./worldSessionPlayerPlaceholderView";
@@ -26,6 +32,11 @@ interface PositionSnapshot {
 interface ClickTargetSnapshot {
   readonly x: number;
   readonly y: number;
+}
+
+interface AreaProjectionContext {
+  readonly bounds: WorldProjectionBounds;
+  readonly viewport: WorldProjectionViewport;
 }
 
 export interface WorldSessionDebugState {
@@ -122,6 +133,7 @@ export function createWorldSessionAreaView(
   const refreshFromRoomState = (nextRoom: Room<DoomscrollsRoomState>): void => {
     const zoneId = nextRoom.state.zoneId;
     const bounds = resolveWorldAreaBounds(zoneId);
+    const projection = createAreaProjectionContext(layout, bounds);
 
     drawBounds(frame, layout);
     boundsLabel.setText(
@@ -134,7 +146,7 @@ export function createWorldSessionAreaView(
     // Task 058 — Refresh enemies view
     const currentEnemies = getTownRoomEnemies(nextRoom.state);
     const projectedEnemies = currentEnemies
-      .map((enemy: TownRoomEnemySnapshot) => projectEnemyToArea(enemy, layout, bounds))
+      .map((enemy: TownRoomEnemySnapshot) => projectEnemyToArea(enemy, projection))
       .filter((enemy: TownRoomEnemySnapshot | null): enemy is TownRoomEnemySnapshot => enemy !== null);
     const newEnemyIds = new Set(projectedEnemies.map((enemy: TownRoomEnemySnapshot) => enemy.id));
 
@@ -184,10 +196,9 @@ export function createWorldSessionAreaView(
 
     inputZone.removeAllListeners();
     inputZone.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
-      const localX = Phaser.Math.Clamp(pointer.x - layout.originX, 0, layout.width);
-      const localY = Phaser.Math.Clamp(pointer.y - layout.originY, 0, layout.height);
-      const worldX = bounds.minX + (localX / layout.width) * (bounds.maxX - bounds.minX);
-      const worldY = bounds.minY + (localY / layout.height) * (bounds.maxY - bounds.minY);
+      const screenPoint = screenToWorldActiveProjection(pointer.x, pointer.y, projection.bounds, projection.viewport);
+      const worldX = screenPoint.x;
+      const worldY = screenPoint.y;
       lastClickTarget = { x: Math.round(worldX), y: Math.round(worldY) };
       onDebugStateChange?.();
       sendMovementIntent(nextRoom, lastClickTarget.x, lastClickTarget.y);
@@ -208,16 +219,23 @@ export function createWorldSessionAreaView(
     }
 
     const { x, y } = self.position;
-    const pixelX = layout.originX + ((x - bounds.minX) / (bounds.maxX - bounds.minX)) * layout.width;
-    const pixelY = layout.originY + ((y - bounds.minY) / (bounds.maxY - bounds.minY)) * layout.height;
+    const playerScreenPosition = worldToScreenActiveProjection(x, y, projection.bounds, projection.viewport);
+    const pixelX = playerScreenPosition.x;
+    const pixelY = playerScreenPosition.y;
 
     // Update placeholder using authoritative synced position only.
     playerPlaceholder.setPosition(pixelX, pixelY);
 
     // Update target marker and line if a click target exists (debug, non-authoritative)
     if (lastClickTarget) {
-      const targetPixelX = layout.originX + ((lastClickTarget.x - bounds.minX) / (bounds.maxX - bounds.minX)) * layout.width;
-      const targetPixelY = layout.originY + ((lastClickTarget.y - bounds.minY) / (bounds.maxY - bounds.minY)) * layout.height;
+      const targetScreenPosition = worldToScreenActiveProjection(
+        lastClickTarget.x,
+        lastClickTarget.y,
+        projection.bounds,
+        projection.viewport,
+      );
+      const targetPixelX = targetScreenPosition.x;
+      const targetPixelY = targetScreenPosition.y;
       targetMarker.setPosition(targetPixelX, targetPixelY);
       targetLabel.setText(`Target: ${lastClickTarget.x}, ${lastClickTarget.y} (non-auth)`);
       lineGraphic.clear();
@@ -264,18 +282,17 @@ export function createWorldSessionAreaView(
 
 function projectEnemyToArea(
   enemy: TownRoomEnemySnapshot,
-  layout: WorldSessionAreaLayout,
-  bounds: { readonly minX: number; readonly maxX: number; readonly minY: number; readonly maxY: number },
+  projection: AreaProjectionContext,
 ): TownRoomEnemySnapshot | null {
-  const width = bounds.maxX - bounds.minX;
-  const height = bounds.maxY - bounds.minY;
+  const width = projection.bounds.maxX - projection.bounds.minX;
+  const height = projection.bounds.maxY - projection.bounds.minY;
 
   if (width <= 0 || height <= 0) {
     return null;
   }
 
-  const normalizedX = (enemy.x - bounds.minX) / width;
-  const normalizedY = (enemy.y - bounds.minY) / height;
+  const normalizedX = (enemy.x - projection.bounds.minX) / width;
+  const normalizedY = (enemy.y - projection.bounds.minY) / height;
 
   if (
     !Number.isFinite(normalizedX) ||
@@ -290,8 +307,22 @@ function projectEnemyToArea(
 
   return {
     ...enemy,
-    x: layout.originX + normalizedX * layout.width,
-    y: layout.originY + normalizedY * layout.height,
+    ...worldToScreenActiveProjection(enemy.x, enemy.y, projection.bounds, projection.viewport),
+  };
+}
+
+function createAreaProjectionContext(
+  layout: WorldSessionAreaLayout,
+  bounds: WorldProjectionBounds,
+): AreaProjectionContext {
+  return {
+    bounds,
+    viewport: {
+      originX: layout.originX,
+      originY: layout.originY,
+      width: layout.width,
+      height: layout.height,
+    },
   };
 }
 
