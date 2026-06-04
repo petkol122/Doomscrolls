@@ -354,9 +354,9 @@ no character level, stat scaling or gameplay-affecting behavior
 
 Interactable objects are intentionally limited. They have no active gameplay behavior, no rewards, no persistence, no collision and no rich dialogue. The server validates distance (50-unit radius from player) and returns safe text responses only. The client renders simple placeholder shapes (gold rectangles with labels) as standin visuals, handles click-to-interact input, and displays the server response message in the center of the screen for 3 seconds before clearing. This is a network + rendering layer only: quests, rewards, loot, inventory effects, NPC dialogue, combat coupling, collision geometry, and persistence are deferred to later Core 0.1 tasks.
 
-### Targeted actions, enemy AI, player HP / downed, loot pickup, and HUD (Core 0.1 — checkpoint)
+### Targeted actions, enemy AI, player HP / downed, dodge, healing flask, loot pickup, inventory summary, and HUD (Core 0.1 — checkpoint)
 
-Recent gameplay slices introduced the following server-authoritative, data-driven foundations. They are intentionally narrow and limited; full simulation polish, stat scaling, pathfinding, projectiles, multiple enemy types, full inventory/equipment UI and persistence are still out of scope.
+Recent gameplay slices introduced the following server-authoritative, data-driven foundations. They are intentionally narrow and limited; full simulation polish, stat scaling, pathfinding, projectiles, multiple enemy types, equipment UI, drag/drop inventory UI and final HUD art are still out of scope.
 
 ```text
 Targeted action approach:
@@ -364,33 +364,45 @@ Targeted action approach:
   - The server uses the same click target as a movement target; once the player is in range of the target, the original action intent (attack / interact / pickup) is processed server-side
   - The client does not decide whether the action succeeded; it only sends intents and renders synced room state
 
+Server-authoritative movement:
+  - click-to-move remains server-authoritative; the client sends only request_move target intents
+  - TownRoom stores the authoritative movement target and advances synced x/y on its simulation tick
+  - newer clicks replace older movement targets; the client never teleports or predicts arrival locally
+
 Enemy AI (Trashboar Runt placeholder):
   - aggro: enemy starts in idle; it aggros the first player that gets within aggro range
   - chase: while aggroed, the enemy moves toward its current target player using a server tick
   - attack: in melee range the enemy hits the player on its own attack cooldown, subtracting server-owned damage
-  - leash return: if the player runs far enough away, the enemy breaks aggro and walks back to its spawn position
-  - respawn: after a synced enemy is defeated, the room keeps it in a defeated state for a short delay, then resets the same enemy to full HP at its original position so the loop is repeatable
+  - leash: if the player runs far enough away, the enemy breaks aggro and walks back to its spawn position
+  - defeat: when server-owned damage reduces HP to 0, the enemy becomes defeated and stops acting
+  - respawn: after a short delay, the same synced enemy resets to full HP at its original position so the loop is repeatable
 
 Player HP / downed / respawn foundation:
   - Each player has server-owned current HP and max HP stored on PlayerPresence
   - Enemy hits reduce HP server-side; HP updates reach the client only through synced room state
   - When HP reaches 0, the player is marked as downed; movement and combat are disabled while downed
-  - After a short downed timer, the player respawns at a server-resolved safe location (last in-zone persisted position or content spawn point), HP is restored, and the downed flag is cleared
+  - The player may then request respawn; the server restores HP, clears the downed state, restores flask state and places the player at a server-resolved safe location (last in-zone persisted position or content spawn point)
   - No XP loss, no item durability loss, no corpse inventory, no recovery flow yet
 
-Loot pickup:
+Dodge and healing flask:
+  - dodge is a server-authoritative short displacement with direction validation and a fixed cooldown; it can also cancel an in-flight enemy telegraph if the player leaves range in time
+  - the starter healing flask is server-authoritative, uses fixed charges/cooldown, heals only living players, and is restored on join/respawn
+  - there is still no stamina system, no mana/resource system, no vendor refill flow and no advanced consumable system
+
+Loot drops, pickup, inventory persistence, inventory summary/detail:
   - Loot dropped by defeated enemies exists as a synced world-loot entry in room state (id, itemId, label, x, y)
   - The client sends only a worldLootId pickup intent; the server validates ownership, distance and that the loot still exists
-  - On success the server removes the synced room-state loot and persists the picked-up item into the character's inventory summary (currentItems count + first few itemId labels) through the persistence layer
-  - Inventory placement, stacking, equipment effects, currency, XP, salvage and full inventory UI are still deferred
+  - On success the server removes the synced room-state loot and persists the picked-up item into the character inventory through the persistence layer
+  - the current client slice exposes real inventory summary/detail data from persisted account state rather than fake client-only loot
+  - inventory placement visuals, drag/drop, equipment effects, currency, XP, salvage, vendor/stash and full inventory UI are still deferred
 
 HUD (temporary debug vs. future default):
-  - The current connected-room overlay is a temporary server-synced debug HUD only
+  - The current connected-room overlay is a temporary server-synced HUD/resource placeholder and debug shell only
   - The future default HUD will use Diablo-like orbs (health globe + mana / resource globe) in the bottom corners
   - An optional WoW-like framed bars mode may be added later behind a setting; the orbs are still the default
 ```
 
-These slices are still narrow debug-level flows. They are not full combat, not full AI, not full loot/inventory/equipment, and not final HUD art. The server still owns every gameplay outcome; the client only sends intents and renders synced state.
+These slices are still narrow checkpoint flows. They are not full combat, not full AI, not full loot/inventory/equipment, and not final HUD art. The server still owns every gameplay outcome; the client only sends intents and renders synced state. Still missing in this milestone: XP, quests, equipment flow, inventory drag/drop, vendor/stash, a full death/corpse recovery system, and the final Diablo-orb HUD.
 
 Selected character state runtime verification passed locally:
 

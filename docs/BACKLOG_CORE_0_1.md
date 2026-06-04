@@ -532,7 +532,34 @@ Notes: Server uses 50-unit distance validation; objects initialized per room ins
 
 Document the recent enemy AI, player HP / downed, loot pickup, targeted actions and HUD direction slices as a low-context checkpoint across `README.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG_CORE_0_1.md` and `docs/CODING_RULES.md`. This is a documentation-only task and must not change code, add gameplay, or refactor docs broadly.
 
-Status: documented. The four docs now briefly note the targeted action approach (far click first moves the player closer, then the server processes attack / interact / pickup), the enemy AI slice (aggro, chase, attack, leash return, respawn), the player HP / downed / respawn foundation, the loot pickup flow that persists a minimal inventory summary on pickup, and the HUD direction (current overlay is temporary debug; future default is Diablo-like orbs, optional WoW-like framed bars later). The wording intentionally keeps the slices scoped to what was actually added and explicitly states what is still deferred (pathfinding, projectiles, multiple enemy types, full inventory/equipment UI, full corpse recovery, XP, currency, full HUD art). No code or schema was changed.
+Status: superseded by the fuller milestone checkpoint docs below.
+
+### Task 100 — Milestone Full Check + Docs
+
+Checkpoint the current playable slice after combat, loot, pickup, inventory summary, HP/downed/respawn, dodge, healing flask, and HUD placeholder work. This task is documentation + verification only and must not add features.
+
+Status: documented. `README.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG_CORE_0_1.md`, and `docs/CODING_RULES.md` now describe the current server-authoritative movement loop, targeted actions (`move first, then attack/interact/pick up`), placeholder enemy aggro/chase/leash/attack/defeat/respawn behavior, player HP/downed/respawn flow, dodge and starter healing flask, loot drops with real pickup persistence into inventory, real inventory summary/detail usage, and the current temporary HUD/resource placeholder.
+
+Explicitly deferred and called out in the docs:
+
+```text
+no XP yet
+no quests yet
+no equipment flow yet
+no inventory drag/drop yet
+no vendor/stash yet
+no full death/corpse recovery system yet
+no final Diablo-orb HUD yet
+```
+
+Required checks for this checkpoint:
+
+```text
+pnpm --filter @doomscrolls/server typecheck
+pnpm --filter @doomscrolls/client typecheck
+pnpm lint
+pnpm test
+```
 
 ## Anti-Scope-Creep
 

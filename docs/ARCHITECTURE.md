@@ -310,44 +310,47 @@ the marker updates only after room-state sync from the server
 interact response messages display for 3 seconds before clearing
 roomKind display reads synced roomKind from room state
 
-### Basic attack intent foundation (Core 0.1)
+### Current realtime gameplay checkpoint (Core 0.1)
 
 ```text
-Network contract:
-  RequestAttackClientMessage: { type: "request_attack", targetEnemyId }
-  RequestAttackAcceptedServerMessage: { type: "request_attack_accepted", targetEnemyId }
-  RequestAttackRejectedServerMessage: { type: "request_attack_rejected", reason, targetEnemyId? }
-  attack cooldown is server-authoritative; client shows safe feedback only and does not predict cooldown timing
+Movement:
+  request_move is the only movement intent the client may send
+  TownRoom stores authoritative movement targets and advances synced x/y on the server tick
+  client movement rendering always comes from synced room state
 
-Server-side:
-  validateAttackIntent(state, player, targetEnemyId): validates player presence, enemy existence and distance <= 64
-  applyEnemyDamage(enemy, 1): subtracts fixed damage, clamps hp at 0
-  TownRoom.onMessage("request_attack", ...): orchestrates validation, delegates cooldown gating to helper/runtime presence state, sends safe accept/reject response, updates synced enemy hp
-  enemy hp remains authoritative in TownRoomState.enemies MapSchema sync
+Targeted actions:
+  request_attack / request_interact / request_pickup_world_loot are target intents only
+  when out of range, TownRoom stores a pending action plus movement target
+  once the player is close enough, the server executes the deferred action
+  the client never decides hit/pickup/interact success locally
 
-Client-side:
-  sendAttackIntent(room, targetEnemyId): dispatches request_attack intent only
-  registerAttackResponseListeners(room, ...): listens for safe accepted/rejected responses
-  worldSessionAreaView.ts: sends attack intent on enemy click, shows synced enemy hp changes, no local hp mutation
-  WorldSessionScene: shows safe feedback ("Attack sent" / "Attack confirmed" / "Too far away")
-  WorldSessionScene: shows safe feedback ("Attack sent" / "Too far away")
+Enemy loop:
+  placeholder Trashboar supports aggro, chase, leash return, melee attack windup/landing, defeat and respawn
+  enemy damage to players is server-owned
+  enemy defeat may spawn synced world loot from server-owned loot rolling
 
-Core 0.1 Scope:
-  one-click basic attack intent against synced placeholder enemies
-  fixed server-owned damage of 1
-  hp text updates only through synced room state
-  no enemy AI, enemy attacks, player damage, loot, xp, death, persistence, animations or pathfinding/collision
+Player survival loop:
+  PlayerPresence stores current hp, maxHp, lifeState, dodge cooldown and flask state
+  on hp <= 0 the player becomes downed and active movement/targeted actions are blocked
+  respawn is a real server message flow that restores hp, flask charges/cooldown and a safe position
+
+Dodge and flask:
+  request_dodge is server-validated for direction/cooldown and applies a short authoritative displacement
+  request_use_healing_flask is server-validated for alive/full-hp/charges/cooldown and heals server-side only
+
+Loot and inventory:
+  synced world loot exists in room state only after a real server-owned enemy defeat roll
+  pickup removes synced world loot only after server validation and persists the item into the character inventory
+  current account/inventory views must reflect real persisted state; no fake local reward state
+
+HUD state:
+  current overlay is a temporary HUD/resource placeholder + debug shell
+  final Diablo-like orb HUD is deferred
 ```
-the overlay groups room info, player presence and movement debug into readable sections
-the overlay states clearly that it is temporary server-synced debug state, not final gameplay UI
-movement debug may show the last click target sent by the client, but position still comes only from synced room state
-TownRoom currently syncs one static Trashboar Runt placeholder enemy in the Nightmarket only
-the Nightmarket uses a reduced 480x320 test-arena bound set so movement/combat verification happens in a compact space
-the default Nightmarket spawn and the placeholder Trashboar are placed close together for faster test-world iteration
-this is still placeholder visual UI, not final art or animation
-no sprites, no map art, no collision, no pathfinding, no final animation, no combat, no enemy AI
-no inventory UI, no persistence, no rich NPC dialogue, no quests, no rewards yet
-```
+
+The overlay groups room info, player presence, controls, hp/flask state and movement/combat debug into readable sections. It states clearly that it is temporary server-synced debug UI, not the final gameplay HUD. Movement debug may show the last click target sent by the client, but position still comes only from synced room state. TownRoom currently syncs one Nightmarket placeholder Trashboar in a reduced 480x320 test arena so movement/combat verification stays compact.
+
+This is still placeholder visual UI, not final art or animation. Still deferred: XP, quests, equipment, drag/drop inventory, vendor/stash, the full corpse/death recovery loop, final Diablo-orb HUD art, sprites, map art, collision and pathfinding.
 
 The current world-area rendering must not be mistaken for the final camera direction. It is a practical 2D debug projection used to verify synced state, movement intents and placeholder world interactions. The intended shipping direction remains a fixed isometric / 2.5D look implemented on the existing Phaser 2D runtime via later visual techniques such as depth sorting, shadows, layered scene objects and pre-rendered / sprite-based assets.
 
