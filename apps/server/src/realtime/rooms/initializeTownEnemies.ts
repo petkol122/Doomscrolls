@@ -26,6 +26,8 @@ export function initializeTownEnemies(
   enemy.id = NIGHTMARKET_TRASHBOAR_PLACEHOLDER_ID;
   enemy.enemyId = trashboarRuntContent.id;
   enemy.label = trashboarRuntContent.nameKey;
+  enemy.spawnX = 240;
+  enemy.spawnY = 160;
   enemy.x = 240;
   enemy.y = 160;
   enemy.state = "idle";

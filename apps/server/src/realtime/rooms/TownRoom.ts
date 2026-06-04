@@ -48,9 +48,90 @@ import type { SpawnPointContentId } from "@doomscrolls/content";
 import { NIGHTMARKET_DEFAULT_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
 
 const ENEMY_AGGRO_RANGE = 120;
+const ENEMY_LEASH_RANGE = 180;
 const ENEMY_ATTACK_RANGE = 44;
 const ENEMY_ATTACK_COOLDOWN_MS = 1200;
 const ENEMY_ATTACK_DAMAGE = 2;
+const ENEMY_RETURN_ARRIVAL_DISTANCE = 1;
+type ContentEnemyId = Parameters<typeof contentRegistry.enemies.get>[0];
+
+function moveEnemyTowardTarget(
+  enemy: { x: number; y: number },
+  target: { x: number; y: number },
+  moveSpeedUnitsPerSecond: number,
+  deltaMs: number,
+): void {
+  if (
+    !Number.isFinite(moveSpeedUnitsPerSecond) ||
+    moveSpeedUnitsPerSecond <= 0 ||
+    !Number.isFinite(deltaMs) ||
+    deltaMs <= 0
+  ) {
+    return;
+  }
+
+  const deltaX = target.x - enemy.x;
+  const deltaY = target.y - enemy.y;
+  const distance = Math.hypot(deltaX, deltaY);
+
+  if (distance <= ENEMY_ATTACK_RANGE) {
+    return;
+  }
+
+  const maxDistance = moveSpeedUnitsPerSecond * (deltaMs / 1000);
+  const distanceToTravel = Math.min(maxDistance, distance - ENEMY_ATTACK_RANGE);
+  if (distanceToTravel <= 0) {
+    return;
+  }
+
+  const scale = distanceToTravel / distance;
+  enemy.x += deltaX * scale;
+  enemy.y += deltaY * scale;
+}
+
+function clearEnemyTargetAndReturn(enemy: {
+  state: "idle" | "chasing" | "returning" | "defeated";
+  targetPlayerSessionId: string;
+}): void {
+  enemy.targetPlayerSessionId = "";
+  enemy.state = "returning";
+}
+
+function moveEnemyTowardPoint(
+  enemy: { x: number; y: number },
+  target: { x: number; y: number },
+  moveSpeedUnitsPerSecond: number,
+  deltaMs: number,
+): void {
+  if (
+    !Number.isFinite(moveSpeedUnitsPerSecond) ||
+    moveSpeedUnitsPerSecond <= 0 ||
+    !Number.isFinite(deltaMs) ||
+    deltaMs <= 0
+  ) {
+    return;
+  }
+
+  const deltaX = target.x - enemy.x;
+  const deltaY = target.y - enemy.y;
+  const distance = Math.hypot(deltaX, deltaY);
+
+  if (distance <= ENEMY_RETURN_ARRIVAL_DISTANCE) {
+    enemy.x = target.x;
+    enemy.y = target.y;
+    return;
+  }
+
+  const maxDistance = moveSpeedUnitsPerSecond * (deltaMs / 1000);
+  const distanceToTravel = Math.min(maxDistance, distance);
+  if (distanceToTravel <= 0) {
+    return;
+  }
+
+  const scale = distanceToTravel / distance;
+  enemy.x += deltaX * scale;
+  enemy.y += deltaY * scale;
+}
 
 /**
  * TownRoom with minimal Colyseus schema state.
@@ -146,7 +227,7 @@ private respawnHandlerRegistered = false;
           }
         },
       });
-      this.applyEnemyAggroDamage(Date.now());
+      this.applyEnemyAggroDamage(Date.now(), deltaMs);
       respawnTownEnemies(this.state as TownRoomState, Date.now());
     }, TOWN_MOVEMENT_TICK_RATE_MS);
 
@@ -994,10 +1075,14 @@ private respawnHandlerRegistered = false;
     });
   }
 
-  private applyEnemyAggroDamage(now: number): void {
+  private applyEnemyAggroDamage(now: number, deltaMs: number): void {
     const state = this.state as TownRoomState;
 
     state.enemies.forEach((enemy) => {
+      const enemyDefinition = contentRegistry.enemies.get(enemy.enemyId as ContentEnemyId);
+      const enemyMoveSpeed = enemyDefinition?.moveSpeed ?? 0;
+      const distanceFromSpawn = Math.hypot(enemy.x - enemy.spawnX, enemy.y - enemy.spawnY);
+
       if (enemy.defeated || enemy.hp <= 0) {
         enemy.state = "defeated";
         enemy.targetPlayerSessionId = "";
@@ -1010,15 +1095,30 @@ private respawnHandlerRegistered = false;
       if (currentTargetSessionId.length > 0) {
         const currentTarget = state.playerPresence.get(currentTargetSessionId);
         if (currentTarget === undefined || currentTarget.hp <= 0) {
-          enemy.targetPlayerSessionId = "";
-          enemy.state = "idle";
+          clearEnemyTargetAndReturn(enemy);
         } else {
           const targetDistance = Math.hypot(enemy.x - currentTarget.x, enemy.y - currentTarget.y);
-          if (targetDistance > ENEMY_AGGRO_RANGE) {
-            enemy.targetPlayerSessionId = "";
-            enemy.state = "idle";
+          if (targetDistance > ENEMY_AGGRO_RANGE || distanceFromSpawn > ENEMY_LEASH_RANGE) {
+            clearEnemyTargetAndReturn(enemy);
           }
         }
+      }
+
+      if (enemy.targetPlayerSessionId.length === 0 && enemy.state === "returning") {
+        moveEnemyTowardPoint(
+          enemy,
+          { x: enemy.spawnX, y: enemy.spawnY },
+          enemyMoveSpeed,
+          deltaMs,
+        );
+
+        const remainingDistanceToSpawn = Math.hypot(enemy.x - enemy.spawnX, enemy.y - enemy.spawnY);
+        if (remainingDistanceToSpawn <= ENEMY_RETURN_ARRIVAL_DISTANCE) {
+          enemy.x = enemy.spawnX;
+          enemy.y = enemy.spawnY;
+          enemy.state = "idle";
+        }
+        return;
       }
 
       let closestPlayerSessionId: string | null = null;
@@ -1047,21 +1147,27 @@ private respawnHandlerRegistered = false;
 
       const targetPlayer = state.playerPresence.get(enemy.targetPlayerSessionId);
       if (targetPlayer === undefined || targetPlayer.hp <= 0) {
-        enemy.targetPlayerSessionId = "";
-        enemy.state = "idle";
+        clearEnemyTargetAndReturn(enemy);
         return;
       }
 
       const targetDistance = Math.hypot(enemy.x - targetPlayer.x, enemy.y - targetPlayer.y);
-      if (targetDistance > ENEMY_AGGRO_RANGE) {
-        enemy.targetPlayerSessionId = "";
-        enemy.state = "idle";
+      if (targetDistance > ENEMY_AGGRO_RANGE || distanceFromSpawn > ENEMY_LEASH_RANGE) {
+        clearEnemyTargetAndReturn(enemy);
         return;
       }
 
       enemy.state = "chasing";
+      moveEnemyTowardTarget(
+        enemy,
+        targetPlayer,
+        enemyMoveSpeed,
+        deltaMs,
+      );
 
-      if (targetDistance > ENEMY_ATTACK_RANGE) {
+      const distanceAfterMovement = Math.hypot(enemy.x - targetPlayer.x, enemy.y - targetPlayer.y);
+
+      if (distanceAfterMovement > ENEMY_ATTACK_RANGE) {
         return;
       }
 
@@ -1078,8 +1184,7 @@ private respawnHandlerRegistered = false;
         targetPlayer.targetX = targetPlayer.x;
         targetPlayer.targetY = targetPlayer.y;
         clearPendingAction(targetPlayer);
-        enemy.targetPlayerSessionId = "";
-        enemy.state = "idle";
+        clearEnemyTargetAndReturn(enemy);
       }
 
       const targetClient = this.clients.find(

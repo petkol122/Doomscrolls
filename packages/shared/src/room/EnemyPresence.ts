@@ -1,12 +1,14 @@
 import { Schema, type } from "@colyseus/schema";
 import type { LocalizationKey } from "@doomscrolls/localization";
 
-export type EnemyState = "idle" | "chasing" | "defeated";
+export type EnemyState = "idle" | "chasing" | "returning" | "defeated";
 
 export class EnemyPresence extends Schema {
   @type("string") id!: string;
   @type("string") enemyId!: string;
   @type("string") label!: LocalizationKey;
+  @type("number") spawnX!: number;
+  @type("number") spawnY!: number;
   @type("number") x!: number;
   @type("number") y!: number;
   @type("string") state!: EnemyState;

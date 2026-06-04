@@ -100,6 +100,12 @@ export function createWorldSessionEnemyPlaceholderView(
       body.setFillStyle(0xc8611d, 0.95);
       body.setStrokeStyle(2, 0xffd3a3, 0.95);
       stateText.setColor("#ffe0aa");
+    } else if (nextEnemy.state === "returning") {
+      ring.setFillStyle(0x2b466f, 0.3);
+      ring.setStrokeStyle(2, 0x8ab8ff, 0.48);
+      body.setFillStyle(0x426ca8, 0.95);
+      body.setStrokeStyle(2, 0xbfd8ff, 0.95);
+      stateText.setColor("#cfe0ff");
     } else {
       ring.setFillStyle(0x6f1414, 0.26);
       ring.setStrokeStyle(2, 0xff7a7a, 0.4);
