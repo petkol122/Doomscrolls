@@ -77,6 +77,14 @@ export function createWorldSessionAreaView(
   const playerPlaceholder = createWorldSessionPlayerPlaceholderView(scene);
   const interactablesView = createWorldSessionInteractablesView(scene, layout, (objectId) => {
     sendInteractIntent(room, objectId);
+    const roomState = room.state as any;
+    if (roomState?.interactables) {
+      const targetInteractable = roomState.interactables.get(objectId);
+      if (targetInteractable) {
+        lastClickTarget = { x: targetInteractable.x, y: targetInteractable.y };
+        onDebugStateChange?.();
+      }
+    }
   });
 
   // Task 058 — Add enemy placeholder view
@@ -186,6 +194,11 @@ export function createWorldSessionAreaView(
           if (result.dispatched) {
             onAttackFeedback?.(t("world_area.attack_sent"));
           }
+          const targetEnemy = getTownRoomEnemies(nextRoom.state).find((enemy) => enemy.id === enemyId);
+          if (targetEnemy) {
+            lastClickTarget = { x: targetEnemy.x, y: targetEnemy.y };
+            onDebugStateChange?.();
+          }
         });
         enemyPlaceholders.set(enemy.id, enemyView);
       } else {
@@ -248,6 +261,11 @@ export function createWorldSessionAreaView(
             const result = sendPickupWorldLootIntent(nextRoom, worldLootId);
             if (result.dispatched) {
               onPickupFeedback?.(t("world_area.pickup_sent"));
+            }
+            const targetLoot = getTownRoomWorldLoot(nextRoom.state).find((loot) => loot.id === worldLootId);
+            if (targetLoot) {
+              lastClickTarget = { x: targetLoot.x, y: targetLoot.y };
+              onDebugStateChange?.();
             }
           }),
         );

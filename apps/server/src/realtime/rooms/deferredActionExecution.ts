@@ -10,6 +10,7 @@ import { applyEnemyDamage } from "./applyEnemyDamage";
 import { getInteractableResponseMessage, validateInteractIntent } from "./interactValidation";
 import type { PlayerPresence } from "./PlayerPresence";
 import { clearPendingAction } from "./pendingActionState";
+import { persistPickedUpWorldLootToInventory } from "./pickupWorldLootInventory";
 import { validatePickupWorldLootIntent } from "./pickupWorldLootValidation";
 import { spawnWorldLootOnEnemyDefeat } from "./spawnWorldLootOnEnemyDefeat";
 import type { TownRoomState } from "./TownRoomState";
@@ -21,7 +22,7 @@ export interface DeferredActionExecutionContext {
   readonly sendToClient: (type: string, payload: unknown) => void;
 }
 
-export function tryExecutePendingAction(context: DeferredActionExecutionContext): void {
+export async function tryExecutePendingAction(context: DeferredActionExecutionContext): Promise<void> {
   const { state, player, now, sendToClient } = context;
   if (!player.hasPendingAction) {
     return;
@@ -106,14 +107,37 @@ export function tryExecutePendingAction(context: DeferredActionExecutionContext)
       return;
     }
 
+    clearPendingAction(player);
+    const pickupResult = await persistPickedUpWorldLootToInventory({
+      characterId: player.characterId,
+      itemDefinitionId: validation.worldLoot.itemId,
+      itemLabel: validation.worldLoot.label,
+    });
+
+    if (!pickupResult.ok) {
+      const message = pickupResult.reason === "inventory_full"
+        ? "Inventory full."
+        : "Pickup unavailable.";
+      sendToClient("request_pickup_world_loot_rejected", {
+        type: "request_pickup_world_loot_rejected",
+        reason: pickupResult.reason === "inventory_full" ? "inventory_full" : "world_loot_not_found",
+        worldLootId: validation.worldLoot.id,
+      });
+      sendToClient("interact_response", {
+        type: "interact_response",
+        objectId: validation.worldLoot.id,
+        message,
+      });
+      return;
+    }
+
     state.worldLoot.delete(validation.worldLoot.id);
     const accepted: RequestPickupWorldLootAcceptedServerMessage = {
       type: "request_pickup_world_loot_accepted",
       worldLootId: validation.worldLoot.id,
-      message: `Picked up ${validation.worldLoot.label}`,
+      message: pickupResult.message,
     };
     sendToClient("request_pickup_world_loot_accepted", accepted);
-    clearPendingAction(player);
     return;
   }
 

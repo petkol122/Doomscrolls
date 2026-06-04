@@ -47,7 +47,7 @@ export function stepTownRoomMovement(
     }
 
     if (options?.onPendingActionReady !== undefined) {
-      tryExecutePendingAction({
+      void tryExecutePendingAction({
         state,
         player: presence,
         now: options.now ?? Date.now(),

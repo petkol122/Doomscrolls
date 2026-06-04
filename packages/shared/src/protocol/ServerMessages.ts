@@ -138,6 +138,7 @@ export interface RequestAttackRejectedServerMessage {
 export type RequestPickupWorldLootRejectedReason =
   | "player_not_ready"
   | "world_loot_not_found"
+  | "inventory_full"
   | "out_of_range";
 
 export interface RequestPickupWorldLootAcceptedServerMessage {

@@ -4,6 +4,8 @@ import { t } from "@doomscrolls/localization";
 import Phaser from "phaser";
 
 import type { AccountState } from "../../net/ApiClient";
+import { ApiClient } from "../../net/ApiClient";
+import { clientEnv } from "../../config/env";
 import { registerAttackResponseListeners } from "../../net/attackIntentClient";
 import { registerInteractResponseListener } from "../../net/interactResponseClient";
 import { registerPickupWorldLootResponseListeners } from "../../net/pickupWorldLootClient";
@@ -32,6 +34,7 @@ export class WorldSessionScene extends Phaser.Scene {
   private room: Room<DoomscrollsRoomState> | null = null;
   private worldAreaView: WorldSessionAreaView | null = null;
   private feedbackView: WorldSessionFeedbackView | null = null;
+  private apiClient: ApiClient | null = null;
 
   public constructor() {
     super("WorldSessionScene");
@@ -52,6 +55,7 @@ export class WorldSessionScene extends Phaser.Scene {
     }
 
     this.feedbackView = createWorldSessionFeedbackView(this);
+    this.apiClient = clientEnv.apiUrl === undefined ? null : new ApiClient(clientEnv.apiUrl);
 
     this.worldAreaView = createWorldSessionAreaView(
       this,
@@ -92,11 +96,14 @@ export class WorldSessionScene extends Phaser.Scene {
     registerPickupWorldLootResponseListeners(this.room, {
       onAccepted: (message) => {
         this.feedbackView?.showNotice(message.message);
+        void this.refreshAccountStateAfterPickup();
       },
       onRejected: (message) => {
         this.feedbackView?.showNotice(
           message.reason === "out_of_range"
             ? t("world_area.moving_closer")
+            : message.reason === "inventory_full"
+              ? t("world_area.inventory_full")
             : message.reason === "world_loot_not_found"
               ? t("world_area.pickup_unavailable")
               : t("world_area.pickup_unavailable"),
@@ -205,10 +212,28 @@ export class WorldSessionScene extends Phaser.Scene {
   }
 
   private handleSceneTeardown(): void {
+    this.apiClient = null;
     this.feedbackView?.destroy();
     this.feedbackView = null;
     this.worldAreaView?.destroy();
     this.worldAreaView = null;
     this.destroyOverlay();
+  }
+
+  private async refreshAccountStateAfterPickup(): Promise<void> {
+    if (this.apiClient === null) {
+      return;
+    }
+
+    const sessionToken = window.localStorage.getItem("doomscrolls.sessionToken");
+    if (typeof sessionToken !== "string" || sessionToken.length === 0) {
+      return;
+    }
+
+    try {
+      this.account = await this.apiClient.getMe(sessionToken);
+    } catch {
+      // Ignore refresh failures; pickup feedback already came from realtime server authority.
+    }
   }
 }
