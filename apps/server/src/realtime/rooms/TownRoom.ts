@@ -53,6 +53,7 @@ const ENEMY_ATTACK_RANGE = 44;
 const ENEMY_ATTACK_COOLDOWN_MS = 1200;
 const ENEMY_ATTACK_DAMAGE = 2;
 const ENEMY_RETURN_ARRIVAL_DISTANCE = 1;
+const ENEMY_RETURN_REACQUIRE_BUFFER = 8;
 type ContentEnemyId = Parameters<typeof contentRegistry.enemies.get>[0];
 
 function moveEnemyTowardTarget(
@@ -92,9 +93,21 @@ function moveEnemyTowardTarget(
 function clearEnemyTargetAndReturn(enemy: {
   state: "idle" | "chasing" | "returning" | "defeated";
   targetPlayerSessionId: string;
+  nextAttackAtMs: number;
 }): void {
   enemy.targetPlayerSessionId = "";
   enemy.state = "returning";
+  enemy.nextAttackAtMs = 0;
+}
+
+function resetEnemyCombatState(enemy: {
+  state: "idle" | "chasing" | "returning" | "defeated";
+  targetPlayerSessionId: string;
+  nextAttackAtMs: number;
+}): void {
+  enemy.targetPlayerSessionId = "";
+  enemy.state = "idle";
+  enemy.nextAttackAtMs = 0;
 }
 
 function moveEnemyTowardPoint(
@@ -1059,6 +1072,11 @@ private respawnHandlerRegistered = false;
       player.targetY = respawnPosition.y;
       player.hasMovementTarget = false;
       clearPendingAction(player);
+      state.enemies.forEach((enemy) => {
+        if (enemy.targetPlayerSessionId === client.sessionId) {
+          clearEnemyTargetAndReturn(enemy);
+        }
+      });
 
       const message: PlayerRespawnedServerMessage = {
         type: "player_respawned",
@@ -1086,6 +1104,7 @@ private respawnHandlerRegistered = false;
       if (enemy.defeated || enemy.hp <= 0) {
         enemy.state = "defeated";
         enemy.targetPlayerSessionId = "";
+        enemy.nextAttackAtMs = 0;
         return;
       }
 
@@ -1114,9 +1133,9 @@ private respawnHandlerRegistered = false;
 
         const remainingDistanceToSpawn = Math.hypot(enemy.x - enemy.spawnX, enemy.y - enemy.spawnY);
         if (remainingDistanceToSpawn <= ENEMY_RETURN_ARRIVAL_DISTANCE) {
+          resetEnemyCombatState(enemy);
           enemy.x = enemy.spawnX;
           enemy.y = enemy.spawnY;
-          enemy.state = "idle";
         }
         return;
       }
@@ -1137,7 +1156,13 @@ private respawnHandlerRegistered = false;
       });
 
       if (enemy.targetPlayerSessionId.length === 0) {
-        if (closestPlayerSessionId === null || closestDistance > ENEMY_AGGRO_RANGE) {
+        const canReacquireWhileReturning = enemy.state !== "returning"
+          || distanceFromSpawn <= ENEMY_RETURN_REACQUIRE_BUFFER;
+        if (
+          closestPlayerSessionId === null
+          || closestDistance > ENEMY_AGGRO_RANGE
+          || !canReacquireWhileReturning
+        ) {
           enemy.state = "idle";
           return;
         }

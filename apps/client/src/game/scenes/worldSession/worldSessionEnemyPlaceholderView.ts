@@ -60,10 +60,21 @@ export function createWorldSessionEnemyPlaceholderView(
     onClick?.(enemy.id);
   });
 
-  const formatStateText = (nextEnemy: TownRoomEnemySnapshot): string =>
-    nextEnemy.targetPlayerSessionId.length > 0
-      ? `state=${nextEnemy.state} target=${nextEnemy.targetPlayerSessionId}`
-      : `state=${nextEnemy.state}`;
+  const formatStateText = (nextEnemy: TownRoomEnemySnapshot): string => {
+    if (nextEnemy.defeated) {
+      return "state=defeated";
+    }
+
+    if (nextEnemy.targetPlayerSessionId.length > 0) {
+      return `state=${nextEnemy.state} target=${nextEnemy.targetPlayerSessionId}`;
+    }
+
+    if (nextEnemy.state === "returning") {
+      return "state=returning home";
+    }
+
+    return `state=${nextEnemy.state}`;
+  };
 
   const applyEnemyVisualState = (nextEnemy: TownRoomEnemySnapshot): void => {
     if (nextEnemy.defeated) {
