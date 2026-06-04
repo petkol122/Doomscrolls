@@ -26,6 +26,23 @@ Content definitions belong in `packages/content`.
 
 ---
 
+## Visual Projection Rules
+
+Doomscrolls targets a fixed isometric / 2.5D ARPG presentation.
+
+Rules:
+
+- runtime remains Phaser 2D
+- do not switch the client to a 3D engine for Core 0.1 projection work
+- do not add a free 3D camera, camera orbit, camera rotation or perspective-camera feature
+- current top-down world/session rendering is temporary debug visualization only and must be documented as such
+- projection-direction prep may add tiny constants/helpers such as `worldProjection = "debug_top_down"` and `futureTargetProjection = "isometric_2_5d"`
+- such prep must not perform real visual conversion by itself
+- later visual tasks may implement depth sorting, shadows, layered objects and pre-rendered / 2D sprite assets on the existing 2D runtime
+- do not present placeholder top-down debug rendering as the final visual identity
+
+---
+
 ## Prisma
 
 Doomscrolls uses PostgreSQL + Prisma.
@@ -361,7 +378,7 @@ Core 0.1 ships a client-side helper at `apps/client/src/game/scenes/accountShell
 Client world area bounds rules:
 
 - The client resolves zone world-area bounds through `resolveWorldAreaBounds(zoneId)`, which reads `ZoneContentDefinition.bounds` from the content registry
-- Falls back to safe 800x600 defaults if the zone is missing from content (should only happen if content data is missing, which would fail content validation)
+- Falls back to safe 480x320 defaults if the zone is missing from content (should only happen if content data is missing, which would fail content validation)
 - The helper documents that bounds are placeholder movement intent constraints — NOT collision geometry or map size
 - The client now depends on `@doomscrolls/content`; this is acceptable because the content package contains only pure TypeScript data and types with no Node-only runtime imports (no Prisma, Fastify, Colyseus, PostgreSQL)
 - If `@doomscrolls/content` ever gains Node-only imports, a future task must extract a shared public content snapshot for client use

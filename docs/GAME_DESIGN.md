@@ -4,6 +4,8 @@
 
 Doomscrolls is a modern dark-fantasy online ARPG with Diablo 2-like pacing, click-to-move identity, persistent characters, loot-driven progression and scalable room-based online world architecture.
 
+Its visual target is a fixed Diablo-like isometric / 2.5D presentation. The current top-down debug world view is temporary and exists only to support early foundation and verification work.
+
 The game starts in the Czech Republic, but the long-term world is planetary.
 
 ---
@@ -17,6 +19,21 @@ dark fantasy with dry black humor
 Think cyberpunk, but 2026 rather than distant sci-fi.
 
 The world should feel serious, bleak, urban, strange and occasionally funny.
+
+---
+
+## Visual Presentation Direction
+
+```text
+fixed isometric / 2.5D ARPG presentation
+Phaser 2D runtime
+no free 3D camera
+no engine switch
+later asset direction may use pre-rendered / 2D sprite art
+later scene depth comes from depth sorting, layered objects and shadows
+```
+
+The intended feel is Diablo-like readability, atmosphere and spatial clarity from a locked viewpoint rather than from camera freedom. Early placeholder/debug views may remain top-down while networking, rooms, movement, combat and interaction foundations are being built, but that debug presentation is not the intended final player-facing camera language.
 
 ---
 

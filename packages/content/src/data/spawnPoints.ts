@@ -8,8 +8,8 @@ export const spawnPoints = [
     id: "nightmarket_spawn",
     spawnPointId: spawnPointId("nightmarket_spawn"),
     zoneId: "nightmarket",
-    x: 400,
-    y: 300,
+    x: 160,
+    y: 160,
     labelKey: "spawn.nightmarket.default"
   }
 ] as const satisfies readonly SpawnPointContentDefinition[];

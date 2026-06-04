@@ -49,6 +49,17 @@ No fake mechanics. No client-only gameplay outcomes. No hardcoded game content i
 - **Main antagonistic force:** Moloch
 - **Architecture:** server-authoritative, room-based, data-driven
 
+Visual direction lock:
+
+```text
+target presentation: fixed isometric / 2.5D ARPG camera
+runtime engine: Phaser 2D
+current world view: temporary top-down debug projection
+no free 3D camera
+no engine switch
+future visual language: depth sorting, shadows, layered objects, pre-rendered / 2D sprite assets
+```
+
 ---
 
 ## Core 0.1 Locked Content
@@ -179,6 +190,8 @@ After successful creation, the client refreshes real account state and resumes t
 The authenticated `AccountShellScene` now has a working **Enter World** button. It is enabled only when a character is selected. On click, it calls `RealtimeClient.joinTownRoom(sessionToken, selectedCharacterId)`. On successful join, the client switches into `WorldSessionScene`, which is the connected room shell only. On failure, it shows a safe error `"Could not enter world."`. The room reference is stored in client memory only.
 
 The client now renders the minimal `TownRoom` state after successful join: `roomKind` (`"town"`), `zoneId` (currently `"nightmarket"`), and `connectedPlayerCount`. `WorldSessionScene` presents this as a temporary server-synced debug shell with grouped room info, player presence and movement-debug sections. Additionally, a helper module (`townRoomPresence.ts`) extracts player presence from the Colyseus schema state so the connected-room overlay can show each player's display name, character ID and already-synced debug fields. This is not final gameplay UI.
+
+The current `WorldSessionScene` area view is also a temporary top-down debug projection only. Doomscrolls still targets a fixed Diablo-like isometric / 2.5D presentation, but the runtime remains Phaser 2D. No free 3D camera, no 3D engine switch, and no visual conversion layer are introduced in the current batch. Later visual tasks may add depth sorting, shadows, layered objects and pre-rendered / 2D sprite assets while keeping the game on the 2D runtime.
 
 If the real `characters` array is empty, the shell shows `No characters yet.`
 

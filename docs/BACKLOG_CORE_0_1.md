@@ -395,7 +395,19 @@ Status: implemented. A new server helper `applyMovementIntent()` lives at `apps/
 
 Remove hardcoded world area bounds from client UI and use shared/content-derived constants.
 
-Status: implemented. `apps/client/src/game/scenes/accountShell/resolveWorldAreaBounds.ts` is a new client helper that reads zone bounds from `@doomscrolls/content` zone definitions (placeholder movement constraints, not collision geometry or map size). Falls back to safe 800x600 defaults if content is missing. `worldAreaInputView.ts` was updated to call this helper instead of using hardcoded `DEFAULT_AREA_W=800`/`DEFAULT_AREA_H=600`. The client now depends on `@doomscrolls/content` — this is safe because the content package contains only pure TypeScript data and types, no Node-only runtime APIs. Typecheck and build pass for both client and content.
+Status: implemented. `apps/client/src/game/scenes/accountShell/resolveWorldAreaBounds.ts` is a new client helper that reads zone bounds from `@doomscrolls/content` zone definitions (placeholder movement constraints, not collision geometry or map size). Falls back to safe Nightmarket defaults if content is missing. `worldAreaInputView.ts` was updated to call this helper instead of using hardcoded dimensions. The client now depends on `@doomscrolls/content` — this is safe because the content package contains only pure TypeScript data and types, no Node-only runtime APIs. Typecheck and build pass for both client and content.
+
+### Task 064 — Movement Feel Tuning Batch
+
+Reduce the Nightmarket test world size and tighten spawn/combat spacing so placeholder combat is practical to verify without adding gameplay systems.
+
+Status: implemented. The Nightmarket placeholder zone bounds were reduced to `480x320` in content, the default Nightmarket spawn was moved closer to the center-left test area, and the synced placeholder Trashboar Runt was moved nearby so a joined player can reach it within a few seconds. The client still resolves world-area bounds from content, and the server still validates and steps movement authoritatively against those zone bounds. To improve feel in the small test arena, the server now converts the existing character-derived `moveSpeed` stat into practical runtime world-units-per-second before storing it on `PlayerPresence`, while keeping the fallback speed as a server safety guard only. No loot, XP, AI, collision, pathfinding, map art, or persistence was added.
+
+### Task 065 — Isometric 2.5D Direction Lock Batch
+
+Document and prepare the client for Doomscrolls' fixed isometric / 2.5D visual direction without adding real rendering conversion.
+
+Status: implemented. `README.md`, `docs/ARCHITECTURE.md`, `docs/GAME_DESIGN.md`, `docs/CODING_RULES.md` and this backlog now explicitly lock Doomscrolls to a fixed Diablo-like isometric / 2.5D presentation while keeping the runtime on Phaser 2D. The docs now state that the current WorldSession top-down world view is temporary debug visualization only, that there is no free 3D camera and no engine switch, and that later visual work may rely on depth sorting, shadows, layered objects and pre-rendered / 2D sprite assets. The client also now exposes a tiny constants/helper module at `apps/client/src/game/worldProjection.ts` with `worldProjection = "debug_top_down"` and `futureTargetProjection = "isometric_2_5d"`. No real isometric rendering, no camera rotation, no 3D engine, no map art, no sprites and no gameplay changes were added.
 
 ### Task 035 — Movement Bounds Docs + Small Dependency Review
 

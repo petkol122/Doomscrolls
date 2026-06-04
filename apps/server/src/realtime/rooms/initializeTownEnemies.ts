@@ -26,8 +26,8 @@ export function initializeTownEnemies(
   enemy.id = NIGHTMARKET_TRASHBOAR_PLACEHOLDER_ID;
   enemy.enemyId = trashboarRuntContent.id;
   enemy.label = trashboarRuntContent.nameKey;
-  enemy.x = 200;
-  enemy.y = 200;
+  enemy.x = 240;
+  enemy.y = 160;
   enemy.hp = trashboarRuntContent.maxHp;
   enemy.maxHp = trashboarRuntContent.maxHp;
   enemy.defeated = false;

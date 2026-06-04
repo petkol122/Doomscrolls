@@ -6,6 +6,8 @@ This document defines the technical architecture of Doomscrolls.
 
 Doomscrolls is a browser-first and mobile-ready online 2D isometric ARPG with Diablo 2-like pacing, server-authoritative multiplayer, persistent characters, loot, progression, profiles, settings and scalable room-based world architecture.
 
+Visual/camera direction is locked as fixed isometric / 2.5D. Runtime remains Phaser 2D. Doomscrolls does not plan a free-rotation 3D camera or an engine switch for this visual target.
+
 ---
 
 ## Architecture Summary
@@ -52,6 +54,20 @@ BossRoom later
 ### No fake features
 
 Placeholder art is allowed. Placeholder mechanics are not.
+
+### Fixed projection direction
+
+The long-term presentation target is a Diablo-like fixed isometric / 2.5D camera.
+
+Rules:
+
+```text
+runtime stays Phaser 2D
+no free 3D camera
+no engine switch
+current top-down world/session view is temporary debug visualization only
+later visual work may use depth sorting, layered objects, shadows and pre-rendered / 2D sprite assets
+```
 
 ---
 
@@ -271,6 +287,8 @@ the client renders synced TownRoom enemies as simple placeholder shapes with lab
 interactable objects render as simple placeholder shapes (rectangles) with labels
 click/tap on an interactable object sends a real request_interact intent
 the client does not fake or predict local movement
+current projection is temporary top-down debug only
+future target projection is fixed isometric / 2.5D
 the marker updates only after room-state sync from the server
 interact response messages display for 3 seconds before clearing
 roomKind display reads synced roomKind from room state
@@ -306,10 +324,14 @@ the overlay groups room info, player presence and movement debug into readable s
 the overlay states clearly that it is temporary server-synced debug state, not final gameplay UI
 movement debug may show the last click target sent by the client, but position still comes only from synced room state
 TownRoom currently syncs one static Trashboar Runt placeholder enemy in the Nightmarket only
+the Nightmarket uses a reduced 480x320 test-arena bound set so movement/combat verification happens in a compact space
+the default Nightmarket spawn and the placeholder Trashboar are placed close together for faster test-world iteration
 this is still placeholder visual UI, not final art or animation
 no sprites, no map art, no collision, no pathfinding, no final animation, no combat, no enemy AI
 no inventory UI, no persistence, no rich NPC dialogue, no quests, no rewards yet
 ```
+
+The current world-area rendering must not be mistaken for the final camera direction. It is a practical 2D debug projection used to verify synced state, movement intents and placeholder world interactions. The intended shipping direction remains a fixed isometric / 2.5D look implemented on the existing Phaser 2D runtime via later visual techniques such as depth sorting, shadows, layered scene objects and pre-rendered / sprite-based assets.
 
 Client scene boundary rule:
 
@@ -650,7 +672,7 @@ fallback speed exists only as a server safety guard when synced runtime speed is
 no collision, no pathfinding, no interpolation, no combat coupling, no persistence yet
 ```
 
-This batch includes the network contract, validation shell, target storage and authoritative movement stepping. When the server accepts a `request_move` intent, it calls `applyMovementIntent()` which stores the validated `targetX`/`targetY` as the player's movement target in the Colyseus schema. On `TownRoom` join, the server resolves a runtime movement speed from the selected character's derived stats (`character.stats.derived.moveSpeed`) and stores that speed in `PlayerPresence.movementSpeed`. A separate simulation interval then runs every 50 ms and `stepTownRoomMovement()` advances authoritative `PlayerPresence.x`/`y` toward that stored target using each player's own stored speed. If a player's runtime speed is missing or invalid, the step helper uses `TOWN_MOVEMENT_SPEED_FALLBACK_UNITS_PER_SECOND` as a safety fallback only. If a newer click arrives first, it simply replaces the previous target. Colyseus broadcasts the resulting x/y updates automatically to all clients. On the client, the `onStateChange` handler re-renders the world session layer from synced room state only. There is still no collision, no pathfinding, no interpolation, no combat coupling, and no persistence tied to it yet. The validator uses zone bounds as placeholder constraints rather than real map geometry.
+This batch includes the network contract, validation shell, target storage and authoritative movement stepping. When the server accepts a `request_move` intent, it calls `applyMovementIntent()` which stores the validated `targetX`/`targetY` as the player's movement target in the Colyseus schema. On `TownRoom` join, the server resolves a runtime movement speed from the selected character's derived stats (`character.stats.derived.moveSpeed`) and converts that stat into practical world-units-per-second for the current small test arena before storing it in `PlayerPresence.movementSpeed`. A separate simulation interval then runs every 50 ms and `stepTownRoomMovement()` advances authoritative `PlayerPresence.x`/`y` toward that stored target using each player's own stored speed. If a player's runtime speed is missing or invalid, the step helper uses `TOWN_MOVEMENT_SPEED_FALLBACK_UNITS_PER_SECOND` as a safety fallback only. If a newer click arrives first, it simply replaces the previous target. Colyseus broadcasts the resulting x/y updates automatically to all clients. On the client, the `onStateChange` handler re-renders the world session layer from synced room state only. There is still no collision, no pathfinding, no interpolation, no combat coupling, and no persistence tied to it yet. The validator uses zone bounds as placeholder constraints rather than real map geometry.
 
 Authoritative movement runtime sanity passed locally with account `movecheck044` and character `Mover044`. The synced player marker moved gradually under server control rather than teleporting instantly on the client, and a second click correctly replaced the previous target before arrival. The client room header/status also fixed a display bug by reading `roomKind` directly from synced room state. This verification does not imply map art, collision, pathfinding, combat, persistence, or a real gameplay loop.
 
@@ -700,7 +722,7 @@ The client click-to-move input panel (`worldAreaInputView.ts`) resolves its zone
 ```text
 resolveWorldAreaBounds(zoneId)  - client helper at apps/client/src/game/scenes/accountShell/resolveWorldAreaBounds.ts
 reads ZoneContentDefinition.bounds from @doomscrolls/content
-falls back to safe 800x600 defaults if the zone is missing from content
+falls back to safe 480x320 defaults if the zone is missing from content
 bounds are placeholder movement intent constraints — NOT collision geometry or map size
 no map rendering, pathfinding, collision, or speed checks yet
 ```
