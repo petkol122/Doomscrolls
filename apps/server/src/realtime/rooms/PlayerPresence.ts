@@ -33,6 +33,7 @@ export class PlayerPresence extends Schema {
   @type("string") public spawnPointId: SpawnPointId;
   @type("number") public hp: number;
   @type("number") public maxHp: number;
+  @type("string") public lifeState: string;
   @type("number") public x: number;
   @type("number") public y: number;
   @type("number") public movementSpeed: number;
@@ -67,6 +68,7 @@ export class PlayerPresence extends Schema {
     this.spawnPointId = spawnPointId;
     this.hp = hp;
     this.maxHp = maxHp;
+    this.lifeState = hp > 0 ? "alive" : "downed";
     this.x = x;
     this.y = y;
     this.movementSpeed = movementSpeed;

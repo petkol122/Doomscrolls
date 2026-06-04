@@ -7,6 +7,7 @@ export const WORLD_LOOT_PICKUP_RANGE = 48;
 
 export type PickupWorldLootRejectedReason =
   | "player_not_ready"
+  | "player_downed"
   | "world_loot_not_found"
   | "out_of_range";
 
@@ -28,6 +29,10 @@ export function validatePickupWorldLootIntent(
 ): PickupWorldLootValidationResult {
   if (player === undefined) {
     return { ok: false, reason: "player_not_ready" };
+  }
+
+  if (player.lifeState !== "alive" || player.hp <= 0) {
+    return { ok: false, reason: "player_downed" };
   }
 
   if (typeof worldLootId !== "string" || worldLootId.length === 0) {

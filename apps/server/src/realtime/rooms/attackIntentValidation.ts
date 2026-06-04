@@ -8,6 +8,7 @@ export const BASIC_ATTACK_RANGE = 64;
 
 export type AttackIntentRejectedReason =
   | "player_not_ready"
+  | "player_downed"
   | "attack_on_cooldown"
   | "enemy_not_found"
   | "enemy_defeated"
@@ -32,6 +33,10 @@ export function validateAttackIntent(
 ): AttackIntentValidationResult {
   if (player === undefined) {
     return { ok: false, reason: "player_not_ready" };
+  }
+
+  if (player.lifeState !== "alive" || player.hp <= 0) {
+    return { ok: false, reason: "player_downed" };
   }
 
   if (!isAttackReady(player, now)) {

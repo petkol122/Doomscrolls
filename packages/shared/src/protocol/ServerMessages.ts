@@ -67,6 +67,7 @@ export interface PlayerRespawnedServerMessage {
   readonly type: "player_respawned";
   readonly characterId: CharacterId;
   readonly zoneId: ZoneId;
+  readonly hp: number;
 }
 
 export interface CorpseRecoveredServerMessage {
@@ -109,7 +110,8 @@ export interface ZoneTransitionApprovedServerMessage {
 export type RequestMoveRejectedReason =
   | "invalid_shape"
   | "non_finite_target"
-  | "out_of_range";
+  | "out_of_range"
+  | "player_downed";
 
 export interface RequestMoveRejectedServerMessage {
   readonly type: "request_move_rejected";
@@ -119,6 +121,7 @@ export interface RequestMoveRejectedServerMessage {
 
 export type RequestAttackRejectedReason =
   | "player_not_ready"
+  | "player_downed"
   | "attack_on_cooldown"
   | "enemy_not_found"
   | "enemy_defeated"
@@ -137,6 +140,7 @@ export interface RequestAttackRejectedServerMessage {
 
 export type RequestPickupWorldLootRejectedReason =
   | "player_not_ready"
+  | "player_downed"
   | "world_loot_not_found"
   | "inventory_full"
   | "out_of_range";

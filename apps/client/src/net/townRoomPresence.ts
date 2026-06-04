@@ -28,6 +28,7 @@ export interface PlayerPresenceEntry {
   readonly sessionId: string;
   readonly characterId: CharacterId;
   readonly displayName: string;
+  readonly lifeState?: "alive" | "downed";
   readonly hp?: number;
   readonly maxHp?: number;
   /**
@@ -91,7 +92,8 @@ export function getTownRoomPresence(
     };
 
     const withSpawn = applyOptionalSpawnPoint(baseEntry, value);
-    const withVitality = applyOptionalVitality(withSpawn, value);
+    const withLifeState = applyOptionalLifeState(withSpawn, value);
+    const withVitality = applyOptionalVitality(withLifeState, value);
     const withPosition = applyOptionalPosition(withVitality, value);
     const withMovementSpeed = applyOptionalMovementSpeed(withPosition, value);
     players.push(withMovementSpeed);
@@ -101,6 +103,17 @@ export function getTownRoomPresence(
     connectedPlayerCount: presenceMap.size,
     players,
   };
+}
+
+function applyOptionalLifeState(
+  entry: PlayerPresenceEntry,
+  value: Record<string, unknown>,
+): PlayerPresenceEntry {
+  const rawLifeState = value.lifeState;
+  if (rawLifeState !== "alive" && rawLifeState !== "downed") {
+    return entry;
+  }
+  return { ...entry, lifeState: rawLifeState };
 }
 
 function applyOptionalVitality(

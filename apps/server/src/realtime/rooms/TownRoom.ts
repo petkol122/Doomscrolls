@@ -6,6 +6,7 @@ import type {
   RequestAttackAcceptedServerMessage,
   RequestAttackRejectedServerMessage,
   DeferredActionQueuedServerMessage,
+  PlayerRespawnedServerMessage,
   RequestPickupWorldLootAcceptedServerMessage,
   RequestPickupWorldLootClientMessage,
   RequestPickupWorldLootRejectedServerMessage,
@@ -41,6 +42,10 @@ import { spawnWorldLootOnEnemyDefeat } from "./spawnWorldLootOnEnemyDefeat";
 import { persistPickedUpWorldLootToInventory } from "./pickupWorldLootInventory";
 import { validatePickupWorldLootIntent } from "./pickupWorldLootValidation";
 import { clearPendingAction, setPendingAction } from "./pendingActionState";
+import { resolvePlayerInitialPosition } from "./validateCharacterLocation";
+import { contentRegistry } from "@doomscrolls/content";
+import type { SpawnPointContentId } from "@doomscrolls/content";
+import { NIGHTMARKET_DEFAULT_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
 
 const ENEMY_AGGRO_RANGE = 120;
 const ENEMY_ATTACK_RANGE = 44;
@@ -104,6 +109,7 @@ private movementIntentHandlerRegistered = false;
 private interactHandlerRegistered = false;
 private attackHandlerRegistered = false;
 private pickupWorldLootHandlerRegistered = false;
+private respawnHandlerRegistered = false;
 
   public override async onCreate(options: TownRoomJoinOptions): Promise<void> {
     const log = createRoomLogger(
@@ -124,6 +130,7 @@ private pickupWorldLootHandlerRegistered = false;
     this.registerInteractHandler(log);
     this.registerAttackHandler(log);
     this.registerPickupWorldLootHandler(log);
+    this.registerRespawnHandler(log);
     this.setSimulationInterval((deltaMs: number) => {
       stepTownRoomMovement(this.state as TownRoomState, deltaMs, {
         now: Date.now(),
@@ -340,6 +347,19 @@ private pickupWorldLootHandlerRegistered = false;
 
     this.onMessage("request_move", (client: Client, raw: unknown) => {
       const state = this.state as TownRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+      if (player !== undefined && player.lifeState !== "alive") {
+        clearPendingAction(player);
+        player.hasMovementTarget = false;
+        const rejection: RequestMoveRejectedServerMessage = {
+          type: "request_move_rejected",
+          reason: "player_downed",
+        };
+        try {
+          client.send("request_move_rejected", rejection);
+        } catch {}
+        return;
+      }
       const zoneBounds = resolveZoneBounds(state.zoneId);
       const result = validateMovementIntent({ message: raw, bounds: zoneBounds });
 
@@ -519,6 +539,7 @@ private pickupWorldLootHandlerRegistered = false;
         player.x,
         player.y,
         message.objectId,
+        player.lifeState,
       );
 
       if (!validation.ok) {
@@ -918,6 +939,61 @@ private pickupWorldLootHandlerRegistered = false;
     });
   }
 
+  private registerRespawnHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.respawnHandlerRegistered) {
+      return;
+    }
+    this.respawnHandlerRegistered = true;
+
+    this.onMessage("request_respawn", (client: Client) => {
+      const state = this.state as TownRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+      if (player === undefined || player.lifeState === "alive") {
+        return;
+      }
+
+      const spawnPoint = contentRegistry.spawnPoints.get(
+        NIGHTMARKET_DEFAULT_SPAWN_POINT_ID as SpawnPointContentId,
+      );
+      if (spawnPoint === undefined) {
+        return;
+      }
+
+      const respawnPosition = resolvePlayerInitialPosition({
+        resolvedZoneId: state.zoneId,
+        spawnPointX: spawnPoint.x,
+        spawnPointY: spawnPoint.y,
+        restoredLocationZoneId: state.zoneId,
+        restoredLocationX: player.x,
+        restoredLocationY: player.y,
+      });
+
+      player.hp = player.maxHp;
+      player.lifeState = "alive";
+      player.x = respawnPosition.x;
+      player.y = respawnPosition.y;
+      player.targetX = respawnPosition.x;
+      player.targetY = respawnPosition.y;
+      player.hasMovementTarget = false;
+      clearPendingAction(player);
+
+      const message: PlayerRespawnedServerMessage = {
+        type: "player_respawned",
+        characterId: player.characterId,
+        zoneId: state.zoneId,
+        hp: player.hp,
+      };
+
+      try {
+        client.send("player_respawned", message);
+      } catch {}
+
+      log.debug?.({ roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, characterId: player.characterId }, "TownRoom player respawned.");
+    });
+  }
+
   private applyEnemyAggroDamage(now: number): void {
     const state = this.state as TownRoomState;
 
@@ -961,6 +1037,13 @@ private pickupWorldLootHandlerRegistered = false;
       enemy.nextAttackAtMs = now + ENEMY_ATTACK_COOLDOWN_MS;
       const nextHp = Math.max(0, targetPlayer.hp - ENEMY_ATTACK_DAMAGE);
       targetPlayer.hp = nextHp;
+      if (nextHp <= 0) {
+        targetPlayer.lifeState = "downed";
+        targetPlayer.hasMovementTarget = false;
+        targetPlayer.targetX = targetPlayer.x;
+        targetPlayer.targetY = targetPlayer.y;
+        clearPendingAction(targetPlayer);
+      }
 
       const targetClient = this.clients.find((client) => client.sessionId === closestPlayerSessionId);
       if (targetClient !== undefined) {

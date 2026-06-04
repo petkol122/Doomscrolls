@@ -14,6 +14,7 @@ export function createWorldSessionOverlayView(
   room: Room<DoomscrollsRoomState>,
   debugState: WorldSessionDebugState,
   onProjectionModeChange: (mode: WorldProjectionMode) => void,
+  onRespawn: () => void,
   onLeaveWorld: () => void,
 ): HTMLElement {
   const section = createCardSection();
@@ -103,6 +104,23 @@ export function createWorldSessionOverlayView(
   section.appendChild(createPresenceSection(room));
   section.appendChild(createProjectionSection(debugState, onProjectionModeChange));
   section.appendChild(createMovementDebugSection(room, debugState));
+
+  const selfPresence = getTownRoomPresence(room.state as unknown as Record<string, unknown>)
+    ?.players.find((player) => player.sessionId === room.sessionId);
+  if (selfPresence?.lifeState === "downed") {
+    const downedNotice = createMutedText(t("world_session.downed_notice"));
+    downedNotice.style.color = "#e3a6a6";
+    downedNotice.style.marginBottom = "8px";
+    section.appendChild(downedNotice);
+
+    const respawnButton = createButton(t("world_session.respawn"));
+    respawnButton.style.marginTop = "4px";
+    respawnButton.style.width = "100%";
+    respawnButton.addEventListener("click", () => {
+      onRespawn();
+    });
+    section.appendChild(respawnButton);
+  }
 
   const leaveButton = createButton(t("world_entry.leave_world"));
   leaveButton.style.marginTop = "8px";
@@ -226,6 +244,9 @@ function createPresenceSection(room: Room<DoomscrollsRoomState>): HTMLElement {
     }
     if (player.hp !== undefined && player.maxHp !== undefined) {
       details.push(`hp=${player.hp}/${player.maxHp}`);
+    }
+    if (player.lifeState !== undefined) {
+      details.push(`state=${player.lifeState}`);
     }
 
     li.textContent = player.displayName + (details.length > 0 ? ` (${details.join(" | ")})` : "");

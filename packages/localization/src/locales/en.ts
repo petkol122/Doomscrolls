@@ -109,6 +109,10 @@ export const en = {
   "world_session.projection_click_mode": "Click-to-move",
   "world_session.projection_click_top_down_only": "Enabled in debug top-down.",
   "world_session.projection_click_disabled_preview": "Disabled in isometric preview until safe screen-to-world mapping exists.",
+  "world_session.downed_notice": "You are downed.",
+  "world_session.respawn": "Respawn",
+  "world_session.respawned_notice": "You respawn with {hp} HP.",
+  "world_session.respawn_unavailable": "Respawn unavailable.",
 
   "world_area.title": "World Area",
   "world_area.click_instruction": "Click inside to move.",

@@ -8,7 +8,7 @@ import type { TownRoomState } from "./TownRoomState";
  */
 export interface InteractValidationResult {
   readonly ok: boolean;
-  readonly reason?: "object_not_found" | "out_of_range" | "invalid_shape";
+  readonly reason?: "object_not_found" | "out_of_range" | "invalid_shape" | "player_downed";
   readonly message?: string;
 }
 
@@ -19,7 +19,12 @@ export function validateInteractIntent(
   playerX: number,
   playerY: number,
   objectId: string,
+  playerLifeState?: string,
 ): InteractValidationResult {
+  if (playerLifeState !== undefined && playerLifeState !== "alive") {
+    return { ok: false, reason: "player_downed" };
+  }
+
   if (typeof objectId !== "string" || objectId.length === 0) {
     return { ok: false, reason: "invalid_shape" };
   }

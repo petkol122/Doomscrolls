@@ -1,5 +1,10 @@
 import type { Room } from "@colyseus/sdk";
-import type { CharacterId, CharacterSummary, RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
+import type {
+  CharacterId,
+  CharacterSummary,
+  PlayerRespawnedServerMessage,
+  RoomState as DoomscrollsRoomState,
+} from "@doomscrolls/shared";
 import { t } from "@doomscrolls/localization";
 import Phaser from "phaser";
 
@@ -9,6 +14,7 @@ import { clientEnv } from "../../config/env";
 import { registerAttackResponseListeners } from "../../net/attackIntentClient";
 import { registerInteractResponseListener } from "../../net/interactResponseClient";
 import { registerPickupWorldLootResponseListeners } from "../../net/pickupWorldLootClient";
+import { registerRespawnListeners, sendRespawnRequest } from "../../net/respawnClient";
 import { createAccountHeader } from "./accountShell/accountShellAccountHeader";
 import { createWorldSessionFeedbackView, type WorldSessionFeedbackView } from "./worldSession/worldSessionFeedbackView";
 import { createWorldSessionOverlayView } from "./worldSession/worldSessionOverlayView";
@@ -98,6 +104,15 @@ export class WorldSessionScene extends Phaser.Scene {
             hp: message.remainingHp,
           }),
         );
+        if (message.remainingHp <= 0) {
+          this.feedbackView?.showNotice(t("world_session.downed_notice"));
+        }
+      },
+    });
+
+    registerRespawnListeners(this.room, {
+      onRespawned: (message: PlayerRespawnedServerMessage) => {
+        this.feedbackView?.showNotice(t("world_session.respawned_notice", { hp: message.hp }));
       },
     });
 
@@ -175,6 +190,9 @@ export class WorldSessionScene extends Phaser.Scene {
           this.handleProjectionModeChange(mode);
         },
         () => {
+          this.handleRespawn();
+        },
+        () => {
           void this.handleLeaveWorld();
         },
       ),
@@ -226,6 +244,13 @@ export class WorldSessionScene extends Phaser.Scene {
     this.worldAreaView?.destroy();
     this.worldAreaView = null;
     this.destroyOverlay();
+  }
+
+  private handleRespawn(): void {
+    const result = sendRespawnRequest(this.room);
+    if (!result.dispatched) {
+      this.feedbackView?.showNotice(t("world_session.respawn_unavailable"));
+    }
   }
 
   private async refreshAccountStateAfterPickup(): Promise<void> {
