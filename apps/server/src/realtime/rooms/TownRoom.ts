@@ -27,6 +27,7 @@ import { initializeTownInteractables } from "./initializeTownInteractables";
 import { initializeTownEnemies } from "./initializeTownEnemies";
 import { validateInteractIntent, getInteractableResponseMessage } from "./interactValidation";
 import { validateAttackIntent } from "./attackIntentValidation";
+import { consumeAttackCooldown, resolveAttackCooldownMs } from "./attackCooldown";
 import { applyEnemyDamage } from "./applyEnemyDamage";
 
 /**
@@ -201,6 +202,9 @@ private attackHandlerRegistered = false;
     const characterName = result.character.characterName;
     const resolvedZoneId = result.resolvedZoneId;
     const movementSpeed = resolvePlayerMovementSpeed(result.character);
+    const attackCooldownMs = resolveAttackCooldownMs(
+      result.character.stats?.derived.attackCooldownMs,
+    );
 
     // Delegate presence building (spawn point resolution + initial
     // world position copy) to a dedicated helper so this room file
@@ -211,6 +215,7 @@ private attackHandlerRegistered = false;
       displayName: characterName,
       resolvedZoneId,
       movementSpeed,
+      attackCooldownMs,
     });
 
     state.playerPresence.set(sessionId, presence);
@@ -226,6 +231,7 @@ private attackHandlerRegistered = false;
         zoneId: resolvedZoneId,
         spawnPointId: presence.spawnPointId,
         movementSpeed: presence.movementSpeed,
+        attackCooldownMs: presence.attackCooldownMs,
         x: presence.x,
         y: presence.y,
         connectedPlayerCount: state.connectedPlayerCount,
@@ -505,7 +511,8 @@ private attackHandlerRegistered = false;
         ? message.targetEnemyId
         : undefined;
       const player = state.playerPresence.get(client.sessionId);
-      const validation = validateAttackIntent(state, player, targetEnemyId ?? "");
+      const now = Date.now();
+      const validation = validateAttackIntent(state, player, targetEnemyId ?? "", now);
 
       if (!validation.ok) {
         const rejection: RequestAttackRejectedServerMessage = {
@@ -533,6 +540,20 @@ private attackHandlerRegistered = false;
         return;
       }
 
+      if (player === undefined) {
+        log.warn?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            targetEnemyId,
+          },
+          "TownRoom request_attack validated without player presence; ignoring as safety guard.",
+        );
+        return;
+      }
+
+      consumeAttackCooldown(player, now);
       const damageResult = applyEnemyDamage(validation.enemy, 1);
       const accepted: RequestAttackAcceptedServerMessage = {
         type: "request_attack_accepted",
@@ -554,6 +575,7 @@ private attackHandlerRegistered = false;
           remainingHp: damageResult.remainingHp,
           appliedDamage: damageResult.appliedDamage,
           defeated: damageResult.defeated,
+          nextAttackAt: player.nextAttackAt,
         },
         "TownRoom request_attack accepted and enemy HP/defeated state updated through synced state.",
       );

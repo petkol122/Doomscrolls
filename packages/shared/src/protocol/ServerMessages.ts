@@ -119,6 +119,7 @@ export interface RequestMoveRejectedServerMessage {
 
 export type RequestAttackRejectedReason =
   | "player_not_ready"
+  | "attack_on_cooldown"
   | "enemy_not_found"
   | "enemy_defeated"
   | "out_of_range";

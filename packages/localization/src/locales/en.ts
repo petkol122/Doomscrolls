@@ -115,6 +115,7 @@ export const en = {
   "world_area.attack_sent": "Attack sent.",
   "world_area.attack_confirmed": "Attack confirmed. Enemy HP updates from synced room state.",
   "world_area.attack_too_far": "Too far away.",
+  "world_area.attack_on_cooldown": "Attack is on cooldown.",
   "world_area.attack_unavailable": "Attack could not be used.",
   "world_area.enemy_hp_synced": "Enemy HP synced: {hp}/{maxHp}",
   "world_area.enemy_defeated": "Enemy defeated.",

@@ -26,6 +26,7 @@ export function buildTownPlayerPresence(args: {
   readonly displayName: string;
   readonly resolvedZoneId: ZoneId;
   readonly movementSpeed: number;
+  readonly attackCooldownMs: number;
 }): PlayerPresence {
   const spawnPoint = resolveTownPresenceSpawnPoint(args.resolvedZoneId);
 
@@ -37,6 +38,7 @@ export function buildTownPlayerPresence(args: {
     spawnPoint.x,
     spawnPoint.y,
     args.movementSpeed,
+    args.attackCooldownMs,
   );
 }
 

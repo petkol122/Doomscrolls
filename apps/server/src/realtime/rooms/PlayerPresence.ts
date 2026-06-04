@@ -14,6 +14,8 @@ import type { CharacterId, SpawnPointId } from "@doomscrolls/shared";
  *  - movementSpeed (server-owned runtime movement speed for tick stepping)
  *  - hasMovementTarget / targetX / targetY
  *                (simple server-owned click-move target state)
+ *  - attackCooldownMs / lastAttackAt / nextAttackAt
+ *                (server-owned basic attack timing state)
  *
  * No pathing, no movement simulation, no facing, no map, no combat,
  * no chat, no gameplay.
@@ -30,6 +32,9 @@ export class PlayerPresence extends Schema {
   @type("number") public x: number;
   @type("number") public y: number;
   @type("number") public movementSpeed: number;
+  @type("number") public attackCooldownMs: number;
+  @type("number") public lastAttackAt: number;
+  @type("number") public nextAttackAt: number;
   @type("boolean") public hasMovementTarget: boolean;
   @type("number") public targetX: number;
   @type("number") public targetY: number;
@@ -42,6 +47,7 @@ export class PlayerPresence extends Schema {
     x: number,
     y: number,
     movementSpeed: number,
+    attackCooldownMs: number,
   ) {
     super();
     this.sessionId = sessionId;
@@ -51,6 +57,9 @@ export class PlayerPresence extends Schema {
     this.x = x;
     this.y = y;
     this.movementSpeed = movementSpeed;
+    this.attackCooldownMs = attackCooldownMs;
+    this.lastAttackAt = 0;
+    this.nextAttackAt = 0;
     this.hasMovementTarget = false;
     this.targetX = x;
     this.targetY = y;

@@ -300,11 +300,12 @@ Network contract:
   RequestAttackClientMessage: { type: "request_attack", targetEnemyId }
   RequestAttackAcceptedServerMessage: { type: "request_attack_accepted", targetEnemyId }
   RequestAttackRejectedServerMessage: { type: "request_attack_rejected", reason, targetEnemyId? }
+  attack cooldown is server-authoritative; client shows safe feedback only and does not predict cooldown timing
 
 Server-side:
   validateAttackIntent(state, player, targetEnemyId): validates player presence, enemy existence and distance <= 64
   applyEnemyDamage(enemy, 1): subtracts fixed damage, clamps hp at 0
-  TownRoom.onMessage("request_attack", ...): orchestrates validation, sends safe accept/reject response, updates synced enemy hp
+  TownRoom.onMessage("request_attack", ...): orchestrates validation, delegates cooldown gating to helper/runtime presence state, sends safe accept/reject response, updates synced enemy hp
   enemy hp remains authoritative in TownRoomState.enemies MapSchema sync
 
 Client-side:

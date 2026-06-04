@@ -71,6 +71,8 @@ export class WorldSessionScene extends Phaser.Scene {
         this.showAttackFeedback(
           message.reason === "out_of_range"
             ? t("world_area.attack_too_far")
+            : message.reason === "attack_on_cooldown"
+              ? t("world_area.attack_on_cooldown")
             : message.reason === "enemy_defeated"
               ? t("world_area.enemy_defeated")
               : t("world_area.attack_unavailable"),
