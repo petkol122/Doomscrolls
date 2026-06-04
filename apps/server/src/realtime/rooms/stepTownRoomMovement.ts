@@ -1,6 +1,7 @@
 import type { PlayerPresence } from "./PlayerPresence";
 import type { TownRoomState } from "./TownRoomState";
 import { TOWN_MOVEMENT_SPEED_FALLBACK_UNITS_PER_SECOND } from "./resolvePlayerMovementSpeed";
+import { tryExecutePendingAction } from "./deferredActionExecution";
 
 export const TOWN_MOVEMENT_TICK_RATE_MS = 50;
 export const TOWN_MOVEMENT_STOP_DISTANCE = 2;
@@ -19,6 +20,10 @@ interface MovementStepResult {
 export function stepTownRoomMovement(
   state: TownRoomState,
   deltaMs: number,
+  options?: {
+    readonly now?: number;
+    readonly onPendingActionReady?: (sessionId: string, payload: { readonly type: string; readonly message: unknown }) => void;
+  },
 ): MovementStepResult {
   if (!Number.isFinite(deltaMs) || deltaMs <= 0) {
     return { movedPlayerCount: 0 };
@@ -39,6 +44,17 @@ export function stepTownRoomMovement(
 
     if (stepPresenceTowardTarget(presence, maxDistance)) {
       movedPlayerCount += 1;
+    }
+
+    if (options?.onPendingActionReady !== undefined) {
+      tryExecutePendingAction({
+        state,
+        player: presence,
+        now: options.now ?? Date.now(),
+        sendToClient: (type, message) => {
+          options.onPendingActionReady?.(presence.sessionId, { type, message });
+        },
+      });
     }
   });
 

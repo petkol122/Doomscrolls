@@ -152,6 +152,13 @@ export interface RequestPickupWorldLootRejectedServerMessage {
   readonly worldLootId?: string;
 }
 
+export interface DeferredActionQueuedServerMessage {
+  readonly type: "deferred_action_queued";
+  readonly actionType: "attack" | "interact" | "pickup";
+  readonly targetId: string;
+  readonly message: string;
+}
+
 export type ServerErrorCode =
   | "invalid_message"
   | "not_authenticated"
@@ -196,5 +203,6 @@ export type ServerRoomMessage =
   | RequestAttackRejectedServerMessage
   | RequestPickupWorldLootAcceptedServerMessage
   | RequestPickupWorldLootRejectedServerMessage
+  | DeferredActionQueuedServerMessage
   | InteractResponseServerMessage
   | ErrorServerMessage;

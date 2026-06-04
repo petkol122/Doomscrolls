@@ -119,6 +119,7 @@ export const en = {
   "world_area.attack_unavailable": "Attack could not be used.",
   "world_area.pickup_sent": "Pickup request sent.",
   "world_area.pickup_too_far": "Too far away to pick that up.",
+  "world_area.moving_closer": "Moving closer.",
   "world_area.pickup_unavailable": "That loot is no longer available.",
   "world_area.enemy_hp_synced": "Enemy HP synced: {hp}/{maxHp}",
   "world_area.enemy_defeated": "Enemy defeated.",

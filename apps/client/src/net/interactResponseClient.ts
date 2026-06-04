@@ -1,5 +1,9 @@
 import type { Room } from "@colyseus/sdk";
-import type { RoomState, InteractResponseServerMessage } from "@doomscrolls/shared";
+import type {
+  DeferredActionQueuedServerMessage,
+  RoomState,
+  InteractResponseServerMessage,
+} from "@doomscrolls/shared";
 
 /**
  * Task 057 — Interactable Object Foundation Batch
@@ -13,6 +17,14 @@ export function registerInteractResponseListener(
 ): void {
   room.onMessage("interact_response", (raw: unknown) => {
     const msg = raw as Partial<InteractResponseServerMessage> | null;
+    if (!msg || typeof msg.message !== "string") {
+      return;
+    }
+    onResponse(msg.message);
+  });
+
+  room.onMessage("deferred_action_queued", (raw: unknown) => {
+    const msg = raw as Partial<DeferredActionQueuedServerMessage> | null;
     if (!msg || typeof msg.message !== "string") {
       return;
     }

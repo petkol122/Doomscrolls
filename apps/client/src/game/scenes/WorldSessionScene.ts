@@ -79,7 +79,7 @@ export class WorldSessionScene extends Phaser.Scene {
       onRejected: (message) => {
         this.showAttackFeedback(
           message.reason === "out_of_range"
-            ? t("world_area.attack_too_far")
+            ? t("world_area.moving_closer")
             : message.reason === "attack_on_cooldown"
               ? t("world_area.attack_on_cooldown")
             : message.reason === "enemy_defeated"
@@ -96,7 +96,7 @@ export class WorldSessionScene extends Phaser.Scene {
       onRejected: (message) => {
         this.feedbackView?.showNotice(
           message.reason === "out_of_range"
-            ? t("world_area.pickup_too_far")
+            ? t("world_area.moving_closer")
             : message.reason === "world_loot_not_found"
               ? t("world_area.pickup_unavailable")
               : t("world_area.pickup_unavailable"),

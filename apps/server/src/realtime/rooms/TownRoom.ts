@@ -3,6 +3,7 @@ import type {
   CharacterId,
   RequestAttackAcceptedServerMessage,
   RequestAttackRejectedServerMessage,
+  DeferredActionQueuedServerMessage,
   RequestPickupWorldLootAcceptedServerMessage,
   RequestPickupWorldLootClientMessage,
   RequestPickupWorldLootRejectedServerMessage,
@@ -36,6 +37,7 @@ import { applyEnemyDamage } from "./applyEnemyDamage";
 import { respawnTownEnemies } from "./respawnTownEnemies";
 import { spawnWorldLootOnEnemyDefeat } from "./spawnWorldLootOnEnemyDefeat";
 import { validatePickupWorldLootIntent } from "./pickupWorldLootValidation";
+import { clearPendingAction, setPendingAction } from "./pendingActionState";
 
 /**
  * TownRoom with minimal Colyseus schema state.
@@ -115,7 +117,20 @@ private pickupWorldLootHandlerRegistered = false;
     this.registerAttackHandler(log);
     this.registerPickupWorldLootHandler(log);
     this.setSimulationInterval((deltaMs: number) => {
-      stepTownRoomMovement(this.state as TownRoomState, deltaMs);
+      stepTownRoomMovement(this.state as TownRoomState, deltaMs, {
+        now: Date.now(),
+        onPendingActionReady: (sessionId, payload) => {
+          const targetClient = this.clients.find((client) => client.sessionId === sessionId);
+          if (targetClient === undefined) {
+            return;
+          }
+          try {
+            targetClient.send(payload.type, payload.message);
+          } catch {
+            // swallow client send failures; room state remains authoritative
+          }
+        },
+      });
       respawnTownEnemies(this.state as TownRoomState, Date.now());
     }, TOWN_MOVEMENT_TICK_RATE_MS);
 
@@ -495,6 +510,31 @@ private pickupWorldLootHandlerRegistered = false;
       );
 
       if (!validation.ok) {
+        if (validation.reason === "out_of_range") {
+          const interactable = state.interactables.get(message.objectId);
+          if (interactable !== undefined) {
+            setPendingAction(player, {
+              type: "interact",
+              targetId: interactable.id,
+              targetX: interactable.x,
+              targetY: interactable.y,
+            });
+            applyMovementIntent(state, client.sessionId, interactable.x, interactable.y);
+            const queued: DeferredActionQueuedServerMessage = {
+              type: "deferred_action_queued",
+              actionType: "interact",
+              targetId: interactable.id,
+              message: "Moving closer.",
+            };
+            try {
+              client.send("deferred_action_queued", queued);
+            } catch {}
+          } else {
+            clearPendingAction(player);
+          }
+        } else {
+          clearPendingAction(player);
+        }
         log.debug?.(
           {
             roomId: this.roomId,
@@ -556,6 +596,65 @@ private pickupWorldLootHandlerRegistered = false;
       const validation = validateAttackIntent(state, player, targetEnemyId ?? "", now);
 
       if (!validation.ok) {
+        if (validation.reason === "out_of_range" && player !== undefined && targetEnemyId !== undefined) {
+          const enemy = state.enemies.get(targetEnemyId);
+          if (enemy !== undefined && !enemy.defeated && enemy.hp > 0) {
+            setPendingAction(player, {
+              type: "attack",
+              targetId: enemy.id,
+              targetX: enemy.x,
+              targetY: enemy.y,
+            });
+            applyMovementIntent(state, client.sessionId, enemy.x, enemy.y);
+            const queued: DeferredActionQueuedServerMessage = {
+              type: "deferred_action_queued",
+              actionType: "attack",
+              targetId: enemy.id,
+              message: "Moving closer.",
+            };
+            try {
+              client.send("deferred_action_queued", queued);
+            } catch {}
+            log.debug?.(
+              {
+                roomId: this.roomId,
+                roomName: this.roomName,
+                sessionId: client.sessionId,
+                targetEnemyId,
+              },
+              "TownRoom request_attack queued as deferred move-closer action.",
+            );
+            return;
+          }
+
+          clearPendingAction(player);
+          const rejection: RequestAttackRejectedServerMessage = {
+            type: "request_attack_rejected",
+            reason: "enemy_not_found",
+            ...(targetEnemyId !== undefined ? { targetEnemyId } : {}),
+          };
+
+          try {
+            client.send("request_attack_rejected", rejection);
+          } catch {
+            // swallow send failures; never crash room on rejected attack intent
+          }
+
+          log.debug?.(
+            {
+              roomId: this.roomId,
+              roomName: this.roomName,
+              sessionId: client.sessionId,
+              targetEnemyId,
+              reason: rejection.reason,
+            },
+            "TownRoom request_attack could not queue because target is no longer valid.",
+          );
+          return;
+        } else if (player !== undefined) {
+          clearPendingAction(player);
+        }
+
         const rejection: RequestAttackRejectedServerMessage = {
           type: "request_attack_rejected",
           reason: validation.reason,
@@ -594,6 +693,7 @@ private pickupWorldLootHandlerRegistered = false;
         return;
       }
 
+      clearPendingAction(player);
       consumeAttackCooldown(player, now);
       const damageResult = applyEnemyDamage(validation.enemy, 1);
       const spawnedLoot = damageResult.defeated
@@ -647,6 +747,65 @@ private pickupWorldLootHandlerRegistered = false;
       const validation = validatePickupWorldLootIntent(state, player, worldLootId ?? "");
 
       if (!validation.ok) {
+        if (validation.reason === "out_of_range" && player !== undefined && worldLootId !== undefined) {
+          const worldLoot = state.worldLoot.get(worldLootId);
+          if (worldLoot !== undefined) {
+            setPendingAction(player, {
+              type: "pickup",
+              targetId: worldLoot.id,
+              targetX: worldLoot.x,
+              targetY: worldLoot.y,
+            });
+            applyMovementIntent(state, client.sessionId, worldLoot.x, worldLoot.y);
+            const queued: DeferredActionQueuedServerMessage = {
+              type: "deferred_action_queued",
+              actionType: "pickup",
+              targetId: worldLoot.id,
+              message: "Moving closer.",
+            };
+            try {
+              client.send("deferred_action_queued", queued);
+            } catch {}
+            log.debug?.(
+              {
+                roomId: this.roomId,
+                roomName: this.roomName,
+                sessionId: client.sessionId,
+                worldLootId,
+              },
+              "TownRoom request_pickup_world_loot queued as deferred move-closer action.",
+            );
+            return;
+          }
+
+          clearPendingAction(player);
+          const rejection: RequestPickupWorldLootRejectedServerMessage = {
+            type: "request_pickup_world_loot_rejected",
+            reason: "world_loot_not_found",
+            ...(worldLootId !== undefined ? { worldLootId } : {}),
+          };
+
+          try {
+            client.send("request_pickup_world_loot_rejected", rejection);
+          } catch {
+            // swallow send failures; never crash room on rejected pickup intent
+          }
+
+          log.debug?.(
+            {
+              roomId: this.roomId,
+              roomName: this.roomName,
+              sessionId: client.sessionId,
+              worldLootId,
+              reason: rejection.reason,
+            },
+            "TownRoom request_pickup_world_loot could not queue because target is no longer valid.",
+          );
+          return;
+        } else if (player !== undefined) {
+          clearPendingAction(player);
+        }
+
         const rejection: RequestPickupWorldLootRejectedServerMessage = {
           type: "request_pickup_world_loot_rejected",
           reason: validation.reason,
@@ -672,6 +831,9 @@ private pickupWorldLootHandlerRegistered = false;
         return;
       }
 
+      if (player !== undefined) {
+        clearPendingAction(player);
+      }
       state.worldLoot.delete(validation.worldLoot.id);
 
       const accepted: RequestPickupWorldLootAcceptedServerMessage = {

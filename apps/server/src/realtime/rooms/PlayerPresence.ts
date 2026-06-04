@@ -16,6 +16,8 @@ import type { CharacterId, SpawnPointId } from "@doomscrolls/shared";
  *                (simple server-owned click-move target state)
  *  - attackCooldownMs / lastAttackAt / nextAttackAt
  *                (server-owned basic attack timing state)
+ *  - hasPendingAction / pendingActionType / pendingTargetId / pendingTargetX / pendingTargetY
+ *                (server-owned deferred action target state)
  *
  * No pathing, no movement simulation, no facing, no map, no combat,
  * no chat, no gameplay.
@@ -38,6 +40,11 @@ export class PlayerPresence extends Schema {
   @type("boolean") public hasMovementTarget: boolean;
   @type("number") public targetX: number;
   @type("number") public targetY: number;
+  @type("boolean") public hasPendingAction: boolean;
+  @type("string") public pendingActionType: string;
+  @type("string") public pendingTargetId: string;
+  @type("number") public pendingTargetX: number;
+  @type("number") public pendingTargetY: number;
 
   constructor(
     sessionId: string,
@@ -63,5 +70,10 @@ export class PlayerPresence extends Schema {
     this.hasMovementTarget = false;
     this.targetX = x;
     this.targetY = y;
+    this.hasPendingAction = false;
+    this.pendingActionType = "";
+    this.pendingTargetId = "";
+    this.pendingTargetX = x;
+    this.pendingTargetY = y;
   }
 }
