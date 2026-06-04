@@ -204,7 +204,9 @@ content defines weighted loot entries; the server consumes those definitions and
 no fake drops, fake reward popups, fake client-predicted loot, or visual-only loot entities
 ```
 
-The RNG foundation is now implemented as a small server-side helper (`apps/server/src/realtime/rooms/serverRng.ts`) with a reusable weighted-table roller. The helper uses a deterministic mulberry32 algorithm, making tests practical without making runtime loot predictable to the client. Enemy defeat, loot table selection, item roll generation, room drop spawning and pickup ownership remain decided by the server.
+The RNG foundation is now implemented as a small server-side helper (`apps/server/src/realtime/rooms/serverRng.ts`) with a reusable weighted-table roller. The helper uses a deterministic mulberry32 algorithm, making tests practical without making runtime loot predictable to the client.
+
+Task 074 adds a thin loot-roll foundation helper at `apps/server/src/realtime/rooms/lootRoller.ts`. It consumes weighted entries, supports the existing content loot-table entry shape via `toLootRollEntries()` / `rollContentTable()`, validates empty/invalid/all-zero tables, and may return an explicit no-drop outcome through configured `noDropWeight`. This remains data-flow only: enemy defeat, room loot state, pickup, inventory placement, XP and persistence are still separate server-authoritative tasks.
 
 The Prisma schema foundation exists, and the server validates `DATABASE_URL` so configuration is explicit. The current runtime uses persistence for auth, character APIs and room join validation, but does not implement room persistence, inventory logic, corpse recovery logic or gameplay business logic.
 

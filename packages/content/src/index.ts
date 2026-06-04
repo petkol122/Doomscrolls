@@ -33,6 +33,7 @@ export type {
   ItemRarity,
   ItemUseEffectDefinition,
   LevelTableDefinition,
+  LootTableEntryDefinition,
   LootTableDefinition,
   OriginContentDefinition,
   PassiveContentDefinition,

@@ -85,10 +85,10 @@ Status: Open
 ```text
 Date: 2026-06-04
 Area: Server tooling
-Description: apps/server/src/realtime/rooms/serverRng.ts implements a deterministic RNG helper (createRng, nextFloat, nextInt, pickWeighted) with type-safe validation but does not include dedicated unit tests because the repository test runner is still placeholder-only.
+Description: apps/server/src/realtime/rooms/serverRng.ts and apps/server/src/realtime/rooms/lootRoller.ts implement deterministic weighted RNG / loot-roll helpers with type-safe validation but do not include dedicated unit tests because the repository test runner is still placeholder-only.
 Reason: Avoid introducing new test infrastructure before the repo-wide testing approach is established.
-Risk: RNG behavior is currently verified by TypeScript checks and manual inspection rather than automated assertions.
-Planned fix: Add focused RNG unit tests when the project introduces a real test runner.
+Risk: RNG and loot-roll behavior are currently verified by TypeScript checks and manual inspection rather than automated assertions.
+Planned fix: Add focused RNG and loot-roll unit tests when the project introduces a real test runner.
 Status: Open
 ```
 

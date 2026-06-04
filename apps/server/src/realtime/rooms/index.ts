@@ -45,3 +45,16 @@ export type {
   AttackIntentRejectedReason,
   AttackIntentValidationResult,
 } from "./attackIntentValidation";
+
+export {
+  createLootRoller,
+  rollLootTable,
+  toLootRollEntries,
+} from "./lootRoller";
+export type {
+  ItemLootEntry,
+  LootRollEntry,
+  LootRollOptions,
+  LootRollResult,
+  NoDropLootEntry,
+} from "./lootRoller";
