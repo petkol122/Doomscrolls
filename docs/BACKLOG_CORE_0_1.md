@@ -528,6 +528,12 @@ Notes: Server uses 50-unit distance validation; objects initialized per room ins
 
 ---
 
+### Task 090 — Low-Context Docs Checkpoint
+
+Document the recent enemy AI, player HP / downed, loot pickup, targeted actions and HUD direction slices as a low-context checkpoint across `README.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG_CORE_0_1.md` and `docs/CODING_RULES.md`. This is a documentation-only task and must not change code, add gameplay, or refactor docs broadly.
+
+Status: documented. The four docs now briefly note the targeted action approach (far click first moves the player closer, then the server processes attack / interact / pickup), the enemy AI slice (aggro, chase, attack, leash return, respawn), the player HP / downed / respawn foundation, the loot pickup flow that persists a minimal inventory summary on pickup, and the HUD direction (current overlay is temporary debug; future default is Diablo-like orbs, optional WoW-like framed bars later). The wording intentionally keeps the slices scoped to what was actually added and explicitly states what is still deferred (pathfinding, projectiles, multiple enemy types, full inventory/equipment UI, full corpse recovery, XP, currency, full HUD art). No code or schema was changed.
+
 ## Anti-Scope-Creep
 
 Do not implement before Core 0.1 is complete:

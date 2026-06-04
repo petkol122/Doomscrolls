@@ -760,6 +760,46 @@ no map rendering, pathfinding, collision, or speed checks yet
 
 The client depends on `@doomscrolls/content` for this lookup. This is acceptable because the content package ships only pure TypeScript data and types — it imports nothing from Prisma, Fastify, Colyseus, PostgreSQL, or any Node-only runtime API. The dependency is the same pattern as the server-side `resolveZoneBounds()` helper, adapted for client-side use. If `@doomscrolls/content` ever gains Node-only imports, a future task should extract a shared public content snapshot for client use.
 
+## Targeted Actions, Enemy AI, Player HP, Loot Pickup, HUD (Core 0.1 checkpoint)
+
+This batch adds the first narrow slices of server-authoritative targeted gameplay. They are foundation-level only and are explicitly not full combat, full AI, full loot/inventory/equipment or final HUD art.
+
+```text
+Targeted action approach:
+  - the client sends a single click intent carrying the world point and the requested action (attack / interact / pickup)
+  - if the player is not yet in range of the target, the server first stores the point as a movement target using the existing movement intent/step foundation
+  - once the simulation tick brings the player in range, the original action intent is processed server-side
+  - the client never decides action success; it only sends intents and renders synced room state
+
+Enemy AI (Trashboar Runt placeholder):
+  - aggro: enemy starts idle, aggros the first player inside its aggro range
+  - chase: while aggroed the enemy moves toward its current target player via a server tick
+  - attack: in melee range the enemy hits the player on its own attack cooldown, subtracting server-owned damage
+  - leash return: when the player leaves leash range the enemy breaks aggro and walks back to its spawn
+  - respawn: after defeat the same synced enemy is kept in a defeated state for a short delay, then reset to full HP at its original position so the loop is repeatable
+
+Player HP / downed / respawn foundation:
+  - server-owned current HP and max HP live on PlayerPresence and are the only source of truth
+  - enemy hits reduce HP server-side; HP updates reach the client only through synced room state
+  - at 0 HP the player is marked as downed; movement and combat are disabled while downed
+  - after a short downed timer the player respawns at a server-resolved safe location (last in-zone persisted position or content spawn point) and HP is restored
+  - no XP loss, no durability loss, no corpse inventory, no recovery flow yet
+
+Loot pickup:
+  - enemy drops are synced world-loot entries in room state (id, itemId, label, x, y)
+  - the client sends only a worldLootId pickup intent
+  - the server validates ownership, distance and that the loot still exists, then removes the synced room-state entry
+  - on success the server persists the picked-up item into the character's inventory summary (currentItems count + first few itemId labels) through the persistence layer
+  - inventory placement, stacking, equipment effects, currency, XP, salvage and full inventory UI remain deferred
+
+HUD (temporary debug vs. future default):
+  - the current connected-room overlay is a temporary server-synced debug HUD only
+  - the future default HUD will use Diablo-like orbs (health globe + mana / resource globe) in the bottom corners
+  - an optional WoW-like framed bars mode may be added later behind a setting; the orbs are still the default
+```
+
+All five slices stay server-authoritative. The client never invents action success, enemy death, player damage, loot pickup, or HUD numbers. Every gameplay outcome still comes from synced room state. These slices do not add pathfinding, projectiles, multiple enemy types, full inventory/equipment UI, full corpse recovery, XP, currency, or persistence beyond the minimal inventory-summary write on pickup. They are not final combat, not final AI, not final loot, and not final HUD art.
+
 ## Core 0.1 Runtime Scope
 
 Core 0.1 must support:

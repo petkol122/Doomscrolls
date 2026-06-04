@@ -3,6 +3,8 @@ import Phaser from "phaser";
 export interface WorldSessionFeedbackView {
   readonly showNotice: (message: string) => void;
   readonly showAttackFeedback: (message: string) => void;
+  readonly showDamageFeedback: (message: string, options?: { readonly isDowned?: boolean }) => void;
+  readonly clearDamageFeedback: () => void;
   readonly destroy: () => void;
 }
 
@@ -30,15 +32,33 @@ export function createWorldSessionFeedbackView(scene: Phaser.Scene): WorldSessio
     padding: { left: 10, right: 10, top: 6, bottom: 6 },
   }).setOrigin(0.5, 0);
 
-  container.add([noticeText, attackText]);
+  const damageText = scene.add.text(0, 60, "", {
+    color: "#ff9b9b",
+    fontFamily: "Arial, sans-serif",
+    fontSize: "15px",
+    fontStyle: "bold",
+    align: "center",
+    wordWrap: { width: 360 },
+    backgroundColor: "rgba(68, 12, 12, 0.94)",
+    padding: { left: 12, right: 12, top: 8, bottom: 8 },
+  }).setOrigin(0.5, 0);
+
+  container.add([noticeText, attackText, damageText]);
 
   let noticeTimer: Phaser.Time.TimerEvent | null = null;
   let attackTimer: Phaser.Time.TimerEvent | null = null;
+  let damageTimer: Phaser.Time.TimerEvent | null = null;
 
   const clearTimer = (timer: Phaser.Time.TimerEvent | null): void => {
     if (timer !== null) {
       scene.time.removeEvent(timer);
     }
+  };
+
+  const clearDamageFeedback = (): void => {
+    damageText.setText("");
+    clearTimer(damageTimer);
+    damageTimer = null;
   };
 
   return {
@@ -58,9 +78,21 @@ export function createWorldSessionFeedbackView(scene: Phaser.Scene): WorldSessio
         attackTimer = null;
       });
     },
+    showDamageFeedback: (message: string, options) => {
+      damageText.setColor(options?.isDowned ? "#ffd0d0" : "#ff9b9b");
+      damageText.setBackgroundColor(options?.isDowned ? "rgba(92, 16, 16, 0.97)" : "rgba(68, 12, 12, 0.94)");
+      damageText.setText(message);
+      clearTimer(damageTimer);
+      damageTimer = scene.time.delayedCall(options?.isDowned ? 2500 : 1400, () => {
+        damageText.setText("");
+        damageTimer = null;
+      });
+    },
+    clearDamageFeedback,
     destroy: () => {
       clearTimer(noticeTimer);
       clearTimer(attackTimer);
+      clearTimer(damageTimer);
       container.destroy(true);
     },
   };

@@ -98,13 +98,25 @@ export class WorldSessionScene extends Phaser.Scene {
         );
       },
       onDamageApplied: (message) => {
+        const isDowned = message.remainingHp <= 0;
+        this.feedbackView?.showDamageFeedback(
+          isDowned
+            ? t("world_session.downed_damage_feedback", {
+                damage: message.damage,
+              })
+            : t("world_session.damage_feedback", {
+                damage: message.damage,
+                hp: message.remainingHp,
+              }),
+          { isDowned },
+        );
         this.feedbackView?.showNotice(
           t("world_area.player_damage_taken", {
             damage: message.damage,
             hp: message.remainingHp,
           }),
         );
-        if (message.remainingHp <= 0) {
+        if (isDowned) {
           this.feedbackView?.showNotice(t("world_session.downed_notice"));
         }
       },
@@ -112,6 +124,7 @@ export class WorldSessionScene extends Phaser.Scene {
 
     registerRespawnListeners(this.room, {
       onRespawned: (message: PlayerRespawnedServerMessage) => {
+        this.feedbackView?.clearDamageFeedback();
         this.feedbackView?.showNotice(t("world_session.respawned_notice", { hp: message.hp }));
       },
     });
@@ -247,6 +260,7 @@ export class WorldSessionScene extends Phaser.Scene {
   }
 
   private handleRespawn(): void {
+    this.feedbackView?.clearDamageFeedback();
     const result = sendRespawnRequest(this.room);
     if (!result.dispatched) {
       this.feedbackView?.showNotice(t("world_session.respawn_unavailable"));

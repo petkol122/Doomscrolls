@@ -354,6 +354,44 @@ no character level, stat scaling or gameplay-affecting behavior
 
 Interactable objects are intentionally limited. They have no active gameplay behavior, no rewards, no persistence, no collision and no rich dialogue. The server validates distance (50-unit radius from player) and returns safe text responses only. The client renders simple placeholder shapes (gold rectangles with labels) as standin visuals, handles click-to-interact input, and displays the server response message in the center of the screen for 3 seconds before clearing. This is a network + rendering layer only: quests, rewards, loot, inventory effects, NPC dialogue, combat coupling, collision geometry, and persistence are deferred to later Core 0.1 tasks.
 
+### Targeted actions, enemy AI, player HP / downed, loot pickup, and HUD (Core 0.1 — checkpoint)
+
+Recent gameplay slices introduced the following server-authoritative, data-driven foundations. They are intentionally narrow and limited; full simulation polish, stat scaling, pathfinding, projectiles, multiple enemy types, full inventory/equipment UI and persistence are still out of scope.
+
+```text
+Targeted action approach:
+  - Far clicks move the player closer first, then attack / interact / pick up
+  - The server uses the same click target as a movement target; once the player is in range of the target, the original action intent (attack / interact / pickup) is processed server-side
+  - The client does not decide whether the action succeeded; it only sends intents and renders synced room state
+
+Enemy AI (Trashboar Runt placeholder):
+  - aggro: enemy starts in idle; it aggros the first player that gets within aggro range
+  - chase: while aggroed, the enemy moves toward its current target player using a server tick
+  - attack: in melee range the enemy hits the player on its own attack cooldown, subtracting server-owned damage
+  - leash return: if the player runs far enough away, the enemy breaks aggro and walks back to its spawn position
+  - respawn: after a synced enemy is defeated, the room keeps it in a defeated state for a short delay, then resets the same enemy to full HP at its original position so the loop is repeatable
+
+Player HP / downed / respawn foundation:
+  - Each player has server-owned current HP and max HP stored on PlayerPresence
+  - Enemy hits reduce HP server-side; HP updates reach the client only through synced room state
+  - When HP reaches 0, the player is marked as downed; movement and combat are disabled while downed
+  - After a short downed timer, the player respawns at a server-resolved safe location (last in-zone persisted position or content spawn point), HP is restored, and the downed flag is cleared
+  - No XP loss, no item durability loss, no corpse inventory, no recovery flow yet
+
+Loot pickup:
+  - Loot dropped by defeated enemies exists as a synced world-loot entry in room state (id, itemId, label, x, y)
+  - The client sends only a worldLootId pickup intent; the server validates ownership, distance and that the loot still exists
+  - On success the server removes the synced room-state loot and persists the picked-up item into the character's inventory summary (currentItems count + first few itemId labels) through the persistence layer
+  - Inventory placement, stacking, equipment effects, currency, XP, salvage and full inventory UI are still deferred
+
+HUD (temporary debug vs. future default):
+  - The current connected-room overlay is a temporary server-synced debug HUD only
+  - The future default HUD will use Diablo-like orbs (health globe + mana / resource globe) in the bottom corners
+  - An optional WoW-like framed bars mode may be added later behind a setting; the orbs are still the default
+```
+
+These slices are still narrow debug-level flows. They are not full combat, not full AI, not full loot/inventory/equipment, and not final HUD art. The server still owns every gameplay outcome; the client only sends intents and renders synced state.
+
 Selected character state runtime verification passed locally:
 
 ```text

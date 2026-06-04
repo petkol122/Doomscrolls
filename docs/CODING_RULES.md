@@ -550,6 +550,22 @@ Rules:
 
 ---
 
+## Targeted Actions, Enemy AI, Player HP, Loot Pickup, HUD Direction Rules
+
+The recent Core 0.1 checkpoint added the first narrow slices of server-authoritative targeted gameplay. They are foundation-level only; the rules below lock down what is and is not in scope so they cannot accidentally be presented as full combat, full AI, full loot/inventory/equipment or final HUD art.
+
+Rules:
+
+- The targeted action approach is "move first, then act": when the client sends a click intent (attack / interact / pickup) against a target that is out of range, the server stores the click point as a movement target and processes the original action intent only once the simulation tick brings the player in range; the client never decides whether the action succeeded
+- Enemy AI on the synced `Trashboar Runt` placeholder is intentionally limited to aggro, chase, melee attack on its own cooldown, leash return when the player leaves leash range, and a dev respawn loop that keeps the same synced enemy defeated briefly before resetting it to full HP at its original position; no pathfinding, no projectiles, no multiple enemy types, no enemy ability bar, no enemy progression
+- Player HP / downed / respawn foundation is server-owned: `PlayerPresence` holds current HP and max HP, enemy hits reduce HP server-side, HP updates reach the client only through synced room state, at 0 HP the player is marked as downed (movement and combat disabled), and after a short timer the player respawns at a server-resolved safe location (last in-zone persisted position or content spawn point); no XP loss, no item durability loss, no corpse inventory, no recovery flow, no permadeath
+- Loot pickup is server-authoritative: the client sends only a `worldLootId`; the server validates ownership, distance and that the loot still exists, then removes the synced room-state entry; the server also persists a minimal inventory summary for the character (current item count + first few item labels) on successful pickup; no inventory placement UI, no stacking UI, no equipment coupling, no currency, no XP, no salvage, no client-side pickup authority
+- The current connected-room overlay is a temporary server-synced debug HUD only; it must remain clearly labeled as such in the UI and the docs
+- The future default HUD will use Diablo-like orbs (health globe + mana / resource globe) in the bottom corners
+- An optional WoW-like framed bars mode may be added later behind a setting, but the orbs are still the default; the framed-bars mode must not become the default HUD
+- None of these slices may add fake client-side prediction for action success, enemy death, player damage, loot pickup, or HUD numbers; every gameplay outcome still comes from synced room state
+- None of these slices may add full corpse recovery, full inventory/equipment UI, full pathfinding, full AI variety, full HUD art, currency, XP, or any other system that is explicitly listed as deferred in the related README / ARCHITECTURE / BACKLOG sections
+
 ## Final Rule
 
 If a feature only appears to work, it is not done.

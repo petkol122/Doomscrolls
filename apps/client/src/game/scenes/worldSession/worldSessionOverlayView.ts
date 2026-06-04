@@ -107,6 +107,11 @@ export function createWorldSessionOverlayView(
 
   const selfPresence = getTownRoomPresence(room.state as unknown as Record<string, unknown>)
     ?.players.find((player) => player.sessionId === room.sessionId);
+  const selfHpSummary = formatPlayerHpSummary(selfPresence?.hp, selfPresence?.maxHp);
+  const selfHpRatio = resolvePlayerHpRatio(selfPresence?.hp, selfPresence?.maxHp);
+
+  section.appendChild(createVitalitySection(selfHpSummary, selfHpRatio, selfPresence?.lifeState));
+
   if (selfPresence?.lifeState === "downed") {
     const downedNotice = createMutedText(t("world_session.downed_notice"));
     downedNotice.style.color = "#e3a6a6";
@@ -268,7 +273,7 @@ function createMovementDebugSection(
     createInfoLine(
       t("world_session.player_hp"),
       self?.hp !== undefined && self?.maxHp !== undefined
-        ? `${self.hp}/${self.maxHp}`
+        ? formatPlayerHpSummary(self.hp, self.maxHp)
         : t("world_session.awaiting_player_hp"),
     ),
     createInfoLine(
@@ -296,6 +301,65 @@ function createMovementDebugSection(
         : t("world_session.awaiting_movement_speed"),
     ),
   ]);
+}
+
+function createVitalitySection(
+  hpSummary: string,
+  hpRatio: number | null,
+  lifeState?: "alive" | "downed",
+): HTMLElement {
+  const content: HTMLElement[] = [];
+
+  content.push(createInfoLine(t("world_session.player_hp"), hpSummary));
+
+  const barFrame = document.createElement("div");
+  barFrame.style.width = "100%";
+  barFrame.style.height = "14px";
+  barFrame.style.border = "1px solid #5f4a2f";
+  barFrame.style.borderRadius = "999px";
+  barFrame.style.background = "rgba(22, 16, 14, 0.95)";
+  barFrame.style.overflow = "hidden";
+  barFrame.style.marginBottom = "6px";
+
+  const barFill = document.createElement("div");
+  barFill.style.height = "100%";
+  barFill.style.width = hpRatio === null ? "0%" : `${Math.max(0, Math.min(100, hpRatio * 100))}%`;
+  barFill.style.background = lifeState === "downed"
+    ? "linear-gradient(90deg, #7a1f1f 0%, #bf5252 100%)"
+    : hpRatio !== null && hpRatio <= 0.25
+      ? "linear-gradient(90deg, #8f2a2a 0%, #d46262 100%)"
+      : "linear-gradient(90deg, #7c2525 0%, #d07a5c 100%)";
+  barFrame.appendChild(barFill);
+  content.push(barFrame);
+
+  const stateLine = createMutedText(
+    lifeState === "downed"
+      ? t("world_session.downed_state_detail")
+      : t("world_session.alive_state_detail"),
+  );
+  stateLine.style.color = lifeState === "downed" ? "#e3a6a6" : "#b9d49a";
+  content.push(stateLine);
+
+  return createSectionBlock(t("world_session.vitality"), content);
+}
+
+function formatPlayerHpSummary(hp?: number, maxHp?: number): string {
+  if (hp === undefined || maxHp === undefined) {
+    return t("world_session.awaiting_player_hp");
+  }
+
+  const safeMaxHp = Math.max(0, maxHp);
+  const safeHp = Math.max(0, hp);
+  const percent = safeMaxHp > 0 ? Math.round((safeHp / safeMaxHp) * 100) : 0;
+  return `${safeHp} / ${safeMaxHp} (${percent}%)`;
+}
+
+function resolvePlayerHpRatio(hp?: number, maxHp?: number): number | null {
+  if (hp === undefined || maxHp === undefined || maxHp <= 0) {
+    return null;
+  }
+
+  return Math.max(0, Math.min(1, hp / maxHp));
 }
 
 function createInventorySummarySection(
