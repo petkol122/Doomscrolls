@@ -211,6 +211,35 @@ flask_1
 
 ---
 
+## Loot and RNG Direction
+
+Loot must be real, server-authoritative and content-driven.
+
+Core direction for future implementation:
+
+```text
+loot rolls happen on the server only
+clients never decide or simulate drop outcomes
+weighted drop tables come from content definitions
+RNG helpers must support deterministic tests and repeatable verification
+enemy death alone does not imply loot unless the server actually rolled and spawned it
+no fake drops, fake item beams, fake reward toasts or client-only loot previews
+```
+
+The long-term loop is:
+
+```text
+enemy defeated on server
+server selects the appropriate weighted drop table
+server performs the roll through a reusable RNG helper
+server creates real loot state only if the roll succeeds
+client renders only synced loot that actually exists on the server
+```
+
+This task adds design direction only. It does not add loot entities, pickup flow, item generation, inventory placement, rarity rules or any visible drop behavior.
+
+---
+
 ## Flask System
 
 Long-term direction: Diablo-style belt identity + Path of Exile-like flask relevance.

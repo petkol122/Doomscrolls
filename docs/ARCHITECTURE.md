@@ -191,6 +191,21 @@ The Colyseus shell now registers an empty `TownRoom` with the room name `town`. 
 
 The current `TownRoom` combat slice is still intentionally narrow. It now supports a synced placeholder-enemy defeated/respawn dev loop: a server-owned basic attack may reduce synced enemy HP to 0, clamps that HP at 0, marks the synced enemy as defeated, stores a short server-owned respawn deadline in synced state, and leaves the enemy in the Colyseus state during that delay. The same static placeholder enemy then resets to full HP and `defeated = false` after the timer expires. Further attacks against a defeated enemy are rejected safely until the reset occurs. This does not introduce loot, XP, corpse handling, enemy AI, enemy attacks, player damage, death animation or persistence.
 
+### RNG and loot foundation direction (planned, not implemented)
+
+Core 0.1 loot generation must remain server-authoritative. Future RNG and loot work will follow these rules:
+
+```text
+all random rolls happen on the server only
+the client may request actions such as attack / interact / pickup, but never rolls loot
+RNG helpers must be deterministic and testable when given the same seed/input stream
+weighted loot-table rolling must be implemented through reusable helpers, not ad hoc Math.random calls scattered through gameplay code
+content defines weighted loot entries; the server consumes those definitions and decides actual outcomes
+no fake drops, fake reward popups, fake client-predicted loot, or visual-only loot entities
+```
+
+The intended foundation is a small server-side RNG helper plus a reusable weighted-table roller. The helper should make deterministic tests practical without making runtime loot predictable to the client. Enemy defeat, loot table selection, item roll generation, room drop spawning and pickup ownership must continue to be decided by the server. This planning note does not add any RNG helper, loot roller, drop entity, pickup flow or persistence.
+
 The Prisma schema foundation exists, and the server validates `DATABASE_URL` so configuration is explicit. The current runtime uses persistence for auth, character APIs and room join validation, but does not implement room persistence, inventory logic, corpse recovery logic or gameplay business logic.
 
 Auth HTTP endpoints (`POST /auth/register`, `POST /auth/login`, `GET /me`) are now registered in the Fastify app via `registerAuthRoutes`. Character HTTP endpoints (`GET /characters`, `POST /characters`, `GET /characters/:characterId`) are registered via `registerCharacterRoutes`. Auth and character routes use request validation with zod, a reusable Bearer token authentication middleware and centralized safe error-to-HTTP mapping. The server owns character creation and account state; it does not implement frontend behavior, gameplay rooms, movement, combat, loot, seed data or fake character data.

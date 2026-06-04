@@ -528,6 +528,23 @@ Rules:
 
 ---
 
+## RNG and Loot Foundation Rules
+
+Future RNG and loot systems must stay server-authoritative, deterministic to test, and free of fake outcomes.
+
+Rules:
+
+- gameplay RNG helpers must live on the server side only; client code must not roll gameplay outcomes
+- the client may send pickup/attack/interact intent, but it must never decide drop success, rarity, quantity or item identity
+- reusable RNG helpers should support deterministic tests through explicit seeded/input-driven behavior where appropriate
+- weighted loot selection must go through dedicated helpers rather than scattered `Math.random()` calls across rooms/services
+- loot tables remain content definitions; systems consume weighted entries from content rather than hardcoding drops in room logic
+- enemy defeat must not automatically imply visible loot unless the server actually rolled and created synced loot state
+- do not add fake drops, fake pickup confirmations, fake item preview beams or client-predicted loot outcomes
+- loot documentation and implementation must state clearly whether a task adds only planning, only data definitions, or real server-owned drop generation/pickup flow
+
+---
+
 ## Final Rule
 
 If a feature only appears to work, it is not done.

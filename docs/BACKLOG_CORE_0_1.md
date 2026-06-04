@@ -287,6 +287,60 @@ Implement XP gain and level 1-10 data-driven progression.
 
 Implement server-side loot generation, room loot entity and pickup into free grid space.
 
+Planned dependency slice before/around Task 024:
+
+### Task 072A — Server RNG Helper Foundation
+
+Add a small server-side RNG utility for gameplay systems.
+
+Scope goals:
+
+```text
+server-side only
+deterministic/testable helper surface
+no client-side rolls
+no fake reward generation
+```
+
+### Task 072B — Weighted Loot Table Roller
+
+Add a reusable weighted-table roller that consumes content-defined weighted entries.
+
+Scope goals:
+
+```text
+generic weighted-entry selection helper
+deterministic test coverage
+no direct UI/client usage
+no ad hoc Math.random scattering in gameplay systems
+```
+
+### Task 072C — Enemy Drop Table Wiring
+
+Wire enemy/content definitions to the future server loot roller.
+
+Scope goals:
+
+```text
+enemy defeat resolves server-owned drop-table selection
+content-driven table lookup
+no fake room drops
+no pickup implementation yet unless explicitly included
+```
+
+### Task 072D — Synced Loot Pickup Placeholder
+
+Add the first thin synced loot/pickup shell after real server-owned loot state exists.
+
+Scope goals:
+
+```text
+server-owned room loot entity placeholder
+safe pickup intent path
+no fake client-side pickup success
+inventory placement and persistence remain explicit follow-up scope unless implemented for real
+```
+
 ### Task 025 — Reconnect
 
 Implement reload/reconnect flow preserving account, character, XP, inventory, equipment and active corpse state.
