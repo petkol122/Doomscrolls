@@ -1,6 +1,7 @@
 import type { Room } from "@colyseus/sdk";
 import { t } from "@doomscrolls/localization";
 import type { CharacterSummary, InventorySummaryItem, RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
+import type { StatModifier } from "@doomscrolls/shared";
 
 import { formatTownRoomState } from "../../../net/RealtimeClient";
 import { getTownRoomPresence } from "../../../net/townRoomPresence";
@@ -58,6 +59,7 @@ export function createWorldSessionOverlayView(
   getEquipmentLoadout: () => EquipmentLoadout = () => createEmptyEquipmentLoadout(),
   onEquipmentLoadoutChange?: (loadout: EquipmentLoadout) => void,
   onEquipItem?: (characterId: string, itemInstanceId: string, slot: string) => Promise<void>,
+  onUnequipItem?: (characterId: string, slot: string) => Promise<void>,
 ): WorldSessionOverlayView {
   let selectedInventoryItemId: InventorySummaryItem["itemInstanceId"] | null = character?.inventorySummaryItems?.[0]?.itemInstanceId ?? null;
 
@@ -134,11 +136,16 @@ export function createWorldSessionOverlayView(
     }));
     panel.appendChild(createEquipmentPanelSection(
       getEquipmentLoadout,
+      () => nextCharacter?.inventorySummaryItems ?? [],
       utilityState.equipment,
       (open) => {
         onUtilityStateChange?.({ ...getUtilityState(), equipment: open });
       },
+      nextCharacter?.id !== undefined && onUnequipItem !== undefined
+        ? (slot) => onUnequipItem(nextCharacter.id, slot)
+        : undefined,
     ));
+    panel.appendChild(createDerivedStatsSection(nextCharacter));
     panel.appendChild(createInventoryPanelSection(
       nextCharacter,
       {
@@ -567,6 +574,86 @@ function createHudSection(
   return wrapper;
 }
 
+function createDerivedStatsSection(character: CharacterSummary | null): HTMLElement {
+  const details = document.createElement("details");
+  details.style.border = "1px solid #31271c";
+  details.style.borderRadius = "8px";
+  details.style.background = "rgba(12, 10, 8, 0.72)";
+  details.style.padding = "0";
+  makeInteractive(details);
+
+  const summary = document.createElement("summary");
+  summary.textContent = "Derived Stats";
+  summary.style.cursor = "pointer";
+  summary.style.listStyle = "none";
+  summary.style.padding = "8px";
+  summary.style.fontSize = "12px";
+  summary.style.color = "#d8c6a3";
+  summary.style.fontWeight = "bold";
+  makeInteractive(summary);
+  details.appendChild(summary);
+
+  const content = document.createElement("div");
+  content.style.padding = "0 8px 8px";
+  content.style.display = "grid";
+  content.style.gap = "6px";
+
+  const stats = character?.stats;
+  if (stats === undefined) {
+    content.appendChild(createMutedText("Derived stats unavailable."));
+    details.appendChild(content);
+    return details;
+  }
+
+  const chipRow = document.createElement("div");
+  chipRow.style.display = "flex";
+  chipRow.style.flexWrap = "wrap";
+  chipRow.style.gap = "6px";
+
+  chipRow.appendChild(createCompactStatChip("Move", formatMoveSpeed(stats.derived.moveSpeed)));
+  chipRow.appendChild(createCompactStatChip("Atk", `${Math.round(stats.derived.attackCooldownMs)} ms`));
+  chipRow.appendChild(createCompactStatChip("HP", `${Math.max(0, stats.currentHp)} / ${Math.max(0, stats.derived.maxHp)}`));
+
+  content.appendChild(chipRow);
+  details.appendChild(content);
+  return details;
+}
+
+function createCompactStatChip(labelText: string, valueText: string): HTMLElement {
+  const chip = document.createElement("div");
+  chip.style.display = "inline-flex";
+  chip.style.alignItems = "center";
+  chip.style.gap = "6px";
+  chip.style.padding = "4px 7px";
+  chip.style.border = "1px solid #3c3122";
+  chip.style.borderRadius = "999px";
+  chip.style.background = "rgba(18, 14, 10, 0.88)";
+
+  const label = document.createElement("span");
+  label.textContent = labelText;
+  label.style.color = "#a88d63";
+  label.style.fontSize = "10px";
+  chip.appendChild(label);
+
+  const value = document.createElement("span");
+  value.textContent = valueText;
+  value.style.color = "#d8c6a3";
+  value.style.fontSize = "10px";
+  value.style.fontFamily = "monospace";
+  value.style.fontWeight = "bold";
+  chip.appendChild(value);
+
+  return chip;
+}
+
+function formatMoveSpeed(moveSpeed: number): string {
+  if (!Number.isFinite(moveSpeed)) {
+    return "—";
+  }
+
+  return moveSpeed.toFixed(2);
+}
+
 function createMiniHudStat(labelText: string, valueText: string): HTMLElement {
   const card = document.createElement("div");
   card.style.padding = "6px 8px";
@@ -854,10 +941,11 @@ function createInventoryDetailSection(
 
     for (const modifier of item.statModifiers ?? []) {
       const entry = document.createElement("li");
-      entry.textContent = `${modifier.operation === "add" ? "+" : "×"}${modifier.value} ${modifier.target}`;
+      entry.textContent = formatItemModifierText(modifier);
       modifierList.appendChild(entry);
     }
 
+    children.push(createInfoLine("Modifiers", String(item.statModifiers?.length ?? 0)));
     children.push(modifierList);
   } else {
     children.push(createMutedText("No item modifiers visible."));
@@ -898,6 +986,11 @@ function createInventoryDetailSection(
   }
 
   return createSectionBlock("Item Detail", children, { compact: true });
+}
+
+function formatItemModifierText(modifier: StatModifier): string {
+  const prefix = modifier.operation === "add" ? "+" : "×";
+  return `${prefix}${modifier.value} ${modifier.target}`;
 }
 
 export function createMutedText(text: string): HTMLElement {

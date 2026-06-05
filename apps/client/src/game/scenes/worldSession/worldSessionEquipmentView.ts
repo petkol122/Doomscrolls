@@ -4,8 +4,10 @@ import type { LocalizationKey } from "@doomscrolls/localization";
 import type {
   EquipmentLoadout,
   EquipmentSlot,
+  InventorySummaryItem,
   RoomState as DoomscrollsRoomState,
 } from "@doomscrolls/shared";
+import type { StatModifier } from "@doomscrolls/shared";
 import type { EquipmentUpdatedServerMessage } from "@doomscrolls/shared";
 import { createMutedText } from "./worldSessionOverlayView";
 import { makeInteractive } from "./worldSessionPointerEvents";
@@ -67,8 +69,10 @@ export function registerEquipmentListener(
 
 export function createEquipmentPanelSection(
   getLoadout: () => EquipmentLoadout,
+  getInventoryItems: () => readonly InventorySummaryItem[],
   isOpen = false,
   onOpenChange?: (isOpen: boolean) => void,
+  onUnequipItem?: (slot: EquipmentSlot) => Promise<void>,
 ): HTMLElement {
   const wrapper = document.createElement("details");
   wrapper.open = isOpen;
@@ -98,7 +102,7 @@ export function createEquipmentPanelSection(
   content.style.display = "grid";
   content.style.gap = "4px";
   wrapper.appendChild(content);
-  updateEquipmentPanelSection(wrapper, getLoadout, isOpen);
+  updateEquipmentPanelSection(wrapper, getLoadout, getInventoryItems, isOpen, onUnequipItem);
 
   return wrapper;
 }
@@ -106,7 +110,9 @@ export function createEquipmentPanelSection(
 export function updateEquipmentPanelSection(
   wrapper: HTMLElement,
   getLoadout: () => EquipmentLoadout,
+  getInventoryItems: () => readonly InventorySummaryItem[],
   isOpen = false,
+  onUnequipItem?: (slot: EquipmentSlot) => Promise<void>,
 ): void {
   if (!(wrapper instanceof HTMLDetailsElement)) {
     return;
@@ -121,6 +127,7 @@ export function updateEquipmentPanelSection(
 
   content.replaceChildren();
   const loadout = getLoadout();
+  const inventoryItems = getInventoryItems();
 
   for (const slot of EQUIPMENT_SLOTS) {
     const itemId = loadout[slot];
@@ -145,13 +152,69 @@ export function updateEquipmentPanelSection(
       valueLabel.textContent = "Empty";
       valueLabel.style.color = "#5f4a2f";
     } else {
-      valueLabel.textContent = "Equipped";
+      const equippedItem = inventoryItems.find((item) => item.itemInstanceId === itemId) ?? null;
+      valueLabel.textContent = equippedItem === null
+        ? "Equipped"
+        : formatEquippedItemLabel(equippedItem);
       valueLabel.style.color = "#b9d49a";
     }
     valueLabel.style.fontWeight = "bold";
     valueLabel.style.fontSize = "11px";
+    valueLabel.style.textAlign = "right";
+    valueLabel.style.flex = "1";
+    valueLabel.style.marginLeft = "8px";
     row.appendChild(valueLabel);
+
+    if (itemId !== null && onUnequipItem !== undefined) {
+      const unequipButton = document.createElement("button");
+      unequipButton.type = "button";
+      unequipButton.textContent = "Unequip";
+      unequipButton.style.marginLeft = "8px";
+      unequipButton.style.fontSize = "10px";
+      unequipButton.style.padding = "4px 6px";
+      unequipButton.style.border = "1px solid #6a8a4a";
+      unequipButton.style.background = "rgba(49, 65, 38, 0.9)";
+      unequipButton.style.color = "#d8c6a3";
+      makeInteractive(unequipButton);
+      unequipButton.addEventListener("click", async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        unequipButton.disabled = true;
+        unequipButton.textContent = "Unequipping...";
+        try {
+          await onUnequipItem(slot);
+          unequipButton.textContent = "Unequipped!";
+        } catch {
+          unequipButton.disabled = false;
+          unequipButton.textContent = "Failed";
+          window.setTimeout(() => {
+            unequipButton.textContent = "Unequip";
+          }, 2000);
+        }
+      });
+      row.appendChild(unequipButton);
+    }
 
     content.appendChild(row);
   }
+}
+
+function formatEquippedItemLabel(item: InventorySummaryItem): string {
+  const modifierSummary = formatCompactModifierSummary(item.statModifiers);
+  return modifierSummary === null ? item.label : `${item.label} (${modifierSummary})`;
+}
+
+function formatCompactModifierSummary(modifiers?: readonly StatModifier[]): string | null {
+  if (modifiers === undefined || modifiers.length === 0) {
+    return null;
+  }
+
+  return modifiers
+    .map((modifier) => formatModifierText(modifier))
+    .join(", ");
+}
+
+function formatModifierText(modifier: StatModifier): string {
+  const prefix = modifier.operation === "add" ? "+" : "×";
+  return `${prefix}${modifier.value} ${modifier.target}`;
 }

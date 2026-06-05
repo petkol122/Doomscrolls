@@ -178,6 +178,18 @@ export class ApiClient {
     });
   }
 
+  public async unequipItem(
+    sessionToken: string,
+    characterId: string,
+    slot: string,
+  ): Promise<{ readonly success: boolean }> {
+    return this.request<{ readonly success: boolean }>("/unequip", {
+      method: "POST",
+      sessionToken,
+      body: { characterId, slot },
+    });
+  }
+
   public async getCharacter(sessionToken: string, characterId: CharacterId): Promise<CharacterDetails> {
     const response = await this.request<CharacterDetailsHttpDto>(`/characters/${characterId}`, {
       method: "GET",
@@ -297,6 +309,11 @@ export class ApiClient {
         case "INVALID_CREDENTIALS":
         case "SESSION_INVALID":
         case "SESSION_EXPIRED":
+        case "ITEM_NOT_FOUND":
+        case "ITEM_NOT_IN_INVENTORY":
+        case "ITEM_NOT_EQUIPPABLE":
+        case "SLOT_MISMATCH":
+        case "INVENTORY_FULL":
         case "INTERNAL_ERROR":
           return rawCode;
         default:

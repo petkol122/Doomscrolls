@@ -802,12 +802,15 @@ Player HP / downed / respawn foundation:
   - after a short downed timer the player respawns at a server-resolved safe location (last in-zone persisted position or content spawn point) and HP is restored
   - no XP loss, no durability loss, no corpse inventory, no recovery flow yet
 
-Loot pickup:
+Loot pickup / inventory / equipment checkpoint:
   - enemy drops are synced world-loot entries in room state (id, itemId, label, x, y)
   - the client sends only a worldLootId pickup intent
   - the server validates ownership, distance and that the loot still exists, then removes the synced room-state entry
-  - on success the server persists the picked-up item into the character's inventory summary (currentItems count + first few itemId labels) through the persistence layer
-  - inventory placement, stacking, equipment effects, currency, XP, salvage and full inventory UI remain deferred
+  - on success the server persists the picked-up item as a real inventory item through the persistence layer
+  - inventory detail is read-only and reflects persisted state rather than local edits
+  - equip moves an item from inventory into the selected equipment slot
+  - unequip moves an equipped item back into the first free inventory slot
+  - drag/drop, stat recalculation, item comparison, stacking/effects expansion, currency, XP, salvage and full inventory UI remain deferred
 
 HUD (temporary debug vs. future default):
   - the current connected-room overlay is a temporary server-synced debug HUD only
@@ -815,7 +818,7 @@ HUD (temporary debug vs. future default):
   - an optional WoW-like framed bars mode may be added later behind a setting; the orbs are still the default
 ```
 
-All five slices stay server-authoritative. The client never invents action success, enemy death, player damage, loot pickup, or HUD numbers. Every gameplay outcome still comes from synced room state. These slices do not add pathfinding, projectiles, multiple enemy types, full inventory/equipment UI, full corpse recovery, XP, currency, or persistence beyond the minimal inventory-summary write on pickup. They are not final combat, not final AI, not final loot, and not final HUD art.
+All five slices stay server-authoritative. The client never invents action success, enemy death, player damage, loot pickup, or HUD numbers. Every gameplay outcome still comes from synced room state. These slices do not add pathfinding, projectiles, multiple enemy types, full inventory/equipment UI, full corpse recovery, XP, currency, or persistence beyond the current real inventory/equipment writes. The current checkpoint is intentionally limited: pickup writes a real inventory item, inventory detail is read-only, equip moves inventory -> slot, unequip moves slot -> first free inventory slot, and there is still no drag/drop, stat recalculation, or item comparison yet. They are not final combat, not final AI, not final loot, and not final HUD art.
 
 ## Core 0.1 Runtime Scope
 

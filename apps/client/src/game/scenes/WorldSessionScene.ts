@@ -148,7 +148,7 @@ export class WorldSessionScene extends Phaser.Scene {
       },
     });
 
-    this.room.onMessage("xp_gained", (message: { amount?: unknown; totalXp?: unknown }) => {
+    this.room.onMessage("xp_gained", (message: { amount?: unknown; totalXp?: unknown; leveledUp?: unknown; hp?: unknown; maxHp?: unknown }) => {
       const amount = typeof message.amount === "number" && Number.isFinite(message.amount)
         ? Math.max(0, Math.floor(message.amount))
         : 0;
@@ -168,6 +168,7 @@ export class WorldSessionScene extends Phaser.Scene {
       if (leveledUp) {
         this.feedbackView?.showAttackFeedback(t("world_area.level_up"));
       }
+      void this.refreshAccountStateAfterProgression();
       this.renderOverlay();
     });
 
@@ -321,6 +322,9 @@ export class WorldSessionScene extends Phaser.Scene {
       (characterId: string, itemInstanceId: string, slot: string) => {
         return this.handleEquipItem(characterId, itemInstanceId, slot);
       },
+      (characterId: string, slot: string) => {
+        return this.handleUnequipItem(characterId, slot);
+      },
     );
     utilityRegion.appendChild(overlayView.utilityPanel);
     hudRegion.appendChild(overlayView.hudPanel);
@@ -414,6 +418,29 @@ export class WorldSessionScene extends Phaser.Scene {
     }
   }
 
+  private async handleUnequipItem(
+    characterId: string,
+    slot: string,
+  ): Promise<void> {
+    if (this.apiClient === null) {
+      throw new Error("API client not available");
+    }
+
+    const sessionToken = window.localStorage.getItem("doomscrolls.sessionToken");
+    if (typeof sessionToken !== "string" || sessionToken.length === 0) {
+      throw new Error("Not authenticated");
+    }
+
+    await this.apiClient.unequipItem(sessionToken, characterId, slot);
+
+    try {
+      this.account = await this.apiClient.getMe(sessionToken);
+      this.renderOverlay();
+    } catch {
+      // Refresh happened best-effort
+    }
+  }
+
   private async refreshAccountStateAfterPickup(): Promise<void> {
     if (this.apiClient === null) {
       return;
@@ -426,8 +453,27 @@ export class WorldSessionScene extends Phaser.Scene {
 
     try {
       this.account = await this.apiClient.getMe(sessionToken);
+      this.renderOverlay();
     } catch {
       // Ignore refresh failures; pickup feedback already came from realtime server authority.
+    }
+  }
+
+  private async refreshAccountStateAfterProgression(): Promise<void> {
+    if (this.apiClient === null) {
+      return;
+    }
+
+    const sessionToken = window.localStorage.getItem("doomscrolls.sessionToken");
+    if (typeof sessionToken !== "string" || sessionToken.length === 0) {
+      return;
+    }
+
+    try {
+      this.account = await this.apiClient.getMe(sessionToken);
+      this.renderOverlay();
+    } catch {
+      // Ignore refresh failures; realtime state already carries the live progression values.
     }
   }
 }

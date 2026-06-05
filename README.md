@@ -394,12 +394,14 @@ Dodge and healing flask:
   - the starter healing flask is server-authoritative, uses fixed charges/cooldown, heals only living players, and is restored on join/respawn
   - there is still no stamina system, no mana/resource system, no vendor refill flow and no advanced consumable system
 
-Loot drops, pickup, inventory persistence, inventory summary/detail:
+ Loot drops, pickup, inventory persistence, inventory summary/detail, equipment checkpoint:
   - Loot dropped by defeated enemies exists as a synced world-loot entry in room state (id, itemId, label, x, y)
   - The client sends only a worldLootId pickup intent; the server validates ownership, distance and that the loot still exists
-  - On success the server removes the synced room-state loot and persists the picked-up item into the character inventory through the persistence layer
-  - the current client slice exposes real inventory summary/detail data from persisted account state rather than fake client-only loot
-  - inventory placement visuals, drag/drop, equipment effects, currency, XP, salvage, vendor/stash and full inventory UI are still deferred
+   - On success the server removes the synced room-state loot and persists the picked-up item as a real inventory item through the persistence layer
+   - the current client slice exposes real inventory summary data plus a read-only inventory detail view from persisted account state rather than fake client-only loot
+   - equip moves a real item from inventory into the selected equipment slot
+   - unequip moves that real equipped item back into the first free inventory slot
+   - drag/drop, stat recalculation, item comparison, currency, XP, salvage, vendor/stash and full inventory UI polish are still deferred
 
 HUD (temporary debug vs. future default):
   - The current connected-room overlay is a temporary server-synced HUD/resource placeholder and debug shell only
@@ -407,7 +409,7 @@ HUD (temporary debug vs. future default):
   - An optional WoW-like framed bars mode may be added later behind a setting; the orbs are still the default
 ```
 
-These slices are still narrow checkpoint flows. They are not full combat, not full AI, not full loot/inventory/equipment, and not final HUD art. The server still owns every gameplay outcome; the client only sends intents and renders synced state. Still missing in this milestone: XP, quests, equipment flow, inventory drag/drop, vendor/stash, a full death/corpse recovery system, and the final Diablo-orb HUD.
+These slices are still narrow checkpoint flows. They are not full combat, not full AI, not full loot/inventory/equipment, and not final HUD art. The server still owns every gameplay outcome; the client only sends intents and renders synced state. Equipment/inventory currently means: pickup writes a real inventory item, inventory detail is read-only, equip moves an item from inventory to a slot, and unequip moves it back to the first free inventory slot. Still missing in this milestone: XP, quests, inventory drag/drop, stat recalculation, item comparison, vendor/stash, a full death/corpse recovery system, and the final Diablo-orb HUD.
 
 Selected character state runtime verification passed locally:
 

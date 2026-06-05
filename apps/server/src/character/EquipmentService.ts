@@ -12,12 +12,48 @@ import { ItemRepository } from "../persistence/repositories/ItemRepository";
 import { InventoryRepository } from "../persistence/repositories/InventoryRepository";
 import { CharacterRepository } from "../persistence/repositories/CharacterRepository";
 import { EquipmentError, EquipmentErrorCode } from "./EquipmentErrors";
+import { CharacterStatsService } from "./CharacterStatsService";
+
+interface InventorySlotCoordinates {
+  readonly pageIndex: number;
+  readonly x: number;
+  readonly y: number;
+}
 
 export class EquipmentService {
+  private readonly characterStatsService = new CharacterStatsService();
+
   public constructor(
     private readonly db: PrismaClient = defaultPrismaClient,
     private readonly content: ContentRegistry = defaultContentRegistry,
   ) {}
+
+  private async findFirstFreeInventorySlot(
+    inventory: { readonly pageCount: number; readonly gridWidth: number; readonly gridHeight: number },
+    itemRepo: ItemRepository,
+    characterId: string,
+    excludedItemIds: readonly string[] = [],
+  ): Promise<InventorySlotCoordinates> {
+    const excludedItemIdSet = new Set(excludedItemIds);
+    const allInventoryItems = await itemRepo.listInventoryItems(characterId);
+    const occupiedPositions = new Set(
+      allInventoryItems
+        .filter((i) => !excludedItemIdSet.has(i.id))
+        .map((i) => `${i.inventoryPage}_${i.inventoryX}_${i.inventoryY}`),
+    );
+
+    for (let pageIndex = 0; pageIndex < inventory.pageCount; pageIndex++) {
+      for (let y = 0; y < inventory.gridHeight; y++) {
+        for (let x = 0; x < inventory.gridWidth; x++) {
+          if (!occupiedPositions.has(`${pageIndex}_${x}_${y}`)) {
+            return { pageIndex, x, y };
+          }
+        }
+      }
+    }
+
+    throw new EquipmentError(EquipmentErrorCode.INVENTORY_FULL);
+  }
 
   /**
    * Equip an inventory item into a character's equipment slot.
@@ -71,6 +107,7 @@ export class EquipmentService {
     // 5. Perform the equip (and slot swap if needed) in a transaction
     await this.db.$transaction(async (tx) => {
       const txItemRepo = new ItemRepository(tx);
+      const txCharacterRepo = new CharacterRepository(tx);
 
       // Check if slot is currently occupied
       const equippedItems = await txItemRepo.listEquippedItems(characterIdStr);
@@ -78,49 +115,23 @@ export class EquipmentService {
         (e) => e.equipmentSlot === requestedSlot,
       );
 
+      const inventoryRepo = new InventoryRepository(tx);
+      const inventory = await inventoryRepo.findByCharacterId(characterIdStr);
+      if (!inventory) {
+        throw new EquipmentError(EquipmentErrorCode.INTERNAL_ERROR);
+      }
+
       if (existingItemInSlot) {
         // Slot occupied -- need to move old item back to inventory first
-        const inventoryRepo = new InventoryRepository(tx);
-        const inventory = await inventoryRepo.findByCharacterId(characterIdStr);
-        if (!inventory) {
-          throw new EquipmentError(EquipmentErrorCode.INTERNAL_ERROR);
-        }
-
-        // Find first free inventory slot
-        const allInventoryItems = await txItemRepo.listInventoryItems(characterIdStr);
-        const occupiedPositions = new Set(
-          allInventoryItems
-            .filter((i) => i.id !== item.id) // exclude the item being equipped
-            .map((i) => `${i.inventoryPage}_${i.inventoryX}_${i.inventoryY}`),
-        );
-
-        let freeX = 0;
-        let freeY = 0;
-        let found = false;
-
-        for (let y = 0; y < inventory.gridHeight; y++) {
-          for (let x = 0; x < inventory.gridWidth; x++) {
-            if (!occupiedPositions.has(`0_${x}_${y}`)) {
-              freeX = x;
-              freeY = y;
-              found = true;
-              break;
-            }
-          }
-          if (found) break;
-        }
-
-        if (!found) {
-          throw new EquipmentError(EquipmentErrorCode.INVENTORY_FULL);
-        }
+        const freeSlot = await this.findFirstFreeInventorySlot(inventory, txItemRepo, characterIdStr, [item.id]);
 
         // Move old equipped item to inventory
         await txItemRepo.updateItemLocation(existingItemInSlot.id, {
           locationType: ItemLocationType.INVENTORY,
           ownerCharacterId: characterIdStr,
-          inventoryPage: 0,
-          inventoryX: freeX,
-          inventoryY: freeY,
+          inventoryPage: freeSlot.pageIndex,
+          inventoryX: freeSlot.x,
+          inventoryY: freeSlot.y,
           equipmentSlot: null,
           roomId: null,
           zoneId: null,
@@ -144,6 +155,96 @@ export class EquipmentService {
         positionY: null,
         corpseId: null,
       });
+
+      await this.recalculateEquippedCharacterStats(characterIdStr, txItemRepo, txCharacterRepo);
+    });
+  }
+
+  public async unequip(
+    characterId: CharacterId | string,
+    userId: UserId | string,
+    requestedSlot: EquipmentSlot,
+  ): Promise<void> {
+    const characterIdStr = characterId.toString();
+    const userIdStr = userId.toString();
+
+    const characterRepo = new CharacterRepository(this.db);
+    const character = await characterRepo.findByIdForUser(characterIdStr, userIdStr);
+    if (!character) {
+      throw new EquipmentError(EquipmentErrorCode.ITEM_NOT_FOUND);
+    }
+
+    await this.db.$transaction(async (tx) => {
+      const txItemRepo = new ItemRepository(tx);
+      const txCharacterRepo = new CharacterRepository(tx);
+      const equippedItems = await txItemRepo.listEquippedItems(characterIdStr);
+      const itemInSlot = equippedItems.find((item) => item.equipmentSlot === requestedSlot);
+
+      const inventoryRepo = new InventoryRepository(tx);
+      const inventory = await inventoryRepo.findByCharacterId(characterIdStr);
+      if (!inventory) {
+        throw new EquipmentError(EquipmentErrorCode.INTERNAL_ERROR);
+      }
+
+      if (!itemInSlot) {
+        throw new EquipmentError(EquipmentErrorCode.ITEM_NOT_FOUND);
+      }
+
+      if (itemInSlot.locationType !== ItemLocationType.EQUIPMENT) {
+        throw new EquipmentError(EquipmentErrorCode.ITEM_NOT_FOUND);
+      }
+
+      const freeSlot = await this.findFirstFreeInventorySlot(inventory, txItemRepo, characterIdStr);
+
+      await txItemRepo.updateItemLocation(itemInSlot.id, {
+        locationType: ItemLocationType.INVENTORY,
+        ownerCharacterId: characterIdStr,
+        inventoryPage: freeSlot.pageIndex,
+        inventoryX: freeSlot.x,
+        inventoryY: freeSlot.y,
+        equipmentSlot: null,
+        roomId: null,
+        zoneId: null,
+        positionX: null,
+        positionY: null,
+        corpseId: null,
+      });
+
+      await this.recalculateEquippedCharacterStats(characterIdStr, txItemRepo, txCharacterRepo);
+    });
+  }
+
+  private async recalculateEquippedCharacterStats(
+    characterId: string,
+    itemRepo: ItemRepository,
+    characterRepo: CharacterRepository,
+  ): Promise<void> {
+    const character = await characterRepo.findProgressionContext(characterId);
+    if (!character) {
+      throw new EquipmentError(EquipmentErrorCode.INTERNAL_ERROR);
+    }
+
+    const origin = this.content.origins.get(character.originId as never);
+    const characterClass = this.content.classes.get(character.classId as never);
+    if (!origin || !characterClass) {
+      throw new EquipmentError(EquipmentErrorCode.INTERNAL_ERROR);
+    }
+
+    const equippedItems = await itemRepo.listEquippedItems(characterId);
+    const modifiers = equippedItems.flatMap((equippedItem) => {
+      const definition = this.content.items.get(equippedItem.definitionId as ItemDefinitionId);
+      return definition?.statModifiers ?? [];
+    });
+
+    const recalculatedStats = this.characterStatsService.calculateEquippedStats(
+      this.characterStatsService.calculateLevelScaledStats(origin.baseStats, characterClass.baseStats, character.level).primary,
+      modifiers,
+      character.level,
+    );
+
+    await characterRepo.updateStats(characterId, {
+      ...recalculatedStats.primary,
+      ...recalculatedStats.derived,
     });
   }
 }

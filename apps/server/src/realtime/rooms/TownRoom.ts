@@ -64,7 +64,9 @@ import { contentRegistry } from "@doomscrolls/content";
 import type { SpawnPointContentId } from "@doomscrolls/content";
 import { NIGHTMARKET_DEFAULT_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
 import { CharacterRepository } from "../../persistence/repositories";
+import { ItemRepository } from "../../persistence/repositories/ItemRepository";
 import { resolveLevelProgression } from "./levelProgression";
+import { CharacterStatsService } from "../../character/CharacterStatsService";
 
 const ENEMY_AGGRO_RANGE = 120;
 const ENEMY_LEASH_RANGE = 180;
@@ -79,7 +81,63 @@ const ENEMY_ATTACK_DAMAGE = 2;
 const ENEMY_RETURN_ARRIVAL_DISTANCE = 1;
 const ENEMY_RETURN_REACQUIRE_BUFFER = 8;
 const TRASHBOAR_RUNT_XP_REWARD = 5;
+const characterStatsService = new CharacterStatsService();
 type ContentEnemyId = Parameters<typeof contentRegistry.enemies.get>[0];
+
+async function applyProgressionUpdate(
+  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number },
+  progression: { readonly xp: number; readonly level: number; readonly leveledUp: boolean },
+): Promise<{ readonly maxHp: number; readonly hp: number; readonly gainedMaxHp: number }> {
+  const characterRepository = new CharacterRepository();
+  const character = await characterRepository.findProgressionContext(player.characterId);
+  if (character === null) {
+    throw new Error("Character progression context not found");
+  }
+
+  const origin = contentRegistry.origins.get(character.originId as never);
+  const characterClass = contentRegistry.classes.get(character.classId as never);
+  if (origin === undefined || characterClass === undefined) {
+    throw new Error("Character progression content missing");
+  }
+
+  const equippedItems = await new ItemRepository().listEquippedItems(player.characterId);
+  const modifiers = equippedItems.flatMap((equippedItem) => {
+    const definition = contentRegistry.items.get(equippedItem.definitionId as never);
+    return definition?.statModifiers ?? [];
+  });
+
+  const previousMaxHp = Number.isFinite(player.maxHp) ? Math.max(0, player.maxHp ?? 0) : 0;
+  const previousHp = Number.isFinite(player.hp) ? Math.max(0, player.hp ?? 0) : character.currentHp;
+  const recalculated = characterStatsService.calculateEquippedStats(
+    characterStatsService.calculateLevelScaledStats(origin.baseStats, characterClass.baseStats, progression.level).primary,
+    modifiers,
+    progression.level,
+  );
+  const nextMaxHp = Math.max(1, Math.floor(recalculated.derived.maxHp));
+  const gainedMaxHp = Math.max(0, nextMaxHp - previousMaxHp);
+  const nextHp = Math.min(nextMaxHp, previousHp + gainedMaxHp);
+
+  await characterRepository.updateProgressionState(player.characterId, {
+    xp: progression.xp,
+    level: progression.level,
+    currentHp: nextHp,
+    stats: {
+      ...recalculated.primary,
+      ...recalculated.derived,
+    },
+  });
+
+  player.xp = progression.xp;
+  player.level = progression.level;
+  if ("maxHp" in player) {
+    player.maxHp = nextMaxHp;
+  }
+  if ("hp" in player) {
+    player.hp = nextHp;
+  }
+
+  return { maxHp: nextMaxHp, hp: nextHp, gainedMaxHp };
+}
 
 async function grantEnemyDefeatXp(
   player: { characterId: CharacterId; xp: number; level: number },
@@ -92,10 +150,7 @@ async function grantEnemyDefeatXp(
 
   const nextXp = player.xp + TRASHBOAR_RUNT_XP_REWARD;
   const progression = resolveLevelProgression(player.level, nextXp);
-  player.xp = progression.xp;
-  player.level = progression.level;
-
-  await new CharacterRepository().updateXpAndLevel(player.characterId, progression.xp, progression.level);
+  const progressionUpdate = await applyProgressionUpdate(player, progression);
 
   const xpGained: XpGainedServerMessage = {
     type: "xp_gained",
@@ -104,6 +159,8 @@ async function grantEnemyDefeatXp(
     totalXp: progression.xp,
     level: progression.level,
     leveledUp: progression.leveledUp,
+    hp: progressionUpdate.hp,
+    maxHp: progressionUpdate.maxHp,
   };
   sendToClient("xp_gained", xpGained);
 }
@@ -425,6 +482,7 @@ private healingFlaskHandlerRegistered = false;
       result.character.stats?.derived.attackCooldownMs,
     );
     const maxHp = Math.max(0, result.character.stats?.derived.maxHp ?? 0);
+    const currentHp = Math.min(maxHp, Math.max(0, result.character.stats?.currentHp ?? maxHp));
 
     // Delegate presence building (spawn point resolution + initial
     // world position copy) to a dedicated helper so this room file
@@ -436,7 +494,7 @@ private healingFlaskHandlerRegistered = false;
       level: result.character.level,
       xp: result.character.xp,
       resolvedZoneId,
-      hp: maxHp,
+      hp: currentHp,
       maxHp,
       movementSpeed,
       attackCooldownMs,

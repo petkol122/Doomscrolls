@@ -540,13 +540,16 @@ Checkpoint the current playable slice after combat, loot, pickup, inventory summ
 
 Status: documented. `README.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG_CORE_0_1.md`, and `docs/CODING_RULES.md` now describe the current server-authoritative movement loop, targeted actions (`move first, then attack/interact/pick up`), placeholder enemy aggro/chase/leash/attack/defeat/respawn behavior, player HP/downed/respawn flow, dodge and starter healing flask, loot drops with real pickup persistence into inventory, real inventory summary/detail usage, and the current temporary HUD/resource placeholder.
 
+Equipment/inventory checkpoint update: pickup now writes a real inventory item, inventory detail is read-only, equip moves an item from inventory to its slot, and unequip moves it back to the first free inventory slot. Drag/drop, stat recalculation and item comparison are still not implemented.
+
 Explicitly deferred and called out in the docs:
 
 ```text
 no XP yet
 no quests yet
-no equipment flow yet
-no inventory drag/drop yet
+- no inventory drag/drop yet
+- no stat recalculation yet
+- no item comparison yet
 no vendor/stash yet
 no full death/corpse recovery system yet
 no final Diablo-orb HUD yet

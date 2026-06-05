@@ -12,6 +12,11 @@ const equipItemBodySchema = z.object({
   slot: z.string(),
 });
 
+const unequipItemBodySchema = z.object({
+  characterId: z.string(),
+  slot: z.string(),
+});
+
 /**
  * Register equipment HTTP routes.
  *
@@ -43,6 +48,43 @@ export async function registerEquipmentRoutes(app: FastifyInstance, _options: Fa
     try {
       const equipmentService = new EquipmentService();
       await equipmentService.equip(characterId, account.user.id, itemInstanceId, slotTyped);
+      void reply.code(200).send({ success: true });
+    } catch (error: unknown) {
+      if (error instanceof EquipmentError) {
+        void reply.code(getHttpStatusFromEquipmentError(error)).send(mapEquipmentErrorToHttpResponse(error));
+        return;
+      }
+
+      void reply.code(500).send({
+        error: "An internal error occurred",
+        code: "INTERNAL_ERROR",
+      });
+    }
+  });
+
+  app.post("/unequip", async (request, reply) => {
+    const account = await authenticateRequest(request, reply, authService);
+
+    if (account === null) {
+      return;
+    }
+
+    const parsed = unequipItemBodySchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      void reply.code(400).send({
+        error: "Invalid request body",
+        code: "VALIDATION_ERROR",
+      });
+      return;
+    }
+
+    const { characterId, slot } = parsed.data;
+    const slotTyped = slot as EquipmentSlot;
+
+    try {
+      const equipmentService = new EquipmentService();
+      await equipmentService.unequip(characterId, account.user.id, slotTyped);
       void reply.code(200).send({ success: true });
     } catch (error: unknown) {
       if (error instanceof EquipmentError) {

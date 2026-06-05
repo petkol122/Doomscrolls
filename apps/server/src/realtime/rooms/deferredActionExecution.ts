@@ -6,6 +6,9 @@ import type {
 } from "@doomscrolls/shared";
 
 import { CharacterRepository } from "../../persistence/repositories";
+import { ItemRepository } from "../../persistence/repositories/ItemRepository";
+import { contentRegistry } from "@doomscrolls/content";
+import { CharacterStatsService } from "../../character/CharacterStatsService";
 
 import { consumeAttackCooldown } from "./attackCooldown";
 import { validateAttackIntent } from "./attackIntentValidation";
@@ -27,6 +30,57 @@ export interface DeferredActionExecutionContext {
 }
 
 const TRASHBOAR_RUNT_XP_REWARD = 5;
+const characterStatsService = new CharacterStatsService();
+
+async function applyProgressionUpdate(
+  player: PlayerPresence,
+  progression: { readonly xp: number; readonly level: number; readonly leveledUp: boolean },
+): Promise<{ readonly maxHp: number; readonly hp: number; readonly gainedMaxHp: number }> {
+  const characterRepository = new CharacterRepository();
+  const character = await characterRepository.findProgressionContext(player.characterId);
+  if (character === null) {
+    throw new Error("Character progression context not found");
+  }
+
+  const origin = contentRegistry.origins.get(character.originId as never);
+  const characterClass = contentRegistry.classes.get(character.classId as never);
+  if (origin === undefined || characterClass === undefined) {
+    throw new Error("Character progression content missing");
+  }
+
+  const equippedItems = await new ItemRepository().listEquippedItems(player.characterId);
+  const modifiers = equippedItems.flatMap((equippedItem) => {
+    const definition = contentRegistry.items.get(equippedItem.definitionId as never);
+    return definition?.statModifiers ?? [];
+  });
+
+  const previousMaxHp = Number.isFinite(player.maxHp) ? Math.max(0, player.maxHp) : 0;
+  const recalculated = characterStatsService.calculateEquippedStats(
+    characterStatsService.calculateLevelScaledStats(origin.baseStats, characterClass.baseStats, progression.level).primary,
+    modifiers,
+    progression.level,
+  );
+  const nextMaxHp = Math.max(1, Math.floor(recalculated.derived.maxHp));
+  const gainedMaxHp = Math.max(0, nextMaxHp - previousMaxHp);
+  const nextHp = Math.min(nextMaxHp, Math.max(0, player.hp) + gainedMaxHp);
+
+  await characterRepository.updateProgressionState(player.characterId, {
+    xp: progression.xp,
+    level: progression.level,
+    currentHp: nextHp,
+    stats: {
+      ...recalculated.primary,
+      ...recalculated.derived,
+    },
+  });
+
+  player.xp = progression.xp;
+  player.level = progression.level;
+  player.maxHp = nextMaxHp;
+  player.hp = nextHp;
+
+  return { maxHp: nextMaxHp, hp: nextHp, gainedMaxHp };
+}
 
 async function grantEnemyDefeatXp(player: PlayerPresence, enemyId: string, sendToClient: (type: string, payload: unknown) => void): Promise<void> {
   if (enemyId !== "trashboar_runt") {
@@ -35,10 +89,7 @@ async function grantEnemyDefeatXp(player: PlayerPresence, enemyId: string, sendT
 
   const nextXp = player.xp + TRASHBOAR_RUNT_XP_REWARD;
   const progression = resolveLevelProgression(player.level, nextXp);
-  player.xp = progression.xp;
-  player.level = progression.level;
-
-  await new CharacterRepository().updateXpAndLevel(player.characterId, progression.xp, progression.level);
+  const progressionUpdate = await applyProgressionUpdate(player, progression);
 
   const xpGained: XpGainedServerMessage = {
     type: "xp_gained",
@@ -47,6 +98,8 @@ async function grantEnemyDefeatXp(player: PlayerPresence, enemyId: string, sendT
     totalXp: progression.xp,
     level: progression.level,
     leveledUp: progression.leveledUp,
+    hp: progressionUpdate.hp,
+    maxHp: progressionUpdate.maxHp,
   };
   sendToClient("xp_gained", xpGained);
 }

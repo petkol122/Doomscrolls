@@ -43,6 +43,7 @@ export interface CreateCharacterWithInitialStateData {
 const characterWithInitialStateInclude = { stats: true, passives: true, inventory: true } satisfies Prisma.CharacterInclude;
 
 const characterAccountStateInclude = {
+  stats: true,
   inventory: true,
   items: {
     where: { locationType: ItemLocationType.INVENTORY },
@@ -57,6 +58,14 @@ export type CharacterWithInitialState = Prisma.CharacterGetPayload<{
 export type CharacterForAccountState = Prisma.CharacterGetPayload<{
   include: typeof characterAccountStateInclude;
 }>;
+
+export interface CharacterProgressionContext {
+  readonly id: string;
+  readonly level: number;
+  readonly currentHp: number;
+  readonly originId: string;
+  readonly classId: string;
+}
 
 export class CharacterRepository {
   public constructor(private readonly db: CharacterRepositoryClient = defaultPrisma) {}
@@ -128,8 +137,73 @@ export class CharacterRepository {
     return this.db.character.update({ where: { id: characterId }, data: { currentHp } });
   }
 
+  public updateStats(
+    characterId: string,
+    stats: CreateCharacterStatsData,
+  ) {
+    return this.db.characterStats.update({
+      where: { characterId },
+      data: {
+        power: stats.power,
+        speed: stats.speed,
+        mind: stats.mind,
+        toughness: stats.toughness,
+        maxHp: stats.maxHp,
+        damage: stats.damage,
+        armor: stats.armor,
+        moveSpeed: stats.moveSpeed,
+        attackCooldownMs: stats.attackCooldownMs,
+      },
+    });
+  }
+
   public updateXpAndLevel(characterId: string, xp: number, level: number) {
     return this.db.character.update({ where: { id: characterId }, data: { xp, level } });
+  }
+
+  public findProgressionContext(characterId: string): Promise<CharacterProgressionContext | null> {
+    return this.db.character.findUnique({
+      where: { id: characterId },
+      select: {
+        id: true,
+        level: true,
+        currentHp: true,
+        originId: true,
+        classId: true,
+      },
+    });
+  }
+
+  public updateProgressionState(
+    characterId: string,
+    input: {
+      readonly xp: number;
+      readonly level: number;
+      readonly currentHp: number;
+      readonly stats: CreateCharacterStatsData;
+    },
+  ) {
+    return this.db.character.update({
+      where: { id: characterId },
+      data: {
+        xp: input.xp,
+        level: input.level,
+        currentHp: input.currentHp,
+        stats: {
+          update: {
+            power: input.stats.power,
+            speed: input.stats.speed,
+            mind: input.stats.mind,
+            toughness: input.stats.toughness,
+            maxHp: input.stats.maxHp,
+            damage: input.stats.damage,
+            armor: input.stats.armor,
+            moveSpeed: input.stats.moveSpeed,
+            attackCooldownMs: input.stats.attackCooldownMs,
+          },
+        },
+      },
+    });
   }
 
   public updateCharacterLocation(
