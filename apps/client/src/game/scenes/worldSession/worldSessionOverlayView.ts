@@ -234,6 +234,19 @@ function createCharacterChip(
   textBlock.style.display = "grid";
   textBlock.style.gap = "2px";
 
+  const zoneLine = document.createElement("div");
+  zoneLine.textContent = "The Nightmarket";
+  zoneLine.style.fontSize = "12px";
+  zoneLine.style.fontWeight = "bold";
+  zoneLine.style.color = "#d8c6a3";
+  textBlock.appendChild(zoneLine);
+
+  const testCombatLine = document.createElement("div");
+  testCombatLine.textContent = "Temporary test combat zone";
+  testCombatLine.style.fontSize = "10px";
+  testCombatLine.style.color = "#a88d63";
+  textBlock.appendChild(testCombatLine);
+
   const nameLine = document.createElement("div");
   nameLine.textContent = character.characterName;
   nameLine.style.fontSize = "14px";

@@ -63,6 +63,19 @@ export const items = [
     iconKey: "item_blackwire_scrap_placeholder"
   },
   {
+    id: itemId("scrap_cloth"),
+    nameKey: "item.scrap_cloth.name" as ContentLocalizationKey,
+    descriptionKey: "item.scrap_cloth.description" as ContentLocalizationKey,
+    category: "material",
+    rarity: "common",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: [],
+    stackable: true,
+    maxStackSize: 99,
+    statModifiers: [],
+    iconKey: "item_scrap_cloth_placeholder"
+  },
+  {
     id: itemId("rustbound_ring"),
     nameKey: "item.rustbound_ring.name" as ContentLocalizationKey,
     descriptionKey: "item.rustbound_ring.description" as ContentLocalizationKey,

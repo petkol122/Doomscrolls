@@ -41,16 +41,17 @@ export function sendHealingFlaskIntent(
   if (!room) {
     return { dispatched: false, reason: "no_room" };
   }
-  if (room.connection?.isOpen !== true) {
-    return { dispatched: false, reason: "room_not_joined" };
-  }
 
   const message: RequestUseHealingFlaskClientMessage = {
     type: "request_use_healing_flask",
   };
 
-  room.send(message.type, message);
-  return { dispatched: true };
+  try {
+    room.send(message.type, message);
+    return { dispatched: true };
+  } catch {
+    return { dispatched: false, reason: "room_not_joined" };
+  }
 }
 
 export function registerHealingFlaskResponseListeners(
