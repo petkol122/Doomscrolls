@@ -271,6 +271,12 @@ connectedPlayerCount: derived from playerPresence.size on join/leave
 
 No player entity list, no map, no movement, no combat, no gameplay state exists yet.
 
+Town hostility checkpoint:
+
+- towns/hubs should not have hostile mobs long-term
+- neutral ambient creatures are allowed in towns/hubs
+- hostile Trashboars in Nightmarket are temporary Core 0.1 test content only
+
 TownRoom rules:
 
 - join options must include a real `sessionToken` and `characterId`

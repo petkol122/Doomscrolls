@@ -1,4 +1,7 @@
+import { makeOverlayPassive } from "./worldSessionPointerEvents";
+
 export function applyWorldSessionOverlayRootStyles(root: HTMLDivElement): void {
+  makeOverlayPassive(root);
   root.style.position = "fixed";
   root.style.inset = "0";
   root.style.display = "grid";
@@ -9,7 +12,6 @@ export function applyWorldSessionOverlayRootStyles(root: HTMLDivElement): void {
   // Root overlay stays passive so ground clicks still reach the Phaser canvas
   // through empty space. Interactive children opt back in via
   // `makeInteractive()` from `worldSessionPointerEvents`.
-  root.style.pointerEvents = "none";
   root.style.fontFamily = "Arial, sans-serif";
   root.style.padding = "12px 14px 16px";
   root.style.gap = "10px";
@@ -17,6 +19,7 @@ export function applyWorldSessionOverlayRootStyles(root: HTMLDivElement): void {
 }
 
 export function applyWorldSessionOverlayUtilityStyles(panel: HTMLElement): void {
+  makeOverlayPassive(panel);
   panel.style.gridArea = "utility";
   panel.style.display = "grid";
   panel.style.alignContent = "start";
@@ -24,30 +27,30 @@ export function applyWorldSessionOverlayUtilityStyles(panel: HTMLElement): void 
   panel.style.justifySelf = "end";
   panel.style.width = "min(280px, calc(100vw - 28px))";
   panel.style.maxHeight = "calc(100vh - 28px)";
-  panel.style.pointerEvents = "none";
 }
 
 export function applyWorldSessionOverlayStatusStyles(panel: HTMLElement): void {
+  makeOverlayPassive(panel);
   panel.style.gridArea = "status";
   panel.style.display = "grid";
   panel.style.alignContent = "start";
   panel.style.gap = "8px";
   panel.style.justifySelf = "start";
   panel.style.width = "min(260px, calc(100vw - 28px))";
-  panel.style.pointerEvents = "none";
 }
 
 export function applyWorldSessionOverlayHudStyles(panel: HTMLElement): void {
+  makeOverlayPassive(panel);
   panel.style.gridArea = "hud";
   panel.style.display = "grid";
   panel.style.alignSelf = "end";
   panel.style.justifySelf = "center";
   panel.style.width = "min(760px, calc(100vw - 32px))";
   panel.style.maxWidth = "100%";
-  panel.style.pointerEvents = "none";
 }
 
 export function applyWorldSessionOverlayPanelStyles(panel: HTMLElement): void {
+  makeOverlayPassive(panel);
   panel.style.padding = "8px 10px";
   panel.style.border = "1px solid #4d3f2a";
   panel.style.borderRadius = "12px";
@@ -57,7 +60,6 @@ export function applyWorldSessionOverlayPanelStyles(panel: HTMLElement): void {
   // Panels are display containers only; let canvas receive clicks in
   // the panel's empty area. Inner interactive children opt back in via
   // `pointerEvents: "auto"` on themselves (buttons, summaries, rows).
-  panel.style.pointerEvents = "none";
   panel.style.width = "100%";
   panel.style.maxWidth = "100%";
   panel.style.boxSizing = "border-box";

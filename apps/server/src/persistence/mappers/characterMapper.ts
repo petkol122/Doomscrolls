@@ -74,6 +74,7 @@ export function toCharacterSummaryWithInventoryDto(
         y: item.inventoryY,
         label: t(definition.nameKey),
         category: definition.category,
+        allowedEquipmentSlots: definition.allowedEquipmentSlots,
         size: {
           width: definition.size.width,
           height: definition.size.height,

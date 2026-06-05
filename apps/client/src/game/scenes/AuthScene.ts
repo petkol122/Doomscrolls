@@ -4,6 +4,7 @@ import Phaser from "phaser";
 import { clearStoredSessionToken, readStoredSessionToken, storeSessionToken } from "../../auth/sessionStorage";
 import { clientEnv } from "../../config/env";
 import { ApiClient, ApiClientError, type AccountState, type ApiErrorCode } from "../../net/ApiClient";
+import { makeOverlayInteractive } from "./worldSession/worldSessionPointerEvents";
 
 type AuthMode = "register" | "login";
 
@@ -135,16 +136,16 @@ export class AuthScene extends Phaser.Scene {
   }
 
   private createAuthOverlay(): AuthFormElements {
-    const root = document.createElement("div");
+    const root = makeOverlayInteractive(document.createElement("div"));
     root.style.position = "fixed";
     root.style.inset = "0";
+    root.style.zIndex = "1000";
     root.style.display = "flex";
     root.style.alignItems = "center";
     root.style.justifyContent = "center";
-    root.style.pointerEvents = "none";
     root.style.fontFamily = "Arial, sans-serif";
 
-    const panel = document.createElement("div");
+    const panel = makeOverlayInteractive(document.createElement("div"));
     panel.style.width = "min(920px, calc(100vw - 32px))";
     panel.style.marginTop = "80px";
     panel.style.padding = "24px";
@@ -153,7 +154,6 @@ export class AuthScene extends Phaser.Scene {
     panel.style.background = "rgba(13, 10, 8, 0.94)";
     panel.style.color = "#d8c6a3";
     panel.style.boxShadow = "0 20px 70px rgba(0, 0, 0, 0.45)";
-    panel.style.pointerEvents = "auto";
     root.appendChild(panel);
 
     const title = document.createElement("h1");

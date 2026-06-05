@@ -1,21 +1,17 @@
-// Tiny helpers to keep pointer-events rules consistent across the
-// WorldSession overlay.
-//
-// Rule of thumb:
-//   - The root overlay + visual wrappers stay `pointer-events: none` so the
-//     Phaser canvas can still receive ground clicks through the empty space.
-//   - Every interactive control (buttons, <details>/<summary>, inputs, list
-//     items) opts back in via `pointer-events: auto`.
-//
-// Centralising this avoids the recurring "some UI buttons don't work" bug
-// where one panel rebuild forgets to re-enable pointer-events on a child.
+// Small shared pointer-events convention for DOM overlays:
+// - auth/account modal overlays are interactive
+// - world root/layout wrappers are passive so canvas clicks still pass through
+// - world controls opt back in explicitly
 
-export function makeInteractive<T extends HTMLElement>(element: T): T {
+export function makeOverlayInteractive<T extends HTMLElement>(element: T): T {
   element.style.pointerEvents = "auto";
   return element;
 }
 
-export function makePassive<T extends HTMLElement>(element: T): T {
+export function makeOverlayPassive<T extends HTMLElement>(element: T): T {
   element.style.pointerEvents = "none";
   return element;
 }
+
+export const makeInteractive = makeOverlayInteractive;
+export const makePassive = makeOverlayPassive;

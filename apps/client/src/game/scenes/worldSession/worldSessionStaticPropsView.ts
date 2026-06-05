@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { contentRegistry, type WorldPropContentDefinition } from "@doomscrolls/content";
 
 import {
   worldToScreenActiveProjection,
@@ -7,18 +8,7 @@ import {
   type WorldProjectionViewport,
 } from "../../worldProjection";
 
-type StaticPropKind = "crate" | "lamp" | "debris" | "junk";
-
-interface StaticPropDefinition {
-  readonly id: string;
-  readonly zoneId: string;
-  readonly kind: StaticPropKind;
-  readonly label: string;
-  readonly x: number;
-  readonly y: number;
-}
-
-interface StaticPropScreenSnapshot extends StaticPropDefinition {
+interface StaticPropScreenSnapshot extends WorldPropContentDefinition {
   readonly screenX: number;
   readonly screenY: number;
 }
@@ -32,14 +22,6 @@ export interface WorldSessionStaticPropsView {
   }) => void;
   readonly destroy: () => void;
 }
-
-const STATIC_PROPS: readonly StaticPropDefinition[] = [
-  { id: "nightmarket_crates_01", zoneId: "nightmarket", kind: "crate", label: "Crates", x: 420, y: 380 },
-  { id: "nightmarket_lamp_01", zoneId: "nightmarket", kind: "lamp", label: "Lamp", x: 860, y: 520 },
-  { id: "nightmarket_debris_01", zoneId: "nightmarket", kind: "debris", label: "Sewer Debris", x: 1180, y: 940 },
-  { id: "nightmarket_junk_01", zoneId: "nightmarket", kind: "junk", label: "Market Junk", x: 1520, y: 700 },
-  { id: "nightmarket_crates_02", zoneId: "nightmarket", kind: "crate", label: "Crates", x: 1890, y: 1120 },
-] as const;
 
 export function createWorldSessionStaticPropsView(scene: Phaser.Scene): WorldSessionStaticPropsView {
   const container = scene.add.container(0, 0);
@@ -60,7 +42,7 @@ export function createWorldSessionStaticPropsView(scene: Phaser.Scene): WorldSes
   }): void => {
     destroyAll();
 
-    const visibleProps = STATIC_PROPS
+    const visibleProps = contentRegistry.worldProps.all
       .filter((prop) => prop.zoneId === projection.zoneId)
       .map((prop) => projectProp(prop, projection))
       .filter((prop): prop is StaticPropScreenSnapshot => prop !== null)
@@ -83,7 +65,7 @@ export function createWorldSessionStaticPropsView(scene: Phaser.Scene): WorldSes
 }
 
 function projectProp(
-  prop: StaticPropDefinition,
+  prop: WorldPropContentDefinition,
   projection: {
     readonly bounds: WorldProjectionBounds;
     readonly viewport: WorldProjectionViewport;
@@ -130,15 +112,27 @@ function buildPropContainer(
 ): Phaser.GameObjects.Container {
   const propContainer = scene.add.container(prop.screenX, prop.screenY);
   const shadow = scene.add.ellipse(0, 12, 42, 16, 0x000000, 0.18);
+  const isAmbientCreature = prop.kind === "ambient_rat" || prop.kind === "ambient_pig" || prop.kind === "ambient_chicken";
   const label = scene.add
     .text(0, 18, prop.label, {
-      color: "#c8b08d",
+      color: isAmbientCreature ? "#f2d96b" : "#c8b08d",
       fontFamily: "Arial, sans-serif",
       fontSize: "11px",
       stroke: "#120e0a",
       strokeThickness: 3,
     })
     .setOrigin(0.5);
+  const stateLabel = isAmbientCreature
+    ? scene.add
+        .text(0, -16, "Neutral", {
+          color: "#f5dc72",
+          fontFamily: "Arial, sans-serif",
+          fontSize: "10px",
+          stroke: "#120e0a",
+          strokeThickness: 3,
+        })
+        .setOrigin(0.5)
+    : null;
 
   propContainer.add(shadow);
 
@@ -178,8 +172,44 @@ function buildPropContainer(
       propContainer.add([sack, crate, shard]);
       break;
     }
+    case "ambient_rat": {
+      const body = scene.add.ellipse(0, 4, 18, 10, 0x6d6d72, 0.98);
+      body.setStrokeStyle(2, 0xa5a5ac, 0.85);
+      const head = scene.add.circle(8, 1, 4, 0x7a7a81, 0.98);
+      head.setStrokeStyle(2, 0xb7b7bf, 0.85);
+      const ear = scene.add.circle(10, -4, 1.7, 0xcd97a8, 0.95);
+      const tail = scene.add.ellipse(-11, 3, 14, 3, 0xc18aa0, 0.9);
+      tail.setAngle(-18);
+      propContainer.add([tail, body, head, ear]);
+      break;
+    }
+    case "ambient_pig": {
+      const body = scene.add.ellipse(0, 3, 28, 16, 0xd59cab, 0.98);
+      body.setStrokeStyle(2, 0xf0c7d0, 0.9);
+      const head = scene.add.circle(12, 1, 6, 0xe0aab7, 0.98);
+      head.setStrokeStyle(2, 0xf7d3da, 0.9);
+      const snout = scene.add.ellipse(15, 3, 7, 5, 0xf0c4cd, 0.98);
+      const ear = scene.add.triangle(8, -6, 0, 6, 4, 0, 8, 6, 0xc98898, 0.95);
+      propContainer.add([body, head, snout, ear]);
+      break;
+    }
+    case "ambient_chicken": {
+      const body = scene.add.ellipse(0, 4, 18, 14, 0xe9e0c8, 0.98);
+      body.setStrokeStyle(2, 0xfff5de, 0.9);
+      const head = scene.add.circle(7, -4, 4, 0xf0e7cf, 0.98);
+      head.setStrokeStyle(2, 0xfff7e1, 0.88);
+      const beak = scene.add.triangle(12, -3, 0, 2, 6, 0, 0, -2, 0xd8a236, 0.98);
+      const comb = scene.add.circle(7, -9, 1.8, 0xcf4f4f, 0.95);
+      const legLeft = scene.add.rectangle(-3, 13, 2, 7, 0xd79c3a, 0.95);
+      const legRight = scene.add.rectangle(3, 13, 2, 7, 0xd79c3a, 0.95);
+      propContainer.add([body, head, beak, comb, legLeft, legRight]);
+      break;
+    }
   }
 
+  if (stateLabel !== null) {
+    propContainer.add(stateLabel);
+  }
   propContainer.add(label);
   return propContainer;
 }

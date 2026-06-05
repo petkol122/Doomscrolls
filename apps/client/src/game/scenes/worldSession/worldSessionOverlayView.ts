@@ -879,7 +879,10 @@ function createInventoryDetailSection(
       equipButton.disabled = true;
       equipButton.textContent = "Equipping...";
       try {
-        const firstSlot = item.statModifiers?.[0] !== undefined ? "weapon" : "weapon";
+        const firstSlot = item.allowedEquipmentSlots?.[0];
+        if (firstSlot === undefined) {
+          throw new Error("Item has no allowed equipment slots");
+        }
         await onEquipItem(characterId, item.itemInstanceId, firstSlot);
         equipButton.textContent = "Equipped!";
       } catch {
