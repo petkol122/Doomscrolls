@@ -56,6 +56,13 @@ interface AreaProjectionContext {
   readonly projectionMode: WorldProjectionMode;
 }
 
+interface WorldRectScreenBounds {
+  readonly left: number;
+  readonly right: number;
+  readonly top: number;
+  readonly bottom: number;
+}
+
 export interface WorldSessionDebugState {
   readonly lastClickTarget: ClickTargetSnapshot | null;
   readonly projectionMode: WorldProjectionMode;
@@ -260,7 +267,7 @@ export function createWorldSessionAreaView(
       viewport: followViewport,
     };
 
-    drawBounds(frame, layout);
+    drawBounds(frame, layout, bounds, followProjection);
     boundsLabel.setText(
       `zone=${zoneId} bounds: x=${bounds.minX}..${bounds.maxX}, y=${bounds.minY}..${bounds.maxY}`,
     );
@@ -659,7 +666,12 @@ function createAreaProjectionContext(
   };
 }
 
-function drawBounds(graphics: Phaser.GameObjects.Graphics, layout: WorldSessionAreaLayout): void {
+function drawBounds(
+  graphics: Phaser.GameObjects.Graphics,
+  layout: WorldSessionAreaLayout,
+  zoneBounds: WorldProjectionBounds,
+  projection: AreaProjectionContext,
+): void {
   graphics.clear();
   graphics.fillStyle(0x1a1510, 1);
   graphics.fillRect(layout.originX, layout.originY, layout.width, layout.height);
@@ -683,6 +695,87 @@ function drawBounds(graphics: Phaser.GameObjects.Graphics, layout: WorldSessionA
     graphics.lineBetween(layout.originX, y, right, y);
   }
 
+  const worldRect = projectWorldRectToScreen(zoneBounds, projection);
+  drawWorldBoundary(graphics, worldRect);
+
   graphics.lineStyle(2, 0x5f4a2f, 1);
   graphics.strokeRect(layout.originX, layout.originY, layout.width, layout.height);
+}
+
+function projectWorldRectToScreen(
+  zoneBounds: WorldProjectionBounds,
+  projection: AreaProjectionContext,
+): WorldRectScreenBounds {
+  const topLeft = worldToScreenActiveProjection(
+    zoneBounds.minX,
+    zoneBounds.minY,
+    projection.bounds,
+    projection.viewport,
+    projection.projectionMode,
+  );
+  const topRight = worldToScreenActiveProjection(
+    zoneBounds.maxX,
+    zoneBounds.minY,
+    projection.bounds,
+    projection.viewport,
+    projection.projectionMode,
+  );
+  const bottomLeft = worldToScreenActiveProjection(
+    zoneBounds.minX,
+    zoneBounds.maxY,
+    projection.bounds,
+    projection.viewport,
+    projection.projectionMode,
+  );
+  const bottomRight = worldToScreenActiveProjection(
+    zoneBounds.maxX,
+    zoneBounds.maxY,
+    projection.bounds,
+    projection.viewport,
+    projection.projectionMode,
+  );
+
+  return {
+    left: Math.min(topLeft.x, topRight.x, bottomLeft.x, bottomRight.x),
+    right: Math.max(topLeft.x, topRight.x, bottomLeft.x, bottomRight.x),
+    top: Math.min(topLeft.y, topRight.y, bottomLeft.y, bottomRight.y),
+    bottom: Math.max(topLeft.y, topRight.y, bottomLeft.y, bottomRight.y),
+  };
+}
+
+function drawWorldBoundary(
+  graphics: Phaser.GameObjects.Graphics,
+  worldRect: WorldRectScreenBounds,
+): void {
+  const markerSpacing = 32;
+  const markerLength = 12;
+  const markerThickness = 4;
+  const width = worldRect.right - worldRect.left;
+  const height = worldRect.bottom - worldRect.top;
+
+  graphics.lineStyle(6, 0x23180f, 0.9);
+  graphics.strokeRect(worldRect.left, worldRect.top, width, height);
+
+  graphics.lineStyle(3, 0x8f6a3d, 0.95);
+  graphics.strokeRect(worldRect.left, worldRect.top, width, height);
+
+  graphics.fillStyle(0xb88952, 0.95);
+  for (let x = worldRect.left + markerSpacing / 2; x < worldRect.right; x += markerSpacing) {
+    graphics.fillRect(x - markerThickness / 2, worldRect.top - 1, markerThickness, markerLength);
+    graphics.fillRect(
+      x - markerThickness / 2,
+      worldRect.bottom - markerLength + 1,
+      markerThickness,
+      markerLength,
+    );
+  }
+  for (let y = worldRect.top + markerSpacing / 2; y < worldRect.bottom; y += markerSpacing) {
+    graphics.fillRect(worldRect.left - 1, y - markerThickness / 2, markerLength, markerThickness);
+    graphics.fillRect(
+      worldRect.right - markerLength + 1,
+      y - markerThickness / 2,
+      markerLength,
+      markerThickness,
+    );
+  }
 }
