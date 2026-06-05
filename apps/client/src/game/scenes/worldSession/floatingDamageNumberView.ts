@@ -7,7 +7,10 @@ export interface FloatingDamageNumberView {
 
 const LIFETIME_MS = 600;
 
-export function createFloatingDamageNumberView(scene: Phaser.Scene): FloatingDamageNumberView {
+export function createFloatingDamageNumberView(
+  scene: Phaser.Scene,
+  parentContainer?: Phaser.GameObjects.Container,
+): FloatingDamageNumberView {
   const active = new Set<Phaser.GameObjects.Text>();
   const timers = new WeakMap<Phaser.GameObjects.Text, Phaser.Time.TimerEvent>();
 
@@ -33,6 +36,7 @@ export function createFloatingDamageNumberView(scene: Phaser.Scene): FloatingDam
       });
       node.setOrigin(0.5, 0.5);
       node.setDepth(950);
+      parentContainer?.add(node);
       active.add(node);
       const timer = scene.time.delayedCall(LIFETIME_MS, () => {
         destroyText(node);

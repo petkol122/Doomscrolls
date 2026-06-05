@@ -16,9 +16,11 @@ export interface WorldSessionEnemyPlaceholderView {
 export function createWorldSessionEnemyPlaceholderView(
   scene: Phaser.Scene,
   enemy: TownRoomEnemySnapshot,
+  parentContainer?: Phaser.GameObjects.Container,
   onClick?: (enemyId: string) => void,
 ): WorldSessionEnemyPlaceholderView {
   const container = scene.add.container(enemy.x, enemy.y);
+  parentContainer?.add(container);
 
   const shadow = scene.add.ellipse(0, 11, 30, 14, 0x000000, 0.34);
   const ring = scene.add.ellipse(0, 9, 36, 16, 0x6f1414, 0.26);

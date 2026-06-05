@@ -11,9 +11,11 @@ export interface WorldSessionLootPlaceholderView {
 export function createWorldSessionLootPlaceholderView(
   scene: Phaser.Scene,
   loot: TownRoomWorldLootSnapshot,
+  parentContainer?: Phaser.GameObjects.Container,
   onClick?: (worldLootId: string) => void,
 ): WorldSessionLootPlaceholderView {
   const container = scene.add.container(loot.x, loot.y);
+  parentContainer?.add(container);
   const glow = scene.add.ellipse(0, 10, 26, 12, 0xe7c66d, 0.26);
   const ping = scene.add.ellipse(0, 9, 34, 14, 0xf7dc8b, 0.12);
   ping.setStrokeStyle(2, 0xffefb3, 0.3);

@@ -32,8 +32,10 @@ export function createWorldSessionInteractablesView(
   scene: Phaser.Scene,
   layout: WorldSessionAreaLayout,
   onInteractClick: (objectId: string) => void,
+  parentContainer?: Phaser.GameObjects.Container,
 ): WorldSessionInteractablesView {
   const container = scene.add.container(0, 0);
+  parentContainer?.add(container);
   const graphicsObjects = new Map<string, Phaser.GameObjects.Graphics>();
   const labelTexts = new Map<string, Phaser.GameObjects.Text>();
   const clickZones = new Map<string, Phaser.GameObjects.Zone>();

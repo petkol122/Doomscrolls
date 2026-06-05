@@ -91,10 +91,18 @@ export function createWorldSessionAreaView(
 ): WorldSessionAreaView {
   const layout = resolveWorldSessionAreaLayout(scene);
   const container = scene.add.container(0, 0);
+  const worldContainer = scene.add.container(0, 0);
   const frame = scene.add.graphics();
-  const staticPropsView = createWorldSessionStaticPropsView(scene);
-  const playerPlaceholder = createWorldSessionPlayerPlaceholderView(scene);
-  const interactablesView = createWorldSessionInteractablesView(scene, layout, (objectId) => {
+  const worldMaskGraphics = scene.add.graphics();
+  worldMaskGraphics.fillStyle(0xffffff, 1);
+  worldMaskGraphics.fillRect(layout.originX, layout.originY, layout.width, layout.height);
+  worldMaskGraphics.setVisible(false);
+  const worldMask = worldMaskGraphics.createGeometryMask();
+  worldContainer.setMask(worldMask);
+
+  const staticPropsView = createWorldSessionStaticPropsView(scene, worldContainer);
+  const playerPlaceholder = createWorldSessionPlayerPlaceholderView(scene, worldContainer);
+  const interactablesView = createWorldSessionInteractablesView(scene, layout, (objectId: string) => {
     pointerHandledByTarget = true;
     sendInteractIntent(room, objectId);
     const roomState = room.state as any;
@@ -105,11 +113,11 @@ export function createWorldSessionAreaView(
         onDebugStateChange?.();
       }
     }
-  });
+  }, worldContainer);
 
   const enemyPlaceholders = new Map<string, WorldSessionEnemyPlaceholderView>();
   const lootPlaceholders = new Map<string, WorldSessionLootPlaceholderView>();
-  const floatingDamageView: FloatingDamageNumberView = createFloatingDamageNumberView(scene);
+  const floatingDamageView: FloatingDamageNumberView = createFloatingDamageNumberView(scene, worldContainer);
   const enemyScreenPositions = new Map<string, { readonly x: number; readonly y: number }>();
 
   const targetMarker = scene.add.circle(-9999, -9999, 7, 0xff4a4a, 0.8);
@@ -153,6 +161,7 @@ export function createWorldSessionAreaView(
   });
 
   container.add([
+    worldContainer,
     frame,
     targetMarker,
     lineGraphic,
@@ -223,25 +232,6 @@ export function createWorldSessionAreaView(
     }
   }
 
-  const computeFollowViewport = (
-    baseProjection: AreaProjectionContext,
-    selfX: number,
-    selfY: number,
-  ): WorldProjectionViewport => {
-    const boundsWidth = baseProjection.bounds.maxX - baseProjection.bounds.minX;
-    const boundsHeight = baseProjection.bounds.maxY - baseProjection.bounds.minY;
-    if (boundsWidth <= 0 || boundsHeight <= 0) {
-      return baseProjection.viewport;
-    }
-    const viewportCenterX = layout.originX + layout.width / 2;
-    const viewportCenterY = layout.originY + layout.height / 2;
-    return {
-      ...baseProjection.viewport,
-      originX: viewportCenterX - ((selfX - baseProjection.bounds.minX) / boundsWidth) * layout.width,
-      originY: viewportCenterY - ((selfY - baseProjection.bounds.minY) / boundsHeight) * layout.height,
-    };
-  };
-
   const refreshFromRoomState = (nextRoom: Room<DoomscrollsRoomState>): void => {
     const zoneId = typeof nextRoom.state?.zoneId === "string" && nextRoom.state.zoneId.length > 0
       ? nextRoom.state.zoneId
@@ -252,20 +242,13 @@ export function createWorldSessionAreaView(
     const currentFocusPosition = self?.position === undefined
       ? selfWorldPosition
       : { x: self.position.x, y: self.position.y };
-    const projection = createAreaProjectionContext(layout, bounds, projectionMode, currentFocusPosition, cameraZoom);
-
-    // Camera follow: shift the viewport origin so the player's world
-    // position maps to the centre pixel of the layout area. All world
-    // entities are then rendered relative to this shifted viewport, so
-    // the world scrolls around the player. While the self position is
-    // unknown, fall back to the raw layout viewport.
-    const followViewport: WorldProjectionViewport = currentFocusPosition === null
-      ? projection.viewport
-      : computeFollowViewport(projection, currentFocusPosition.x, currentFocusPosition.y);
-    const followProjection: AreaProjectionContext = {
-      ...projection,
-      viewport: followViewport,
-    };
+    const followProjection = createAreaProjectionContext(
+      layout,
+      bounds,
+      projectionMode,
+      currentFocusPosition,
+      cameraZoom,
+    );
 
     drawBounds(frame, layout, bounds, followProjection);
     boundsLabel.setText(
@@ -298,7 +281,7 @@ export function createWorldSessionAreaView(
     for (const enemy of projectedEnemies) {
       let enemyView = enemyPlaceholders.get(enemy.id);
       if (enemyView === undefined) {
-        enemyView = createWorldSessionEnemyPlaceholderView(scene, enemy, (enemyId) => {
+        enemyView = createWorldSessionEnemyPlaceholderView(scene, enemy, worldContainer, (enemyId: string) => {
           pointerHandledByTarget = true;
           const result = sendAttackIntent(nextRoom, enemyId);
           if (result.dispatched) {
@@ -369,7 +352,7 @@ export function createWorldSessionAreaView(
       if (existing === undefined) {
         lootPlaceholders.set(
           loot.id,
-          createWorldSessionLootPlaceholderView(scene, loot, (worldLootId) => {
+          createWorldSessionLootPlaceholderView(scene, loot, worldContainer, (worldLootId: string) => {
             pointerHandledByTarget = true;
             const result = sendPickupWorldLootIntent(nextRoom, worldLootId);
             if (result.dispatched) {
@@ -410,8 +393,8 @@ export function createWorldSessionAreaView(
       const screenPoint = screenToWorldActiveProjection(
         pointer.x,
         pointer.y,
-        projection.bounds,
-        followViewport,
+        followProjection.bounds,
+        followProjection.viewport,
         projectionMode,
       );
       const worldX = screenPoint.x;
@@ -438,8 +421,8 @@ export function createWorldSessionAreaView(
     const playerScreenPosition = worldToScreenActiveProjection(
       x,
       y,
-      projection.bounds,
-      followViewport,
+      followProjection.bounds,
+      followProjection.viewport,
       projectionMode,
     );
     const pixelX = playerScreenPosition.x;
@@ -452,8 +435,8 @@ export function createWorldSessionAreaView(
       const targetScreenPosition = worldToScreenActiveProjection(
         lastClickTarget.x,
         lastClickTarget.y,
-        projection.bounds,
-        followViewport,
+        followProjection.bounds,
+        followProjection.viewport,
         projectionMode,
       );
       const targetPixelX = targetScreenPosition.x;
@@ -548,6 +531,8 @@ export function createWorldSessionAreaView(
       lootPlaceholders.clear();
       floatingDamageView.destroy();
       selfScreenPosition = null;
+      worldContainer.clearMask(false);
+      worldMaskGraphics.destroy();
       container.destroy(true);
     },
   };

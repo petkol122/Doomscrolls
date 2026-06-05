@@ -23,8 +23,12 @@ export interface WorldSessionStaticPropsView {
   readonly destroy: () => void;
 }
 
-export function createWorldSessionStaticPropsView(scene: Phaser.Scene): WorldSessionStaticPropsView {
+export function createWorldSessionStaticPropsView(
+  scene: Phaser.Scene,
+  parentContainer?: Phaser.GameObjects.Container,
+): WorldSessionStaticPropsView {
   const container = scene.add.container(0, 0);
+  parentContainer?.add(container);
   const propContainers = new Map<string, Phaser.GameObjects.Container>();
 
   const destroyAll = (): void => {

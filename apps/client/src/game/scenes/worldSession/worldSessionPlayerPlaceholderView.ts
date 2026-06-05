@@ -11,8 +11,10 @@ export interface WorldSessionPlayerPlaceholderView {
 
 export function createWorldSessionPlayerPlaceholderView(
   scene: Phaser.Scene,
+  parentContainer?: Phaser.GameObjects.Container,
 ): WorldSessionPlayerPlaceholderView {
   const container = scene.add.container(HIDDEN_POSITION, HIDDEN_POSITION);
+  parentContainer?.add(container);
 
   const shadow = scene.add.ellipse(0, 10, 24, 12, 0x000000, 0.28);
   const body = scene.add.circle(0, 0, 12, 0x4a9eff, 1);
