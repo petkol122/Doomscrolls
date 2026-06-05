@@ -519,6 +519,7 @@ export function createWorldSessionAreaView(
     selfScreenPosition = { x: pixelX, y: pixelY };
 
     playerPlaceholder.setPosition(playerScreenPosition.x, playerScreenPosition.y);
+    playerPlaceholder.setInfo(self.displayName, self.hp, self.maxHp);
 
     if (lastClickTarget) {
       const targetScreenPosition = worldToScreenActiveProjection(
