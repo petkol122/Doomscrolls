@@ -12,6 +12,9 @@ import type {
   RequestPickupWorldLootRejectedServerMessage,
   RequestMoveRejectedServerMessage,
   RequestAttackClientMessage,
+  RequestUseSkillSlotAcceptedServerMessage,
+  RequestUseSkillSlotClientMessage,
+  RequestUseSkillSlotRejectedServerMessage,
   UserId,
   ZoneId,
   RequestInteractClientMessage,
@@ -337,13 +340,14 @@ export class TownRoom extends Room {
  * while the room simulation tick advances the player's authoritative
  * position through Colyseus schema synchronization.
  */
-private movementIntentHandlerRegistered = false;
-private interactHandlerRegistered = false;
-private attackHandlerRegistered = false;
-private pickupWorldLootHandlerRegistered = false;
-private respawnHandlerRegistered = false;
-private dodgeHandlerRegistered = false;
-private healingFlaskHandlerRegistered = false;
+  private movementIntentHandlerRegistered = false;
+  private interactHandlerRegistered = false;
+  private attackHandlerRegistered = false;
+  private pickupWorldLootHandlerRegistered = false;
+  private respawnHandlerRegistered = false;
+  private dodgeHandlerRegistered = false;
+  private healingFlaskHandlerRegistered = false;
+  private skillSlotHandlerRegistered = false;
 
   public override async onCreate(options: TownRoomJoinOptions): Promise<void> {
     const log = createRoomLogger(
@@ -367,6 +371,7 @@ private healingFlaskHandlerRegistered = false;
     this.registerRespawnHandler(log);
     this.registerDodgeHandler(log);
     this.registerHealingFlaskHandler(log);
+    this.registerSkillSlotHandler(log);
     this.setSimulationInterval((deltaMs: number) => {
       stepTownRoomMovement(this.state as TownRoomState, deltaMs, {
         now: Date.now(),
@@ -1510,7 +1515,79 @@ private healingFlaskHandlerRegistered = false;
         },
         "TownRoom request_use_healing_flask accepted and HP / charges synced.",
       );
-      void (null as unknown as RequestUseHealingFlaskClientMessage);
+    });
+  }
+
+  private registerSkillSlotHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.skillSlotHandlerRegistered) {
+      return;
+    }
+    this.skillSlotHandlerRegistered = true;
+
+    this.onMessage("request_use_skill_slot", (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const message = raw as Partial<RequestUseSkillSlotClientMessage> | null;
+      const player = state.playerPresence.get(client.sessionId);
+      const rejectionBase = {
+        type: "request_use_skill_slot_rejected" as const,
+        slot: "secondary" as const,
+      };
+
+      if (message?.slot !== "secondary") {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "skill_unavailable",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      if (player === undefined || player.lifeState !== "alive" || player.hp <= 0) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "player_downed",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      const now = Date.now();
+      const nextSkillSlotAt = Number.isFinite(player.nextSkillSlotAt) ? player.nextSkillSlotAt : 0;
+      if (now < nextSkillSlotAt) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "skill_on_cooldown",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      player.nextSkillSlotAt = now + 750;
+      const rejection: RequestUseSkillSlotRejectedServerMessage = {
+        ...rejectionBase,
+        reason: "slot_not_learned",
+      };
+      try {
+        client.send(rejection.type, rejection);
+      } catch {
+        log.warn?.(
+          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+          "TownRoom request_use_skill_slot placeholder rejection send failed.",
+        );
+      }
+
+      log.debug?.(
+        {
+          roomId: this.roomId,
+          roomName: this.roomName,
+          sessionId: client.sessionId,
+          slot: message.slot,
+          nextSkillSlotAt: player.nextSkillSlotAt,
+        },
+        "TownRoom request_use_skill_slot cooldown consumed and placeholder slot rejected as not learned.",
+      );
     });
   }
 

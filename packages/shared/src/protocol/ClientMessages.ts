@@ -113,6 +113,11 @@ export interface RequestUseHealingFlaskClientMessage {
   readonly type: "request_use_healing_flask";
 }
 
+export interface RequestUseSkillSlotClientMessage {
+  readonly type: "request_use_skill_slot";
+  readonly slot: "secondary";
+}
+
 export interface RequestRespawnClientMessage {
   readonly type: "request_respawn";
 }
@@ -169,4 +174,5 @@ export type ClientRoomMessage =
   | DropInventoryItemClientMessage
   | RequestInteractClientMessage
   | RequestDodgeClientMessage
-  | RequestUseHealingFlaskClientMessage;
+  | RequestUseHealingFlaskClientMessage
+  | RequestUseSkillSlotClientMessage;

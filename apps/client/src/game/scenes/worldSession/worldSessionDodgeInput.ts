@@ -8,6 +8,7 @@ import {
   sendDodgeIntent,
   registerDodgeResponseListeners,
 } from "../../../net/dodgeIntentClient";
+import { shouldIgnoreWorldSessionCombatHotkey } from "./worldSessionCombatHotkeyFocus";
 
 // ---------------------------------------------------------------------------
 // Task 095 -- World Session Dodge Input.
@@ -72,6 +73,10 @@ export function attachWorldSessionDodgeInput(
   callbacks: WorldSessionDodgeInputCallbacks,
 ): WorldSessionDodgeInput {
   const sendDodge = (): void => {
+    if (shouldIgnoreWorldSessionCombatHotkey()) {
+      return;
+    }
+
     const self = provider.getSelfPosition();
     const target = provider.getLastClickTarget();
     if (self === null || target === null) {
@@ -95,12 +100,27 @@ export function attachWorldSessionDodgeInput(
   // enabled in the world session scene via the global input manager.
   const keyboard = scene.input.keyboard;
   let spaceKey: Phaser.Input.Keyboard.Key | null = null;
+  let handleSpaceKeyDown: (() => void) | null = null;
+  let handleWindowKeyDown: ((event: KeyboardEvent) => void) | null = null;
   if (keyboard !== null) {
     spaceKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-    spaceKey.on("down", () => {
+    handleSpaceKeyDown = () => {
       sendDodge();
-    });
+    };
+    spaceKey.on("down", handleSpaceKeyDown);
   }
+
+  handleWindowKeyDown = (event: KeyboardEvent): void => {
+    if (event.repeat) {
+      return;
+    }
+    if (event.key !== " ") {
+      return;
+    }
+    sendDodge();
+  };
+
+  window.addEventListener("keydown", handleWindowKeyDown);
 
   // Register server response listeners once; they live for the
   // lifetime of the room and are torn down when the scene shuts down.
@@ -124,8 +144,11 @@ export function attachWorldSessionDodgeInput(
   return {
     handleDodgePressed: sendDodge,
     destroy: () => {
-      if (spaceKey !== null) {
-        spaceKey.off("down");
+      if (spaceKey !== null && handleSpaceKeyDown !== null) {
+        spaceKey.off("down", handleSpaceKeyDown);
+      }
+      if (handleWindowKeyDown !== null) {
+        window.removeEventListener("keydown", handleWindowKeyDown);
       }
     },
   };

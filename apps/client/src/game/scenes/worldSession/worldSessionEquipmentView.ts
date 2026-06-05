@@ -12,6 +12,8 @@ import type { EquipmentUpdatedServerMessage } from "@doomscrolls/shared";
 import { createMutedText } from "./worldSessionOverlayView";
 import { makeInteractive } from "./worldSessionPointerEvents";
 
+const COMMON_ITEM_COLOR = "#d8c6a3";
+
 export const EQUIPMENT_SLOTS: readonly EquipmentSlot[] = [
   "weapon",
   "head",
@@ -156,7 +158,7 @@ export function updateEquipmentPanelSection(
       valueLabel.textContent = equippedItem === null
         ? "Equipped"
         : formatEquippedItemLabel(equippedItem);
-      valueLabel.style.color = "#b9d49a";
+      valueLabel.style.color = equippedItem === null ? "#b9d49a" : getItemRarityColor(equippedItem.rarity);
     }
     valueLabel.style.fontWeight = "bold";
     valueLabel.style.fontSize = "11px";
@@ -202,6 +204,10 @@ export function updateEquipmentPanelSection(
 function formatEquippedItemLabel(item: InventorySummaryItem): string {
   const modifierSummary = formatCompactModifierSummary(item.statModifiers);
   return modifierSummary === null ? item.label : `${item.label} (${modifierSummary})`;
+}
+
+function getItemRarityColor(rarity?: string): string {
+  return rarity === "common" || rarity === undefined ? COMMON_ITEM_COLOR : COMMON_ITEM_COLOR;
 }
 
 function formatCompactModifierSummary(modifiers?: readonly StatModifier[]): string | null {

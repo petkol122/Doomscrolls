@@ -16,10 +16,15 @@ import { registerAttackResponseListeners } from "../../net/attackIntentClient";
 import { registerInteractResponseListener } from "../../net/interactResponseClient";
 import { registerPickupWorldLootResponseListeners } from "../../net/pickupWorldLootClient";
 import { registerRespawnListeners, sendRespawnRequest } from "../../net/respawnClient";
+import { registerSkillSlotResponseListeners } from "../../net/skillSlotIntentClient";
 import { createWorldSessionFeedbackView, type WorldSessionFeedbackView } from "./worldSession/worldSessionFeedbackView";
 import { createWorldSessionOverlayView } from "./worldSession/worldSessionOverlayView";
 import { createWorldSessionAreaView, type WorldSessionAreaView } from "./worldSession/worldSessionAreaView";
 import { attachWorldSessionDodgeInput, type WorldSessionDodgeInput } from "./worldSession/worldSessionDodgeInput";
+import {
+  attachWorldSessionHealingFlaskInput,
+  type WorldSessionHealingFlaskInput,
+} from "./worldSession/worldSessionHealingFlaskInput";
 import {
   applyWorldSessionOverlayPanelStyles,
   applyWorldSessionOverlayRootStyles,
@@ -29,10 +34,6 @@ import {
 } from "./worldSession/worldSessionOverlayLayout";
 import type { WorldProjectionMode } from "../worldProjection";
 import { defaultWorldProjection } from "../worldProjection";
-import {
-  sendHealingFlaskIntent,
-  registerHealingFlaskResponseListeners,
-} from "../../net/healingFlaskIntentClient";
 import {
   createEmptyEquipmentLoadout,
   registerEquipmentListener,
@@ -56,6 +57,7 @@ export class WorldSessionScene extends Phaser.Scene {
   private feedbackView: WorldSessionFeedbackView | null = null;
   private apiClient: ApiClient | null = null;
   private dodgeInput: WorldSessionDodgeInput | null = null;
+  private healingFlaskInput: WorldSessionHealingFlaskInput | null = null;
   private equipmentLoadout: EquipmentLoadout = createEmptyEquipmentLoadout();
   private utilityPanelOpenState: WorldSessionUtilityPanelOpenState = {
     controls: false,
@@ -179,6 +181,11 @@ export class WorldSessionScene extends Phaser.Scene {
       },
     });
 
+    this.dodgeInput?.destroy();
+    this.dodgeInput = null;
+    this.healingFlaskInput?.destroy();
+    this.healingFlaskInput = null;
+
     this.dodgeInput = attachWorldSessionDodgeInput(
       this,
       this.room,
@@ -194,25 +201,16 @@ export class WorldSessionScene extends Phaser.Scene {
       },
     );
 
-    const keyboard = this.input.keyboard;
-    let qKey: Phaser.Input.Keyboard.Key | null = null;
-    if (keyboard !== null) {
-      qKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
-      qKey.on("down", () => {
-        const result = sendHealingFlaskIntent(this.room);
-        if (result.dispatched) {
-          this.feedbackView?.showNotice(t("world_area.flask_sent"));
-        }
-      });
-    }
-
-    registerHealingFlaskResponseListeners(this.room, {
-      onAccepted: (message) => {
+    this.healingFlaskInput = attachWorldSessionHealingFlaskInput(this, this.room, {
+      onFlaskSentFeedback: (message) => {
+        this.feedbackView?.showNotice(message);
+      },
+      onFlaskAcceptedFeedback: (message) => {
         this.feedbackView?.showNotice(
           t("world_area.flask_healed", { healed: message.healedAmount, hp: message.remainingHp }),
         );
       },
-      onRejected: (message) => {
+      onFlaskRejectedFeedback: (message) => {
         if (message.reason === "no_charges") { this.feedbackView?.showNotice(t("world_area.flask_no_charges")); return; }
         if (message.reason === "already_full_hp") { this.feedbackView?.showNotice(t("world_area.flask_full_hp")); return; }
         if (message.reason === "flask_on_cooldown") { this.feedbackView?.showNotice(t("world_area.flask_on_cooldown")); return; }
@@ -233,6 +231,19 @@ export class WorldSessionScene extends Phaser.Scene {
             : message.reason === "world_loot_not_found" ? t("world_area.pickup_unavailable")
             : t("world_area.pickup_unavailable"),
         );
+      },
+    });
+
+    registerSkillSlotResponseListeners(this.room, {
+      onAccepted: () => {
+        this.feedbackView?.showNotice(t("world_area.skill_unlearned"));
+      },
+      onRejected: (message) => {
+        if (message.reason === "slot_not_learned") {
+          this.feedbackView?.showNotice(t("world_area.skill_unlearned"));
+          return;
+        }
+        this.feedbackView?.showNotice(t("world_area.skill_unavailable"));
       },
     });
 
@@ -378,6 +389,8 @@ export class WorldSessionScene extends Phaser.Scene {
     this.bootMarker = null;
     this.dodgeInput?.destroy();
     this.dodgeInput = null;
+    this.healingFlaskInput?.destroy();
+    this.healingFlaskInput = null;
     this.feedbackView?.destroy();
     this.feedbackView = null;
     this.worldAreaView?.destroy();

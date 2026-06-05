@@ -208,6 +208,23 @@ export interface RequestUseHealingFlaskRejectedServerMessage {
   readonly reason: RequestUseHealingFlaskRejectedReason;
 }
 
+export type RequestUseSkillSlotRejectedReason =
+  | "player_downed"
+  | "skill_on_cooldown"
+  | "slot_not_learned"
+  | "skill_unavailable";
+
+export interface RequestUseSkillSlotAcceptedServerMessage {
+  readonly type: "request_use_skill_slot_accepted";
+  readonly slot: "secondary";
+}
+
+export interface RequestUseSkillSlotRejectedServerMessage {
+  readonly type: "request_use_skill_slot_rejected";
+  readonly slot: "secondary";
+  readonly reason: RequestUseSkillSlotRejectedReason;
+}
+
 export type RequestPickupWorldLootRejectedReason =
   | "player_not_ready"
   | "player_downed"
@@ -285,4 +302,6 @@ export type ServerRoomMessage =
   | RequestDodgeRejectedServerMessage
   | RequestUseHealingFlaskAcceptedServerMessage
   | RequestUseHealingFlaskRejectedServerMessage
+  | RequestUseSkillSlotAcceptedServerMessage
+  | RequestUseSkillSlotRejectedServerMessage
   | ErrorServerMessage;

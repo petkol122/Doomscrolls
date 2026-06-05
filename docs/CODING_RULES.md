@@ -191,11 +191,21 @@ Client auth UI rules:
 - the player placeholder is a simple visual-only shape (circle body + triangle marker + ellipse shadow) rendered from synced server x/y only
 - the direction marker (triangle) rotates toward the last movement target / click direction as a facing indicator only
 - the player body position must come from server-synced PlayerPresence x/y only; no local prediction, no movement animation, no combat animation
+- world rendering must use the live `worldContainer` offset derived from the synced player position rather than a stale or separately-tracked camera value
+- enemy, loot and interactable hit testing must use the same world projection and live container offset as rendering so clicks resolve against the visible world state
+- input priority must resolve actionable targets before fallback ground-movement clicks when multiple hit candidates overlap
+- avoid rebuilding overlay DOM on every state tick; update stable overlay UI incrementally where practical
 - player placeholder visual rules apply only when the server syncs PlayerPresence with position data; if position is missing, the placeholder must be hidden
 - no final art, sprite animation, or gameplay-coupled facing system is implemented in placeholder tasks
 - basic attack placeholder UX may show safe client text such as "Attack sent.", "Attack confirmed." or "Too far away.", but enemy HP must still update only from synced room state and never from local client mutation
 - the current basic attack slice must keep fixed server-owned damage of 1 until a dedicated combat task changes the formula and documents the new authority rules
 - placeholder enemy death state may mark synced enemies as `defeated` when server-owned HP reaches 0; dedicated respawn-loop tasks may keep that defeated state briefly and then reset the same synced placeholder enemy back to full HP at the same static position through a server-owned timer. Such tasks still must not add loot, XP, corpse behavior, enemy AI, enemy attacks, player damage, death animation or persistence
+- defeated enemies may grant only real server-owned XP; any resulting level-up must be resolved server-side from the real level table
+- level-up max HP reward and all other derived-stat changes must come from server recalculation only; the client must not invent level-up outcomes locally
+- equipped item stat modifiers must feed the same server-side derived-stat recalculation used for progression/runtime joins; client UI may only display the resulting real derived/runtime values
+- current debug/account UI may show derived stats, runtime HP/flask state and equipment outcomes only from real synced room state or persisted account state
+- Q (healing flask) and Space (dodge) world hotkeys must share the same focus-filtering helper so they do not fire while text-entry style focus is active
+- projection preview modes must not keep click-to-move world input enabled when that would misrepresent the active world projection
 
 ## Interactable Object Rules
 

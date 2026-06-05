@@ -26,6 +26,7 @@ export interface InventorySummaryItem extends InventoryGridItem {
   readonly label: string;
   readonly definitionId: ItemDefinitionId;
   readonly category: ItemCategory;
+  readonly rarity?: string;
   readonly allowedEquipmentSlots?: readonly EquipmentSlot[];
   readonly size?: {
     readonly width: number;

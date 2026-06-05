@@ -63,6 +63,7 @@ export class PlayerPresence extends Schema {
   @type("number") public flaskCharges: number;
   @type("number") public maxFlaskCharges: number;
   @type("number") public nextFlaskAt: number;
+  @type("number") public nextSkillSlotAt: number;
 
   constructor(
     sessionId: string,
@@ -110,5 +111,6 @@ export class PlayerPresence extends Schema {
     this.flaskCharges = 0;
     this.maxFlaskCharges = 0;
     this.nextFlaskAt = 0;
+    this.nextSkillSlotAt = 0;
   }
 }

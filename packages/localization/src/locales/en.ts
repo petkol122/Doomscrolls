@@ -126,8 +126,12 @@ export const en = {
   "world_session.controls": "Controls",
   "world_session.control_move": "Click ground: move",
   "world_session.control_attack": "Click enemy: attack / approach",
+  "world_session.control_skill_secondary": "Right click: placeholder skill slot",
   "world_session.control_dodge": "Space: dodge",
   "world_session.control_flask": "Q: healing flask",
+  "world_session.skill_slot_secondary": "Right Click",
+  "world_session.skill_slot_secondary_hint": "Reserved secondary skill slot",
+  "world_session.skill_slot_secondary_empty": "No skill learned",
   "world_session.flask_charges": "Flask charges",
   "world_session.awaiting_flask": "Waiting for synced flask state...",
   // Future: Diablo-like right orb resource (mana/class resource) — placeholder until class resource system lands
@@ -176,6 +180,8 @@ export const en = {
   "world_area.flask_on_cooldown": "Flask is on cooldown.",
   "world_area.flask_downed": "Cannot use flask while downed.",
   "world_area.flask_unavailable": "Flask unavailable.",
+  "world_area.skill_unlearned": "Skill slot not learned yet.",
+  "world_area.skill_unavailable": "Skill unavailable.",
 
   "inventory.title": "Inventory",
   "equipment.title": "Equipment",

@@ -407,6 +407,18 @@ Document the current server-authoritative movement stepping and, if practical, d
 
 Status: documented from the current implementation and updated after runtime sanity verification. `request_move` no longer means an instant authoritative teleport to the clicked point. Instead, accepted input stores `targetX` / `targetY` on server-owned movement-target fields, and the server simulation tick moves `PlayerPresence.x` / `y` toward that target every 50 ms. A newer click replaces the older target. The client renders synced x/y only. Runtime sanity passed locally with account `movecheck044` and character `Mover044`: movement advanced gradually from synced server state rather than as an instant local teleport, and second-click retargeting worked before arrival. The related room header/status display bug was also fixed by reading `roomKind` from synced room state. Collision, map art, pathfinding, stat-driven speed, interpolation/smoothing, combat coupling, persistence and a real gameplay loop are still out of scope.
 
+### Task 137 — Camera/World Interaction Docs Checkpoint
+
+Document the current stable camera/world interaction rules. This is a documentation-only checkpoint and must not add features.
+
+Status: documented. `docs/CODING_RULES.md` now records that world rendering uses the live `worldContainer` offset derived from synced player position, that enemy/loot/interactable hit testing must use the same projection/offset as rendering, that click priority resolves targets before fallback ground movement, and that the temporary overlay should not rebuild its DOM tree on every state tick. This checkpoint is stabilization/documentation only: no gameplay features, no rendering-system rewrite and no input-authority changes were added.
+
+### Task 140 — Level/Equipment/Combat Docs Checkpoint
+
+Document the current progression/equipment-derived-stat/UI/input stabilization checkpoint. This is documentation-only and must not add features.
+
+Status: documented. `README.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG_CORE_0_1.md`, and `docs/CODING_RULES.md` now briefly state that defeated enemies can grant real server-owned XP, level-up raises max HP through the level reward, equipment stat modifiers participate in derived-stat recalculation, and the current client debug/account UI shows derived/runtime values from real synced/persisted state only. They also record that Q flask and Space dodge helpers share focus filtering, and that world rendering, click projection and hit testing must stay aligned through the same live projection/offset rules. This checkpoint is docs + verification only: no gameplay or UI feature changes were added.
+
 ### Task 023.2 — Spawn Point Assignment Only
 
 Resolve the spawn point on TownRoom join and store only the spawn point id on the player presence entry.

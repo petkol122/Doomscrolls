@@ -363,7 +363,7 @@ no character level, stat scaling or gameplay-affecting behavior
 
 Interactable objects are intentionally limited. They have no active gameplay behavior, no rewards, no persistence, no collision and no rich dialogue. The server validates distance (50-unit radius from player) and returns safe text responses only. The client renders simple placeholder shapes (gold rectangles with labels) as standin visuals, handles click-to-interact input, and displays the server response message in the center of the screen for 3 seconds before clearing. This is a network + rendering layer only: quests, rewards, loot, inventory effects, NPC dialogue, combat coupling, collision geometry, and persistence are deferred to later Core 0.1 tasks.
 
-### Targeted actions, enemy AI, player HP / downed, dodge, healing flask, loot pickup, inventory summary, and HUD (Core 0.1 — checkpoint)
+### Targeted actions, enemy AI, player HP / downed, dodge, healing flask, loot pickup, progression, equipment-derived stats, and HUD (Core 0.1 — checkpoint)
 
 Recent gameplay slices introduced the following server-authoritative, data-driven foundations. They are intentionally narrow and limited; full simulation polish, stat scaling, pathfinding, projectiles, multiple enemy types, equipment UI, drag/drop inventory UI and final HUD art are still out of scope.
 
@@ -398,10 +398,23 @@ Player HP / downed / respawn foundation:
   - The player may then request respawn; the server restores HP, clears the downed state, restores flask state and places the player at a server-resolved safe location (last in-zone persisted position or content spawn point)
   - No XP loss, no item durability loss, no corpse inventory, no recovery flow yet
 
+Progression and equipment-derived stats:
+  - defeated enemies can grant real server-owned XP through the Core 0.1 level table
+  - level-ups recalculate derived stats server-side and raise max HP through the per-level HP reward
+  - equipment stat modifiers are included in that same recalculation and can change derived stats such as max HP, damage and movement speed
+  - the current client debug UI shows these derived/runtime values from real synced/account state rather than inventing local values
+
 Dodge and healing flask:
   - dodge is a server-authoritative short displacement with direction validation and a fixed cooldown; it can also cancel an in-flight enemy telegraph if the player leaves range in time
   - the starter healing flask is server-authoritative, uses fixed charges/cooldown, heals only living players, and is restored on join/respawn
+  - Q (flask) and Space (dodge) input helpers share focus filtering so gameplay hotkeys do not fire while text-entry style UI focus is active
   - there is still no stamina system, no mana/resource system, no vendor refill flow and no advanced consumable system
+
+Camera / world input projection rules:
+  - world rendering uses the live world-container offset derived from synced player position
+  - world clicks/hit testing must use the same active projection and live offset as rendering so visible targets and input stay aligned
+  - actionable targets resolve before fallback ground movement when hit candidates overlap
+  - top-down click-to-move input is allowed only in the current debug projection; projection preview modes must not fake gameplay input
 
  Loot drops, pickup, inventory persistence, inventory summary/detail, equipment checkpoint:
   - Loot dropped by defeated enemies exists as a synced world-loot entry in room state (id, itemId, label, x, y)

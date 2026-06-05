@@ -7,6 +7,7 @@ import { sendMovementIntent } from "../../../net/movementIntentClient";
 import { sendInteractIntent } from "../../../net/interactIntentClient";
 import { sendAttackIntent } from "../../../net/attackIntentClient";
 import { sendPickupWorldLootIntent } from "../../../net/pickupWorldLootClient";
+import { sendSkillSlotIntent } from "../../../net/skillSlotIntentClient";
 import { getTownRoomPresence } from "../../../net/townRoomPresence";
 import {
   defaultWorldProjection,
@@ -198,6 +199,7 @@ export function createWorldSessionAreaView(
     .zone(layout.originX, layout.originY, layout.width, layout.height)
     .setOrigin(0, 0)
     .setInteractive({ useHandCursor: true });
+  const canvasElement = scene.game.canvas;
 
   // The interactive target zones (enemy / loot / interactable) live on top
   // of `inputZone` in the container, so Phaser's input manager fires their
@@ -406,6 +408,19 @@ export function createWorldSessionAreaView(
 
     inputZone.removeAllListeners();
     inputZone.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
+      if (pointer.rightButtonDown()) {
+        const localX = pointer.x - layout.originX;
+        const localY = pointer.y - layout.originY;
+        if (localX < 0 || localY < 0 || localX > layout.width || localY > layout.height) {
+          return;
+        }
+        const result = sendSkillSlotIntent(nextRoom);
+        if (!result.dispatched) {
+          onPickupFeedback?.(t("world_area.skill_unavailable"));
+        }
+        return;
+      }
+
       // Enemy / loot / interactable click handlers fire before this one
       // (they sit on top of inputZone in the container). If one of them
       // already handled the click we must not also send a movement intent.
@@ -539,6 +554,19 @@ export function createWorldSessionAreaView(
 
   scene.events.on(Phaser.Scenes.Events.UPDATE, handleSceneUpdate);
 
+  const handleContextMenu = (event: MouseEvent): void => {
+    const rect = canvasElement.getBoundingClientRect();
+    const insideViewport = event.clientX >= rect.left + layout.originX
+      && event.clientX <= rect.left + layout.originX + layout.width
+      && event.clientY >= rect.top + layout.originY
+      && event.clientY <= rect.top + layout.originY + layout.height;
+    if (insideViewport) {
+      event.preventDefault();
+    }
+  };
+
+  canvasElement.addEventListener("contextmenu", handleContextMenu);
+
   refreshFromRoomState(room);
 
   const setProjectionMode = (mode: WorldProjectionMode): void => {
@@ -589,6 +617,7 @@ export function createWorldSessionAreaView(
     getSelfWorldPosition: () => selfWorldPosition,
     getLastClickTarget: () => lastClickTarget,
     destroy: () => {
+      canvasElement.removeEventListener("contextmenu", handleContextMenu);
       scene.events.off(Phaser.Scenes.Events.UPDATE, handleSceneUpdate);
       scene.input.off(Phaser.Input.Events.POINTER_WHEEL);
       staticPropsView.destroy();

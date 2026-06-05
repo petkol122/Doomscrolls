@@ -352,16 +352,22 @@ Loot and inventory:
   pickup removes synced world loot only after server validation and persists the item into the character inventory
   current account/inventory views must reflect real persisted state; no fake local reward state
 
+Progression and equipment-derived stats:
+  defeated enemies can grant real server-owned XP through the Core 0.1 level table
+  level-up recalculates derived stats server-side and applies the level HP reward through maxHp growth
+  equipped item stat modifiers participate in the same recalculation and can change derived stats such as maxHp, damage and movement speed
+  current client account/world debug UI may show these derived/runtime values from real synced or persisted state only
+
 HUD state:
   current overlay is a temporary HUD/resource placeholder + debug shell
   final Diablo-like orb HUD is deferred
 ```
 
-The overlay groups room info, player presence, controls, hp/flask state and movement/combat debug into readable sections. It states clearly that it is temporary server-synced debug UI, not the final gameplay HUD. Movement debug may show the last click target sent by the client, but position still comes only from synced room state. TownRoom currently syncs multiple content-driven Nightmarket placeholder Trashboars (spawned from a zone definition) in a reduced 480x320 test arena so movement/combat verification stays compact.
+The overlay groups room info, player presence, controls, hp/flask state and movement/combat debug into readable sections. It states clearly that it is temporary server-synced debug UI, not the final gameplay HUD. Movement debug may show the last click target sent by the client, but position still comes only from synced room state. TownRoom currently syncs multiple content-driven Nightmarket placeholder Trashboars (spawned from a zone definition) in a reduced 480x320 test arena so movement/combat verification stays compact. Hotkey helpers for Q (healing flask) and Space (dodge) now share the same focus-filtering rule so world hotkeys are ignored while text-entry style focus is active.
 
 This is still placeholder visual UI, not final art or animation. Still deferred: XP, quests, equipment, drag/drop inventory, vendor/stash, the full corpse/death recovery loop, final Diablo-orb HUD art, sprites, map art, collision and pathfinding.
 
-The current world-area rendering must not be mistaken for the final camera direction. It is a practical 2D debug projection used to verify synced state, movement intents and placeholder world interactions. The intended shipping direction remains a fixed isometric / 2.5D look implemented on the existing Phaser 2D runtime via later visual techniques such as depth sorting, shadows, layered scene objects and pre-rendered / sprite-based assets.
+The current world-area rendering must not be mistaken for the final camera direction. It is a practical 2D debug projection used to verify synced state, movement intents and placeholder world interactions. The intended shipping direction remains a fixed isometric / 2.5D look implemented on the existing Phaser 2D runtime via later visual techniques such as depth sorting, shadows, layered scene objects and pre-rendered / sprite-based assets. Rendering and input projection must stay aligned: world clicks and hit testing must use the same active projection and live world-container offset as rendering, actionable targets resolve before fallback ground movement, and non-debug projection previews must not pretend click-to-move gameplay is active.
 
 Client scene boundary rule:
 

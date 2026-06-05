@@ -19,6 +19,9 @@ import {
 } from "./worldSessionOverlayLayout";
 import type { WorldProjectionMode } from "../../worldProjection";
 
+const COMMON_ITEM_COLOR = "#d8c6a3";
+const COMMON_ITEM_ACCENT_COLOR = "#a88d63";
+
 export interface WorldSessionUtilityPanelOpenState {
   readonly controls: boolean;
   readonly equipment: boolean;
@@ -100,6 +103,7 @@ export function createWorldSessionOverlayView(
       selfPresence?.level ?? nextCharacter?.level ?? 1,
       selfPresence?.xp ?? nextCharacter?.xp ?? 0,
     ));
+    panel.appendChild(createSkillSlotPlaceholder());
 
     if (selfPresence?.lifeState === "downed") {
       const downedNotice = createMutedText(t("world_session.downed_notice"));
@@ -680,6 +684,60 @@ function createMiniHudStat(labelText: string, valueText: string): HTMLElement {
   return card;
 }
 
+function createSkillSlotPlaceholder(): HTMLElement {
+  const card = document.createElement("div");
+  card.style.display = "flex";
+  card.style.alignItems = "center";
+  card.style.gap = "10px";
+  card.style.padding = "8px 10px";
+  card.style.border = "1px solid #3c3122";
+  card.style.borderRadius = "12px";
+  card.style.background = "rgba(18, 14, 10, 0.9)";
+
+  const slotKey = document.createElement("div");
+  slotKey.textContent = "RMB";
+  slotKey.style.minWidth = "42px";
+  slotKey.style.padding = "6px 0";
+  slotKey.style.border = "1px solid #6b5738";
+  slotKey.style.borderRadius = "8px";
+  slotKey.style.background = "linear-gradient(180deg, rgba(42, 32, 22, 0.96) 0%, rgba(24, 18, 13, 0.96) 100%)";
+  slotKey.style.color = "#e0c88a";
+  slotKey.style.fontSize = "11px";
+  slotKey.style.fontFamily = "monospace";
+  slotKey.style.fontWeight = "bold";
+  slotKey.style.textAlign = "center";
+  slotKey.style.flex = "0 0 auto";
+  card.appendChild(slotKey);
+
+  const textBlock = document.createElement("div");
+  textBlock.style.display = "grid";
+  textBlock.style.gap = "2px";
+  textBlock.style.minWidth = "0";
+
+  const title = document.createElement("div");
+  title.textContent = t("world_session.skill_slot_secondary");
+  title.style.color = "#d8c6a3";
+  title.style.fontSize = "11px";
+  title.style.fontWeight = "bold";
+  textBlock.appendChild(title);
+
+  const subtitle = document.createElement("div");
+  subtitle.textContent = t("world_session.skill_slot_secondary_hint");
+  subtitle.style.color = "#a88d63";
+  subtitle.style.fontSize = "10px";
+  textBlock.appendChild(subtitle);
+
+  const emptyState = document.createElement("div");
+  emptyState.textContent = t("world_session.skill_slot_secondary_empty");
+  emptyState.style.color = "#b9d49a";
+  emptyState.style.fontSize = "11px";
+  emptyState.style.fontFamily = "monospace";
+  textBlock.appendChild(emptyState);
+
+  card.appendChild(textBlock);
+  return card;
+}
+
 function createFlaskChargesLine(charges?: number, maxCharges?: number): HTMLElement {
   if (charges === undefined || maxCharges === undefined) {
     const line = document.createElement("div");
@@ -902,9 +960,11 @@ function createInventorySummarySection(
     button.style.padding = "6px 8px";
     button.style.border = isSelected ? "1px solid #b9d49a" : "1px solid #5f4a2f";
     button.style.background = isSelected ? "rgba(63, 83, 49, 0.9)" : "rgba(31, 24, 18, 0.95)";
+    button.style.color = getItemRarityColor(item.rarity);
     button.setAttribute("aria-pressed", isSelected ? "true" : "false");
-    const sizeText = item.size === undefined ? "" : ` | ${item.size.width}x${item.size.height}`;
-    button.textContent = `${item.label}${sizeText}`;
+    const sizeText = item.size === undefined ? "" : ` • ${item.size.width}x${item.size.height}`;
+    const rarityText = formatItemRarityLabel(item.rarity);
+    button.textContent = `${item.label} [${rarityText}]${sizeText}`;
     button.addEventListener("click", () => {
       onSelectItem(item.itemInstanceId);
     });
@@ -927,10 +987,30 @@ function createInventoryDetailSection(
 
   const children: HTMLElement[] = [
     createInfoLine("Label", item.label),
+    createInfoLine("Rarity", formatItemRarityLabel(item.rarity)),
     createInfoLine("Category", item.category),
     createInfoLine("Size", item.size === undefined ? "Unknown" : `${item.size.width}x${item.size.height}`),
     createInfoLine("Grid Position", `page=${item.pageIndex}, x=${item.x}, y=${item.y}`),
   ];
+
+  const title = document.createElement("div");
+  title.textContent = item.label;
+  title.style.color = getItemRarityColor(item.rarity);
+  title.style.fontWeight = "bold";
+  title.style.fontSize = "13px";
+
+  const rarityBadge = document.createElement("div");
+  rarityBadge.textContent = formatItemRarityLabel(item.rarity);
+  rarityBadge.style.display = "inline-block";
+  rarityBadge.style.marginTop = "4px";
+  rarityBadge.style.marginBottom = "6px";
+  rarityBadge.style.padding = "2px 6px";
+  rarityBadge.style.border = `1px solid ${getItemRarityAccentColor(item.rarity)}`;
+  rarityBadge.style.borderRadius = "999px";
+  rarityBadge.style.color = getItemRarityColor(item.rarity);
+  rarityBadge.style.fontSize = "10px";
+  rarityBadge.style.fontWeight = "bold";
+  rarityBadge.style.textTransform = "uppercase";
 
   if ((item.statModifiers?.length ?? 0) > 0) {
     const modifierList = document.createElement("ul");
@@ -985,7 +1065,25 @@ function createInventoryDetailSection(
     children.push(equipRow);
   }
 
-  return createSectionBlock("Item Detail", children, { compact: true });
+  const section = createSectionBlock("Item Detail", [], { compact: true });
+  section.append(title, rarityBadge, ...children);
+  return section;
+}
+
+function formatItemRarityLabel(rarity?: string): string {
+  if (rarity === undefined || rarity.length === 0) {
+    return "Unknown";
+  }
+
+  return rarity.charAt(0).toUpperCase() + rarity.slice(1);
+}
+
+function getItemRarityColor(rarity?: string): string {
+  return rarity === "common" || rarity === undefined ? COMMON_ITEM_COLOR : COMMON_ITEM_COLOR;
+}
+
+function getItemRarityAccentColor(rarity?: string): string {
+  return rarity === "common" || rarity === undefined ? COMMON_ITEM_ACCENT_COLOR : COMMON_ITEM_ACCENT_COLOR;
 }
 
 function formatItemModifierText(modifier: StatModifier): string {
