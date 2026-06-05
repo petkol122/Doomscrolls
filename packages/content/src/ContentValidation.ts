@@ -186,6 +186,17 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
         errors.push({ category: "lootTable", id: lootTable.id, message: `Unknown item id: ${entry.itemId}` });
       }
 
+      if (entry.rarity !== undefined) {
+        const item = registry.items.get(entry.itemId);
+        if (item !== undefined && item.rarity !== entry.rarity) {
+          errors.push({
+            category: "lootTable",
+            id: lootTable.id,
+            message: `Loot entry rarity mismatch for item: ${entry.itemId}`
+          });
+        }
+      }
+
       if (entry.weight <= 0) {
         errors.push({ category: "lootTable", id: lootTable.id, message: `Loot weight must be positive for item: ${entry.itemId}` });
       }

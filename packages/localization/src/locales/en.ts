@@ -43,6 +43,9 @@ export const en = {
   "item.blackwire_scrap.name": "Blackwire Scrap",
   "item.blackwire_scrap.description":
     "A twisted piece of conductive junk that still hums when nobody is touching it.",
+  "item.rustbound_ring.name": "Rustbound Ring",
+  "item.rustbound_ring.description":
+    "A grimy ring scavenged from the sewer depths, stubborn enough to keep a little life in you.",
 
   "skill.heavy_strike.name": "Heavy Strike",
   "skill.heavy_strike.description":

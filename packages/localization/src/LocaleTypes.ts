@@ -36,6 +36,8 @@ export const REQUIRED_LOCALIZATION_KEYS = [
   "item.starter_blood_flask.description",
   "item.blackwire_scrap.name",
   "item.blackwire_scrap.description",
+  "item.rustbound_ring.name",
+  "item.rustbound_ring.description",
   "skill.heavy_strike.name",
   "skill.heavy_strike.description",
   "auth.username",

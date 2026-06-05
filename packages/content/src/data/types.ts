@@ -19,7 +19,7 @@ export type EnemyId = "trashboar_runt" | "trashboar_brute";
 export type LootTableId = "sewer_starter_loot";
 export type LevelTableId = "level_1_to_10";
 export type ZoneContentId = "nightmarket" | "blackwire_sewers";
-export type ItemRarity = "common";
+export type ItemRarity = "common" | "rare";
 export type SkillTargetingMode = "target";
 export type ZoneRoomType = "town" | "combat";
 export type SpawnPointContentId = "nightmarket_spawn";
@@ -124,6 +124,7 @@ export interface ItemContentDefinition extends LocalizedContentDefinition {
 
 export interface LootTableEntryDefinition {
   readonly itemId: ItemDefinitionId;
+  readonly rarity?: ItemRarity;
   readonly weight: number;
 }
 

@@ -1,5 +1,5 @@
 import type { ItemDefinitionId } from "@doomscrolls/shared";
-import type { ItemContentDefinition } from "./types";
+import type { ContentLocalizationKey, ItemContentDefinition } from "./types";
 
 const itemId = (value: string): ItemDefinitionId => value as ItemDefinitionId;
 
@@ -61,5 +61,22 @@ export const items = [
     maxStackSize: 99,
     statModifiers: [],
     iconKey: "item_blackwire_scrap_placeholder"
+  },
+  {
+    id: itemId("rustbound_ring"),
+    nameKey: "item.rustbound_ring.name" as ContentLocalizationKey,
+    descriptionKey: "item.rustbound_ring.description" as ContentLocalizationKey,
+    category: "accessory",
+    rarity: "rare",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: ["ring_1"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [
+      { target: "armor", operation: "add", value: 1 },
+      { target: "maxHp", operation: "add", value: 8 }
+    ],
+    durabilityMax: 20,
+    iconKey: "item_rustbound_ring_placeholder"
   }
 ] as const satisfies readonly ItemContentDefinition[];
