@@ -25,6 +25,10 @@ export interface WorldSessionInteractablesView {
       readonly projectionMode: WorldProjectionMode;
     },
   ) => void;
+  readonly findClickedInteractable: (
+    pointerX: number,
+    pointerY: number,
+  ) => { readonly objectId: string; readonly worldX: number; readonly worldY: number } | null;
   readonly destroy: () => void;
 }
 
@@ -38,7 +42,10 @@ export function createWorldSessionInteractablesView(
   parentContainer?.add(container);
   const graphicsObjects = new Map<string, Phaser.GameObjects.Graphics>();
   const labelTexts = new Map<string, Phaser.GameObjects.Text>();
-  const clickZones = new Map<string, Phaser.GameObjects.Zone>();
+  const hitAreas = new Map<
+    string,
+    { readonly screenX: number; readonly screenY: number; readonly worldX: number; readonly worldY: number }
+  >();
 
   const refresh = (
     room: Room<RoomState>,
@@ -51,10 +58,9 @@ export function createWorldSessionInteractablesView(
     // Clear existing objects
     graphicsObjects.forEach((g) => g.destroy());
     labelTexts.forEach((t) => t.destroy());
-    clickZones.forEach((z) => z.destroy?.());
     graphicsObjects.clear();
     labelTexts.clear();
-    clickZones.clear();
+    hitAreas.clear();
 
     // Get room state - check if it has interactables
     const state = room.state as unknown as Record<string, unknown>;
@@ -101,25 +107,61 @@ export function createWorldSessionInteractablesView(
       container.add(labelText);
       labelTexts.set(objectId, labelText);
 
-      // Create a clickable zone
-      const clickZone = scene.add.zone(pixelX, pixelY, 32, 32).setInteractive();
-      clickZone.setData("objectId", objectId);
-
-      clickZone.on("pointerdown", () => {
-        onInteractClick(objectId);
+      hitAreas.set(objectId, {
+        screenX: pixelX,
+        screenY: pixelY,
+        worldX: x,
+        worldY: y,
       });
-
-      container.add(clickZone);
-      clickZones.set(objectId, clickZone);
     });
+  };
+
+  const findClickedInteractable = (
+    pointerX: number,
+    pointerY: number,
+  ): { readonly objectId: string; readonly worldX: number; readonly worldY: number } | null => {
+    const hitRadiusPx = 24;
+    const hitRadiusSquared = hitRadiusPx * hitRadiusPx;
+    let closestHit:
+      | { readonly objectId: string; readonly worldX: number; readonly worldY: number; readonly distanceSquared: number }
+      | null = null;
+
+    for (const [objectId, area] of hitAreas.entries()) {
+      const dx = pointerX - area.screenX;
+      const dy = pointerY - area.screenY;
+      const distanceSquared = (dx * dx) + (dy * dy);
+      if (distanceSquared > hitRadiusSquared) {
+        continue;
+      }
+
+      if (closestHit === null || distanceSquared < closestHit.distanceSquared) {
+        closestHit = {
+          objectId,
+          worldX: area.worldX,
+          worldY: area.worldY,
+          distanceSquared,
+        };
+      }
+    }
+
+    if (closestHit === null) {
+      return null;
+    }
+
+    return {
+      objectId: closestHit.objectId,
+      worldX: closestHit.worldX,
+      worldY: closestHit.worldY,
+    };
   };
 
   return {
     refresh,
+    findClickedInteractable,
     destroy: () => {
       graphicsObjects.forEach((g) => g.destroy());
       labelTexts.forEach((t) => t.destroy());
-      clickZones.forEach((z) => z.destroy());
+      hitAreas.clear();
       container.destroy(true);
     },
   };

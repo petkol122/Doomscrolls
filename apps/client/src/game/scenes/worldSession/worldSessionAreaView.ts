@@ -199,8 +199,6 @@ export function createWorldSessionAreaView(
     .setOrigin(0, 0)
     .setInteractive({ useHandCursor: true });
 
-  container.add(inputZone);
-
   // The interactive target zones (enemy / loot / interactable) live on top
   // of `inputZone` in the container, so Phaser's input manager fires their
   // pointerdown handlers before the inputZone's. We set this flag from
@@ -432,6 +430,19 @@ export function createWorldSessionAreaView(
         return;
       }
 
+      const clickedInteractable = interactablesView.findClickedInteractable(pointer.x, pointer.y);
+      if (clickedInteractable !== null) {
+        pointerHandledByTarget = true;
+        sendInteractIntent(nextRoom, clickedInteractable.objectId);
+        lastClickTarget = {
+          x: Math.round(clickedInteractable.worldX),
+          y: Math.round(clickedInteractable.worldY),
+        };
+        onDebugStateChange?.();
+        pointerHandledByTarget = false;
+        return;
+      }
+
       if (projectionMode !== "debug_top_down") {
         return;
       }
@@ -455,6 +466,10 @@ export function createWorldSessionAreaView(
       onDebugStateChange?.();
       sendMovementIntent(nextRoom, lastClickTarget.x, lastClickTarget.y);
     });
+
+    if (!container.exists(inputZone)) {
+      container.add(inputZone);
+    }
 
     if (self?.position === undefined) {
       playerPlaceholder.hide();
