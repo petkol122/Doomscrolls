@@ -173,10 +173,19 @@ Exact commands may evolve as the repository is implemented. If commands change, 
 Run the browser client during local development:
 
 ```bash
-pnpm dev:client
+pnpm --filter @doomscrolls/client dev -- --host 0.0.0.0
 ```
 
-The client must be opened at `http://localhost:5173`. Its local `.env` sets `VITE_API_URL=http://localhost:2567` so browser API calls target the local server.
+The client binds to `0.0.0.0` for local-network/Tailscale access. You can open it at `http://localhost:5173` on the dev machine or at your Tailscale IP from another device. Keep `apps/client/.env` local to the machine you are testing from.
+
+For Tailscale local-dev access, `apps/client/.env.example` uses:
+
+```env
+VITE_API_URL=http://100.101.190.70:2567
+VITE_WS_URL=ws://100.101.190.70:2567
+```
+
+For local-only browser testing on the same machine, you may still point `VITE_API_URL` / `VITE_WS_URL` at `localhost` instead.
 
 The client is a Vite + Phaser foundation. It boots:
 

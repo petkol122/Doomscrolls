@@ -159,10 +159,17 @@ Run the browser client against the local server with:
 
 ```bash
 copy apps\client\.env.example apps\client\.env
-pnpm dev:client
+pnpm --filter @doomscrolls/client dev -- --host 0.0.0.0
 ```
 
-`apps/client/.env.example` sets `VITE_API_URL=http://localhost:2567`. The Vite dev server is configured to run at `http://localhost:5173`; use that URL for local client testing.
+`apps/client/.env.example` includes Tailscale-ready local-dev URLs:
+
+```env
+VITE_API_URL=http://100.101.190.70:2567
+VITE_WS_URL=ws://100.101.190.70:2567
+```
+
+The Vite dev server binds to `0.0.0.0`, so you can use `http://localhost:5173` on the dev machine or `http://100.101.190.70:5173` from another Tailscale-connected device. If the server is accessed from the Tailscale client URL, set `CLIENT_ORIGIN_EXTRA=http://100.101.190.70:5173` in `apps/server/.env` so local-dev CORS allows that extra origin without changing production origins.
 
 `DATABASE_URL` is required for Prisma CLI commands and future runtime persistence. The Prisma schema foundation exists in `apps/server/prisma/schema.prisma`, but the current server runtime does not connect to PostgreSQL or run database queries on startup.
 
