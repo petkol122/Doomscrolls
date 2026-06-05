@@ -207,7 +207,11 @@ function formatEquippedItemLabel(item: InventorySummaryItem): string {
 }
 
 function getItemRarityColor(rarity?: string): string {
-  return rarity === "common" || rarity === undefined ? COMMON_ITEM_COLOR : COMMON_ITEM_COLOR;
+  if (rarity === "rare") {
+    return "#8fc7ff";
+  }
+
+  return COMMON_ITEM_COLOR;
 }
 
 function formatCompactModifierSummary(modifiers?: readonly StatModifier[]): string | null {

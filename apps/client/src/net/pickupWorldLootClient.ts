@@ -69,7 +69,9 @@ function isRequestPickupWorldLootAcceptedServerMessage(
   return (
     candidate.type === "request_pickup_world_loot_accepted" &&
     typeof candidate.worldLootId === "string" &&
-    typeof candidate.message === "string"
+    typeof candidate.message === "string" &&
+    (candidate.itemLabel === undefined || typeof candidate.itemLabel === "string") &&
+    (candidate.rarity === undefined || typeof candidate.rarity === "string")
   );
 }
 

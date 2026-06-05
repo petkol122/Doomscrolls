@@ -392,7 +392,7 @@ export function createWorldSessionAreaView(
             pointerHandledByTarget = true;
             const result = sendPickupWorldLootIntent(nextRoom, worldLootId);
             if (result.dispatched) {
-              onPickupFeedback?.(t("world_area.pickup_sent"));
+              onPickupFeedback?.(`${t("world_area.pickup_sent")} ${formatPickupFeedbackLabel(loot)}`);
             }
             const targetLoot = getTownRoomWorldLoot(nextRoom.state).find((l) => l.id === worldLootId);
             if (targetLoot) {
@@ -712,6 +712,19 @@ function projectWorldLootToArea(
       projection.projectionMode,
     ),
   };
+}
+
+function formatPickupFeedbackLabel(loot: TownRoomWorldLootSnapshot): string {
+  const label = t(loot.label);
+  if (loot.rarity === undefined || loot.rarity.length === 0) {
+    return label;
+  }
+
+  return `${label} [${formatItemRarityLabel(loot.rarity)}]`;
+}
+
+function formatItemRarityLabel(rarity: string): string {
+  return rarity.charAt(0).toUpperCase() + rarity.slice(1);
 }
 
 function projectEnemyToArea(

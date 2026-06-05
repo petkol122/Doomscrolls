@@ -28,6 +28,7 @@ export function spawnWorldLootOnEnemyDefeat(
     lootId,
     itemId,
     itemDefinition.nameKey,
+    itemDefinition.rarity,
     enemy.x + WORLD_LOOT_OFFSET_X,
     enemy.y + WORLD_LOOT_OFFSET_Y,
   );

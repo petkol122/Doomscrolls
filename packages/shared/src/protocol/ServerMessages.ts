@@ -236,6 +236,8 @@ export interface RequestPickupWorldLootAcceptedServerMessage {
   readonly type: "request_pickup_world_loot_accepted";
   readonly worldLootId: string;
   readonly message: string;
+  readonly itemLabel?: string;
+  readonly rarity?: string;
 }
 
 export interface RequestPickupWorldLootRejectedServerMessage {

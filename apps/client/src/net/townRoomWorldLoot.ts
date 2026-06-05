@@ -5,6 +5,7 @@ export interface TownRoomWorldLootSnapshot {
   readonly id: string;
   readonly itemId: string;
   readonly label: LocalizationKey;
+  readonly rarity?: string;
   readonly x: number;
   readonly y: number;
 }
@@ -28,6 +29,7 @@ export function getTownRoomWorldLoot(
     const id = entry.id;
     const itemId = entry.itemId;
     const label = entry.label;
+    const rarity = entry.rarity;
     const x = entry.x;
     const y = entry.y;
 
@@ -35,6 +37,7 @@ export function getTownRoomWorldLoot(
       typeof id !== "string" ||
       typeof itemId !== "string" ||
       typeof label !== "string" ||
+      (rarity !== undefined && typeof rarity !== "string") ||
       typeof x !== "number" ||
       typeof y !== "number"
     ) {
@@ -49,6 +52,7 @@ export function getTownRoomWorldLoot(
       id,
       itemId,
       label: label as LocalizationKey,
+      ...(rarity === undefined ? {} : { rarity }),
       x,
       y,
     });

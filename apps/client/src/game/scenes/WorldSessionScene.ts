@@ -40,6 +40,25 @@ import {
 } from "./worldSession/worldSessionEquipmentView";
 import type { WorldSessionUtilityPanelOpenState } from "./worldSession/worldSessionOverlayView";
 
+function formatItemRarityLabel(rarity?: string): string | null {
+  if (rarity === undefined || rarity.length === 0) {
+    return null;
+  }
+
+  return rarity.charAt(0).toUpperCase() + rarity.slice(1);
+}
+
+function formatPickupAcceptedNotice(message: { readonly message: string; readonly itemLabel?: string; readonly rarity?: string }): string {
+  if (message.itemLabel === undefined || message.itemLabel.length === 0) {
+    return message.message;
+  }
+
+  const rarityLabel = formatItemRarityLabel(message.rarity);
+  return rarityLabel === null
+    ? `${message.message} ${t(message.itemLabel as never)}`
+    : `${message.message} ${t(message.itemLabel as never)} [${rarityLabel}]`;
+}
+
 interface WorldSessionSceneData {
   readonly account: AccountState;
   readonly characterId: CharacterId;
@@ -221,7 +240,7 @@ export class WorldSessionScene extends Phaser.Scene {
 
     registerPickupWorldLootResponseListeners(this.room, {
       onAccepted: (message) => {
-        this.feedbackView?.showNotice(message.message);
+        this.feedbackView?.showNotice(formatPickupAcceptedNotice(message));
         void this.refreshAccountStateAfterPickup();
       },
       onRejected: (message) => {

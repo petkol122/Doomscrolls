@@ -2,6 +2,7 @@ import type { Room } from "@colyseus/sdk";
 import { t } from "@doomscrolls/localization";
 import type { CharacterSummary, InventorySummaryItem, RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
 import type { StatModifier } from "@doomscrolls/shared";
+import type { EquipmentSlot } from "@doomscrolls/shared";
 
 import { formatTownRoomState } from "../../../net/RealtimeClient";
 import { getTownRoomPresence } from "../../../net/townRoomPresence";
@@ -158,6 +159,7 @@ export function createWorldSessionOverlayView(
           selectedInventoryItemId = itemId;
         },
       },
+      getEquipmentLoadout(),
       nextCharacter?.id ?? null,
       onEquipItem,
       utilityState.inventory,
@@ -815,6 +817,7 @@ function createInventoryPanelSection(
     readonly getSelectedItemId: () => InventorySummaryItem["itemInstanceId"] | null;
     readonly onSelectItem: (itemId: InventorySummaryItem["itemInstanceId"]) => void;
   },
+  equipmentLoadout: EquipmentLoadout,
   characterId: string | null,
   onEquipItem?: (characterId: string, itemInstanceId: string, slot: string) => Promise<void>,
   isOpen: boolean = false,
@@ -856,7 +859,7 @@ function createInventoryPanelSection(
     if (selectedItem !== null) {
       selection.onSelectItem(selectedItem.itemInstanceId);
     }
-    const detailSection = createInventoryDetailSection(selectedItem, characterId, onEquipItem);
+    const detailSection = createInventoryDetailSection(selectedItem, items, equipmentLoadout, characterId, onEquipItem);
     content.append(summarySection, detailSection);
   };
 
@@ -978,6 +981,8 @@ function createInventorySummarySection(
 
 function createInventoryDetailSection(
   item: InventorySummaryItem | null,
+  inventoryItems: readonly InventorySummaryItem[],
+  equipmentLoadout: EquipmentLoadout,
   characterId: string | null,
   onEquipItem?: (characterId: string, itemInstanceId: string, slot: string) => Promise<void>,
 ): HTMLElement {
@@ -1011,6 +1016,12 @@ function createInventoryDetailSection(
   rarityBadge.style.fontSize = "10px";
   rarityBadge.style.fontWeight = "bold";
   rarityBadge.style.textTransform = "uppercase";
+
+  const compareData = resolveEquippedComparisonItem(item, inventoryItems, equipmentLoadout);
+  if (compareData !== null) {
+    children.push(createInfoLine("Equipped", `${formatEquipmentSlotLabel(compareData.slot)}: ${compareData.equippedItem.label}`));
+    children.push(createModifierComparisonBlock(item, compareData.equippedItem));
+  }
 
   if ((item.statModifiers?.length ?? 0) > 0) {
     const modifierList = document.createElement("ul");
@@ -1079,16 +1090,105 @@ function formatItemRarityLabel(rarity?: string): string {
 }
 
 function getItemRarityColor(rarity?: string): string {
-  return rarity === "common" || rarity === undefined ? COMMON_ITEM_COLOR : COMMON_ITEM_COLOR;
+  if (rarity === "rare") {
+    return "#8fc7ff";
+  }
+
+  return COMMON_ITEM_COLOR;
 }
 
 function getItemRarityAccentColor(rarity?: string): string {
-  return rarity === "common" || rarity === undefined ? COMMON_ITEM_ACCENT_COLOR : COMMON_ITEM_ACCENT_COLOR;
+  if (rarity === "rare") {
+    return "#4b86d8";
+  }
+
+  return COMMON_ITEM_ACCENT_COLOR;
 }
 
 function formatItemModifierText(modifier: StatModifier): string {
   const prefix = modifier.operation === "add" ? "+" : "×";
   return `${prefix}${modifier.value} ${modifier.target}`;
+}
+
+function resolveEquippedComparisonItem(
+  item: InventorySummaryItem,
+  inventoryItems: readonly InventorySummaryItem[],
+  equipmentLoadout: EquipmentLoadout,
+): { readonly slot: EquipmentSlot; readonly equippedItem: InventorySummaryItem } | null {
+  const firstSlot = item.allowedEquipmentSlots?.[0];
+  if (firstSlot === undefined) {
+    return null;
+  }
+
+  const equippedItemId = equipmentLoadout[firstSlot];
+  if (equippedItemId === null) {
+    return null;
+  }
+
+  const equippedItem = inventoryItems.find((candidate) => candidate.itemInstanceId === equippedItemId);
+  if (equippedItem === undefined) {
+    return null;
+  }
+
+  return { slot: firstSlot, equippedItem };
+}
+
+function createModifierComparisonBlock(
+  selectedItem: InventorySummaryItem,
+  equippedItem: InventorySummaryItem,
+): HTMLElement {
+  const wrapper = document.createElement("div");
+  wrapper.style.display = "grid";
+  wrapper.style.gap = "6px";
+  wrapper.style.marginTop = "4px";
+  wrapper.style.padding = "8px";
+  wrapper.style.border = "1px solid #3c3122";
+  wrapper.style.borderRadius = "6px";
+  wrapper.style.background = "rgba(18, 14, 10, 0.88)";
+
+  wrapper.appendChild(createModifierComparisonColumn("Selected item modifiers", selectedItem.statModifiers));
+  wrapper.appendChild(createModifierComparisonColumn("Equipped item modifiers", equippedItem.statModifiers));
+  return wrapper;
+}
+
+function createModifierComparisonColumn(
+  labelText: string,
+  modifiers?: readonly StatModifier[],
+): HTMLElement {
+  const container = document.createElement("div");
+  container.style.display = "grid";
+  container.style.gap = "4px";
+
+  const label = document.createElement("div");
+  label.textContent = labelText;
+  label.style.color = "#a88d63";
+  label.style.fontSize = "11px";
+  label.style.fontWeight = "bold";
+  container.appendChild(label);
+
+  if (modifiers === undefined || modifiers.length === 0) {
+    container.appendChild(createMutedText("No modifiers."));
+    return container;
+  }
+
+  const list = document.createElement("ul");
+  list.style.margin = "0";
+  list.style.padding = "0 0 0 18px";
+  list.style.color = "#d8c6a3";
+  list.style.fontSize = "12px";
+
+  for (const modifier of modifiers) {
+    const entry = document.createElement("li");
+    entry.textContent = formatItemModifierText(modifier);
+    list.appendChild(entry);
+  }
+
+  container.appendChild(list);
+  return container;
+}
+
+function formatEquipmentSlotLabel(slot: EquipmentSlot): string {
+  return slot.replace("_", " ");
 }
 
 export function createMutedText(text: string): HTMLElement {

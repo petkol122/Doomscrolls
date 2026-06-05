@@ -220,6 +220,8 @@ export async function tryExecutePendingAction(context: DeferredActionExecutionCo
       type: "request_pickup_world_loot_accepted",
       worldLootId: validation.worldLoot.id,
       message: pickupResult.message,
+      itemLabel: validation.worldLoot.label,
+      ...(validation.worldLoot.rarity === undefined ? {} : { rarity: validation.worldLoot.rarity }),
     };
     sendToClient("request_pickup_world_loot_accepted", accepted);
     return;
