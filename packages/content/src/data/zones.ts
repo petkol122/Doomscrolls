@@ -11,7 +11,7 @@ export const zones = [
     descriptionKey: "zone.nightmarket.description",
     roomType: "town",
     maxPlayers: 30,
-    enemyIds: [],
+    enemyIds: ["trashboar_runt", "trashboar_brute"],
     transitionZoneIds: ["blackwire_sewers"],
     mapKey: "map_nightmarket_placeholder",
     bounds: { minX: 0, maxX: 2400, minY: 0, maxY: 1800 }

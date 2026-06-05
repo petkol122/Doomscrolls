@@ -93,12 +93,6 @@ export function createWorldSessionAreaView(
   const container = scene.add.container(0, 0);
   const worldContainer = scene.add.container(0, 0);
   const frame = scene.add.graphics();
-  const worldMaskGraphics = scene.add.graphics();
-  worldMaskGraphics.fillStyle(0xffffff, 1);
-  worldMaskGraphics.fillRect(layout.originX, layout.originY, layout.width, layout.height);
-  worldMaskGraphics.setVisible(false);
-  const worldMask = worldMaskGraphics.createGeometryMask();
-  worldContainer.setMask(worldMask);
 
   const staticPropsView = createWorldSessionStaticPropsView(scene, worldContainer);
   const playerPlaceholder = createWorldSessionPlayerPlaceholderView(scene, worldContainer);
@@ -531,8 +525,6 @@ export function createWorldSessionAreaView(
       lootPlaceholders.clear();
       floatingDamageView.destroy();
       selfScreenPosition = null;
-      worldContainer.clearMask(false);
-      worldMaskGraphics.destroy();
       container.destroy(true);
     },
   };

@@ -7,19 +7,19 @@ export interface WorldSessionAreaLayout {
   readonly height: number;
 }
 
-const SCREEN_MARGIN_LEFT = 24;
-const SCREEN_MARGIN_RIGHT = 24;
-const SCREEN_MARGIN_TOP = 24;
+const SCREEN_MARGIN_LEFT = 20;
+const SCREEN_MARGIN_RIGHT = 20;
+const SCREEN_MARGIN_TOP = 32;
 const SCREEN_MARGIN_BOTTOM = 24;
-const CHARACTER_CHIP_RESERVED_WIDTH = 220;
-const CHARACTER_CHIP_RESERVED_HEIGHT = 72;
-const CHARACTER_CHIP_GAP = 16;
+const CHARACTER_CHIP_RESERVED_WIDTH = 120;
+const CHARACTER_CHIP_RESERVED_HEIGHT = 48;
+const CHARACTER_CHIP_GAP = 12;
 const UTILITY_PANEL_WIDTH = 300;
-const UTILITY_PANEL_GAP = 20;
+const UTILITY_PANEL_GAP = 16;
 const BOTTOM_HUD_HEIGHT = 170;
-const BOTTOM_HUD_GAP = 20;
-const MIN_AREA_WIDTH = 720;
-const MIN_AREA_HEIGHT = 420;
+const BOTTOM_HUD_GAP = 16;
+const MIN_AREA_WIDTH = 760;
+const MIN_AREA_HEIGHT = 440;
 
 export function resolveWorldSessionAreaLayout(scene: Phaser.Scene): WorldSessionAreaLayout {
   const leftBoundary = SCREEN_MARGIN_LEFT + CHARACTER_CHIP_RESERVED_WIDTH + CHARACTER_CHIP_GAP;

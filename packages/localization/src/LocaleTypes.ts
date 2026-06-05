@@ -22,6 +22,8 @@ export const REQUIRED_LOCALIZATION_KEYS = [
   "class.gravewalker.description",
   "enemy.trashboar_runt.name",
   "enemy.trashboar_runt.description",
+  "enemy.trashboar_brute.name",
+  "enemy.trashboar_brute.description",
   "zone.nightmarket.name",
   "zone.nightmarket.description",
   "zone.blackwire_sewers.name",

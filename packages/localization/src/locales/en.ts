@@ -16,6 +16,9 @@ export const en = {
   "enemy.trashboar_runt.name": "Trashboar Runt",
   "enemy.trashboar_runt.description":
     "A sewer-fed mutant with a bad temper, worse hygiene and enough tusk to ruin your evening.",
+  "enemy.trashboar_brute.name": "Trashboar Brute",
+  "enemy.trashboar_brute.description":
+    "A broader, meaner slab of tusk and scar tissue that hits the alleys like a living battering ram.",
 
   "zone.nightmarket.name": "The Nightmarket",
   "zone.nightmarket.description":

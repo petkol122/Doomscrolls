@@ -80,7 +80,6 @@ const ENEMY_ATTACK_WINDUP_MS = 350;
 const ENEMY_ATTACK_DAMAGE = 2;
 const ENEMY_RETURN_ARRIVAL_DISTANCE = 1;
 const ENEMY_RETURN_REACQUIRE_BUFFER = 8;
-const TRASHBOAR_RUNT_XP_REWARD = 5;
 const characterStatsService = new CharacterStatsService();
 type ContentEnemyId = Parameters<typeof contentRegistry.enemies.get>[0];
 
@@ -144,18 +143,20 @@ async function grantEnemyDefeatXp(
   enemyId: string,
   sendToClient: (type: string, payload: unknown) => void,
 ): Promise<void> {
-  if (enemyId !== "trashboar_runt") {
+  const enemyDefinition = contentRegistry.enemies.get(enemyId as ContentEnemyId);
+  const xpReward = enemyDefinition?.xp ?? 0;
+  if (enemyDefinition === undefined || !Number.isFinite(xpReward) || xpReward <= 0) {
     return;
   }
 
-  const nextXp = player.xp + TRASHBOAR_RUNT_XP_REWARD;
+  const nextXp = player.xp + xpReward;
   const progression = resolveLevelProgression(player.level, nextXp);
   const progressionUpdate = await applyProgressionUpdate(player, progression);
 
   const xpGained: XpGainedServerMessage = {
     type: "xp_gained",
     characterId: player.characterId,
-    amount: TRASHBOAR_RUNT_XP_REWARD,
+    amount: xpReward,
     totalXp: progression.xp,
     level: progression.level,
     leveledUp: progression.leveledUp,

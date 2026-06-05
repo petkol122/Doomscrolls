@@ -29,7 +29,6 @@ export interface DeferredActionExecutionContext {
   readonly sendToClient: (type: string, payload: unknown) => void;
 }
 
-const TRASHBOAR_RUNT_XP_REWARD = 5;
 const characterStatsService = new CharacterStatsService();
 
 async function applyProgressionUpdate(
@@ -83,18 +82,20 @@ async function applyProgressionUpdate(
 }
 
 async function grantEnemyDefeatXp(player: PlayerPresence, enemyId: string, sendToClient: (type: string, payload: unknown) => void): Promise<void> {
-  if (enemyId !== "trashboar_runt") {
+  const enemyDefinition = contentRegistry.enemies.get(enemyId as never);
+  const xpReward = enemyDefinition?.xp ?? 0;
+  if (enemyDefinition === undefined || !Number.isFinite(xpReward) || xpReward <= 0) {
     return;
   }
 
-  const nextXp = player.xp + TRASHBOAR_RUNT_XP_REWARD;
+  const nextXp = player.xp + xpReward;
   const progression = resolveLevelProgression(player.level, nextXp);
   const progressionUpdate = await applyProgressionUpdate(player, progression);
 
   const xpGained: XpGainedServerMessage = {
     type: "xp_gained",
     characterId: player.characterId,
-    amount: TRASHBOAR_RUNT_XP_REWARD,
+    amount: xpReward,
     totalXp: progression.xp,
     level: progression.level,
     leveledUp: progression.leveledUp,

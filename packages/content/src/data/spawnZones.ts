@@ -11,4 +11,14 @@ export const spawnZones = [
     minY: 220,
     maxY: 420,
   },
+  {
+    id: "nightmarket_trashboar_brute_zone",
+    zoneId: "nightmarket",
+    enemyId: "trashboar_brute" as EnemyId,
+    count: 1,
+    minX: 960,
+    maxX: 1120,
+    minY: 760,
+    maxY: 940,
+  },
 ] as const satisfies readonly SpawnZoneDefinition[];
