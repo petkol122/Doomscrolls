@@ -239,13 +239,19 @@ export class WorldSessionScene extends Phaser.Scene {
     });
 
     registerPickupWorldLootResponseListeners(this.room, {
+      onDeferredQueued: (message) => {
+        this.worldAreaView?.setPendingPickupTarget(message.targetId);
+        this.feedbackView?.showNotice(t("world_area.pickup_moving_closer"));
+      },
       onAccepted: (message) => {
+        this.worldAreaView?.setPendingPickupTarget(null);
         this.feedbackView?.showNotice(formatPickupAcceptedNotice(message));
         void this.refreshAccountStateAfterPickup();
       },
       onRejected: (message) => {
+        this.worldAreaView?.setPendingPickupTarget(null);
         this.feedbackView?.showNotice(
-          message.reason === "out_of_range" ? t("world_area.moving_closer")
+          message.reason === "out_of_range" ? t("world_area.pickup_too_far")
             : message.reason === "inventory_full" ? t("world_area.inventory_full")
             : message.reason === "world_loot_not_found" ? t("world_area.pickup_unavailable")
             : t("world_area.pickup_unavailable"),

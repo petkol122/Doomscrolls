@@ -5,6 +5,7 @@ import { TownRoomState } from "./TownRoomState";
 import { WorldLoot } from "./WorldLoot";
 import { rollLoot } from "./rollLoot";
 
+const MAX_ACTIVE_WORLD_LOOT = 20;
 const WORLD_LOOT_OFFSET_X = 14;
 const WORLD_LOOT_OFFSET_Y = 10;
 
@@ -32,6 +33,7 @@ export function spawnWorldLootOnEnemyDefeat(
     enemy.x + WORLD_LOOT_OFFSET_X,
     enemy.y + WORLD_LOOT_OFFSET_Y,
   );
+  evictOldestWorldLootIfNeeded(state);
 
   state.worldLoot.set(lootId, worldLoot);
   return worldLoot;
@@ -39,4 +41,17 @@ export function spawnWorldLootOnEnemyDefeat(
 
 function buildWorldLootId(enemyInstanceId: string, now: number): WorldLootId {
   return `world_loot:${enemyInstanceId}:${now}` as WorldLootId;
+}
+
+function evictOldestWorldLootIfNeeded(state: TownRoomState): void {
+  if (state.worldLoot.size < MAX_ACTIVE_WORLD_LOOT) {
+    return;
+  }
+
+  const oldestLootId = state.worldLoot.keys().next().value;
+  if (typeof oldestLootId !== "string") {
+    return;
+  }
+
+  state.worldLoot.delete(oldestLootId);
 }

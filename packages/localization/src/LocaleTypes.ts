@@ -131,6 +131,7 @@ export const REQUIRED_LOCALIZATION_KEYS = [
   "world_area.player_damage_taken",
   "world_area.pickup_sent",
   "world_area.pickup_too_far",
+  "world_area.pickup_moving_closer",
   "world_area.moving_closer",
   "world_area.pickup_unavailable",
   "world_area.enemy_hp_synced",

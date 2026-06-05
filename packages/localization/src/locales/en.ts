@@ -156,6 +156,7 @@ export const en = {
   "world_area.player_damage_taken": "You take {damage} damage. HP now {hp}.",
   "world_area.pickup_sent": "Pickup request sent.",
   "world_area.pickup_too_far": "Too far away to pick that up.",
+  "world_area.pickup_moving_closer": "Moving closer to pick that up.",
   "world_area.moving_closer": "Moving closer.",
   "world_area.pickup_unavailable": "Pickup unavailable.",
   "world_area.inventory_full": "Inventory full.",

@@ -105,6 +105,7 @@ export interface WorldSessionAreaView {
   readonly showEnemyTelegraph: (enemyId: string) => void;
   readonly getSelfWorldPosition: () => { readonly x: number; readonly y: number } | null;
   readonly getLastClickTarget: () => ClickTargetSnapshot | null;
+  readonly setPendingPickupTarget: (worldLootId: string | null) => void;
   readonly destroy: () => void;
 }
 
@@ -218,6 +219,7 @@ export function createWorldSessionAreaView(
   const previousEnemyHp = new Map<string, number>();
   const previousEnemyDefeated = new Map<string, boolean>();
   const previousEnemyRespawnAtMs = new Map<string, number>();
+  let pendingPickupWorldLootId: string | null = null;
 
   const clampZoom = (value: number): number => Math.min(Math.max(value, minZoom), maxZoom);
   const setZoom = (value: number): void => {
@@ -380,6 +382,9 @@ export function createWorldSessionAreaView(
       if (!newWorldLootIds.has(id)) {
         view.destroy();
         lootPlaceholders.delete(id);
+        if (pendingPickupWorldLootId === id) {
+          pendingPickupWorldLootId = null;
+        }
       }
     }
 
@@ -392,6 +397,7 @@ export function createWorldSessionAreaView(
             pointerHandledByTarget = true;
             const result = sendPickupWorldLootIntent(nextRoom, worldLootId);
             if (result.dispatched) {
+              pendingPickupWorldLootId = worldLootId;
               onPickupFeedback?.(`${t("world_area.pickup_sent")} ${formatPickupFeedbackLabel(loot)}`);
             }
             const targetLoot = getTownRoomWorldLoot(nextRoom.state).find((l) => l.id === worldLootId);
@@ -401,8 +407,9 @@ export function createWorldSessionAreaView(
             }
           }),
         );
+        lootPlaceholders.get(loot.id)?.refresh(loot, pendingPickupWorldLootId === loot.id);
       } else {
-        existing.refresh(loot);
+        existing.refresh(loot, pendingPickupWorldLootId === loot.id);
       }
     }
 
@@ -616,6 +623,10 @@ export function createWorldSessionAreaView(
     showEnemyTelegraph,
     getSelfWorldPosition: () => selfWorldPosition,
     getLastClickTarget: () => lastClickTarget,
+    setPendingPickupTarget: (worldLootId: string | null) => {
+      pendingPickupWorldLootId = worldLootId;
+      refreshFromRoomState(room);
+    },
     destroy: () => {
       canvasElement.removeEventListener("contextmenu", handleContextMenu);
       scene.events.off(Phaser.Scenes.Events.UPDATE, handleSceneUpdate);

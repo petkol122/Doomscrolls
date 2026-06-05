@@ -49,7 +49,7 @@ function getLootPlaceholderPalette(rarity?: string): {
 }
 
 export interface WorldSessionLootPlaceholderView {
-  readonly refresh: (loot: TownRoomWorldLootSnapshot) => void;
+  readonly refresh: (loot: TownRoomWorldLootSnapshot, isPendingTarget?: boolean) => void;
   readonly destroy: () => void;
 }
 
@@ -68,6 +68,8 @@ export function createWorldSessionLootPlaceholderView(
   const body = scene.add.rectangle(0, 0, 16, 16, initialPalette.body, 0.98);
   body.setStrokeStyle(2, initialPalette.bodyStroke, 0.98);
   body.setInteractive({ useHandCursor: true });
+  const targetRing = scene.add.ellipse(0, 0, 28, 28);
+  targetRing.setStrokeStyle(2, 0xfbf2a2, 0);
   const labelText = scene.add
     .text(0, 16, t(loot.label), {
       color: getItemRarityColor(loot.rarity),
@@ -82,10 +84,24 @@ export function createWorldSessionLootPlaceholderView(
     onClick?.(loot.id);
   });
 
-  container.add([glow, ping, body, labelText]);
+  container.add([glow, ping, targetRing, body, labelText]);
+
+  const applyPendingTargetState = (isPendingTarget: boolean): void => {
+    if (isPendingTarget) {
+      targetRing.setStrokeStyle(2, 0xfbf2a2, 0.95);
+      targetRing.setVisible(true);
+      labelText.setScale(1.05);
+      return;
+    }
+
+    targetRing.setStrokeStyle(2, 0xfbf2a2, 0);
+    targetRing.setVisible(false);
+    labelText.setScale(1);
+  };
+  applyPendingTargetState(false);
 
   return {
-    refresh: (nextLoot: TownRoomWorldLootSnapshot) => {
+    refresh: (nextLoot: TownRoomWorldLootSnapshot, isPendingTarget = false) => {
       container.setPosition(nextLoot.x, nextLoot.y);
       labelText.setText(t(nextLoot.label));
       labelText.setColor(getItemRarityColor(nextLoot.rarity));
@@ -96,6 +112,7 @@ export function createWorldSessionLootPlaceholderView(
       ping.setStrokeStyle(2, palette.pingStroke, 0.3);
       body.setFillStyle(palette.body, 0.98);
       body.setStrokeStyle(2, palette.bodyStroke, 0.98);
+      applyPendingTargetState(isPendingTarget);
     },
     destroy: () => {
       container.destroy(true);
