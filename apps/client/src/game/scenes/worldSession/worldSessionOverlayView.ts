@@ -990,25 +990,22 @@ function createInventoryDetailSection(
     return createSectionBlock("Item Detail", [createMutedText("Select an item to inspect it.")], { compact: true });
   }
 
-  const children: HTMLElement[] = [
-    createInfoLine("Label", item.label),
-    createInfoLine("Rarity", formatItemRarityLabel(item.rarity)),
-    createInfoLine("Category", item.category),
-    createInfoLine("Size", item.size === undefined ? "Unknown" : `${item.size.width}x${item.size.height}`),
-    createInfoLine("Grid Position", `page=${item.pageIndex}, x=${item.x}, y=${item.y}`),
-  ];
+  const children: HTMLElement[] = [];
 
   const title = document.createElement("div");
   title.textContent = item.label;
   title.style.color = getItemRarityColor(item.rarity);
   title.style.fontWeight = "bold";
   title.style.fontSize = "13px";
+  title.style.lineHeight = "1.2";
+
+  const header = document.createElement("div");
+  header.style.display = "grid";
+  header.style.gap = "6px";
 
   const rarityBadge = document.createElement("div");
   rarityBadge.textContent = formatItemRarityLabel(item.rarity);
   rarityBadge.style.display = "inline-block";
-  rarityBadge.style.marginTop = "4px";
-  rarityBadge.style.marginBottom = "6px";
   rarityBadge.style.padding = "2px 6px";
   rarityBadge.style.border = `1px solid ${getItemRarityAccentColor(item.rarity)}`;
   rarityBadge.style.borderRadius = "999px";
@@ -1017,30 +1014,32 @@ function createInventoryDetailSection(
   rarityBadge.style.fontWeight = "bold";
   rarityBadge.style.textTransform = "uppercase";
 
+  const headerMeta = document.createElement("div");
+  headerMeta.style.display = "flex";
+  headerMeta.style.flexWrap = "wrap";
+  headerMeta.style.gap = "6px";
+
+  const categoryBadge = createItemMetaBadge("Category", item.category);
+  const sizeBadge = createItemMetaBadge(
+    "Size/Grid",
+    item.size === undefined
+      ? `Unknown • p${item.pageIndex} @ ${item.x},${item.y}`
+      : `${item.size.width}x${item.size.height} • p${item.pageIndex} @ ${item.x},${item.y}`,
+  );
+
+  header.appendChild(title);
+  headerMeta.append(rarityBadge, categoryBadge, sizeBadge);
+  header.appendChild(headerMeta);
+
+  children.push(header);
+
   const compareData = resolveEquippedComparisonItem(item, inventoryItems, equipmentLoadout);
   if (compareData !== null) {
-    children.push(createInfoLine("Equipped", `${formatEquipmentSlotLabel(compareData.slot)}: ${compareData.equippedItem.label}`));
+    children.push(createInfoLine("Compare", `${formatEquipmentSlotLabel(compareData.slot)}: ${compareData.equippedItem.label}`));
     children.push(createModifierComparisonBlock(item, compareData.equippedItem));
   }
 
-  if ((item.statModifiers?.length ?? 0) > 0) {
-    const modifierList = document.createElement("ul");
-    modifierList.style.margin = "0";
-    modifierList.style.padding = "0 0 0 18px";
-    modifierList.style.color = "#d8c6a3";
-    modifierList.style.fontSize = "12px";
-
-    for (const modifier of item.statModifiers ?? []) {
-      const entry = document.createElement("li");
-      entry.textContent = formatItemModifierText(modifier);
-      modifierList.appendChild(entry);
-    }
-
-    children.push(createInfoLine("Modifiers", String(item.statModifiers?.length ?? 0)));
-    children.push(modifierList);
-  } else {
-    children.push(createMutedText("No item modifiers visible."));
-  }
+  children.push(createItemModifierSection(item.statModifiers));
 
   // Add Equip button if the item is equip-capable (has statModifiers or non-material category)
   if (characterId !== null && onEquipItem !== undefined && item.category !== "flask" && item.category !== "material") {
@@ -1077,7 +1076,9 @@ function createInventoryDetailSection(
   }
 
   const section = createSectionBlock("Item Detail", [], { compact: true });
-  section.append(title, rarityBadge, ...children);
+  section.style.display = "grid";
+  section.style.gap = "8px";
+  section.append(...children);
   return section;
 }
 
@@ -1139,8 +1140,8 @@ function createModifierComparisonBlock(
 ): HTMLElement {
   const wrapper = document.createElement("div");
   wrapper.style.display = "grid";
+  wrapper.style.gridTemplateColumns = "repeat(auto-fit, minmax(150px, 1fr))";
   wrapper.style.gap = "6px";
-  wrapper.style.marginTop = "4px";
   wrapper.style.padding = "8px";
   wrapper.style.border = "1px solid #3c3122";
   wrapper.style.borderRadius = "6px";
@@ -1185,6 +1186,75 @@ function createModifierComparisonColumn(
 
   container.appendChild(list);
   return container;
+}
+
+function createItemModifierSection(modifiers?: readonly StatModifier[]): HTMLElement {
+  const wrapper = document.createElement("div");
+  wrapper.style.display = "grid";
+  wrapper.style.gap = "6px";
+
+  const label = document.createElement("div");
+  label.textContent = "Modifiers";
+  label.style.color = "#a88d63";
+  label.style.fontSize = "11px";
+  label.style.fontWeight = "bold";
+  wrapper.appendChild(label);
+
+  if (modifiers === undefined || modifiers.length === 0) {
+    wrapper.appendChild(createMutedText("No item modifiers visible."));
+    return wrapper;
+  }
+
+  const list = document.createElement("div");
+  list.style.display = "grid";
+  list.style.gap = "4px";
+
+  for (const modifier of modifiers) {
+    list.appendChild(createModifierChip(formatItemModifierText(modifier)));
+  }
+
+  wrapper.appendChild(list);
+  return wrapper;
+}
+
+function createModifierChip(text: string): HTMLElement {
+  const chip = document.createElement("div");
+  chip.textContent = text;
+  chip.style.padding = "4px 7px";
+  chip.style.border = "1px solid #3c3122";
+  chip.style.borderRadius = "6px";
+  chip.style.background = "rgba(18, 14, 10, 0.88)";
+  chip.style.color = "#d8c6a3";
+  chip.style.fontSize = "11px";
+  chip.style.fontFamily = "monospace";
+  return chip;
+}
+
+function createItemMetaBadge(labelText: string, valueText: string): HTMLElement {
+  const badge = document.createElement("div");
+  badge.style.display = "inline-flex";
+  badge.style.alignItems = "center";
+  badge.style.gap = "5px";
+  badge.style.padding = "2px 6px";
+  badge.style.border = "1px solid #3c3122";
+  badge.style.borderRadius = "999px";
+  badge.style.background = "rgba(18, 14, 10, 0.88)";
+
+  const label = document.createElement("span");
+  label.textContent = `${labelText}:`;
+  label.style.color = "#a88d63";
+  label.style.fontSize = "10px";
+  label.style.fontWeight = "bold";
+  badge.appendChild(label);
+
+  const value = document.createElement("span");
+  value.textContent = valueText;
+  value.style.color = "#d8c6a3";
+  value.style.fontSize = "10px";
+  value.style.fontFamily = "monospace";
+  badge.appendChild(value);
+
+  return badge;
 }
 
 function formatEquipmentSlotLabel(slot: EquipmentSlot): string {

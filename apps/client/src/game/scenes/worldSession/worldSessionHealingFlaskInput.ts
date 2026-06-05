@@ -53,7 +53,10 @@ export function attachWorldSessionHealingFlaskInput(
     if (event.repeat) {
       return;
     }
-    if (event.key.toLowerCase() !== "q") {
+    const isQKey = event.code === "KeyQ"
+      || event.key === "q"
+      || event.key === "Q";
+    if (!isQKey) {
       return;
     }
     sendFlask();
