@@ -50,6 +50,19 @@ interface ClickTargetSnapshot {
   readonly y: number;
 }
 
+interface EnemyScreenPositionSnapshot {
+  readonly x: number;
+  readonly y: number;
+  readonly worldX: number;
+  readonly worldY: number;
+}
+
+interface ProjectedEnemySnapshot {
+  readonly enemy: TownRoomEnemySnapshot;
+  readonly screenX: number;
+  readonly screenY: number;
+}
+
 interface AreaProjectionContext {
   readonly bounds: WorldProjectionBounds;
   readonly viewport: WorldProjectionViewport;
@@ -61,6 +74,18 @@ interface WorldRectScreenBounds {
   readonly right: number;
   readonly top: number;
   readonly bottom: number;
+}
+
+interface CameraFollowPadding {
+  readonly left: number;
+  readonly right: number;
+  readonly top: number;
+  readonly bottom: number;
+}
+
+interface WorldContainerOffset {
+  readonly x: number;
+  readonly y: number;
 }
 
 export interface WorldSessionDebugState {
@@ -93,6 +118,7 @@ export function createWorldSessionAreaView(
   const container = scene.add.container(0, 0);
   const worldContainer = scene.add.container(0, 0);
   const frame = scene.add.graphics();
+  const worldFrame = scene.add.graphics();
 
   const staticPropsView = createWorldSessionStaticPropsView(scene, worldContainer);
   const playerPlaceholder = createWorldSessionPlayerPlaceholderView(scene, worldContainer);
@@ -112,7 +138,7 @@ export function createWorldSessionAreaView(
   const enemyPlaceholders = new Map<string, WorldSessionEnemyPlaceholderView>();
   const lootPlaceholders = new Map<string, WorldSessionLootPlaceholderView>();
   const floatingDamageView: FloatingDamageNumberView = createFloatingDamageNumberView(scene, worldContainer);
-  const enemyScreenPositions = new Map<string, { readonly x: number; readonly y: number }>();
+  const enemyScreenPositions = new Map<string, EnemyScreenPositionSnapshot>();
 
   const targetMarker = scene.add.circle(-9999, -9999, 7, 0xff4a4a, 0.8);
   const targetLabel = scene.add.text(layout.originX + 10, layout.originY + layout.height - 20, "", {
@@ -155,8 +181,9 @@ export function createWorldSessionAreaView(
   });
 
   container.add([
-    worldContainer,
     frame,
+    worldFrame,
+    worldContainer,
     targetMarker,
     lineGraphic,
     title,
@@ -236,33 +263,36 @@ export function createWorldSessionAreaView(
     const currentFocusPosition = self?.position === undefined
       ? selfWorldPosition
       : { x: self.position.x, y: self.position.y };
-    const followProjection = createAreaProjectionContext(
+    const worldProjection = createAreaProjectionContext(
       layout,
       bounds,
       projectionMode,
-      currentFocusPosition,
       cameraZoom,
     );
+    const worldOffset = resolveWorldContainerOffset(layout, worldProjection, currentFocusPosition);
+    worldContainer.setPosition(worldOffset.x, worldOffset.y);
+    worldFrame.setPosition(worldOffset.x, worldOffset.y);
 
-    drawBounds(frame, layout, bounds, followProjection);
+    drawViewportFrame(frame, layout);
+    drawBounds(worldFrame, layout, bounds, worldProjection);
     boundsLabel.setText(
       `zone=${zoneId} bounds: x=${bounds.minX}..${bounds.maxX}, y=${bounds.minY}..${bounds.maxY}`,
     );
 
     staticPropsView.refresh({
       zoneId,
-      bounds: followProjection.bounds,
-      viewport: followProjection.viewport,
-      projectionMode: followProjection.projectionMode,
+      bounds: worldProjection.bounds,
+      viewport: worldProjection.viewport,
+      projectionMode: worldProjection.projectionMode,
     });
 
-    interactablesView.refresh(nextRoom, followProjection);
+    interactablesView.refresh(nextRoom, worldProjection);
 
     const currentEnemies = getTownRoomEnemies(nextRoom.state);
     const projectedEnemies = currentEnemies
-      .map((enemy: TownRoomEnemySnapshot) => projectEnemyToArea(enemy, followProjection))
-      .filter((enemy: TownRoomEnemySnapshot | null): enemy is TownRoomEnemySnapshot => enemy !== null);
-    const newEnemyIds = new Set(projectedEnemies.map((enemy: TownRoomEnemySnapshot) => enemy.id));
+      .map((enemy: TownRoomEnemySnapshot) => projectEnemyToArea(enemy, worldProjection))
+      .filter((enemy: ProjectedEnemySnapshot | null): enemy is ProjectedEnemySnapshot => enemy !== null);
+    const newEnemyIds = new Set(projectedEnemies.map((projectedEnemy: ProjectedEnemySnapshot) => projectedEnemy.enemy.id));
 
     for (const [id, view] of enemyPlaceholders.entries()) {
       if (!newEnemyIds.has(id)) {
@@ -272,10 +302,17 @@ export function createWorldSessionAreaView(
       }
     }
 
-    for (const enemy of projectedEnemies) {
+    for (const projectedEnemy of projectedEnemies) {
+      const enemy = projectedEnemy.enemy;
+      const projectedViewEnemy: TownRoomEnemySnapshot = {
+        ...enemy,
+        x: projectedEnemy.screenX,
+        y: projectedEnemy.screenY,
+      };
+
       let enemyView = enemyPlaceholders.get(enemy.id);
       if (enemyView === undefined) {
-        enemyView = createWorldSessionEnemyPlaceholderView(scene, enemy, worldContainer, (enemyId: string) => {
+        enemyView = createWorldSessionEnemyPlaceholderView(scene, projectedViewEnemy, worldContainer, (enemyId: string) => {
           pointerHandledByTarget = true;
           const result = sendAttackIntent(nextRoom, enemyId);
           if (result.dispatched) {
@@ -289,10 +326,15 @@ export function createWorldSessionAreaView(
         });
         enemyPlaceholders.set(enemy.id, enemyView);
       } else {
-        enemyView.refresh(enemy);
+        enemyView.refresh(projectedViewEnemy);
       }
 
-      enemyScreenPositions.set(enemy.id, { x: enemy.x, y: enemy.y });
+      enemyScreenPositions.set(enemy.id, {
+        x: projectedEnemy.screenX,
+        y: projectedEnemy.screenY,
+        worldX: enemy.x,
+        worldY: enemy.y,
+      });
 
       const lastHp = previousEnemyHp.get(enemy.id);
       const lastDefeated = previousEnemyDefeated.get(enemy.id);
@@ -330,7 +372,7 @@ export function createWorldSessionAreaView(
 
     const currentWorldLoot = getTownRoomWorldLoot(nextRoom.state);
     const projectedWorldLoot = currentWorldLoot
-      .map((loot: TownRoomWorldLootSnapshot) => projectWorldLootToArea(loot, followProjection))
+      .map((loot: TownRoomWorldLootSnapshot) => projectWorldLootToArea(loot, worldProjection))
       .filter((loot: TownRoomWorldLootSnapshot | null): loot is TownRoomWorldLootSnapshot => loot !== null);
     const newWorldLootIds = new Set(projectedWorldLoot.map((loot: TownRoomWorldLootSnapshot) => loot.id));
 
@@ -366,15 +408,31 @@ export function createWorldSessionAreaView(
 
     inputZone.removeAllListeners();
     inputZone.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
-      if (projectionMode !== "debug_top_down") {
-        return;
-      }
-
       // Enemy / loot / interactable click handlers fire before this one
       // (they sit on top of inputZone in the container). If one of them
       // already handled the click we must not also send a movement intent.
       if (pointerHandledByTarget) {
         pointerHandledByTarget = false;
+        return;
+      }
+
+      const clickedEnemy = findClickedEnemy(enemyScreenPositions, pointer.x, pointer.y);
+      if (clickedEnemy !== null) {
+        pointerHandledByTarget = true;
+        const result = sendAttackIntent(nextRoom, clickedEnemy.id);
+        if (result.dispatched) {
+          onAttackFeedback?.(t("world_area.attack_sent"));
+        }
+        lastClickTarget = {
+          x: Math.round(clickedEnemy.worldX),
+          y: Math.round(clickedEnemy.worldY),
+        };
+        onDebugStateChange?.();
+        pointerHandledByTarget = false;
+        return;
+      }
+
+      if (projectionMode !== "debug_top_down") {
         return;
       }
 
@@ -385,10 +443,10 @@ export function createWorldSessionAreaView(
       }
 
       const screenPoint = screenToWorldActiveProjection(
-        pointer.x,
-        pointer.y,
-        followProjection.bounds,
-        followProjection.viewport,
+        pointer.x - worldOffset.x,
+        pointer.y - worldOffset.y,
+        worldProjection.bounds,
+        worldProjection.viewport,
         projectionMode,
       );
       const worldX = screenPoint.x;
@@ -415,26 +473,26 @@ export function createWorldSessionAreaView(
     const playerScreenPosition = worldToScreenActiveProjection(
       x,
       y,
-      followProjection.bounds,
-      followProjection.viewport,
+      worldProjection.bounds,
+      worldProjection.viewport,
       projectionMode,
     );
-    const pixelX = playerScreenPosition.x;
-    const pixelY = playerScreenPosition.y;
+    const pixelX = playerScreenPosition.x + worldOffset.x;
+    const pixelY = playerScreenPosition.y + worldOffset.y;
     selfScreenPosition = { x: pixelX, y: pixelY };
 
-    playerPlaceholder.setPosition(pixelX, pixelY);
+    playerPlaceholder.setPosition(playerScreenPosition.x, playerScreenPosition.y);
 
     if (lastClickTarget) {
       const targetScreenPosition = worldToScreenActiveProjection(
         lastClickTarget.x,
         lastClickTarget.y,
-        followProjection.bounds,
-        followProjection.viewport,
+        worldProjection.bounds,
+        worldProjection.viewport,
         projectionMode,
       );
-      const targetPixelX = targetScreenPosition.x;
-      const targetPixelY = targetScreenPosition.y;
+      const targetPixelX = targetScreenPosition.x + worldOffset.x;
+      const targetPixelY = targetScreenPosition.y + worldOffset.y;
       targetMarker.setPosition(targetPixelX, targetPixelY);
       targetLabel.setText(`Target: ${lastClickTarget.x}, ${lastClickTarget.y} (non-auth)`);
       lineGraphic.clear();
@@ -459,6 +517,12 @@ export function createWorldSessionAreaView(
     );
     previousPosition = { x, y };
   };
+
+  const handleSceneUpdate = (): void => {
+    refreshFromRoomState(room);
+  };
+
+  scene.events.on(Phaser.Scenes.Events.UPDATE, handleSceneUpdate);
 
   refreshFromRoomState(room);
 
@@ -510,6 +574,7 @@ export function createWorldSessionAreaView(
     getSelfWorldPosition: () => selfWorldPosition,
     getLastClickTarget: () => lastClickTarget,
     destroy: () => {
+      scene.events.off(Phaser.Scenes.Events.UPDATE, handleSceneUpdate);
       scene.input.off(Phaser.Input.Events.POINTER_WHEEL);
       staticPropsView.destroy();
       playerPlaceholder.destroy();
@@ -527,6 +592,44 @@ export function createWorldSessionAreaView(
       selfScreenPosition = null;
       container.destroy(true);
     },
+  };
+}
+
+function findClickedEnemy(
+  enemyScreenPositions: ReadonlyMap<string, EnemyScreenPositionSnapshot>,
+  pointerX: number,
+  pointerY: number,
+): { readonly id: string; readonly worldX: number; readonly worldY: number } | null {
+  const hitRadiusPx = 24;
+  const hitRadiusSquared = hitRadiusPx * hitRadiusPx;
+  let closestHit: { readonly id: string; readonly worldX: number; readonly worldY: number; readonly distanceSquared: number } | null = null;
+
+  for (const [id, position] of enemyScreenPositions.entries()) {
+    const dx = pointerX - position.x;
+    const dy = pointerY - position.y;
+    const distanceSquared = (dx * dx) + (dy * dy);
+    if (distanceSquared > hitRadiusSquared) {
+      continue;
+    }
+
+    if (closestHit === null || distanceSquared < closestHit.distanceSquared) {
+      closestHit = {
+        id,
+        worldX: position.worldX,
+        worldY: position.worldY,
+        distanceSquared,
+      };
+    }
+  }
+
+  if (closestHit === null) {
+    return null;
+  }
+
+  return {
+    id: closestHit.id,
+    worldX: closestHit.worldX,
+    worldY: closestHit.worldY,
   };
 }
 
@@ -570,7 +673,7 @@ function projectWorldLootToArea(
 function projectEnemyToArea(
   enemy: TownRoomEnemySnapshot,
   projection: AreaProjectionContext,
-): TownRoomEnemySnapshot | null {
+): ProjectedEnemySnapshot | null {
   const width = projection.bounds.maxX - projection.bounds.minX;
   const height = projection.bounds.maxY - projection.bounds.minY;
 
@@ -592,15 +695,18 @@ function projectEnemyToArea(
     return null;
   }
 
+  const projectedPosition = worldToScreenActiveProjection(
+    enemy.x,
+    enemy.y,
+    projection.bounds,
+    projection.viewport,
+    projection.projectionMode,
+  );
+
   return {
-    ...enemy,
-    ...worldToScreenActiveProjection(
-      enemy.x,
-      enemy.y,
-      projection.bounds,
-      projection.viewport,
-      projection.projectionMode,
-    ),
+    enemy,
+    screenX: projectedPosition.x,
+    screenY: projectedPosition.y,
   };
 }
 
@@ -608,27 +714,18 @@ function createAreaProjectionContext(
   layout: WorldSessionAreaLayout,
   bounds: WorldProjectionBounds,
   projectionMode: WorldProjectionMode,
-  focusPosition: { readonly x: number; readonly y: number } | null,
   zoom: number,
 ): AreaProjectionContext {
   const clampedZoom = Math.min(Math.max(zoom, 0.75), 1.6);
   const fullWidth = bounds.maxX - bounds.minX;
   const fullHeight = bounds.maxY - bounds.minY;
-  const visibleWidth = fullWidth / clampedZoom;
-  const visibleHeight = fullHeight / clampedZoom;
-  const desiredCenterX = focusPosition?.x ?? (bounds.minX + bounds.maxX) / 2;
-  const desiredCenterY = focusPosition?.y ?? (bounds.minY + bounds.maxY) / 2;
-  const minCenterX = bounds.minX + visibleWidth / 2;
-  const maxCenterX = bounds.maxX - visibleWidth / 2;
-  const minCenterY = bounds.minY + visibleHeight / 2;
-  const maxCenterY = bounds.maxY - visibleHeight / 2;
-  const centerX = Math.min(Math.max(desiredCenterX, minCenterX), maxCenterX);
-  const centerY = Math.min(Math.max(desiredCenterY, minCenterY), maxCenterY);
+  const visibleWidth = Math.min(fullWidth, fullWidth / clampedZoom);
+  const visibleHeight = Math.min(fullHeight, fullHeight / clampedZoom);
   const cameraBounds: WorldProjectionBounds = {
-    minX: centerX - visibleWidth / 2,
-    maxX: centerX + visibleWidth / 2,
-    minY: centerY - visibleHeight / 2,
-    maxY: centerY + visibleHeight / 2,
+    minX: bounds.minX,
+    maxX: bounds.minX + visibleWidth,
+    minY: bounds.minY,
+    maxY: bounds.minY + visibleHeight,
   };
 
   return {
@@ -643,6 +740,15 @@ function createAreaProjectionContext(
   };
 }
 
+function drawViewportFrame(graphics: Phaser.GameObjects.Graphics, layout: WorldSessionAreaLayout): void {
+  graphics.clear();
+  graphics.fillStyle(0x1a1510, 1);
+  graphics.fillRect(layout.originX, layout.originY, layout.width, layout.height);
+
+  graphics.lineStyle(2, 0x5f4a2f, 1);
+  graphics.strokeRect(layout.originX, layout.originY, layout.width, layout.height);
+}
+
 function drawBounds(
   graphics: Phaser.GameObjects.Graphics,
   layout: WorldSessionAreaLayout,
@@ -650,17 +756,10 @@ function drawBounds(
   projection: AreaProjectionContext,
 ): void {
   graphics.clear();
-  graphics.fillStyle(0x1a1510, 1);
+
+  graphics.fillStyle(0x1a1510, 0.001);
   graphics.fillRect(layout.originX, layout.originY, layout.width, layout.height);
 
-  // Subtle debug/world backdrop grid. Clearly placeholder: drawn on the same
-  // graphics as the area fill, lives at the back of the container that owns
-  // `frame`, and all player/enemy/loot/interactable views are children of
-  // the scene (not the container) so they render above this backdrop with
-  // no z-order changes. Screen-space grid: it gives visual scale to the
-  // visible world area without implying any world-space grid, collision,
-  // pathfinding, tilesets, or real map art. Camera/zoom/click math is
-  // untouched.
   const cellSize = 50;
   graphics.lineStyle(1, 0x6b5436, 0.18);
   const right = layout.originX + layout.width;
@@ -677,6 +776,29 @@ function drawBounds(
 
   graphics.lineStyle(2, 0x5f4a2f, 1);
   graphics.strokeRect(layout.originX, layout.originY, layout.width, layout.height);
+}
+
+function resolveWorldContainerOffset(
+  layout: WorldSessionAreaLayout,
+  projection: AreaProjectionContext,
+  focusPosition: { readonly x: number; readonly y: number } | null,
+): WorldContainerOffset {
+  if (focusPosition === null) {
+    return { x: 0, y: 0 };
+  }
+
+  const projectedFocus = worldToScreenActiveProjection(
+    focusPosition.x,
+    focusPosition.y,
+    projection.bounds,
+    projection.viewport,
+    projection.projectionMode,
+  );
+
+  return {
+    x: (layout.originX + (layout.width / 2)) - projectedFocus.x,
+    y: (layout.originY + (layout.height / 2)) - projectedFocus.y,
+  };
 }
 
 function projectWorldRectToScreen(
