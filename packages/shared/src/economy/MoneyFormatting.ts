@@ -10,6 +10,19 @@ export interface MoneyBreakdown {
   readonly copper: number;
 }
 
+/**
+ * Core 0.1 economy is display-only.
+ *
+ * Spending, trading, vendors, shops, auctions, enemy currency drops,
+ * regional currencies, honor, crypto currencies, stealing and crime
+ * are intentionally NOT implemented. `moneyCopper` is server-persisted
+ * on the character record (default 0) and may only change through
+ * dedicated future tasks that add real server-authoritative economy
+ * systems. Do not add client-side mutation paths here.
+ */
+export const MONEY_SYSTEM_GUARD_MESSAGE =
+  "Core 0.1 economy is display-only. Spending/trading/vendors are intentionally not implemented." as const;
+
 export function splitMoneyCopper(moneyCopper: number): MoneyBreakdown {
   const safe = Math.max(0, Math.floor(Number.isFinite(moneyCopper) ? moneyCopper : 0));
   const gold = Math.floor(safe / COPPER_PER_GOLD);

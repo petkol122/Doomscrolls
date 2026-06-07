@@ -1,7 +1,9 @@
 import { t } from "@doomscrolls/localization";
 import type { CharacterId, CharacterSummary } from "@doomscrolls/shared";
 import { createButton } from "./accountShellDom";
-import { formatMoneyCompact } from "../../moneyFormatting";
+// Money formatting lives in @doomscrolls/shared (server-owned / shared contract).
+// The client must not reimplement gold/silver/copper breakdown ad hoc.
+import { formatMoneyCompact } from "@doomscrolls/shared";
 
 export function createCharacterList(
   characters: readonly CharacterSummary[],

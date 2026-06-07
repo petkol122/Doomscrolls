@@ -12,7 +12,9 @@ import type { StatModifier } from "@doomscrolls/shared";
 import type { EquipmentUpdatedServerMessage } from "@doomscrolls/shared";
 import { createMutedText } from "./worldSessionOverlayView";
 import { makeInteractive } from "./worldSessionPointerEvents";
-import { formatMoneyCompact } from "../../moneyFormatting";
+// Money formatting lives in @doomscrolls/shared (server-owned / shared contract).
+// The client must not reimplement gold/silver/copper breakdown ad hoc.
+import { formatMoneyCompact } from "@doomscrolls/shared";
 
 const COMMON_ITEM_COLOR = "#d8c6a3";
 
