@@ -840,12 +840,17 @@ Enemy AI (Trashboar Runt placeholder, multiple per zone):
   - respawn: after defeat the enemy picks a new random position inside the same spawn zone and resets to full HP so the loop is repeatable
   - still no collision, no pathfinding, no rarity tiers, no enemy packs, no persistence
 
-Player HP / downed / respawn foundation:
+Player HP / downed / respawn / corpse foundation:
   - server-owned current HP and max HP live on PlayerPresence and are the only source of truth
   - enemy hits reduce HP server-side; HP updates reach the client only through synced room state
   - at 0 HP the player is marked as downed; movement and combat are disabled while downed
-  - after a short downed timer the player respawns at a server-resolved safe location (last in-zone persisted position or content spawn point) and HP is restored
-  - no XP loss, no durability loss, no corpse inventory, no recovery flow yet
+  - a corpse marker (hasCorpse, corpseX, corpseY) is placed at the death location on PlayerPresence
+  - the corpse marker persists after respawn so the player can walk back and recover it
+  - on respawn the player is placed at a server-resolved safe location (last in-zone persisted position or content spawn point) and HP/flask are restored
+  - while alive, the player can click their own corpse marker to recover it (request_corpse_interact)
+  - server validates lifeState, hasCorpse and range before accepting; rejections are player_downed, no_corpse, out_of_range
+  - own corpse markers use a distinct teal visual on the client; other players' corpses use the default brown marker
+  - corpse recovery is visual/placeholder only: no gear loss, no durability loss, no XP loss, no corpse inventory, no hardcore mode, no persistence
 
 Loot pickup / inventory / equipment checkpoint:
   - enemy drops are synced world-loot entries in room state (id, itemId, label, x, y)

@@ -700,6 +700,12 @@ pnpm lint
 
 Core 0.1 ships a copper currency foundation. `Character.moneyCopper` exists via Prisma migration (default 0). Copper drops from defeated enemies use the world loot system: `rollCurrencyLoot()` rolls the enemy's `currencyDrop` range, `spawnWorldLootOnEnemyDefeat()` creates a `WorldLoot` entry with `currencyCopper > 0` and `itemId = ""`, and pickup calls `CharacterRepository.incrementMoneyCopper()` to atomically persist the total server-side. Vendors, shops, trading, NPC buying/selling, regional currency, honor, reputation, and crypto are not implemented.
 
+### Task 236 — Death/Corpse Loop Docs Checkpoint
+
+Document the current death/respawn/corpse placeholder loop. Documentation-only task.
+
+Status: documented. `docs/ARCHITECTURE.md` and `docs/CODING_RULES.md` now state: at 0 HP the player becomes downed and a corpse marker is placed at the death location; after respawn the corpse marker persists so the player can walk back and recover it via `request_corpse_interact`; server validates lifeState/hasCorpse/range before accepting; rejections are `player_downed`/`no_corpse`/`out_of_range`; own corpse uses distinct teal visual on the client; corpse recovery is visual/placeholder only with no gear/durability/XP loss, no corpse inventory, no hardcore mode, no persistence.
+
 ---
 
 ## Anti-Scope-Creep

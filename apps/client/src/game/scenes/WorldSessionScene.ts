@@ -325,6 +325,11 @@ export class WorldSessionScene extends Phaser.Scene {
       }
     });
 
+    // Task 238 -- corpse interact accepted feedback
+    this.room.onMessage("corpse_interact_accepted", () => {
+      this.feedbackView?.showNotice(t("world_area.corpse_composure_restored"));
+    });
+
     this.dodgeInput?.destroy();
     this.dodgeInput = null;
     this.healingFlaskInput?.destroy();
