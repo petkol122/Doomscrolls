@@ -25,7 +25,7 @@ function hashLootId(id: string): number {
   return h;
 }
 
-function getScatterOffset(id: string): { readonly x: number; readonly y: number } {
+export function getScatterOffset(id: string): { readonly x: number; readonly y: number } {
   const h = hashLootId(id);
   return {
     x: (h % (SCATTER_RANGE * 2 + 1)) - SCATTER_RANGE,

@@ -34,6 +34,7 @@ import {
 import type { WorldSessionEnemyPlaceholderView } from "./worldSessionEnemyPlaceholderView";
 import {
   createWorldSessionLootPlaceholderView,
+  getScatterOffset,
   type WorldSessionLootPlaceholderView,
 } from "./worldSessionLootPlaceholderView";
 import {
@@ -477,9 +478,11 @@ export function createWorldSessionAreaView(
     for (const loot of projectedWorldLoot) {
       const sourceLoot = currentWorldLoot.find((entry) => entry.id === loot.id);
       if (sourceLoot !== undefined) {
-        // Scatter offset must match worldSessionLootPlaceholderView's getScatterOffset
-        const scatterLootX = loot.x + worldOffset.x;
-        const scatterLootY = loot.y + worldOffset.y;
+        // Hit-test position must match the rendered position in
+        // worldSessionLootPlaceholderView (world x/y + scatter offset + worldOffset).
+        const scatter = getScatterOffset(loot.id);
+        const scatterLootX = loot.x + scatter.x + worldOffset.x;
+        const scatterLootY = loot.y + scatter.y + worldOffset.y;
         lootScreenPositions.set(loot.id, {
           id: loot.id,
           x: scatterLootX,
