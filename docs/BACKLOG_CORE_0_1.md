@@ -241,6 +241,8 @@ Implement server-authoritative click-to-move.
 
 Status: partially implemented as the current movement-step foundation. `request_move` is a real shared/network contract, the server validates the intent, `applyMovementIntent()` stores `targetX` / `targetY` on the authoritative player presence entry, and `TownRoom` runs a 50 ms simulation interval that calls `stepTownRoomMovement()` to move synced `x` / `y` gradually toward the stored target. `TownRoom` resolves a runtime movement speed from the joined character's derived stats and stores that value in `PlayerPresence.movementSpeed`; the movement tick uses each player's stored speed, with a fallback constant kept only as a server safety guard for invalid runtime state. A newer click replaces the previous target. The client renders synced x/y only, may show synced speed in debug text, and may show the last click target as debug intent text only. Collision, pathfinding, interpolation/smoothing, combat coupling and persistence remain deferred.
 
+Checkpoint note: tap left click keeps the existing behavior. A planned Diablo-like follow-up may let holding left mouse on empty ground keep updating the move target through throttled `request_move` intents while the server remains authoritative. This checkpoint does not add hold-to-auto-attack or hold-to-auto-pickup.
+
 ### Task 048 — Movement Speed Docs + Small Client Display
 
 Document the current movement-speed flow and, if already synchronized, show speed in the debug presence list only.

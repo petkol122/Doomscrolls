@@ -10,6 +10,7 @@ import type {
 import { formatMoneyCompact } from "@doomscrolls/shared";
 import { t } from "@doomscrolls/localization";
 import Phaser from "phaser";
+import { contentRegistry } from "@doomscrolls/content";
 
 import type { AccountState } from "../../net/ApiClient";
 import { ApiClient } from "../../net/ApiClient";
@@ -162,8 +163,14 @@ export class WorldSessionScene extends Phaser.Scene {
           ? this.account.characters.find((c) => c.id === this.characterId) ?? null
           : null;
         const moneyCopper = character?.moneyCopper ?? 0;
+        // Task 204 — basic sell-disabled vendor stock preview.
+        const stockEntries = contentRegistry.vendorStocks.all.filter(
+          (entry) => entry.vendorId === "nightmarket_suspicious_vendor",
+        );
         this.vendorPanel?.destroy();
-        this.vendorPanel = createVendorInteractionPanel("Suspicious Vendor", moneyCopper);
+        this.vendorPanel = createVendorInteractionPanel("Suspicious Vendor", moneyCopper, {
+          stockEntries,
+        });
         this.vendorPanel.show();
         return;
       }

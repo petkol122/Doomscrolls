@@ -27,6 +27,14 @@ export type ZoneClassification = "safe_hub" | "combat" | "test_hybrid";
 export type SpawnPointContentId = "nightmarket_spawn";
 export type EquipmentSlotCategory = "weapon" | "armor" | "accessory" | "belt" | "flask";
 export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken" | "loot_container" | "vendor";
+export type VendorId = "nightmarket_suspicious_vendor";
+
+export interface VendorStockEntryDefinition {
+  readonly id: string;
+  readonly vendorId: VendorId;
+  readonly itemId: ItemDefinitionId;
+  readonly priceCopper: number;
+}
 
 export interface SpawnZoneDefinition {
   readonly id: string;

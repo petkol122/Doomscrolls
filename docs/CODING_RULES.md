@@ -498,6 +498,11 @@ WorldSession visual layer rules:
 - debug presence text may show synced `movementSpeed` when it is already present in `PlayerPresence`, but this must stay debug text only and must not become a gameplay HUD
 - movement debug text may show the last click target only when it comes from a real already-sent client intent; it must not imply arrival, prediction or local movement
 - click/tap input in the world area may send only a real `request_move` intent through `sendMovementIntent()` on an already-joined room
+- tap left click keeps the existing movement behavior: one valid click sends one real move target intent
+- holding left mouse on empty ground may refresh/update the authoritative move target over time for Diablo-like travel feel, but only by sending throttled real movement intents
+- hold-left-mouse movement applies only on empty-ground travel; it must not imply hold-to-auto-attack, hold-to-auto-pickup, or other auto-action chains yet
+- repeated hold movement intents must be throttled; the client must not spam unbounded `request_move` messages every frame
+- server-authoritative movement remains mandatory during hold behavior: the client sends only target intents, and the server alone validates, stores, and advances synced position
 - visual refresh after input must come from synced room-state updates, not from local speculative movement
 - runtime sanity for movement must continue to confirm gradual server-synced stepping and valid second-click retargeting, not instant local teleport behavior
 - the connected-room overlay must clearly state that it is temporary server-synced debug state, not final gameplay UI

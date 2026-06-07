@@ -1,23 +1,58 @@
 /**
  * Task 200 — Basic Vendor Interaction Panel Placeholder
+ * Task 204 — Basic Sell-Disabled Vendor Inventory Preview
  *
- * Compact dismissible vendor panel showing vendor name, a placeholder message,
- * and the current money from the account state.
+ * Compact dismissible vendor panel showing vendor name, placeholder stock rows
+ * (item label + formatted price) and a disabled Buy button per row. The
+ * "Unavailable" status reflects that no purchase flow exists yet.
  *
- * No buying, selling, stock, prices, reputation or dialogue tree.
+ * No buying, selling, stock persistence, stock mutation or reputation.
  */
+import { contentRegistry, type VendorStockEntryDefinition } from "@doomscrolls/content";
+import { t } from "@doomscrolls/localization";
 import { formatMoneyCompact } from "@doomscrolls/shared";
+import type { ItemDefinitionId } from "@doomscrolls/shared";
+
+export interface VendorStockRowView {
+  readonly stockEntryId: string;
+  readonly itemId: ItemDefinitionId;
+  readonly itemLabel: string;
+  readonly priceLabel: string;
+}
 
 export interface VendorInteractionPanel {
   readonly show: () => void;
   readonly destroy: () => void;
 }
 
+export interface CreateVendorInteractionPanelOptions {
+  readonly stockEntries?: readonly VendorStockEntryDefinition[];
+}
+
 export function createVendorInteractionPanel(
   vendorName: string,
   moneyCopper: number,
+  options: CreateVendorInteractionPanelOptions = {},
 ): VendorInteractionPanel {
   let panelElement: HTMLDivElement | null = null;
+
+  const resolveStockRows = (): VendorStockRowView[] => {
+    const entries = options.stockEntries ?? contentRegistry.vendorStocks.all;
+    const rows: VendorStockRowView[] = [];
+    for (const entry of entries) {
+      const item = contentRegistry.items.get(entry.itemId);
+      if (item === undefined) {
+        continue;
+      }
+      rows.push({
+        stockEntryId: entry.id,
+        itemId: entry.itemId,
+        itemLabel: t(item.nameKey as never),
+        priceLabel: formatMoneyCompact(entry.priceCopper),
+      });
+    }
+    return rows;
+  };
 
   const show = (): void => {
     hideExisting();
@@ -32,7 +67,7 @@ export function createVendorInteractionPanel(
     const card = document.createElement("div");
     card.style.cssText = `
       background: #1a1510; border: 1px solid #5f4a2f; border-radius: 10px;
-      padding: 20px 24px; min-width: 260px; max-width: 340px;
+      padding: 20px 24px; min-width: 320px; max-width: 420px;
       box-shadow: 0 6px 20px rgba(0,0,0,0.7);
       display: grid; gap: 12px;
     `;
@@ -50,14 +85,6 @@ export function createVendorInteractionPanel(
     sep.style.cssText = "height: 1px; background: #3c3122;";
     card.appendChild(sep);
 
-    // Placeholder message
-    const msg = document.createElement("div");
-    msg.textContent = "Trading is not available yet.";
-    msg.style.cssText = `
-      color: #a88d63; font-size: 13px; font-style: italic;
-    `;
-    card.appendChild(msg);
-
     // Money line
     const moneyLine = document.createElement("div");
     moneyLine.textContent = `Money: ${formatMoneyCompact(moneyCopper)}`;
@@ -65,6 +92,37 @@ export function createVendorInteractionPanel(
       color: #b9d49a; font-size: 12px; font-family: monospace;
     `;
     card.appendChild(moneyLine);
+
+    // Stock preview
+    const stockRows = resolveStockRows();
+    const stockHeader = document.createElement("div");
+    stockHeader.textContent = "Stock (preview)";
+    stockHeader.style.cssText = `
+      color: #a88d63; font-size: 11px; font-weight: bold;
+      text-transform: uppercase; letter-spacing: 0.04em;
+    `;
+    card.appendChild(stockHeader);
+
+    if (stockRows.length === 0) {
+      const emptyLine = document.createElement("div");
+      emptyLine.textContent = "No stock entries.";
+      emptyLine.style.cssText = `
+        color: #7a6a4f; font-size: 12px; font-style: italic;
+      `;
+      card.appendChild(emptyLine);
+    } else {
+      for (const row of stockRows) {
+        card.appendChild(createStockRow(row));
+      }
+    }
+
+    // Unavailable notice
+    const note = document.createElement("div");
+    note.textContent = "Trading is not available yet.";
+    note.style.cssText = `
+      color: #7a6a4f; font-size: 11px; font-style: italic;
+    `;
+    card.appendChild(note);
 
     // Dismiss button
     const dismissBtn = document.createElement("button");
@@ -105,4 +163,46 @@ export function createVendorInteractionPanel(
   };
 
   return { show, destroy };
+}
+
+function createStockRow(row: VendorStockRowView): HTMLElement {
+  const rowEl = document.createElement("div");
+  rowEl.style.cssText = `
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    background: rgba(24, 18, 13, 0.7);
+    border: 1px solid #3c3122;
+    border-radius: 6px;
+  `;
+
+  const itemLabel = document.createElement("div");
+  itemLabel.textContent = row.itemLabel;
+  itemLabel.style.cssText = `
+    color: #d8c6a3; font-size: 12px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  `;
+  rowEl.appendChild(itemLabel);
+
+  const priceLabel = document.createElement("div");
+  priceLabel.textContent = row.priceLabel;
+  priceLabel.style.cssText = `
+    color: #b9d49a; font-size: 12px; font-family: monospace;
+  `;
+  rowEl.appendChild(priceLabel);
+
+  const buyBtn = document.createElement("button");
+  buyBtn.textContent = "Buy";
+  buyBtn.disabled = true;
+  buyBtn.title = "Unavailable";
+  buyBtn.style.cssText = `
+    padding: 4px 10px; font-size: 11px;
+    background: #2a2218; border: 1px solid #4d3f2a; border-radius: 5px;
+    color: #7a6a4f; cursor: not-allowed; opacity: 0.7;
+  `;
+  rowEl.appendChild(buyBtn);
+
+  return rowEl;
 }

@@ -51,6 +51,10 @@ interface ClickTargetSnapshot {
   readonly y: number;
 }
 
+interface HeldMovementTargetSnapshot extends ClickTargetSnapshot {
+  readonly pointerId: number;
+}
+
 interface EnemyScreenPositionSnapshot {
   readonly x: number;
   readonly y: number;
@@ -125,6 +129,7 @@ export function createWorldSessionAreaView(
   onPickupFeedback?: (message: string) => void,
   onDebugStateChange?: () => void,
 ): WorldSessionAreaView {
+  const movementHoldThrottleMs = 125;
   const layout = resolveWorldSessionAreaLayout(scene);
   const container = scene.add.container(0, 0);
   const worldContainer = scene.add.container(0, 0);
@@ -230,6 +235,50 @@ export function createWorldSessionAreaView(
   const previousEnemyDefeated = new Map<string, boolean>();
   const previousEnemyRespawnAtMs = new Map<string, number>();
   let pendingPickupWorldLootId: string | null = null;
+  let heldMovementTarget: HeldMovementTargetSnapshot | null = null;
+  let lastHeldMovementIntentAtMs = 0;
+
+  const isPointerInsideViewport = (pointerX: number, pointerY: number): boolean => {
+    const localX = pointerX - layout.originX;
+    const localY = pointerY - layout.originY;
+    return localX >= 0 && localY >= 0 && localX <= layout.width && localY <= layout.height;
+  };
+
+  const clearHeldMovementTarget = (): void => {
+    heldMovementTarget = null;
+  };
+
+  const resolveWorldTargetFromPointer = (
+    pointer: Phaser.Input.Pointer,
+    worldOffset: WorldContainerOffset,
+    worldProjection: AreaProjectionContext,
+  ): ClickTargetSnapshot | null => {
+    if (projectionMode !== "debug_top_down" || !isPointerInsideViewport(pointer.x, pointer.y)) {
+      return null;
+    }
+
+    const screenPoint = screenToWorldActiveProjection(
+      pointer.x - worldOffset.x,
+      pointer.y - worldOffset.y,
+      worldProjection.bounds,
+      worldProjection.viewport,
+      projectionMode,
+    );
+
+    return {
+      x: Math.round(screenPoint.x),
+      y: Math.round(screenPoint.y),
+    };
+  };
+
+  const dispatchMovementIntent = (
+    nextRoom: Room<DoomscrollsRoomState>,
+    target: ClickTargetSnapshot,
+  ): void => {
+    lastClickTarget = target;
+    onDebugStateChange?.();
+    sendMovementIntent(nextRoom, target.x, target.y);
+  };
 
   const clampZoom = (value: number): number => Math.min(Math.max(value, minZoom), maxZoom);
   const setZoom = (value: number): void => {
@@ -508,6 +557,7 @@ export function createWorldSessionAreaView(
       const clickedInteractable = interactablesView.findClickedInteractable(pointer.x, pointer.y);
       if (clickedInteractable !== null) {
         pointerHandledByTarget = true;
+        clearHeldMovementTarget();
         sendInteractIntent(nextRoom, clickedInteractable.objectId);
         lastClickTarget = {
           x: Math.round(clickedInteractable.worldX),
@@ -522,26 +572,39 @@ export function createWorldSessionAreaView(
         return;
       }
 
-      const localX = pointer.x - layout.originX;
-      const localY = pointer.y - layout.originY;
-      if (localX < 0 || localY < 0 || localX > layout.width || localY > layout.height) {
+      const target = resolveWorldTargetFromPointer(pointer, worldOffset, worldProjection);
+      if (target === null) {
         return;
       }
 
-      const screenPoint = screenToWorldActiveProjection(
-        pointer.x - worldOffset.x,
-        pointer.y - worldOffset.y,
-        worldProjection.bounds,
-        worldProjection.viewport,
-        projectionMode,
-      );
-      // Keep this inverse transform aligned with the same projection + offset
-      // used by rendering/hit visuals, or visible clicks will resolve wrong.
-      const worldX = screenPoint.x;
-      const worldY = screenPoint.y;
-      lastClickTarget = { x: Math.round(worldX), y: Math.round(worldY) };
-      onDebugStateChange?.();
-      sendMovementIntent(nextRoom, lastClickTarget.x, lastClickTarget.y);
+      heldMovementTarget = { ...target, pointerId: pointer.id };
+      lastHeldMovementIntentAtMs = scene.time.now;
+      dispatchMovementIntent(nextRoom, target);
+    });
+
+    inputZone.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
+      if (!pointer.leftButtonDown()) {
+        clearHeldMovementTarget();
+        return;
+      }
+
+      if (heldMovementTarget === null || heldMovementTarget.pointerId !== pointer.id) {
+        return;
+      }
+
+      const target = resolveWorldTargetFromPointer(pointer, worldOffset, worldProjection);
+      if (target === null) {
+        clearHeldMovementTarget();
+        return;
+      }
+
+      heldMovementTarget = { ...target, pointerId: pointer.id };
+    });
+
+    inputZone.on(Phaser.Input.Events.POINTER_UP, (pointer: Phaser.Input.Pointer) => {
+      if (heldMovementTarget?.pointerId === pointer.id) {
+        clearHeldMovementTarget();
+      }
     });
 
     if (!container.exists(inputZone)) {
@@ -613,6 +676,17 @@ export function createWorldSessionAreaView(
   };
 
   const handleSceneUpdate = (): void => {
+    if (heldMovementTarget !== null) {
+      if (!scene.input.activePointer.leftButtonDown() || !isPointerInsideViewport(scene.input.activePointer.x, scene.input.activePointer.y)) {
+        clearHeldMovementTarget();
+      } else if (scene.time.now - lastHeldMovementIntentAtMs >= movementHoldThrottleMs) {
+        lastHeldMovementIntentAtMs = scene.time.now;
+        dispatchMovementIntent(room, {
+          x: heldMovementTarget.x,
+          y: heldMovementTarget.y,
+        });
+      }
+    }
     refreshFromRoomState(room);
   };
 
