@@ -22,6 +22,10 @@ import { registerRespawnListeners, sendRespawnRequest } from "../../net/respawnC
 import { registerSkillSlotResponseListeners } from "../../net/skillSlotIntentClient";
 import { createWorldSessionFeedbackView, type WorldSessionFeedbackView } from "./worldSession/worldSessionFeedbackView";
 import { createWorldSessionOverlayView } from "./worldSession/worldSessionOverlayView";
+import {
+  createVendorInteractionPanel,
+  type VendorInteractionPanel,
+} from "./worldSession/vendorInteractionPanel";
 import { createWorldSessionAreaView, type WorldSessionAreaView } from "./worldSession/worldSessionAreaView";
 import { attachWorldSessionDodgeInput, type WorldSessionDodgeInput } from "./worldSession/worldSessionDodgeInput";
 import {
@@ -101,6 +105,7 @@ export class WorldSessionScene extends Phaser.Scene {
   private healingFlaskInput: WorldSessionHealingFlaskInput | null = null;
   private equipmentLoadout: EquipmentLoadout = createEmptyEquipmentLoadout();
   private lastObjectiveCompletionNotice: string | null = null;
+  private vendorPanel: VendorInteractionPanel | null = null;
   private utilityPanelOpenState: WorldSessionUtilityPanelOpenState = {
     controls: false,
     equipment: false,
@@ -151,7 +156,17 @@ export class WorldSessionScene extends Phaser.Scene {
       },
     );
 
-    registerInteractResponseListener(this.room, (message: string) => {
+    registerInteractResponseListener(this.room, (message: string, objectId?: string) => {
+      if (objectId === "nightmarket_vendor_01") {
+        const character = this.account !== null && this.characterId !== null
+          ? this.account.characters.find((c) => c.id === this.characterId) ?? null
+          : null;
+        const moneyCopper = character?.moneyCopper ?? 0;
+        this.vendorPanel?.destroy();
+        this.vendorPanel = createVendorInteractionPanel("Suspicious Vendor", moneyCopper);
+        this.vendorPanel.show();
+        return;
+      }
       this.feedbackView?.showNotice(message);
     }, (message: ObjectiveUpdatedServerMessage) => {
       if (message.completed) {
@@ -469,6 +484,8 @@ export class WorldSessionScene extends Phaser.Scene {
     this.healingFlaskInput = null;
     this.feedbackView?.destroy();
     this.feedbackView = null;
+    this.vendorPanel?.destroy();
+    this.vendorPanel = null;
     this.worldAreaView?.destroy();
     this.worldAreaView = null;
     this.destroyOverlay();
