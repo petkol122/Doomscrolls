@@ -20,7 +20,8 @@ import { persistPickedUpWorldLootToInventory } from "./pickupWorldLootInventory"
 import { validatePickupWorldLootIntent } from "./pickupWorldLootValidation";
 import { spawnWorldLootOnEnemyDefeat } from "./spawnWorldLootOnEnemyDefeat";
 import type { TownRoomState } from "./TownRoomState";
-import { resolveLevelProgression } from "./levelProgression";
+import { tryResolveLevelProgression } from "./levelProgression";
+import { createRoomLogger } from "./roomLogger";
 
 export interface DeferredActionExecutionContext {
   readonly state: TownRoomState;
@@ -30,15 +31,24 @@ export interface DeferredActionExecutionContext {
 }
 
 const characterStatsService = new CharacterStatsService();
+const log = createRoomLogger(undefined);
+
+type ProgressionUpdateResult =
+  | { readonly ok: true; readonly maxHp: number; readonly hp: number; readonly gainedMaxHp: number }
+  | { readonly ok: false };
 
 async function applyProgressionUpdate(
   player: PlayerPresence,
   progression: { readonly xp: number; readonly level: number; readonly leveledUp: boolean },
-): Promise<{ readonly maxHp: number; readonly hp: number; readonly gainedMaxHp: number }> {
+): Promise<ProgressionUpdateResult> {
   const characterRepository = new CharacterRepository();
   const character = await characterRepository.findProgressionContext(player.characterId);
   if (character === null) {
-    throw new Error("Character progression context not found");
+    log.warn?.(
+      { event: "enemy_defeat_xp_skipped", reason: "missing_character", characterId: player.characterId },
+      "Skipping enemy defeat XP because progression character context was not found.",
+    );
+    return { ok: false };
   }
 
   const origin = contentRegistry.origins.get(character.originId as never);
@@ -63,34 +73,86 @@ async function applyProgressionUpdate(
   const gainedMaxHp = Math.max(0, nextMaxHp - previousMaxHp);
   const nextHp = Math.min(nextMaxHp, Math.max(0, player.hp) + gainedMaxHp);
 
-  await characterRepository.updateProgressionState(player.characterId, {
-    xp: progression.xp,
-    level: progression.level,
-    currentHp: nextHp,
-    stats: {
-      ...recalculated.primary,
-      ...recalculated.derived,
-    },
-  });
+  try {
+    await characterRepository.updateProgressionState(player.characterId, {
+      xp: progression.xp,
+      level: progression.level,
+      currentHp: nextHp,
+      stats: {
+        ...recalculated.primary,
+        ...recalculated.derived,
+      },
+    });
+  } catch (error) {
+    log.warn?.(
+      {
+        event: "enemy_defeat_xp_skipped",
+        reason: "missing_stats_row",
+        characterId: player.characterId,
+        err: error,
+      },
+      "Skipping enemy defeat XP because progression stats could not be updated.",
+    );
+    return { ok: false };
+  }
 
   player.xp = progression.xp;
   player.level = progression.level;
   player.maxHp = nextMaxHp;
   player.hp = nextHp;
 
-  return { maxHp: nextMaxHp, hp: nextHp, gainedMaxHp };
+  return { ok: true, maxHp: nextMaxHp, hp: nextHp, gainedMaxHp };
 }
 
 async function grantEnemyDefeatXp(player: PlayerPresence, enemyId: string, sendToClient: (type: string, payload: unknown) => void): Promise<void> {
   const enemyDefinition = contentRegistry.enemies.get(enemyId as never);
-  const xpReward = enemyDefinition?.xp ?? 0;
-  if (enemyDefinition === undefined || !Number.isFinite(xpReward) || xpReward <= 0) {
+  if (enemyDefinition === undefined || !Number.isFinite(enemyDefinition.xp) || enemyDefinition.xp <= 0) {
+    log.warn?.(
+      { event: "enemy_defeat_xp_skipped", reason: "missing_enemy_xp", enemyId, characterId: player.characterId },
+      "Skipping enemy defeat XP because enemy XP is missing or invalid.",
+    );
+    return;
+  }
+
+  const xpReward = enemyDefinition.xp;
+
+  if (!Number.isFinite(player.xp) || player.xp < 0 || !Number.isFinite(player.level) || player.level < 1) {
+    log.warn?.(
+      {
+        event: "enemy_defeat_xp_skipped",
+        reason: "invalid_current_progression",
+        enemyId,
+        characterId: player.characterId,
+        xp: player.xp,
+        level: player.level,
+      },
+      "Skipping enemy defeat XP because the current player progression state is invalid.",
+    );
     return;
   }
 
   const nextXp = player.xp + xpReward;
-  const progression = resolveLevelProgression(player.level, nextXp);
+  const progressionResult = tryResolveLevelProgression(player.level, nextXp);
+  if (!progressionResult.ok) {
+    log.warn?.(
+      {
+        event: "enemy_defeat_xp_skipped",
+        reason: progressionResult.reason,
+        enemyId,
+        characterId: player.characterId,
+        nextXp,
+        level: player.level,
+      },
+      "Skipping enemy defeat XP because level progression could not be resolved.",
+    );
+    return;
+  }
+
+  const progression = progressionResult.progression;
   const progressionUpdate = await applyProgressionUpdate(player, progression);
+  if (!progressionUpdate.ok) {
+    return;
+  }
 
   const xpGained: XpGainedServerMessage = {
     type: "xp_gained",

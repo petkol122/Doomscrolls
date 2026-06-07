@@ -1,0 +1,5 @@
+
+petrj@DESKTOP-PETKOL C:\Users\petrj\Moje hry\Doomscrolls>set FOO=bar 
+
+petrj@DESKTOP-PETKOL C:\Users\petrj\Moje hry\Doomscrolls>echo FOO=bar 
+FOO=bar
