@@ -23,9 +23,10 @@ export type ZoneContentId = "nightmarket" | "blackwire_sewers";
 export type ItemRarity = "common" | "rare";
 export type SkillTargetingMode = "target";
 export type ZoneRoomType = "town" | "combat";
+export type ZoneClassification = "safe_hub" | "combat" | "test_hybrid";
 export type SpawnPointContentId = "nightmarket_spawn";
 export type EquipmentSlotCategory = "weapon" | "armor" | "accessory" | "belt" | "flask";
-export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken" | "loot_container";
+export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken" | "loot_container" | "vendor";
 
 export interface SpawnZoneDefinition {
   readonly id: string;
@@ -102,6 +103,7 @@ export interface ZoneContentDefinition extends LocalizedContentDefinition {
   readonly id: ZoneContentId;
   readonly zoneId: ZoneId;
   readonly roomType: ZoneRoomType;
+  readonly classification: ZoneClassification;
   readonly maxPlayers: number;
   readonly enemyIds: readonly EnemyId[];
   readonly transitionZoneIds: readonly ZoneContentId[];

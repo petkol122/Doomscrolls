@@ -164,6 +164,7 @@ function buildCrateWorldLootId(
 export function getInteractableResponseMessage(objectId: string): string {
   const responses: Record<string, string> = {
     nightmarket_notice_board: "The notice board hums quietly.",
+    nightmarket_vendor_01: "Vendor trading is not available yet.",
   };
   return responses[objectId] ?? "You interact with the object.";
 }

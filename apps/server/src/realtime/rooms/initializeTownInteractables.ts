@@ -38,6 +38,19 @@ export function initializeTownInteractables(
       );
       state.interactables.set(lootContainer.id, lootContainer);
     }
+
+    // Task 197 — Neutral vendor placeholder
+    const vendorProp = contentRegistry.worldProps.get("nightmarket_vendor_01");
+    if (vendorProp !== undefined) {
+      const vendor = new Interactable(
+        vendorProp.id,
+        "vendor",
+        vendorProp.label,
+        vendorProp.x,
+        vendorProp.y,
+      );
+      state.interactables.set(vendor.id, vendor);
+    }
   }
   // Future: add more zones and objects
 }

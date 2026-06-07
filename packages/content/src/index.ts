@@ -50,6 +50,7 @@ export type {
   SpawnZoneDefinition,
   WorldPropContentDefinition,
   WorldPropKind,
+  ZoneClassification,
   ZoneContentBounds,
   ZoneContentDefinition,
   ZoneContentId,

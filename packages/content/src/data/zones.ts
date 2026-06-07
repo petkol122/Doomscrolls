@@ -5,11 +5,14 @@ const zoneId = (value: string): ZoneId => value as ZoneId;
 
 export const zones = [
   {
+    // Core 0.1: nightmarket is test_hybrid because it has enemies despite being a town room.
+    // Long-term, towns/villages should be safe_hub with no enemy spawns.
     id: "nightmarket",
     zoneId: zoneId("nightmarket"),
     nameKey: "zone.nightmarket.name",
     descriptionKey: "zone.nightmarket.description",
     roomType: "town",
+    classification: "test_hybrid",
     maxPlayers: 30,
     enemyIds: ["trashboar_runt", "trashboar_brute"],
     transitionZoneIds: ["blackwire_sewers"],
@@ -22,6 +25,7 @@ export const zones = [
     nameKey: "zone.blackwire_sewers.name",
     descriptionKey: "zone.blackwire_sewers.description",
     roomType: "combat",
+    classification: "combat",
     maxPlayers: 4,
     enemyIds: ["trashboar_runt"],
     transitionZoneIds: ["nightmarket"],
