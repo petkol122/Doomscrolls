@@ -16,5 +16,8 @@ export const worldProps = [
   { id: "nightmarket_waypoint_01", zoneId: "nightmarket", kind: "waypoint", label: "Waypoint", x: 980, y: 640 },
   // Visual marker for the combat edge boundary — no gameplay enforcement
   { id: "nightmarket_sewer_edge_marker_01", zoneId: "nightmarket", kind: "combat_edge", label: "→ Blackwire Sewer Edge", x: 360, y: 260 },
-  { id: "nightmarket_sewer_edge_marker_02", zoneId: "nightmarket", kind: "combat_edge", label: "→ Blackwire Sewer Edge", x: 1180, y: 900 }
+  { id: "nightmarket_sewer_edge_marker_02", zoneId: "nightmarket", kind: "combat_edge", label: "→ Blackwire Sewer Edge", x: 1180, y: 900 },
+  // Visual-only sewer edge debris props to reinforce the combat pocket feel
+  { id: "nightmarket_sewer_debris_01", zoneId: "nightmarket", kind: "debris", label: "Sewer Edge Debris", x: 340, y: 280 },
+  { id: "nightmarket_sewer_debris_02", zoneId: "nightmarket", kind: "debris", label: "Sewer Edge Debris", x: 1150, y: 920 },
 ] as const satisfies readonly WorldPropContentDefinition[];

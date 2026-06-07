@@ -2,26 +2,27 @@ import type { EnemyId, SpawnZoneDefinition } from "./types";
 
 export const spawnZones = [
   {
-    // Conceptual combat edge area near/inside current Nightmarket bounds.
-    // zoneId stays "nightmarket" so the server still picks these up.
-    // Long-term these will move to blackwire_sewer_edge zone when multi-zone lands.
+    // Clustered tightly around sewer edge marker 01 at (360, 260)
+    // so runts feel like they're guarding the immediate edge entrance
     id: "sewer_edge_trashboar_runt_zone",
     zoneId: "nightmarket",
     enemyId: "trashboar_runt" as EnemyId,
     count: 3,
-    minX: 360,
-    maxX: 620,
-    minY: 260,
-    maxY: 500,
+    minX: 300,
+    maxX: 460,
+    minY: 220,
+    maxY: 380,
   },
   {
+    // Pushed deeper south-east beyond marker 02 at (1180, 900)
+    // so the Brute feels farther into the sewer edge area
     id: "sewer_edge_trashboar_brute_zone",
     zoneId: "nightmarket",
     enemyId: "trashboar_brute" as EnemyId,
     count: 1,
-    minX: 1180,
-    maxX: 1420,
-    minY: 900,
-    maxY: 1160,
+    minX: 1400,
+    maxX: 1700,
+    minY: 1100,
+    maxY: 1400,
   },
 ] as const satisfies readonly SpawnZoneDefinition[];
