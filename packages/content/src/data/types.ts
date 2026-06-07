@@ -99,10 +99,14 @@ export interface EnemyContentDefinition extends LocalizedContentDefinition {
   readonly level: number;
   readonly maxHp: number;
   readonly damage: number;
+  readonly heavyAttackDamage?: number;
   readonly armor: number;
   readonly moveSpeed: number;
   readonly attackRange: number;
   readonly attackCooldownMs: number;
+  readonly heavyAttackWindupMs?: number;
+  readonly heavyAttackCooldownMs?: number;
+  readonly heavyAttackChance?: number;
   readonly aggroRange: number;
   readonly leashRange: number;
   readonly xp: number;

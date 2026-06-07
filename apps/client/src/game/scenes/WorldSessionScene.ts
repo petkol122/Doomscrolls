@@ -257,7 +257,10 @@ export class WorldSessionScene extends Phaser.Scene {
         }
       },
       onEnemyAttackTelegraph: (message) => {
-        this.worldAreaView?.showEnemyTelegraph(message.enemyId);
+        this.worldAreaView?.showEnemyTelegraph(message.enemyId, message.attackKind);
+        if (message.attackKind === "heavy") {
+          this.feedbackView?.showNotice("Heavy attack!");
+        }
       },
       onEnemyAttackResolved: (message) => {
         this.worldAreaView?.resolveEnemyAttackOutcome(message.enemyId, message.outcome);

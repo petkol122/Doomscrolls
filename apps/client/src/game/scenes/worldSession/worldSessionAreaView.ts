@@ -125,7 +125,7 @@ export interface WorldSessionAreaView {
   readonly setProjectionMode: (mode: WorldProjectionMode) => void;
   readonly showEnemyFloatingDamage: (enemyId: string, text: string) => void;
   readonly showPlayerFloatingDamage: (text: string) => void;
-  readonly showEnemyTelegraph: (enemyId: string) => void;
+  readonly showEnemyTelegraph: (enemyId: string, attackKind?: "normal" | "heavy") => void;
   readonly resolveEnemyAttackOutcome: (enemyId: string, outcome: "hit" | "miss") => void;
   readonly getSelfWorldPosition: () => { readonly x: number; readonly y: number } | null;
   readonly getLastClickTarget: () => ClickTargetSnapshot | null;
@@ -788,12 +788,12 @@ export function createWorldSessionAreaView(
     floatingDamageView.show(selfScreenPosition.x, selfScreenPosition.y - 18, text);
   };
 
-  const showEnemyTelegraph = (enemyId: string): void => {
+  const showEnemyTelegraph = (enemyId: string, attackKind: "normal" | "heavy" = "normal"): void => {
     const view = enemyPlaceholders.get(enemyId);
     if (view === undefined) {
       return;
     }
-    view.setTelegraphing(true);
+    view.setTelegraphing(true, attackKind);
   };
 
   const resolveEnemyAttackOutcome = (enemyId: string, outcome: "hit" | "miss"): void => {

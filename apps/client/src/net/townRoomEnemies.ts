@@ -1,5 +1,5 @@
 import type { LocalizationKey } from "@doomscrolls/localization";
-import type { EnemyState, RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
+import type { EnemyState, EnemyAttackKind, RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
 
 export interface TownRoomEnemySnapshot {
   readonly id: string;
@@ -13,6 +13,7 @@ export interface TownRoomEnemySnapshot {
   readonly maxHp: number;
   readonly defeated: boolean;
   readonly respawnAtMs: number;
+  readonly attackKind: EnemyAttackKind;
 }
 
 export function getTownRoomEnemies(
@@ -42,6 +43,7 @@ export function getTownRoomEnemies(
     const maxHp = enemy.maxHp;
     const defeated = enemy.defeated;
     const respawnAtMs = enemy.respawnAtMs;
+    const attackKind = enemy.attackKind;
 
     if (
       typeof id !== "string" ||
@@ -54,7 +56,8 @@ export function getTownRoomEnemies(
       typeof hp !== "number" ||
       typeof maxHp !== "number" ||
       typeof defeated !== "boolean" ||
-      typeof respawnAtMs !== "number"
+      typeof respawnAtMs !== "number" ||
+      (attackKind !== "normal" && attackKind !== "heavy")
     ) {
       return;
     }
@@ -81,6 +84,7 @@ export function getTownRoomEnemies(
       maxHp,
       defeated,
       respawnAtMs,
+      attackKind,
     });
   });
 

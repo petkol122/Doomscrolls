@@ -39,6 +39,7 @@ export interface EnemyAttackTelegraphServerMessage {
   readonly enemyId: string;
   readonly targetEntityId: EntityId;
   readonly windupMs: number;
+  readonly attackKind?: "normal" | "heavy";
 }
 
 export interface EnemyAttackResolvedServerMessage {
@@ -46,6 +47,7 @@ export interface EnemyAttackResolvedServerMessage {
   readonly enemyId: string;
   readonly targetEntityId: EntityId;
   readonly outcome: "hit" | "miss";
+  readonly attackKind?: "normal" | "heavy";
   readonly damage?: number;
   readonly remainingHp?: number;
 }

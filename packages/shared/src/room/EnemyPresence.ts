@@ -3,6 +3,8 @@ import type { LocalizationKey } from "@doomscrolls/localization";
 
 export type EnemyState = "idle" | "chasing" | "returning" | "defeated";
 
+export type EnemyAttackKind = "normal" | "heavy";
+
 export class EnemyPresence extends Schema {
   @type("string") id!: string;
   @type("string") enemyId!: string;
@@ -23,6 +25,9 @@ export class EnemyPresence extends Schema {
   // telegraphed attack will land; 0 means no telegraph is active.
   // Clients only read this to drive a transient visual warning marker.
   @type("number") attackLandingAtMs!: number;
+  // Task 226 — server-owned heavy-attack kind flag. Drives the
+  // distinct client warning marker for Brute charged attacks.
+  @type("string") attackKind!: EnemyAttackKind;
 }
 
 export type WorldEnemy = Pick<
@@ -39,4 +44,5 @@ export type WorldEnemy = Pick<
   | "defeated"
   | "respawnAtMs"
   | "attackLandingAtMs"
+  | "attackKind"
 >;

@@ -21,7 +21,7 @@ export interface WorldSessionEnemyPlaceholderView {
   readonly refresh: (enemy: TownRoomEnemySnapshot) => void;
   readonly hide: () => void;
   // Task 094 - show or hide the enemy attack telegraph warning marker.
-  readonly setTelegraphing: (active: boolean) => void;
+  readonly setTelegraphing: (active: boolean, attackKind?: "normal" | "heavy") => void;
   readonly destroy: () => void;
 }
 
@@ -112,7 +112,21 @@ export function createWorldSessionEnemyPlaceholderView(
     .setOrigin(0.5);
   telegraphExclaim.setVisible(false);
 
-  container.add([shadow, ring, body, core, hpBarFrame, hpBarFill, hpText, labelText, stateText, telegraphMarker, telegraphExclaim, aggroExclaim]);
+  const heavyTelegraphLabel = scene.add
+    .text(0, -29, "HEAVY!", {
+      color: "#fff1d6",
+      fontFamily: "Arial, sans-serif",
+      fontSize: "10px",
+      fontStyle: "bold",
+      stroke: "#2a0600",
+      strokeThickness: 3,
+      backgroundColor: "#7a1408",
+      padding: { left: 4, right: 4, top: 2, bottom: 2 },
+    })
+    .setOrigin(0.5);
+  heavyTelegraphLabel.setVisible(false);
+
+  container.add([shadow, ring, body, core, hpBarFrame, hpBarFill, hpText, labelText, stateText, telegraphMarker, telegraphExclaim, heavyTelegraphLabel, aggroExclaim]);
 
   body.on(Phaser.Input.Events.POINTER_DOWN, () => {
     onClick?.(enemy.id);
@@ -224,17 +238,23 @@ export function createWorldSessionEnemyPlaceholderView(
   // Task 094 - show or hide the telegraph warning marker. Driven
   // exclusively by the server-sent `enemy_attack_telegraph` event.
   let telegraphTween: Phaser.Tweens.Tween | null = null;
-  const setTelegraphing = (active: boolean): void => {
+  const setTelegraphing = (active: boolean, attackKind: "normal" | "heavy" = "normal"): void => {
+    const isHeavy = attackKind === "heavy";
+    telegraphMarker.setFillStyle(isHeavy ? 0xff6a3d : 0xffe14a, 0.95);
+    telegraphMarker.setStrokeStyle(2, isHeavy ? 0x5c1200 : 0x6b4a00, 0.9);
+    telegraphExclaim.setText(isHeavy ? "!!" : "!");
+    telegraphExclaim.setColor(isHeavy ? "#fff3e0" : "#1a0e00");
     telegraphMarker.setVisible(active);
     telegraphExclaim.setVisible(active);
+    heavyTelegraphLabel.setVisible(active && isHeavy);
     if (active) {
       if (telegraphTween === null) {
         telegraphTween = scene.tweens.add({
-          targets: [telegraphMarker, telegraphExclaim],
-          scaleX: 1.15,
-          scaleY: 1.15,
+          targets: [telegraphMarker, telegraphExclaim, heavyTelegraphLabel],
+          scaleX: isHeavy ? 1.22 : 1.15,
+          scaleY: isHeavy ? 1.22 : 1.15,
           yoyo: true,
-          duration: 110,
+          duration: isHeavy ? 135 : 110,
           repeat: -1,
         });
       } else if (!telegraphTween.isPlaying()) {
@@ -245,6 +265,8 @@ export function createWorldSessionEnemyPlaceholderView(
       telegraphTween = null;
       telegraphMarker.setScale(1);
       telegraphExclaim.setScale(1);
+      heavyTelegraphLabel.setScale(1);
+      heavyTelegraphLabel.setVisible(false);
     }
   };
 

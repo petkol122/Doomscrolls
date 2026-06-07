@@ -57,6 +57,7 @@ export function initializeTownEnemies(
       enemy.nextAttackAtMs = 0;
       enemy.respawnAtMs = 0;
       enemy.attackLandingAtMs = 0;
+      enemy.attackKind = "normal";
 
       state.enemies.set(enemy.id, enemy);
     }
