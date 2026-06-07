@@ -80,6 +80,14 @@ import { CharacterStatsService } from "../../character/CharacterStatsService";
 // decides the stop point.
 import { resolveApproachTarget } from "./resolveApproachTarget";
 
+// Task 227 -- enemy movement speed is authored in the same
+// per-second stat space as the player's derived `moveSpeed` (see
+// resolvePlayerMovementSpeed). The runtime world-units-per-second
+// value must be scaled by this constant the same way the player
+// speed is, otherwise the enemy moves at <1 wu/sec and can never
+// catch a player running at 200+ wu/sec.
+const ENEMY_MOVEMENT_SPEED_UNITS_PER_SECOND_MULTIPLIER = 220;
+
 const ENEMY_ATTACK_RANGE = 44;
 // Task 207 -- server-owned engagement / pickup / interact ranges used
 // by resolveApproachTarget when queuing deferred move-closer actions.
@@ -1994,7 +2002,13 @@ export class TownRoom extends Room {
 
     state.enemies.forEach((enemy) => {
       const enemyDefinition = contentRegistry.enemies.get(enemy.enemyId as ContentEnemyId);
-      const enemyMoveSpeed = enemyDefinition?.moveSpeed ?? 0;
+      // Task 227 -- enemy `moveSpeed` is authored in the same per-second
+      // stat space as the player's derived `moveSpeed` (see
+      // resolvePlayerMovementSpeed). The runtime world-units-per-second
+      // value must be scaled by ENEMY_MOVEMENT_SPEED_UNITS_PER_SECOND_MULTIPLIER
+      // the same way the player speed is, otherwise the enemy moves at
+      // <1 wu/sec and can never catch a player running at 200+ wu/sec.
+      const enemyMoveSpeed = (enemyDefinition?.moveSpeed ?? 0) * ENEMY_MOVEMENT_SPEED_UNITS_PER_SECOND_MULTIPLIER;
       const enemyAggroRange = toWorldUnits(enemyDefinition?.aggroRange ?? 0, 120);
       const enemyLeashRange = toWorldUnits(enemyDefinition?.leashRange ?? 0, 180);
       const enemyAttackCooldownMs = enemyDefinition?.attackCooldownMs ?? 1200;
