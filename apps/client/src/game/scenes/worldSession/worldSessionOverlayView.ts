@@ -67,6 +67,9 @@ export function createWorldSessionOverlayView(
   onUnequipItem?: (characterId: string, slot: string) => Promise<void>,
 ): WorldSessionOverlayView {
   let selectedInventoryItemId: InventorySummaryItem["itemInstanceId"] | null = character?.inventorySummaryItems?.[0]?.itemInstanceId ?? null;
+  let currentStatusPanel: HTMLElement | null = null;
+  let currentUtilityPanel: HTMLElement;
+  let currentHudPanel: HTMLElement;
 
   const buildStatusPanel = (
     nextCharacter: CharacterSummary | null,
@@ -188,24 +191,32 @@ export function createWorldSessionOverlayView(
   const statusPanel = buildStatusPanel(character, room);
   const utilityPanel = buildUtilityPanel(character, room, debugState);
   const hudPanel = buildHudPanel(character, room);
+  currentStatusPanel = statusPanel;
+  currentUtilityPanel = utilityPanel;
+  currentHudPanel = hudPanel;
 
   const update = (
     nextCharacter: CharacterSummary | null,
     nextRoom: Room<DoomscrollsRoomState>,
     nextDebugState: WorldSessionDebugState,
   ): void => {
-    if (statusPanel !== null) {
+    if (currentStatusPanel !== null) {
       const nextStatus = buildStatusPanel(nextCharacter, nextRoom);
       if (nextStatus !== null) {
-        statusPanel.replaceWith(nextStatus);
+        currentStatusPanel.replaceWith(nextStatus);
+        currentStatusPanel = nextStatus;
       }
+    } else {
+      currentStatusPanel = buildStatusPanel(nextCharacter, nextRoom);
     }
 
     const nextHud = buildHudPanel(nextCharacter, nextRoom);
-    hudPanel.replaceWith(nextHud);
+    currentHudPanel.replaceWith(nextHud);
+    currentHudPanel = nextHud;
 
     const nextUtility = buildUtilityPanel(nextCharacter, nextRoom, nextDebugState);
-    utilityPanel.replaceWith(nextUtility);
+    currentUtilityPanel.replaceWith(nextUtility);
+    currentUtilityPanel = nextUtility;
   };
 
   return {
