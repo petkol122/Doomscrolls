@@ -23,6 +23,7 @@ import type {
   RequestDodgeAcceptedServerMessage,
   RequestDodgeRejectedServerMessage,
   RequestDodgeClientMessage,
+  ObjectiveUpdatedServerMessage,
   XpGainedServerMessage,
 } from "@doomscrolls/shared";
 import { RoomJoinValidationService } from "../RoomJoinValidationService";
@@ -86,6 +87,117 @@ const ENEMY_RETURN_REACQUIRE_BUFFER = 8;
 const characterStatsService = new CharacterStatsService();
 const progressionLog = createRoomLogger(undefined);
 type ContentEnemyId = Parameters<typeof contentRegistry.enemies.get>[0];
+const NOTICE_BOARD_OBJECTIVE_ID = "cull_trashboars" as const;
+const NOTICE_BOARD_OBJECTIVE_LABEL = "Cull Trashboars" as const;
+const NOTICE_BOARD_OBJECTIVE_TARGET = 3;
+const NOTICE_BOARD_OBJECTIVE_XP_REWARD = 5;
+
+function buildObjectiveUpdatedMessage(player: {
+  objectiveCurrent: number;
+  objectiveTarget: number;
+  objectiveCompleted: boolean;
+}): ObjectiveUpdatedServerMessage {
+  return {
+    type: "objective_updated",
+    objectiveId: NOTICE_BOARD_OBJECTIVE_ID,
+    label: NOTICE_BOARD_OBJECTIVE_LABEL,
+    current: player.objectiveCurrent,
+    target: player.objectiveTarget,
+    completed: player.objectiveCompleted,
+  };
+}
+
+function startNoticeBoardObjective(player: {
+  hasObjective: boolean;
+  objectiveId: string;
+  objectiveLabel: string;
+  objectiveCurrent: number;
+  objectiveTarget: number;
+  objectiveCompleted: boolean;
+}): ObjectiveUpdatedServerMessage {
+  player.hasObjective = true;
+  player.objectiveId = NOTICE_BOARD_OBJECTIVE_ID;
+  player.objectiveLabel = NOTICE_BOARD_OBJECTIVE_LABEL;
+  player.objectiveCurrent = 0;
+  player.objectiveTarget = NOTICE_BOARD_OBJECTIVE_TARGET;
+  player.objectiveCompleted = false;
+  return buildObjectiveUpdatedMessage(player);
+}
+
+function shouldCountForNoticeBoardObjective(enemyId: string): boolean {
+  return enemyId === "trashboar_runt" || enemyId === "trashboar_brute";
+}
+
+async function advanceNoticeBoardObjective(
+  player: {
+    characterId: CharacterId;
+    xp: number;
+    level: number;
+    objectiveId: string;
+    objectiveCurrent: number;
+    objectiveTarget: number;
+    objectiveCompleted: boolean;
+  },
+  enemyId: string,
+  sendToClient: (type: string, payload: unknown) => void,
+): Promise<void> {
+  if (
+    player.objectiveId !== NOTICE_BOARD_OBJECTIVE_ID
+    || player.objectiveCompleted
+    || !shouldCountForNoticeBoardObjective(enemyId)
+  ) {
+    return;
+  }
+
+  player.objectiveCurrent = Math.min(player.objectiveTarget, player.objectiveCurrent + 1);
+  if (player.objectiveCurrent >= player.objectiveTarget) {
+    player.objectiveCompleted = true;
+  }
+
+  sendToClient("objective_updated", buildObjectiveUpdatedMessage(player));
+
+  if (player.objectiveCompleted) {
+    await grantFlatXpReward(player, NOTICE_BOARD_OBJECTIVE_XP_REWARD, sendToClient);
+  }
+}
+
+async function grantFlatXpReward(
+  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number },
+  xpReward: number,
+  sendToClient: (type: string, payload: unknown) => void,
+): Promise<void> {
+  if (!Number.isFinite(xpReward) || xpReward <= 0) {
+    return;
+  }
+
+  if (!Number.isFinite(player.xp) || player.xp < 0 || !Number.isFinite(player.level) || player.level < 1) {
+    return;
+  }
+
+  const nextXp = player.xp + xpReward;
+  const progressionResult = tryResolveLevelProgression(player.level, nextXp);
+  if (!progressionResult.ok) {
+    return;
+  }
+
+  const progression = progressionResult.progression;
+  const progressionUpdate = await applyProgressionUpdate(player, progression);
+  if (!progressionUpdate.ok) {
+    return;
+  }
+
+  const xpGained: XpGainedServerMessage = {
+    type: "xp_gained",
+    characterId: player.characterId,
+    amount: xpReward,
+    totalXp: progression.xp,
+    level: progression.level,
+    leveledUp: progression.leveledUp,
+    hp: progressionUpdate.hp,
+    maxHp: progressionUpdate.maxHp,
+  };
+  sendToClient("xp_gained", xpGained);
+}
 
 type ProgressionUpdateResult =
   | { readonly ok: true; readonly maxHp: number; readonly hp: number; readonly gainedMaxHp: number }
@@ -178,56 +290,7 @@ async function grantEnemyDefeatXp(
   }
 
   const xpReward = enemyDefinition.xp;
-
-  if (!Number.isFinite(player.xp) || player.xp < 0 || !Number.isFinite(player.level) || player.level < 1) {
-    progressionLog.warn?.(
-      {
-        event: "enemy_defeat_xp_skipped",
-        reason: "invalid_current_progression",
-        enemyId,
-        characterId: player.characterId,
-        xp: player.xp,
-        level: player.level,
-      },
-      "Skipping enemy defeat XP because the current player progression state is invalid.",
-    );
-    return;
-  }
-
-  const nextXp = player.xp + xpReward;
-  const progressionResult = tryResolveLevelProgression(player.level, nextXp);
-  if (!progressionResult.ok) {
-    progressionLog.warn?.(
-      {
-        event: "enemy_defeat_xp_skipped",
-        reason: progressionResult.reason,
-        enemyId,
-        characterId: player.characterId,
-        nextXp,
-        level: player.level,
-      },
-      "Skipping enemy defeat XP because level progression could not be resolved.",
-    );
-    return;
-  }
-
-  const progression = progressionResult.progression;
-  const progressionUpdate = await applyProgressionUpdate(player, progression);
-  if (!progressionUpdate.ok) {
-    return;
-  }
-
-  const xpGained: XpGainedServerMessage = {
-    type: "xp_gained",
-    characterId: player.characterId,
-    amount: xpReward,
-    totalXp: progression.xp,
-    level: progression.level,
-    leveledUp: progression.leveledUp,
-    hp: progressionUpdate.hp,
-    maxHp: progressionUpdate.maxHp,
-  };
-  sendToClient("xp_gained", xpGained);
+  await grantFlatXpReward(player, xpReward, sendToClient);
 }
 
 /**
@@ -888,6 +951,12 @@ export class TownRoom extends Room {
 
       // Send response message to the requesting client
       const responseMessage = getInteractableResponseMessage(message.objectId);
+      if (message.objectId === "nightmarket_notice_board") {
+        const objectiveUpdate = startNoticeBoardObjective(player);
+        try {
+          client.send("objective_updated", objectiveUpdate);
+        } catch {}
+      }
       const response: InteractResponseServerMessage = {
         type: "interact_response",
         objectId: message.objectId,
@@ -1038,6 +1107,15 @@ export class TownRoom extends Room {
         ? spawnWorldLootOnEnemyDefeat(state, validation.enemy, now)
         : null;
       if (damageResult.defeated) {
+        void advanceNoticeBoardObjective(player, validation.enemy.enemyId, (type, payload) => {
+          try {
+            client.send(type, payload);
+          } catch {
+            // ignore send failures; authoritative state persists
+          }
+        }).catch(() => {
+          // keep kill flow authoritative even if temporary objective progression fails
+        });
         void grantEnemyDefeatXp(player, validation.enemy.enemyId, (type, payload) => {
           try {
             client.send(type, payload);

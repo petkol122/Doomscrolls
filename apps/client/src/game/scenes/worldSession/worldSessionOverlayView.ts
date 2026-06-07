@@ -103,6 +103,7 @@ export function createWorldSessionOverlayView(
       selfPresence?.maxFlaskCharges,
       selfPresence?.level ?? nextCharacter?.level ?? 1,
       selfPresence?.xp ?? nextCharacter?.xp ?? 0,
+      selfPresence?.objective ?? null,
     ));
     panel.appendChild(createSkillSlotPlaceholder());
 
@@ -526,11 +527,17 @@ function createHudSection(
   maxFlaskCharges?: number,
   level?: number,
   xp?: number,
+  objective?: {
+    readonly label: string;
+    readonly current: number;
+    readonly target: number;
+    readonly completed: boolean;
+  } | null,
 ): HTMLElement {
   const wrapper = document.createElement("section");
   wrapper.style.display = "grid";
   wrapper.style.gap = "8px";
-  wrapper.style.gridTemplateColumns = "minmax(240px, 1.6fr) repeat(3, minmax(72px, auto))";
+  wrapper.style.gridTemplateColumns = "minmax(240px, 1.6fr) repeat(2, minmax(72px, auto))";
   wrapper.style.alignItems = "center";
 
   const hpLine = document.createElement("div");
@@ -585,6 +592,10 @@ function createHudSection(
   vitalityCard.appendChild(createFlaskChargesLine(flaskCharges, maxFlaskCharges));
 
   wrapper.appendChild(vitalityCard);
+
+  if (objective !== undefined && objective !== null) {
+    wrapper.appendChild(createObjectiveTrackerCard(objective));
+  }
 
   wrapper.appendChild(createMiniHudStat("Resource", t("world_session.resource_placeholder")));
   wrapper.appendChild(createMiniHudStat(t("character.level"), String(level ?? 1)));
@@ -695,6 +706,74 @@ function createMiniHudStat(labelText: string, valueText: string): HTMLElement {
   value.style.fontWeight = "bold";
   value.style.color = "#d8c6a3";
   card.appendChild(value);
+
+  return card;
+}
+
+function createObjectiveTrackerCard(objective: {
+  readonly label: string;
+  readonly current: number;
+  readonly target: number;
+  readonly completed: boolean;
+}): HTMLElement {
+  const card = document.createElement("div");
+  card.style.display = "grid";
+  card.style.gap = "4px";
+  card.style.padding = "8px 10px";
+  card.style.border = objective.completed ? "1px solid #4f6b3d" : "1px solid #5a4727";
+  card.style.borderRadius = "12px";
+  card.style.background = objective.completed
+    ? "linear-gradient(180deg, rgba(20, 34, 18, 0.92) 0%, rgba(14, 22, 12, 0.92) 100%)"
+    : "linear-gradient(180deg, rgba(32, 24, 14, 0.92) 0%, rgba(18, 14, 10, 0.92) 100%)";
+  card.style.minWidth = "176px";
+
+  const topRow = document.createElement("div");
+  topRow.style.display = "flex";
+  topRow.style.alignItems = "center";
+  topRow.style.justifyContent = "space-between";
+  topRow.style.gap = "8px";
+
+  const title = document.createElement("div");
+  title.textContent = "Objective";
+  title.style.fontSize = "10px";
+  title.style.color = objective.completed ? "#9fca8b" : "#c5a874";
+  topRow.appendChild(title);
+
+  const state = document.createElement("div");
+  state.textContent = objective.completed ? "Complete" : "Active";
+  state.style.fontSize = "10px";
+  state.style.fontWeight = "bold";
+  state.style.textTransform = "uppercase";
+  state.style.color = objective.completed ? "#b9e5a8" : "#e0c88a";
+  topRow.appendChild(state);
+
+  card.appendChild(topRow);
+
+  const trackerLine = document.createElement("div");
+  trackerLine.textContent = `${objective.label}: ${objective.current}/${objective.target}`;
+  trackerLine.style.fontSize = "12px";
+  trackerLine.style.fontWeight = "bold";
+  trackerLine.style.color = objective.completed ? "#d8f0c8" : "#f0ddbb";
+  card.appendChild(trackerLine);
+
+  const progressFrame = document.createElement("div");
+  progressFrame.style.width = "100%";
+  progressFrame.style.height = "8px";
+  progressFrame.style.border = objective.completed ? "1px solid #567546" : "1px solid #5f4a2f";
+  progressFrame.style.borderRadius = "999px";
+  progressFrame.style.background = "rgba(10, 10, 10, 0.45)";
+  progressFrame.style.overflow = "hidden";
+
+  const progressFill = document.createElement("div");
+  const ratio = objective.target <= 0 ? 0 : Math.max(0, Math.min(1, objective.current / objective.target));
+  progressFill.style.width = `${ratio * 100}%`;
+  progressFill.style.height = "100%";
+  progressFill.style.borderRadius = "999px";
+  progressFill.style.background = objective.completed
+    ? "linear-gradient(90deg, #4c7e42 0%, #9fd27e 100%)"
+    : "linear-gradient(90deg, #8c6131 0%, #d6a45a 100%)";
+  progressFrame.appendChild(progressFill);
+  card.appendChild(progressFrame);
 
   return card;
 }

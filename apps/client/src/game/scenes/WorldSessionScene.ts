@@ -3,6 +3,7 @@ import type {
   CharacterId,
   CharacterSummary,
   EquipmentLoadout,
+  ObjectiveUpdatedServerMessage,
   PlayerRespawnedServerMessage,
   RoomState as DoomscrollsRoomState,
 } from "@doomscrolls/shared";
@@ -78,6 +79,7 @@ export class WorldSessionScene extends Phaser.Scene {
   private dodgeInput: WorldSessionDodgeInput | null = null;
   private healingFlaskInput: WorldSessionHealingFlaskInput | null = null;
   private equipmentLoadout: EquipmentLoadout = createEmptyEquipmentLoadout();
+  private lastObjectiveCompletionNotice: string | null = null;
   private utilityPanelOpenState: WorldSessionUtilityPanelOpenState = {
     controls: false,
     equipment: false,
@@ -130,6 +132,16 @@ export class WorldSessionScene extends Phaser.Scene {
 
     registerInteractResponseListener(this.room, (message: string) => {
       this.feedbackView?.showNotice(message);
+    }, (message: ObjectiveUpdatedServerMessage) => {
+      if (message.completed) {
+        const completionText = `${message.label} complete.`;
+        if (this.lastObjectiveCompletionNotice !== completionText) {
+          this.lastObjectiveCompletionNotice = completionText;
+          this.feedbackView?.showNotice(completionText);
+          this.showAttackFeedback(completionText);
+        }
+      }
+      this.renderOverlay();
     });
 
     registerAttackResponseListeners(this.room, {

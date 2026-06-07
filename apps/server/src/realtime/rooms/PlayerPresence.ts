@@ -64,6 +64,12 @@ export class PlayerPresence extends Schema {
   @type("number") public maxFlaskCharges: number;
   @type("number") public nextFlaskAt: number;
   @type("number") public nextSkillSlotAt: number;
+  @type("boolean") public hasObjective: boolean;
+  @type("string") public objectiveId: string;
+  @type("string") public objectiveLabel: string;
+  @type("number") public objectiveCurrent: number;
+  @type("number") public objectiveTarget: number;
+  @type("boolean") public objectiveCompleted: boolean;
 
   constructor(
     sessionId: string,
@@ -112,5 +118,11 @@ export class PlayerPresence extends Schema {
     this.maxFlaskCharges = 0;
     this.nextFlaskAt = 0;
     this.nextSkillSlotAt = 0;
+    this.hasObjective = false;
+    this.objectiveId = "";
+    this.objectiveLabel = "";
+    this.objectiveCurrent = 0;
+    this.objectiveTarget = 0;
+    this.objectiveCompleted = false;
   }
 }

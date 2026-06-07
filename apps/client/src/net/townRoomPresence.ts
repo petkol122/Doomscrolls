@@ -60,6 +60,13 @@ export interface PlayerPresenceEntry {
    */
   readonly flaskCharges?: number;
   readonly maxFlaskCharges?: number;
+  readonly objective?: {
+    readonly id: "cull_trashboars";
+    readonly label: string;
+    readonly current: number;
+    readonly target: number;
+    readonly completed: boolean;
+  };
 }
 
 export interface TownRoomPresence {
@@ -101,7 +108,8 @@ export function getTownRoomPresence(
     const withPosition = applyOptionalPosition(withVitality, value);
     const withMovementSpeed = applyOptionalMovementSpeed(withPosition, value);
     const withFlask = applyOptionalFlaskState(withMovementSpeed, value);
-    players.push(withFlask);
+    const withObjective = applyOptionalObjective(withFlask, value);
+    players.push(withObjective);
   }
 
   return {
@@ -263,5 +271,43 @@ function applyOptionalFlaskState(
     ...entry,
     flaskCharges: Math.max(0, rawCharges),
     maxFlaskCharges: Math.max(0, rawMax),
+  };
+}
+
+function applyOptionalObjective(
+  entry: PlayerPresenceEntry,
+  value: Record<string, unknown>,
+): PlayerPresenceEntry {
+  if (value.hasObjective !== true) {
+    return entry;
+  }
+
+  const rawId = value.objectiveId;
+  const rawLabel = value.objectiveLabel;
+  const rawCurrent = value.objectiveCurrent;
+  const rawTarget = value.objectiveTarget;
+  const rawCompleted = value.objectiveCompleted;
+
+  if (
+    rawId !== "cull_trashboars"
+    || typeof rawLabel !== "string"
+    || typeof rawCurrent !== "number"
+    || typeof rawTarget !== "number"
+    || typeof rawCompleted !== "boolean"
+    || !Number.isFinite(rawCurrent)
+    || !Number.isFinite(rawTarget)
+  ) {
+    return entry;
+  }
+
+  return {
+    ...entry,
+    objective: {
+      id: rawId,
+      label: rawLabel,
+      current: Math.max(0, Math.floor(rawCurrent)),
+      target: Math.max(1, Math.floor(rawTarget)),
+      completed: rawCompleted,
+    },
   };
 }

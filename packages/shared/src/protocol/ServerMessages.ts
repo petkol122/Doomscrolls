@@ -277,6 +277,15 @@ export interface InteractResponseServerMessage {
   readonly message: string;
 }
 
+export interface ObjectiveUpdatedServerMessage {
+  readonly type: "objective_updated";
+  readonly objectiveId: "cull_trashboars";
+  readonly label: "Cull Trashboars";
+  readonly current: number;
+  readonly target: number;
+  readonly completed: boolean;
+}
+
 export type ServerRoomMessage =
   | RoomStateSnapshotServerMessage
   | RoomStatePatchServerMessage
@@ -300,6 +309,7 @@ export type ServerRoomMessage =
   | RequestPickupWorldLootRejectedServerMessage
   | DeferredActionQueuedServerMessage
   | InteractResponseServerMessage
+  | ObjectiveUpdatedServerMessage
   | RequestDodgeAcceptedServerMessage
   | RequestDodgeRejectedServerMessage
   | RequestUseHealingFlaskAcceptedServerMessage
