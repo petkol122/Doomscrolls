@@ -74,6 +74,11 @@ export type ApiErrorCode =
   | "SESSION_INVALID"
   | "SESSION_EXPIRED"
   | "AUTH_ERROR"
+  | "ITEM_NOT_FOUND"
+  | "ITEM_NOT_IN_INVENTORY"
+  | "ITEM_NOT_EQUIPPABLE"
+  | "SLOT_MISMATCH"
+  | "INVENTORY_FULL"
   | "INTERNAL_ERROR"
   | "UNKNOWN_ERROR";
 
@@ -158,6 +163,31 @@ export class ApiClient {
     });
 
     return this.toCharacterSummary(response);
+  }
+
+  public async equipItem(
+    sessionToken: string,
+    characterId: string,
+    itemInstanceId: string,
+    slot: string,
+  ): Promise<{ readonly success: boolean }> {
+    return this.request<{ readonly success: boolean }>("/equip", {
+      method: "POST",
+      sessionToken,
+      body: { characterId, itemInstanceId, slot },
+    });
+  }
+
+  public async unequipItem(
+    sessionToken: string,
+    characterId: string,
+    slot: string,
+  ): Promise<{ readonly success: boolean }> {
+    return this.request<{ readonly success: boolean }>("/unequip", {
+      method: "POST",
+      sessionToken,
+      body: { characterId, slot },
+    });
   }
 
   public async getCharacter(sessionToken: string, characterId: CharacterId): Promise<CharacterDetails> {
@@ -279,6 +309,11 @@ export class ApiClient {
         case "INVALID_CREDENTIALS":
         case "SESSION_INVALID":
         case "SESSION_EXPIRED":
+        case "ITEM_NOT_FOUND":
+        case "ITEM_NOT_IN_INVENTORY":
+        case "ITEM_NOT_EQUIPPABLE":
+        case "SLOT_MISMATCH":
+        case "INVENTORY_FULL":
         case "INTERNAL_ERROR":
           return rawCode;
         default:

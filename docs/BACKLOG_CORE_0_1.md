@@ -247,6 +247,24 @@ Document the current movement-speed flow and, if already synchronized, show spee
 
 Status: implemented. The docs now state that `TownRoom` resolves runtime movement speed from character-derived stats on join, stores that speed in `PlayerPresence`, and that `stepTownRoomMovement()` uses each player's synced speed during the 50 ms authoritative movement tick. They also state that the fallback speed constant exists only as a server safety guard when runtime speed is missing or invalid. On the client, `apps/client/src/net/townRoomPresence.ts` now forwards synced `movementSpeed` when present, and `apps/client/src/game/scenes/accountShell/worldEntryView.ts` appends it to the existing debug player-presence text. No prediction, gameplay HUD, collision, pathfinding, combat, inventory or persistence changes were added.
 
+### Task 169 — World Overlay Stability Rule Docs
+
+Document the WorldSession overlay interaction rule so overlay regressions do not replace interactive roots or break pointer handling.
+
+Status: documented. `docs/CODING_RULES.md` now states that WorldSession overlay interactive mount points must stay stable across state updates, interactive panel roots must not be replaced during overlay refreshes, passive containers use `pointer-events: none`, real controls use `pointer-events: auto`, live combat HUD reads room-synced `PlayerPresence`, and inventory/equipment panels read persisted `/me` account state. This task is docs-only and adds no feature work.
+
+### Task 172 — Stability Checkpoint Docs
+
+Record the fixed WorldSession stability rules without adding features.
+
+Status: documented. `docs/CODING_RULES.md` now states that interactive WorldSession overlay nodes must stay mounted across updates, live HP and valid location are saved on leave/disconnect through real persistence, room join restores saved valid HP/location when present, and `/me` remains persisted account state rather than live combat/runtime state. This task is docs-only and adds no feature work.
+
+### Task 179 — Target/Input Stability Checkpoint
+
+Document the recent WorldSession interaction/render stability fixes without adding features.
+
+Status: documented. `docs/CODING_RULES.md` now records that the inventory panel must capture its own clicks, world target hit testing must use the same rendered projection/live offset as the visible world, enemy views must not be destroyed merely because they are off-screen or overlapped, and defeated/respawn visuals must follow synced server state only. This task is docs-only and adds no feature work.
+
 ### Task 017 — Enemy Spawn and AI
 
 Spawn Trashboar Runt from content and implement AI v1.
@@ -258,6 +276,8 @@ Implement Heavy Strike, damage/armor/death and tests.
 Status: partially implemented as the current basic attack intent foundation batch. `request_attack` is now a real shared/network contract that carries only `targetEnemyId`. `TownRoom` delegates range/existence/presence checks to `validateAttackIntent()`, applies fixed server-owned damage through `applyEnemyDamage()`, clamps synced enemy hp at 0, and sends safe accepted/rejected responses. The client sends attack intent only by clicking a synced enemy placeholder, does not mutate hp locally, and shows safe feedback from server responses while hp text updates only from room-state sync. Enemy AI, enemy attacks, player damage, loot, XP, death, persistence, combat animation and pathfinding/collision remain deferred.
 
 Task 062 milestone cleanup note: the current click-enemy UX now explicitly communicates dispatch (`Attack sent.`), out-of-range rejection (`Too far away.`), and acceptance (`Attack confirmed. Enemy HP updates from synced room state.`). Enemy HP remains visibly updated only through synced room-state changes. Damage remains fixed at 1 and server-owned.
+
+Task 164 status note: the current temporary Notice Board objective is documented as a narrow session-only slice. Objective definitions now live in content, the Notice Board reads `cull_trashboars` from content, completion grants XP once per session objective, and there is still no objective persistence, quest log, dialogue system, or multiple-objective support.
 
 Task 078 milestone note: synced placeholder world loot can now be clicked for server-authoritative pickup. The client sends only `worldLootId`, `TownRoom` validates player presence + loot existence + distance <= 48, and on success removes the synced loot from room state before the client view disappears via Colyseus sync. There is still no inventory write, item stacking, equipment, currency, XP, persistence or client-side pickup authority.
 
@@ -407,6 +427,18 @@ Document the current server-authoritative movement stepping and, if practical, d
 
 Status: documented from the current implementation and updated after runtime sanity verification. `request_move` no longer means an instant authoritative teleport to the clicked point. Instead, accepted input stores `targetX` / `targetY` on server-owned movement-target fields, and the server simulation tick moves `PlayerPresence.x` / `y` toward that target every 50 ms. A newer click replaces the older target. The client renders synced x/y only. Runtime sanity passed locally with account `movecheck044` and character `Mover044`: movement advanced gradually from synced server state rather than as an instant local teleport, and second-click retargeting worked before arrival. The related room header/status display bug was also fixed by reading `roomKind` from synced room state. Collision, map art, pathfinding, stat-driven speed, interpolation/smoothing, combat coupling, persistence and a real gameplay loop are still out of scope.
 
+### Task 137 — Camera/World Interaction Docs Checkpoint
+
+Document the current stable camera/world interaction rules. This is a documentation-only checkpoint and must not add features.
+
+Status: documented. `docs/CODING_RULES.md` now records that world rendering uses the live `worldContainer` offset derived from synced player position, that enemy/loot/interactable hit testing must use the same projection/offset as rendering, that click priority resolves targets before fallback ground movement, and that the temporary overlay should not rebuild its DOM tree on every state tick. This checkpoint is stabilization/documentation only: no gameplay features, no rendering-system rewrite and no input-authority changes were added.
+
+### Task 140 — Level/Equipment/Combat Docs Checkpoint
+
+Document the current progression/equipment-derived-stat/UI/input stabilization checkpoint. This is documentation-only and must not add features.
+
+Status: documented. `README.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG_CORE_0_1.md`, and `docs/CODING_RULES.md` now briefly state that defeated enemies can grant real server-owned XP, level-up raises max HP through the level reward, equipment stat modifiers participate in derived-stat recalculation, and the current client debug/account UI shows derived/runtime values from real synced/persisted state only. They also record that Q flask and Space dodge helpers share focus filtering, and that world rendering, click projection and hit testing must stay aligned through the same live projection/offset rules. This checkpoint is docs + verification only: no gameplay or UI feature changes were added.
+
 ### Task 023.2 — Spawn Point Assignment Only
 
 Resolve the spawn point on TownRoom join and store only the spawn point id on the player presence entry.
@@ -527,6 +559,55 @@ Forbidden scope (strictly avoided):
 Notes: Server uses 50-unit distance validation; objects initialized per room instance (no persistence); render layer kept thin via extracted helper modules; room stays lean via delegation to validation helpers.
 
 ---
+
+### Task 090 — Low-Context Docs Checkpoint
+
+Document the recent enemy AI, player HP / downed, loot pickup, targeted actions and HUD direction slices as a low-context checkpoint across `README.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG_CORE_0_1.md` and `docs/CODING_RULES.md`. This is a documentation-only task and must not change code, add gameplay, or refactor docs broadly.
+
+Status: superseded by the fuller milestone checkpoint docs below.
+
+### Task 100 — Milestone Full Check + Docs
+
+Checkpoint the current playable slice after combat, loot, pickup, inventory summary, HP/downed/respawn, dodge, healing flask, and HUD placeholder work. This task is documentation + verification only and must not add features.
+
+Status: documented. `README.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG_CORE_0_1.md`, and `docs/CODING_RULES.md` now describe the current server-authoritative movement loop, targeted actions (`move first, then attack/interact/pick up`), placeholder enemy aggro/chase/leash/attack/defeat/respawn behavior, player HP/downed/respawn flow, dodge and starter healing flask, loot drops with real pickup persistence into inventory, real inventory summary/detail usage, and the current temporary HUD/resource placeholder.
+
+Equipment/inventory checkpoint update: pickup now writes a real inventory item, inventory detail is read-only, equip moves an item from inventory to its slot, and unequip moves it back to the first free inventory slot. Drag/drop, stat recalculation and item comparison are still not implemented.
+
+Explicitly deferred and called out in the docs:
+
+```text
+no XP yet
+no quests yet
+- no inventory drag/drop yet
+- no stat recalculation yet
+- no item comparison yet
+no vendor/stash yet
+no full death/corpse recovery system yet
+no final Diablo-orb HUD yet
+```
+
+Required checks for this checkpoint:
+
+```text
+pnpm --filter @doomscrolls/server typecheck
+pnpm --filter @doomscrolls/client typecheck
+pnpm lint
+pnpm test
+```
+
+### Task 110 — Spawn Zone + Enemy AI Docs Checkpoint
+
+Document the recent enemy spawn/wander/chase/leash/randomization work across `README.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG_CORE_0_1.md` and `docs/CODING_RULES.md`. This is a documentation-only task and must not add features.
+
+Status: documented. The docs now state that Nightmarket enemy spawning is content-driven through `SpawnZoneDefinition`, that one spawn zone may create multiple enemies (currently 3 `Trashboar Runt` placeholders), that initial spawn positions are chosen by deterministic server RNG, that respawn picks a new random position inside the same spawn zone, and that idle enemies wander while aggro/chase/leash return remain server-authoritative. They also explicitly state that collision, pathfinding, rarity tiers, enemy packs and persistence are still not implemented by this slice.
+
+Required checks for this checkpoint:
+
+```text
+pnpm lint
+pnpm test
+```
 
 ## Anti-Scope-Creep
 

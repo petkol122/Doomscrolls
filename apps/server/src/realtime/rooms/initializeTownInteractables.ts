@@ -1,13 +1,15 @@
 import { Interactable } from "./Interactable";
 import type { TownRoomState } from "./TownRoomState";
 import type { ZoneId } from "@doomscrolls/shared";
+import { contentRegistry } from "@doomscrolls/content";
 
 /**
  * Task 057 — Interactable Object Foundation Batch
  *
  * Initialize static interactable objects for the room.
  * Currently hardcoded for nightmarket zone with one notice board.
- * Future: read from content definitions.
+ * Task 180 — Added loot container from content definitions.
+ * Future: read all interactables from content definitions.
  */
 export function initializeTownInteractables(
   state: TownRoomState,
@@ -22,6 +24,20 @@ export function initializeTownInteractables(
       140, // y: near spawn point
     );
     state.interactables.set(noticeBoard.id, noticeBoard);
+
+    // Task 180 — Shared loot container from worldProps content
+    const lootContainerProp = contentRegistry.worldProps.get("nightmarket_loot_container_01");
+    if (lootContainerProp !== undefined) {
+      const lootContainer = new Interactable(
+        lootContainerProp.id,
+        "loot_container",
+        lootContainerProp.label,
+        lootContainerProp.x,
+        lootContainerProp.y,
+        false, // initially unopened
+      );
+      state.interactables.set(lootContainer.id, lootContainer);
+    }
   }
   // Future: add more zones and objects
 }

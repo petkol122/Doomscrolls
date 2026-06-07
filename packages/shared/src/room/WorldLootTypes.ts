@@ -6,6 +6,7 @@ export interface WorldLoot {
   readonly id: WorldLootId;
   readonly itemId: ItemDefinitionId;
   readonly label: string;
+  readonly rarity?: string;
   readonly x: number;
   readonly y: number;
 }

@@ -1,5 +1,6 @@
 import type { Room } from "@colyseus/sdk";
 import type {
+  DeferredActionQueuedServerMessage,
   RequestPickupWorldLootAcceptedServerMessage,
   RequestPickupWorldLootClientMessage,
   RequestPickupWorldLootRejectedServerMessage,
@@ -41,8 +42,16 @@ export function registerPickupWorldLootResponseListeners(
   callbacks: {
     readonly onAccepted: (message: RequestPickupWorldLootAcceptedServerMessage) => void;
     readonly onRejected: (message: RequestPickupWorldLootRejectedServerMessage) => void;
+    readonly onDeferredQueued?: (message: DeferredActionQueuedServerMessage) => void;
   },
 ): void {
+  room.onMessage("deferred_action_queued", (raw: unknown) => {
+    if (!isDeferredActionQueuedServerMessage(raw) || raw.actionType !== "pickup") {
+      return;
+    }
+    callbacks.onDeferredQueued?.(raw);
+  });
+
   room.onMessage("request_pickup_world_loot_accepted", (raw: unknown) => {
     if (!isRequestPickupWorldLootAcceptedServerMessage(raw)) {
       return;
@@ -69,6 +78,24 @@ function isRequestPickupWorldLootAcceptedServerMessage(
   return (
     candidate.type === "request_pickup_world_loot_accepted" &&
     typeof candidate.worldLootId === "string" &&
+    typeof candidate.message === "string" &&
+    (candidate.itemLabel === undefined || typeof candidate.itemLabel === "string") &&
+    (candidate.rarity === undefined || typeof candidate.rarity === "string")
+  );
+}
+
+function isDeferredActionQueuedServerMessage(
+  value: unknown,
+): value is DeferredActionQueuedServerMessage {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return (
+    candidate.type === "deferred_action_queued" &&
+    (candidate.actionType === "attack" || candidate.actionType === "interact" || candidate.actionType === "pickup") &&
+    typeof candidate.targetId === "string" &&
     typeof candidate.message === "string"
   );
 }

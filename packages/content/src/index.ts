@@ -18,8 +18,11 @@ export { skills } from "./data/skills";
 export { enemies } from "./data/enemies";
 export { items } from "./data/items";
 export { lootTables } from "./data/lootTables";
+export { objectives } from "./data/objectives";
 export { zones } from "./data/zones";
 export { spawnPoints } from "./data/spawnPoints";
+export { worldProps } from "./data/worldProps";
+export { spawnZones } from "./data/spawnZones";
 export { levelTables } from "./data/levelTables";
 export { equipmentSlots } from "./data/equipmentSlots";
 
@@ -35,12 +38,17 @@ export type {
   LevelTableDefinition,
   LootTableEntryDefinition,
   LootTableDefinition,
+  ObjectiveContentDefinition,
   OriginContentDefinition,
+  ObjectiveId,
   PassiveContentDefinition,
   SkillContentDefinition,
   SkillTargetingMode,
   SpawnPointContentDefinition,
   SpawnPointContentId,
+  SpawnZoneDefinition,
+  WorldPropContentDefinition,
+  WorldPropKind,
   ZoneContentBounds,
   ZoneContentDefinition,
   ZoneContentId,

@@ -9,6 +9,7 @@ const envSchema = z
     NODE_ENV: nodeEnvSchema,
     SERVER_PORT: z.coerce.number().int().min(1).max(65535),
     CLIENT_ORIGIN: z.string().url(),
+    CLIENT_ORIGIN_EXTRA: z.string().url().optional(),
     REDIS_URL: z.string().url(),
     DATABASE_URL: z.string().min(1),
     SESSION_SECRET: z.string().min(16)

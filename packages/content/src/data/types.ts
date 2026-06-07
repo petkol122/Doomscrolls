@@ -15,15 +15,28 @@ import type { LocalizationKey } from "@doomscrolls/localization";
 export type ContentLocalizationKey = LocalizationKey;
 
 export type SkillId = "heavy_strike";
-export type EnemyId = "trashboar_runt";
+export type EnemyId = "trashboar_runt" | "trashboar_brute";
 export type LootTableId = "sewer_starter_loot";
 export type LevelTableId = "level_1_to_10";
+export type ObjectiveId = "cull_trashboars";
 export type ZoneContentId = "nightmarket" | "blackwire_sewers";
-export type ItemRarity = "common";
+export type ItemRarity = "common" | "rare";
 export type SkillTargetingMode = "target";
 export type ZoneRoomType = "town" | "combat";
 export type SpawnPointContentId = "nightmarket_spawn";
 export type EquipmentSlotCategory = "weapon" | "armor" | "accessory" | "belt" | "flask";
+export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken" | "loot_container";
+
+export interface SpawnZoneDefinition {
+  readonly id: string;
+  readonly zoneId: string;
+  readonly enemyId: EnemyId;
+  readonly count: number;
+  readonly minX: number;
+  readonly maxX: number;
+  readonly minY: number;
+  readonly maxY: number;
+}
 
 export interface LocalizedContentDefinition {
   readonly id: string;
@@ -112,6 +125,7 @@ export interface ItemContentDefinition extends LocalizedContentDefinition {
 
 export interface LootTableEntryDefinition {
   readonly itemId: ItemDefinitionId;
+  readonly rarity?: ItemRarity;
   readonly weight: number;
 }
 
@@ -130,6 +144,15 @@ export interface LevelTableDefinition {
   readonly levels: readonly LevelThresholdDefinition[];
 }
 
+export interface ObjectiveContentDefinition {
+  readonly id: ObjectiveId;
+  readonly titleKey: ContentLocalizationKey;
+  readonly descriptionKey: ContentLocalizationKey;
+  readonly targetEnemyIds: readonly EnemyId[];
+  readonly requiredKills: number;
+  readonly xpReward: number;
+}
+
 export interface SpawnPointContentDefinition {
   readonly id: SpawnPointContentId;
   readonly spawnPointId: SpawnPointId;
@@ -144,4 +167,13 @@ export interface EquipmentSlotContentDefinition {
   readonly nameKey: ContentLocalizationKey;
   readonly category: EquipmentSlotCategory;
   readonly activeInCore01: boolean;
+}
+
+export interface WorldPropContentDefinition {
+  readonly id: string;
+  readonly zoneId: ZoneContentId;
+  readonly kind: WorldPropKind;
+  readonly label: string;
+  readonly x: number;
+  readonly y: number;
 }

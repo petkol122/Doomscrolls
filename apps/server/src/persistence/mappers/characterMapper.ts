@@ -51,7 +51,7 @@ export function toCharacterSummaryDto(character: Character): CharacterSummary {
 }
 
 export function toCharacterSummaryWithInventoryDto(
-  character: Character & { inventory: Inventory | null; items: readonly ItemInstance[] },
+  character: Character & { stats: PrismaCharacterStats | null; inventory: Inventory | null; items: readonly ItemInstance[] },
 ): CharacterSummary {
   const inventorySummaryItems: InventorySummaryItem[] = [];
 
@@ -74,6 +74,8 @@ export function toCharacterSummaryWithInventoryDto(
         y: item.inventoryY,
         label: t(definition.nameKey),
         category: definition.category,
+        rarity: definition.rarity,
+        allowedEquipmentSlots: definition.allowedEquipmentSlots,
         size: {
           width: definition.size.width,
           height: definition.size.height,
@@ -85,6 +87,7 @@ export function toCharacterSummaryWithInventoryDto(
 
   return {
     ...toCharacterSummaryDto(character),
+    ...(character.stats !== null ? { stats: toCharacterStatsDto(character, character.stats) } : {}),
     inventorySummaryItems,
   };
 }

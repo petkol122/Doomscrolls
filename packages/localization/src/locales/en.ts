@@ -16,6 +16,9 @@ export const en = {
   "enemy.trashboar_runt.name": "Trashboar Runt",
   "enemy.trashboar_runt.description":
     "A sewer-fed mutant with a bad temper, worse hygiene and enough tusk to ruin your evening.",
+  "enemy.trashboar_brute.name": "Trashboar Brute",
+  "enemy.trashboar_brute.description":
+    "A broader, meaner slab of tusk and scar tissue that hits the alleys like a living battering ram.",
 
   "zone.nightmarket.name": "The Nightmarket",
   "zone.nightmarket.description":
@@ -40,10 +43,20 @@ export const en = {
   "item.blackwire_scrap.name": "Blackwire Scrap",
   "item.blackwire_scrap.description":
     "A twisted piece of conductive junk that still hums when nobody is touching it.",
+  "item.scrap_cloth.name": "Scrap Cloth",
+  "item.scrap_cloth.description":
+    "Oil-stained strips of cloth torn from old wraps, pockets or something that used to be a uniform.",
+  "item.rustbound_ring.name": "Rustbound Ring",
+  "item.rustbound_ring.description":
+    "A grimy ring scavenged from the sewer depths, stubborn enough to keep a little life in you.",
 
   "skill.heavy_strike.name": "Heavy Strike",
   "skill.heavy_strike.description":
     "A deliberate attack that solves immediate problems through blunt force.",
+
+  "objective.cull_trashboars.title": "Cull Trashboars",
+  "objective.cull_trashboars.description":
+    "Thin the Nightmarket trashboar pack before it spills deeper into the alleys.",
 
   "auth.username": "Username",
   "auth.password": "Password",
@@ -90,11 +103,16 @@ export const en = {
   "world_session.room_kind": "Room kind",
   "world_session.zone_id": "Zone ID",
   "world_session.connected_players": "Connected players",
+  "world_session.progression": "Progression",
+  "world_session.vitality": "Vitality",
   "world_session.player_presence": "Player presence",
   "world_session.no_presence": "Waiting for synced player presence...",
   "world_session.players_empty": "No synced players are visible yet.",
   "world_session.player_hp": "Player HP",
+  "world_session.player_xp": "Player XP",
   "world_session.awaiting_player_hp": "Waiting for synced HP...",
+  "world_session.alive_state_detail": "State: alive",
+  "world_session.downed_state_detail": "State: downed — respawn to recover.",
   "world_session.movement_debug": "Movement debug",
   "world_session.current_position": "Synced position",
   "world_session.movement_speed": "Movement speed",
@@ -110,9 +128,25 @@ export const en = {
   "world_session.projection_click_top_down_only": "Enabled in debug top-down.",
   "world_session.projection_click_disabled_preview": "Disabled in isometric preview until safe screen-to-world mapping exists.",
   "world_session.downed_notice": "You are downed.",
+  "world_session.damage_feedback": "-{damage} HP  ({hp} remaining)",
+  "world_session.downed_damage_feedback": "-{damage} HP  You are downed.",
   "world_session.respawn": "Respawn",
   "world_session.respawned_notice": "You respawn with {hp} HP.",
   "world_session.respawn_unavailable": "Respawn unavailable.",
+  "world_session.controls": "Controls",
+  "world_session.control_move": "Click ground: move",
+  "world_session.control_attack": "Click enemy: attack / approach",
+  "world_session.control_skill_secondary": "Right click: placeholder skill slot",
+  "world_session.control_dodge": "Space: dodge",
+  "world_session.control_flask": "Q: healing flask",
+  "world_session.skill_slot_secondary": "Right Click",
+  "world_session.skill_slot_secondary_hint": "Reserved secondary skill slot",
+  "world_session.skill_slot_secondary_empty": "No skill learned",
+  "world_session.flask_charges": "Flask charges",
+  "world_session.awaiting_flask": "Waiting for synced flask state...",
+  // Future: Diablo-like right orb resource (mana/class resource) — placeholder until class resource system lands
+  "world_session.resource": "Resource",
+  "world_session.resource_placeholder": "Coming later",
 
   "world_area.title": "World Area",
   "world_area.click_instruction": "Click inside to move.",
@@ -126,6 +160,7 @@ export const en = {
   "world_area.player_damage_taken": "You take {damage} damage. HP now {hp}.",
   "world_area.pickup_sent": "Pickup request sent.",
   "world_area.pickup_too_far": "Too far away to pick that up.",
+  "world_area.pickup_moving_closer": "Moving closer to pick that up.",
   "world_area.moving_closer": "Moving closer.",
   "world_area.pickup_unavailable": "Pickup unavailable.",
   "world_area.inventory_full": "Inventory full.",
@@ -136,6 +171,28 @@ export const en = {
   "world_area.enemy_defeated_respawn": "Enemy defeated. Respawning in {seconds}s.",
   "world_area.enemy_respawning_in": "Respawning in {seconds}s",
   "world_area.enemy_respawned": "Enemy respawned and reset.",
+  "world_area.xp_gained": "+{amount} XP.",
+  "world_area.xp_gained_total": "+{amount} XP ({totalXp} total).",
+  "world_area.level_up": "Level up!",
+
+  "world_area.dodge_sent": "Dodge sent.",
+  "world_area.dodge_confirmed": "Dodge confirmed.",
+  "world_area.dodge_on_cooldown": "Dodge is on cooldown.",
+  "world_area.dodge_unavailable": "Dodge unavailable.",
+  "world_area.dodge_test_button": "Send test dodge (Space)",
+  "world_area.dodge_test_help":
+    "Press Space in this scene to dodge in the last movement direction. Server decides cooldown and outcome.",
+  "world_area.dodge_no_direction": "No recent movement direction; dodge ignored.",
+
+  "world_area.flask_sent": "Healing flask used.",
+  "world_area.flask_healed": "Healed +{healed} HP ({hp} remaining).",
+  "world_area.flask_full_hp": "Already at full HP.",
+  "world_area.flask_no_charges": "No flask charges left.",
+  "world_area.flask_on_cooldown": "Flask is on cooldown.",
+  "world_area.flask_downed": "Cannot use flask while downed.",
+  "world_area.flask_unavailable": "Flask unavailable.",
+  "world_area.skill_unlearned": "Skill slot not learned yet.",
+  "world_area.skill_unavailable": "Skill unavailable.",
 
   "inventory.title": "Inventory",
   "equipment.title": "Equipment",
@@ -159,7 +216,11 @@ export const en = {
   "error.duplicate_character_name": "That character name is already used by this account.",
   "error.missing_localization_key": "Missing localization key: {key}",
 
-  "spawn.nightmarket.default": "Nightmarket Arrival"
+  "spawn.nightmarket.default": "Nightmarket Arrival",
+
+  "world_prop.loot_container.name": "Loot Container",
+  "world_prop.loot_container.description": "A shared container that may hold valuable finds.",
+  "world_prop.loot_container.empty": "The container has already been looted."
 } as const satisfies LocalizationDictionary;
 
 export type LocalizationKey = keyof typeof en;

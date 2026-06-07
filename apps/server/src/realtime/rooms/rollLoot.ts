@@ -1,5 +1,11 @@
+import { randomBytes } from "node:crypto";
 import { contentRegistry } from "@doomscrolls/content";
 import type { ItemDefinitionId } from "@doomscrolls/shared";
+import { createLootRoller } from "./lootRoller";
+
+function createLootSeed(): number {
+  return randomBytes(4).readUInt32BE(0);
+}
 
 export function rollLoot(enemyId: string): ItemDefinitionId | null {
   const enemyDefinition = contentRegistry.enemies.get(enemyId as never);
@@ -12,19 +18,6 @@ export function rollLoot(enemyId: string): ItemDefinitionId | null {
     return null;
   }
 
-  const totalWeight = lootTable.entries.reduce((sum, entry) => sum + entry.weight, 0);
-  if (totalWeight <= 0) {
-    return null;
-  }
-
-  const roll = Math.random() * totalWeight;
-  let currentWeight = 0;
-  for (const entry of lootTable.entries) {
-    currentWeight += entry.weight;
-    if (roll < currentWeight) {
-      return entry.itemId;
-    }
-  }
-
-  return null;
+  const result = createLootRoller(createLootSeed()).rollContentTable(lootTable.entries);
+  return result.itemId;
 }

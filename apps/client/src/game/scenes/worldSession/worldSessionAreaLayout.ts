@@ -7,28 +7,25 @@ export interface WorldSessionAreaLayout {
   readonly height: number;
 }
 
-const AREA_MARGIN_LEFT = 20;
-const AREA_MARGIN_RIGHT = 20;
-const AREA_MARGIN_TOP = 56;
-const AREA_MARGIN_BOTTOM = 24;
-const OVERLAY_SIDEBAR_WIDTH = 300;
-const OVERLAY_SIDEBAR_GAP = 16;
-const MIN_AREA_WIDTH = 640;
-const MIN_AREA_HEIGHT = 360;
+const SCREEN_MARGIN_LEFT = 20;
+const SCREEN_MARGIN_RIGHT = 20;
+const SCREEN_MARGIN_TOP = 32;
+const SCREEN_MARGIN_BOTTOM = 24;
+const MIN_AREA_WIDTH = 960;
+const MIN_AREA_HEIGHT = 560;
 
 export function resolveWorldSessionAreaLayout(scene: Phaser.Scene): WorldSessionAreaLayout {
-  const availableWidth = scene.scale.width
-    - AREA_MARGIN_LEFT
-    - AREA_MARGIN_RIGHT
-    - OVERLAY_SIDEBAR_WIDTH
-    - OVERLAY_SIDEBAR_GAP;
-  const width = Math.max(MIN_AREA_WIDTH, availableWidth);
-  const height = Math.max(MIN_AREA_HEIGHT, scene.scale.height - AREA_MARGIN_TOP - AREA_MARGIN_BOTTOM);
+  const availableWidth = Math.max(0, scene.scale.width - SCREEN_MARGIN_LEFT - SCREEN_MARGIN_RIGHT);
+  const availableHeight = Math.max(0, scene.scale.height - SCREEN_MARGIN_TOP - SCREEN_MARGIN_BOTTOM);
+  const resolvedWidth = Math.max(MIN_AREA_WIDTH, availableWidth);
+  const resolvedHeight = Math.max(MIN_AREA_HEIGHT, availableHeight);
+  const centeredOriginX = (scene.scale.width - resolvedWidth) / 2;
+  const centeredOriginY = (scene.scale.height - resolvedHeight) / 2;
 
   return {
-    originX: AREA_MARGIN_LEFT,
-    originY: AREA_MARGIN_TOP,
-    width,
-    height,
+    originX: centeredOriginX,
+    originY: centeredOriginY,
+    width: resolvedWidth,
+    height: resolvedHeight,
   };
 }

@@ -24,6 +24,7 @@ export interface CharacterSummary {
   readonly level: number;
   readonly xp: number;
   readonly currentZoneId: ZoneId;
+  readonly stats?: CharacterStats;
   readonly inventorySummaryItems?: readonly InventorySummaryItem[];
   readonly createdAt: IsoDateTimeString;
   readonly updatedAt: IsoDateTimeString;

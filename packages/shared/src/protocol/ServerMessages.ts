@@ -24,6 +24,23 @@ export interface DamageAppliedServerMessage {
   readonly remainingHp: number;
 }
 
+// ---------------------------------------------------------------------------
+// Enemy attack telegraph (Task 094)
+//
+// Server-only, time-bound warning sent to the target player right before
+// an enemy attack lands. The client must not derive damage outcome from
+// this message; the server is the sole authority for whether/when damage
+// is applied. The `windupMs` value is informational and describes how
+// long the windup phase is expected to last; clients may use it for
+// transient visual warning markers only.
+// ---------------------------------------------------------------------------
+export interface EnemyAttackTelegraphServerMessage {
+  readonly type: "enemy_attack_telegraph";
+  readonly enemyId: string;
+  readonly targetEntityId: EntityId;
+  readonly windupMs: number;
+}
+
 export interface EntityDiedServerMessage {
   readonly type: "entity_died";
   readonly entityId: EntityId;
@@ -34,6 +51,10 @@ export interface XpGainedServerMessage {
   readonly characterId: CharacterId;
   readonly amount: number;
   readonly totalXp: number;
+  readonly level?: number;
+  readonly leveledUp?: boolean;
+  readonly hp?: number;
+  readonly maxHp?: number;
 }
 
 export interface LootDroppedServerMessage {
@@ -138,6 +159,72 @@ export interface RequestAttackRejectedServerMessage {
   readonly targetEnemyId?: string;
 }
 
+/**
+ * Task 095 — Player Dodge Intent Foundation.
+ *
+ * Safe server-owned rejection reasons for `request_dodge` intents.
+ */
+export type RequestDodgeRejectedReason =
+  | "invalid_shape"
+  | "non_finite_direction"
+  | "zero_direction"
+  | "player_downed"
+  | "dodge_on_cooldown";
+
+export interface RequestDodgeRejectedServerMessage {
+  readonly type: "request_dodge_rejected";
+  readonly reason: RequestDodgeRejectedReason;
+}
+
+export interface RequestDodgeAcceptedServerMessage {
+  readonly type: "request_dodge_accepted";
+}
+
+// ---------------------------------------------------------------------------
+// Task 096 — Basic Healing Flask Foundation.
+//
+// Safe server-owned rejection reasons for `request_use_healing_flask`
+// intents. The client never decides whether a flask charge is usable;
+// the server is the only authority for the heal, the cooldown, the
+// charge count, the full-HP / no-charges / cooldown / downed feedback
+// and the resulting synced HP / flask state.
+// ---------------------------------------------------------------------------
+export type RequestUseHealingFlaskRejectedReason =
+  | "player_downed"
+  | "already_full_hp"
+  | "no_charges"
+  | "flask_on_cooldown";
+
+export interface RequestUseHealingFlaskAcceptedServerMessage {
+  readonly type: "request_use_healing_flask_accepted";
+  readonly healedAmount: number;
+  readonly remainingHp: number;
+  readonly flaskCharges: number;
+  readonly nextFlaskAt: number;
+}
+
+export interface RequestUseHealingFlaskRejectedServerMessage {
+  readonly type: "request_use_healing_flask_rejected";
+  readonly reason: RequestUseHealingFlaskRejectedReason;
+}
+
+export type RequestUseSkillSlotRejectedReason =
+  | "player_downed"
+  | "skill_on_cooldown"
+  | "slot_not_learned"
+  | "skill_unavailable";
+
+export interface RequestUseSkillSlotAcceptedServerMessage {
+  readonly type: "request_use_skill_slot_accepted";
+  readonly slot: "secondary";
+}
+
+export interface RequestUseSkillSlotRejectedServerMessage {
+  readonly type: "request_use_skill_slot_rejected";
+  readonly slot: "secondary";
+  readonly reason: RequestUseSkillSlotRejectedReason;
+}
+
 export type RequestPickupWorldLootRejectedReason =
   | "player_not_ready"
   | "player_downed"
@@ -149,6 +236,8 @@ export interface RequestPickupWorldLootAcceptedServerMessage {
   readonly type: "request_pickup_world_loot_accepted";
   readonly worldLootId: string;
   readonly message: string;
+  readonly itemLabel?: string;
+  readonly rarity?: string;
 }
 
 export interface RequestPickupWorldLootRejectedServerMessage {
@@ -188,10 +277,20 @@ export interface InteractResponseServerMessage {
   readonly message: string;
 }
 
+export interface ObjectiveUpdatedServerMessage {
+  readonly type: "objective_updated";
+  readonly objectiveId: "cull_trashboars";
+  readonly label: string;
+  readonly current: number;
+  readonly target: number;
+  readonly completed: boolean;
+}
+
 export type ServerRoomMessage =
   | RoomStateSnapshotServerMessage
   | RoomStatePatchServerMessage
   | DamageAppliedServerMessage
+  | EnemyAttackTelegraphServerMessage
   | EntityDiedServerMessage
   | XpGainedServerMessage
   | LootDroppedServerMessage
@@ -210,4 +309,11 @@ export type ServerRoomMessage =
   | RequestPickupWorldLootRejectedServerMessage
   | DeferredActionQueuedServerMessage
   | InteractResponseServerMessage
+  | ObjectiveUpdatedServerMessage
+  | RequestDodgeAcceptedServerMessage
+  | RequestDodgeRejectedServerMessage
+  | RequestUseHealingFlaskAcceptedServerMessage
+  | RequestUseHealingFlaskRejectedServerMessage
+  | RequestUseSkillSlotAcceptedServerMessage
+  | RequestUseSkillSlotRejectedServerMessage
   | ErrorServerMessage;

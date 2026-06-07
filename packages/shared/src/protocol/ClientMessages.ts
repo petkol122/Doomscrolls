@@ -84,6 +84,40 @@ export interface RequestPickupWorldLootClientMessage {
   readonly worldLootId: string;
 }
 
+/**
+ * Task 095 — Player Dodge Intent Foundation.
+ *
+ * The client may only identify a desired unit direction (`dirX`, `dirY`)
+ * in which the player wants to roll. The server is the sole authority
+ * for whether the dodge happens, how far the player moves, and whether
+ * it interacts with combat telegraphs. The server never accepts
+ * client-sent damage, kills, XP, loot, inventory changes, equipment
+ * changes, level-up or quest completion.
+ */
+export interface RequestDodgeClientMessage {
+  readonly type: "request_dodge";
+  readonly dirX: number;
+  readonly dirY: number;
+}
+
+// ---------------------------------------------------------------------------
+// Task 096 — Basic Healing Flask Foundation.
+//
+// Minimal client intent to ask the server to consume a healing-flask charge.
+// The client never decides whether the flask is usable, never tells the
+// server how much to heal and never tracks flask charges locally for any
+// gameplay outcome: the server is the sole authority for charge counts,
+// cooldown, heal amount, and the resulting HP state.
+// ---------------------------------------------------------------------------
+export interface RequestUseHealingFlaskClientMessage {
+  readonly type: "request_use_healing_flask";
+}
+
+export interface RequestUseSkillSlotClientMessage {
+  readonly type: "request_use_skill_slot";
+  readonly slot: "secondary";
+}
+
 export interface RequestRespawnClientMessage {
   readonly type: "request_respawn";
 }
@@ -121,6 +155,10 @@ export interface RequestInteractClientMessage {
   readonly objectId: string;
 }
 
+export interface RequestResetObjectiveClientMessage {
+  readonly type: "request_reset_objective";
+}
+
 export type ClientRoomMessage =
   | MoveToPointClientMessage
   | AttackTargetClientMessage
@@ -138,4 +176,8 @@ export type ClientRoomMessage =
   | ChatMessageClientMessage
   | TransitionZoneClientMessage
   | DropInventoryItemClientMessage
-  | RequestInteractClientMessage;
+  | RequestInteractClientMessage
+  | RequestResetObjectiveClientMessage
+  | RequestDodgeClientMessage
+  | RequestUseHealingFlaskClientMessage
+  | RequestUseSkillSlotClientMessage;

@@ -30,6 +30,8 @@ export class PlayerPresence extends Schema {
   @type("string") public sessionId: string;
   @type("string") public characterId: CharacterId;
   @type("string") public displayName: string;
+  @type("number") public level: number;
+  @type("number") public xp: number;
   @type("string") public spawnPointId: SpawnPointId;
   @type("number") public hp: number;
   @type("number") public maxHp: number;
@@ -48,11 +50,34 @@ export class PlayerPresence extends Schema {
   @type("string") public pendingTargetId: string;
   @type("number") public pendingTargetX: number;
   @type("number") public pendingTargetY: number;
+  // Task 095 -- server-owned dodge cooldown timestamp (ms since epoch).
+  // 0 means "no dodge in progress / ready".
+  @type("number") public nextDodgeAt: number;
+
+  // Task 096 -- server-owned basic healing flask state.
+  // flaskCharges  : current number of usable charges (0..maxFlaskCharges).
+  // maxFlaskCharges: total charges granted on respawn / join.
+  // nextFlaskAt   : cooldown timestamp (ms since epoch). 0 = ready now.
+  // The server is the sole authority for charge counts, cooldown and
+  // heal amount; the client only reads these values for display.
+  @type("number") public flaskCharges: number;
+  @type("number") public maxFlaskCharges: number;
+  @type("number") public nextFlaskAt: number;
+  @type("number") public nextSkillSlotAt: number;
+  @type("boolean") public hasObjective: boolean;
+  @type("string") public objectiveId: string;
+  @type("string") public objectiveLabel: string;
+  @type("number") public objectiveCurrent: number;
+  @type("number") public objectiveTarget: number;
+  @type("boolean") public objectiveCompleted: boolean;
+  @type("boolean") public objectiveRewardGranted: boolean;
 
   constructor(
     sessionId: string,
     characterId: CharacterId,
     displayName: string,
+    level: number,
+    xp: number,
     spawnPointId: SpawnPointId,
     hp: number,
     maxHp: number,
@@ -65,6 +90,8 @@ export class PlayerPresence extends Schema {
     this.sessionId = sessionId;
     this.characterId = characterId;
     this.displayName = displayName;
+    this.level = level;
+    this.xp = xp;
     this.spawnPointId = spawnPointId;
     this.hp = hp;
     this.maxHp = maxHp;
@@ -83,5 +110,21 @@ export class PlayerPresence extends Schema {
     this.pendingTargetId = "";
     this.pendingTargetX = x;
     this.pendingTargetY = y;
+    this.nextDodgeAt = 0;
+    // Task 096 -- initialize server-owned basic healing flask state
+    // for a fresh presence entry. Respawn / join both go through this
+    // constructor path, so the player always starts with a full
+    // set of charges and a ready cooldown.
+    this.flaskCharges = 0;
+    this.maxFlaskCharges = 0;
+    this.nextFlaskAt = 0;
+    this.nextSkillSlotAt = 0;
+    this.hasObjective = false;
+    this.objectiveId = "";
+    this.objectiveLabel = "";
+    this.objectiveCurrent = 0;
+    this.objectiveTarget = 0;
+    this.objectiveCompleted = false;
+    this.objectiveRewardGranted = false;
   }
 }

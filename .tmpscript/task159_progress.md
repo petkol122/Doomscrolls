@@ -1,0 +1,7 @@
+- [x] Inspect server XP grant code (TownRoom.ts)
+- [ ] Inspect enemy defeat flow / persistence dependencies
+- [ ] Start client and run full reproduction (login, create char, enter world, kill trashboar)
+- [ ] Capture server log for "enemy defeat XP grant failed after kill."
+- [ ] If cause is obvious, fix smallest safe cause
+- [ ] Run typecheck on server + client if code changed
+- [ ] Final report (max 3 lines)

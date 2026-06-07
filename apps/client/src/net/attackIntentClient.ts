@@ -1,6 +1,7 @@
 import type { Room } from "@colyseus/sdk";
 import type {
   DamageAppliedServerMessage,
+  EnemyAttackTelegraphServerMessage,
   RequestAttackAcceptedServerMessage,
   RequestAttackClientMessage,
   RequestAttackRejectedServerMessage,
@@ -40,6 +41,8 @@ export function registerAttackResponseListeners(
     readonly onAccepted: (message: RequestAttackAcceptedServerMessage) => void;
     readonly onRejected: (message: RequestAttackRejectedServerMessage) => void;
     readonly onDamageApplied?: (message: DamageAppliedServerMessage) => void;
+    // Task 094 - server-owned enemy attack telegraph warning.
+    readonly onEnemyAttackTelegraph?: (message: EnemyAttackTelegraphServerMessage) => void;
   },
 ): void {
   room.onMessage("request_attack_accepted", (raw: unknown) => {
@@ -61,6 +64,13 @@ export function registerAttackResponseListeners(
       return;
     }
     callbacks.onDamageApplied?.(raw);
+  });
+
+  room.onMessage("enemy_attack_telegraph", (raw: unknown) => {
+    if (!isEnemyAttackTelegraphServerMessage(raw)) {
+      return;
+    }
+    callbacks.onEnemyAttackTelegraph?.(raw);
   });
 }
 
@@ -115,5 +125,20 @@ function isDamageAppliedServerMessage(
     typeof candidate.damage === "number" &&
     typeof candidate.remainingHp === "number" &&
     (candidate.sourceEntityId === undefined || typeof candidate.sourceEntityId === "string")
+  );
+}
+function isEnemyAttackTelegraphServerMessage(
+  value: unknown,
+): value is EnemyAttackTelegraphServerMessage {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return (
+    candidate.type === "enemy_attack_telegraph" &&
+    typeof candidate.enemyId === "string" &&
+    typeof candidate.targetEntityId === "string" &&
+    typeof candidate.windupMs === "number"
   );
 }

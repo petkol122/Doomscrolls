@@ -173,10 +173,19 @@ Exact commands may evolve as the repository is implemented. If commands change, 
 Run the browser client during local development:
 
 ```bash
-pnpm dev:client
+pnpm --filter @doomscrolls/client dev -- --host 0.0.0.0
 ```
 
-The client must be opened at `http://localhost:5173`. Its local `.env` sets `VITE_API_URL=http://localhost:2567` so browser API calls target the local server.
+The client binds to `0.0.0.0` for local-network/Tailscale access. You can open it at `http://localhost:5173` on the dev machine or at your Tailscale IP from another device. Keep `apps/client/.env` local to the machine you are testing from.
+
+For Tailscale local-dev access, `apps/client/.env.example` uses:
+
+```env
+VITE_API_URL=http://100.101.190.70:2567
+VITE_WS_URL=ws://100.101.190.70:2567
+```
+
+For local-only browser testing on the same machine, you may still point `VITE_API_URL` / `VITE_WS_URL` at `localhost` instead.
 
 The client is a Vite + Phaser foundation. It boots:
 
@@ -220,6 +229,8 @@ If the real `characters` array is empty, the shell shows `No characters yet.`
 `AccountShellScene` was refactored to extract DOM helpers into `accountShell/accountShellDom.ts`, shared account header rendering into `accountShell/accountShellAccountHeader.ts`, character list view into `accountShell/characterListView.ts`, character create form into `accountShell/characterCreateFormView.ts`, and world entry view into `accountShell/worldEntryView.ts`. This keeps the scene file lean and avoids god-file growth. The rule is: `AccountShellScene` remains the account/character shell, while `WorldSessionScene` remains the connected room shell; shared tiny DOM pieces should be extracted before either scene starts drifting into a god file.
 
 The current basic attack slice now includes a minimal synced enemy death state. When fixed server-owned damage reduces a synced placeholder enemy to 0 HP, the server clamps HP at 0, marks the enemy as defeated, and keeps that enemy in the room state instead of removing it. Further attacks against a defeated enemy are safely rejected. On the client, defeated enemies render in a muted/disabled style and show safe feedback (`Enemy defeated.`) only. There is still no loot, XP, corpse system, respawn, enemy AI, player damage, death animation or persistence in this slice.
+
+The current temporary Notice Board objective is intentionally narrow: objective definitions now live in content, and the Notice Board reads the `cull_trashboars` objective from content when interaction starts a session-temporary `Cull Trashboars 0/3` objective. Completing that objective grants XP once for that session objective only. There is still no quest log, persistence, dialogue system, multiple-objective support or other quest flow yet.
 
 A dedicated client helper (`apps/client/src/net/townRoomPresence.ts`) now extracts player presence data from the Colyseus `TownRoomState` schema at runtime. It returns `connectedPlayerCount` plus an array of `{ sessionId, characterId, displayName, spawnPointId?, position? }` entries. When the server-side `PlayerPresence` entry carries a `spawnPointId` (currently the resolved `nightmarket_spawn` for TownRoom joins), the helper passes it through so `worldEntryView.ts` can show it next to the player's display name. Presence rendering logic is kept out of `AccountShellScene` — the scene only calls `getTownRoomPresence()` via the view module.
 
@@ -353,6 +364,76 @@ no character level, stat scaling or gameplay-affecting behavior
 ```
 
 Interactable objects are intentionally limited. They have no active gameplay behavior, no rewards, no persistence, no collision and no rich dialogue. The server validates distance (50-unit radius from player) and returns safe text responses only. The client renders simple placeholder shapes (gold rectangles with labels) as standin visuals, handles click-to-interact input, and displays the server response message in the center of the screen for 3 seconds before clearing. This is a network + rendering layer only: quests, rewards, loot, inventory effects, NPC dialogue, combat coupling, collision geometry, and persistence are deferred to later Core 0.1 tasks.
+
+### Targeted actions, enemy AI, player HP / downed, dodge, healing flask, loot pickup, progression, equipment-derived stats, and HUD (Core 0.1 — checkpoint)
+
+Recent gameplay slices introduced the following server-authoritative, data-driven foundations. They are intentionally narrow and limited; full simulation polish, stat scaling, pathfinding, projectiles, multiple enemy types, equipment UI, drag/drop inventory UI and final HUD art are still out of scope.
+
+```text
+Targeted action approach:
+  - Far clicks move the player closer first, then attack / interact / pick up
+  - The server uses the same click target as a movement target; once the player is in range of the target, the original action intent (attack / interact / pickup) is processed server-side
+  - The client does not decide whether the action succeeded; it only sends intents and renders synced room state
+
+Server-authoritative movement:
+  - click-to-move remains server-authoritative; the client sends only request_move target intents
+  - TownRoom stores the authoritative movement target and advances synced x/y on its simulation tick
+  - newer clicks replace older movement targets; the client never teleports or predicts arrival locally
+
+Enemy AI (Trashboar Runt placeholder):
+  - content-driven spawn zones define enemy type, count and bounding rectangle per zone
+  - Nightmarket currently spawns 3 Trashboar Runt placeholders from one spawn zone
+  - deterministic server RNG (seeded mulberry32) chooses initial spawn positions inside the spawn zone
+  - idle: enemies wander near their spawn point at reduced speed
+  - aggro: enemy targets the closest alive player within aggro range
+  - chase: while aggroed, the enemy moves toward its current target player using a server tick
+  - attack: in melee range the enemy hits the player on its own attack cooldown, subtracting server-owned damage
+  - leash: if the player runs far enough away, the enemy breaks aggro and walks back to its spawn position
+  - defeat: when server-owned damage reduces HP to 0, the enemy becomes defeated and stops acting
+  - respawn: after a short delay, the enemy picks a new random position inside the same spawn zone and resets to full HP so the loop is repeatable
+  - still no collision, no pathfinding, no rarity tiers, no enemy packs, no persistence
+
+Player HP / downed / respawn foundation:
+  - Each player has server-owned current HP and max HP stored on PlayerPresence
+  - Enemy hits reduce HP server-side; HP updates reach the client only through synced room state
+  - When HP reaches 0, the player is marked as downed; movement and combat are disabled while downed
+  - The player may then request respawn; the server restores HP, clears the downed state, restores flask state and places the player at a server-resolved safe location (last in-zone persisted position or content spawn point)
+  - No XP loss, no item durability loss, no corpse inventory, no recovery flow yet
+
+Progression and equipment-derived stats:
+  - defeated enemies can grant real server-owned XP through the Core 0.1 level table
+  - level-ups recalculate derived stats server-side and raise max HP through the per-level HP reward
+  - equipment stat modifiers are included in that same recalculation and can change derived stats such as max HP, damage and movement speed
+  - the current client debug UI shows these derived/runtime values from real synced/account state rather than inventing local values
+
+Dodge and healing flask:
+  - dodge is a server-authoritative short displacement with direction validation and a fixed cooldown; it can also cancel an in-flight enemy telegraph if the player leaves range in time
+  - the starter healing flask is server-authoritative, uses fixed charges/cooldown, heals only living players, and is restored on join/respawn
+  - Q (flask) and Space (dodge) input helpers share focus filtering so gameplay hotkeys do not fire while text-entry style UI focus is active
+  - there is still no stamina system, no mana/resource system, no vendor refill flow and no advanced consumable system
+
+Camera / world input projection rules:
+  - world rendering uses the live world-container offset derived from synced player position
+  - world clicks/hit testing must use the same active projection and live offset as rendering so visible targets and input stay aligned
+  - actionable targets resolve before fallback ground movement when hit candidates overlap
+  - top-down click-to-move input is allowed only in the current debug projection; projection preview modes must not fake gameplay input
+
+ Loot drops, pickup, inventory persistence, inventory summary/detail, equipment checkpoint:
+  - Loot dropped by defeated enemies exists as a synced world-loot entry in room state (id, itemId, label, x, y)
+  - The client sends only a worldLootId pickup intent; the server validates ownership, distance and that the loot still exists
+   - On success the server removes the synced room-state loot and persists the picked-up item as a real inventory item through the persistence layer
+   - the current client slice exposes real inventory summary data plus a read-only inventory detail view from persisted account state rather than fake client-only loot
+   - equip moves a real item from inventory into the selected equipment slot
+   - unequip moves that real equipped item back into the first free inventory slot
+   - drag/drop, stat recalculation, item comparison, currency, XP, salvage, vendor/stash and full inventory UI polish are still deferred
+
+HUD (temporary debug vs. future default):
+  - The current connected-room overlay is a temporary server-synced HUD/resource placeholder and debug shell only
+  - The future default HUD will use Diablo-like orbs (health globe + mana / resource globe) in the bottom corners
+  - An optional WoW-like framed bars mode may be added later behind a setting; the orbs are still the default
+```
+
+These slices are still narrow checkpoint flows. They are not full combat, not full AI, not full loot/inventory/equipment, and not final HUD art. The server still owns every gameplay outcome; the client only sends intents and renders synced state. Equipment/inventory currently means: pickup writes a real inventory item, inventory detail is read-only, equip moves an item from inventory to a slot, and unequip moves it back to the first free inventory slot. Still missing in this milestone: XP, quests, inventory drag/drop, stat recalculation, item comparison, vendor/stash, a full death/corpse recovery system, and the final Diablo-orb HUD.
 
 Selected character state runtime verification passed locally:
 

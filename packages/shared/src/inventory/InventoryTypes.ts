@@ -1,4 +1,5 @@
 import type { StatModifier } from "../character/StatTypes";
+import type { EquipmentSlot } from "./EquipmentTypes";
 import type { ItemCategory } from "./ItemTypes";
 import type { CharacterId, ItemDefinitionId, ItemInstanceId } from "../ids";
 
@@ -25,6 +26,8 @@ export interface InventorySummaryItem extends InventoryGridItem {
   readonly label: string;
   readonly definitionId: ItemDefinitionId;
   readonly category: ItemCategory;
+  readonly rarity?: string;
+  readonly allowedEquipmentSlots?: readonly EquipmentSlot[];
   readonly size?: {
     readonly width: number;
     readonly height: number;

@@ -12,11 +12,22 @@ import type {
   RequestPickupWorldLootRejectedServerMessage,
   RequestMoveRejectedServerMessage,
   RequestAttackClientMessage,
+  RequestUseSkillSlotAcceptedServerMessage,
+  RequestUseSkillSlotClientMessage,
+  RequestUseSkillSlotRejectedServerMessage,
   UserId,
   ZoneId,
   RequestInteractClientMessage,
   InteractResponseServerMessage,
+  EnemyAttackTelegraphServerMessage,
+  RequestDodgeAcceptedServerMessage,
+  RequestDodgeRejectedServerMessage,
+  RequestDodgeClientMessage,
+  ObjectiveUpdatedServerMessage,
+  RequestResetObjectiveClientMessage,
+  XpGainedServerMessage,
 } from "@doomscrolls/shared";
+import { t } from "@doomscrolls/localization";
 import { RoomJoinValidationService } from "../RoomJoinValidationService";
 import { CharacterService } from "../../character/CharacterService";
 import type { TownRoomJoinOptions } from "./townRoomTypes";
@@ -33,12 +44,24 @@ import {
 } from "./stepTownRoomMovement";
 import { initializeTownInteractables } from "./initializeTownInteractables";
 import { initializeTownEnemies } from "./initializeTownEnemies";
-import { validateInteractIntent, getInteractableResponseMessage } from "./interactValidation";
+import { validateInteractIntent, getInteractableResponseMessage, handleLootContainerInteraction } from "./interactValidation";
 import { validateAttackIntent } from "./attackIntentValidation";
 import { consumeAttackCooldown, resolveAttackCooldownMs } from "./attackCooldown";
 import { applyEnemyDamage } from "./applyEnemyDamage";
+import { validateDodgeIntent } from "./dodgeIntentValidation";
+import { applyDodgeIntent } from "./applyDodgeIntent";
+import { consumeDodgeCooldown, isDodgeReady } from "./dodgeCooldown";
+import { validateHealingFlaskIntent } from "./healingFlaskValidation";
+import { applyHealingFlaskIntent } from "./applyHealingFlaskIntent";
+import { restoreFlaskToFull } from "./healingFlaskConfig";
+import type {
+  RequestUseHealingFlaskAcceptedServerMessage,
+  RequestUseHealingFlaskRejectedServerMessage,
+  RequestUseHealingFlaskClientMessage,
+} from "@doomscrolls/shared";
 import { respawnTownEnemies } from "./respawnTownEnemies";
 import { spawnWorldLootOnEnemyDefeat } from "./spawnWorldLootOnEnemyDefeat";
+import { applyWanderMovement, clearWanderState } from "./wanderEnemies";
 import { persistPickedUpWorldLootToInventory } from "./pickupWorldLootInventory";
 import { validatePickupWorldLootIntent } from "./pickupWorldLootValidation";
 import { clearPendingAction, setPendingAction } from "./pendingActionState";
@@ -46,11 +69,371 @@ import { resolvePlayerInitialPosition } from "./validateCharacterLocation";
 import { contentRegistry } from "@doomscrolls/content";
 import type { SpawnPointContentId } from "@doomscrolls/content";
 import { NIGHTMARKET_DEFAULT_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
+import { CharacterRepository } from "../../persistence/repositories";
+import { ItemRepository } from "../../persistence/repositories/ItemRepository";
+import { tryResolveLevelProgression } from "./levelProgression";
+import { CharacterStatsService } from "../../character/CharacterStatsService";
 
 const ENEMY_AGGRO_RANGE = 120;
+const ENEMY_LEASH_RANGE = 180;
 const ENEMY_ATTACK_RANGE = 44;
 const ENEMY_ATTACK_COOLDOWN_MS = 1200;
+// Task 094 -- server-owned enemy attack windup. The server sends
+// `enemy_attack_telegraph` to the target client when the windup starts;
+// damage is applied after this many ms only if the target is still alive
+// and in attack range.
+const ENEMY_ATTACK_WINDUP_MS = 350;
 const ENEMY_ATTACK_DAMAGE = 2;
+const ENEMY_RETURN_ARRIVAL_DISTANCE = 1;
+const ENEMY_RETURN_REACQUIRE_BUFFER = 8;
+const characterStatsService = new CharacterStatsService();
+const progressionLog = createRoomLogger(undefined);
+type ContentEnemyId = Parameters<typeof contentRegistry.enemies.get>[0];
+const NOTICE_BOARD_OBJECTIVE_ID = "cull_trashboars" as const;
+const NOTICE_BOARD_OBJECTIVE = contentRegistry.objectives.require(NOTICE_BOARD_OBJECTIVE_ID);
+
+function buildObjectiveUpdatedMessage(player: {
+  objectiveLabel: string;
+  objectiveCurrent: number;
+  objectiveTarget: number;
+  objectiveCompleted: boolean;
+}): ObjectiveUpdatedServerMessage {
+  return {
+    type: "objective_updated",
+    objectiveId: NOTICE_BOARD_OBJECTIVE_ID,
+    label: player.objectiveLabel,
+    current: player.objectiveCurrent,
+    target: player.objectiveTarget,
+    completed: player.objectiveCompleted,
+  };
+}
+
+function startNoticeBoardObjective(player: {
+  hasObjective: boolean;
+  objectiveId: string;
+  objectiveLabel: string;
+  objectiveCurrent: number;
+  objectiveTarget: number;
+  objectiveCompleted: boolean;
+  objectiveRewardGranted: boolean;
+}): ObjectiveUpdatedServerMessage {
+  player.hasObjective = true;
+  player.objectiveId = NOTICE_BOARD_OBJECTIVE.id;
+  player.objectiveLabel = t(NOTICE_BOARD_OBJECTIVE.titleKey);
+  player.objectiveCurrent = 0;
+  player.objectiveTarget = NOTICE_BOARD_OBJECTIVE.requiredKills;
+  player.objectiveCompleted = false;
+  player.objectiveRewardGranted = false;
+  return buildObjectiveUpdatedMessage(player);
+}
+
+function resetNoticeBoardObjective(player: {
+  hasObjective: boolean;
+  objectiveId: string;
+  objectiveLabel: string;
+  objectiveCurrent: number;
+  objectiveTarget: number;
+  objectiveCompleted: boolean;
+  objectiveRewardGranted: boolean;
+}): void {
+  player.hasObjective = false;
+  player.objectiveId = "";
+  player.objectiveLabel = "";
+  player.objectiveCurrent = 0;
+  player.objectiveTarget = 0;
+  player.objectiveCompleted = false;
+  player.objectiveRewardGranted = false;
+}
+
+function shouldCountForNoticeBoardObjective(enemyId: string): boolean {
+  return NOTICE_BOARD_OBJECTIVE.targetEnemyIds.includes(enemyId as ContentEnemyId);
+}
+
+async function advanceNoticeBoardObjective(
+  player: {
+    characterId: CharacterId;
+    xp: number;
+    level: number;
+    objectiveId: string;
+    objectiveLabel: string;
+    objectiveCurrent: number;
+    objectiveTarget: number;
+    objectiveCompleted: boolean;
+    objectiveRewardGranted: boolean;
+  },
+  enemyId: string,
+  sendToClient: (type: string, payload: unknown) => void,
+): Promise<void> {
+  if (
+    player.objectiveId !== NOTICE_BOARD_OBJECTIVE_ID
+    || player.objectiveRewardGranted
+    || !shouldCountForNoticeBoardObjective(enemyId)
+  ) {
+    return;
+  }
+
+  player.objectiveCurrent = Math.min(player.objectiveTarget, player.objectiveCurrent + 1);
+  if (player.objectiveCurrent >= player.objectiveTarget) {
+    player.objectiveCompleted = true;
+  }
+
+  sendToClient("objective_updated", buildObjectiveUpdatedMessage(player));
+
+  if (player.objectiveCompleted) {
+    player.objectiveRewardGranted = true;
+    await grantFlatXpReward(player, NOTICE_BOARD_OBJECTIVE.xpReward, sendToClient);
+  }
+}
+
+async function grantFlatXpReward(
+  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number },
+  xpReward: number,
+  sendToClient: (type: string, payload: unknown) => void,
+): Promise<void> {
+  if (!Number.isFinite(xpReward) || xpReward <= 0) {
+    return;
+  }
+
+  if (!Number.isFinite(player.xp) || player.xp < 0 || !Number.isFinite(player.level) || player.level < 1) {
+    return;
+  }
+
+  const nextXp = player.xp + xpReward;
+  const progressionResult = tryResolveLevelProgression(player.level, nextXp);
+  if (!progressionResult.ok) {
+    return;
+  }
+
+  const progression = progressionResult.progression;
+  const progressionUpdate = await applyProgressionUpdate(player, progression);
+  if (!progressionUpdate.ok) {
+    return;
+  }
+
+  const xpGained: XpGainedServerMessage = {
+    type: "xp_gained",
+    characterId: player.characterId,
+    amount: xpReward,
+    totalXp: progression.xp,
+    level: progression.level,
+    leveledUp: progression.leveledUp,
+    hp: progressionUpdate.hp,
+    maxHp: progressionUpdate.maxHp,
+  };
+  sendToClient("xp_gained", xpGained);
+}
+
+type ProgressionUpdateResult =
+  | { readonly ok: true; readonly maxHp: number; readonly hp: number; readonly gainedMaxHp: number }
+  | { readonly ok: false };
+
+async function applyProgressionUpdate(
+  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number },
+  progression: { readonly xp: number; readonly level: number; readonly leveledUp: boolean },
+): Promise<ProgressionUpdateResult> {
+  const characterRepository = new CharacterRepository();
+  const character = await characterRepository.findProgressionContext(player.characterId);
+  if (character === null) {
+    progressionLog.warn?.(
+      { event: "enemy_defeat_xp_skipped", reason: "missing_character", characterId: player.characterId },
+      "Skipping enemy defeat XP because progression character context was not found.",
+    );
+    return { ok: false };
+  }
+
+  const origin = contentRegistry.origins.get(character.originId as never);
+  const characterClass = contentRegistry.classes.get(character.classId as never);
+  if (origin === undefined || characterClass === undefined) {
+    throw new Error("Character progression content missing");
+  }
+
+  const equippedItems = await new ItemRepository().listEquippedItems(player.characterId);
+  const modifiers = equippedItems.flatMap((equippedItem) => {
+    const definition = contentRegistry.items.get(equippedItem.definitionId as never);
+    return definition?.statModifiers ?? [];
+  });
+
+  const previousMaxHp = Number.isFinite(player.maxHp) ? Math.max(0, player.maxHp ?? 0) : 0;
+  const previousHp = Number.isFinite(player.hp) ? Math.max(0, player.hp ?? 0) : character.currentHp;
+  const recalculated = characterStatsService.calculateEquippedStats(
+    characterStatsService.calculateLevelScaledStats(origin.baseStats, characterClass.baseStats, progression.level).primary,
+    modifiers,
+    progression.level,
+  );
+  const nextMaxHp = Math.max(1, Math.floor(recalculated.derived.maxHp));
+  const gainedMaxHp = Math.max(0, nextMaxHp - previousMaxHp);
+  const nextHp = Math.min(nextMaxHp, previousHp + gainedMaxHp);
+
+  try {
+    await characterRepository.updateProgressionState(player.characterId, {
+      xp: progression.xp,
+      level: progression.level,
+      currentHp: nextHp,
+      stats: {
+        ...recalculated.primary,
+        ...recalculated.derived,
+      },
+    });
+  } catch (error) {
+    progressionLog.warn?.(
+      {
+        event: "enemy_defeat_xp_skipped",
+        reason: "missing_stats_row",
+        characterId: player.characterId,
+        err: error,
+      },
+      "Skipping enemy defeat XP because progression stats could not be updated.",
+    );
+    return { ok: false };
+  }
+
+  player.xp = progression.xp;
+  player.level = progression.level;
+  if ("maxHp" in player) {
+    player.maxHp = nextMaxHp;
+  }
+  if ("hp" in player) {
+    player.hp = nextHp;
+  }
+
+  return { ok: true, maxHp: nextMaxHp, hp: nextHp, gainedMaxHp };
+}
+
+async function grantEnemyDefeatXp(
+  player: { characterId: CharacterId; xp: number; level: number },
+  enemyId: string,
+  sendToClient: (type: string, payload: unknown) => void,
+): Promise<void> {
+  const enemyDefinition = contentRegistry.enemies.get(enemyId as ContentEnemyId);
+  if (enemyDefinition === undefined || !Number.isFinite(enemyDefinition.xp) || enemyDefinition.xp <= 0) {
+    progressionLog.warn?.(
+      { event: "enemy_defeat_xp_skipped", reason: "missing_enemy_xp", enemyId, characterId: player.characterId },
+      "Skipping enemy defeat XP because enemy XP is missing or invalid.",
+    );
+    return;
+  }
+
+  const xpReward = enemyDefinition.xp;
+  await grantFlatXpReward(player, xpReward, sendToClient);
+}
+
+/**
+ * Task 094 -- Send the `enemy_attack_telegraph` warning to the
+ * target client. The client only uses this for transient visual
+ * warning markers; damage outcome is decided by the server.
+ */
+function sendEnemyAttackTelegraph(
+  targetClient: Client,
+  enemyId: string,
+  targetCharacterId: string,
+  windupMs: number,
+): void {
+  const telegraph: EnemyAttackTelegraphServerMessage = {
+    type: "enemy_attack_telegraph",
+    enemyId,
+    targetEntityId: targetCharacterId as unknown as EntityId,
+    windupMs,
+  };
+  try {
+    targetClient.send("enemy_attack_telegraph", telegraph);
+  } catch {
+    // keep room state authoritative even if send fails
+  }
+}
+
+function moveEnemyTowardTarget(
+  enemy: { x: number; y: number },
+  target: { x: number; y: number },
+  moveSpeedUnitsPerSecond: number,
+  deltaMs: number,
+): void {
+  if (
+    !Number.isFinite(moveSpeedUnitsPerSecond) ||
+    moveSpeedUnitsPerSecond <= 0 ||
+    !Number.isFinite(deltaMs) ||
+    deltaMs <= 0
+  ) {
+    return;
+  }
+
+  const deltaX = target.x - enemy.x;
+  const deltaY = target.y - enemy.y;
+  const distance = Math.hypot(deltaX, deltaY);
+
+  if (distance <= ENEMY_ATTACK_RANGE) {
+    return;
+  }
+
+  const maxDistance = moveSpeedUnitsPerSecond * (deltaMs / 1000);
+  const distanceToTravel = Math.min(maxDistance, distance - ENEMY_ATTACK_RANGE);
+  if (distanceToTravel <= 0) {
+    return;
+  }
+
+  const scale = distanceToTravel / distance;
+  enemy.x += deltaX * scale;
+  enemy.y += deltaY * scale;
+}
+
+function clearEnemyTargetAndReturn(enemy: {
+  state: "idle" | "chasing" | "returning" | "defeated";
+  targetPlayerSessionId: string;
+  nextAttackAtMs: number;
+  attackLandingAtMs: number;
+}): void {
+  enemy.targetPlayerSessionId = "";
+  enemy.state = "returning";
+  enemy.nextAttackAtMs = 0;
+  enemy.attackLandingAtMs = 0;
+}
+
+function resetEnemyCombatState(enemy: {
+  state: "idle" | "chasing" | "returning" | "defeated";
+  targetPlayerSessionId: string;
+  nextAttackAtMs: number;
+  attackLandingAtMs: number;
+}): void {
+  enemy.targetPlayerSessionId = "";
+  enemy.state = "idle";
+  enemy.nextAttackAtMs = 0;
+  enemy.attackLandingAtMs = 0;
+}
+
+function moveEnemyTowardPoint(
+  enemy: { x: number; y: number },
+  target: { x: number; y: number },
+  moveSpeedUnitsPerSecond: number,
+  deltaMs: number,
+): void {
+  if (
+    !Number.isFinite(moveSpeedUnitsPerSecond) ||
+    moveSpeedUnitsPerSecond <= 0 ||
+    !Number.isFinite(deltaMs) ||
+    deltaMs <= 0
+  ) {
+    return;
+  }
+
+  const deltaX = target.x - enemy.x;
+  const deltaY = target.y - enemy.y;
+  const distance = Math.hypot(deltaX, deltaY);
+
+  if (distance <= ENEMY_RETURN_ARRIVAL_DISTANCE) {
+    enemy.x = target.x;
+    enemy.y = target.y;
+    return;
+  }
+
+  const maxDistance = moveSpeedUnitsPerSecond * (deltaMs / 1000);
+  const distanceToTravel = Math.min(maxDistance, distance);
+  if (distanceToTravel <= 0) {
+    return;
+  }
+
+  const scale = distanceToTravel / distance;
+  enemy.x += deltaX * scale;
+  enemy.y += deltaY * scale;
+}
 
 /**
  * TownRoom with minimal Colyseus schema state.
@@ -105,11 +488,15 @@ export class TownRoom extends Room {
  * while the room simulation tick advances the player's authoritative
  * position through Colyseus schema synchronization.
  */
-private movementIntentHandlerRegistered = false;
-private interactHandlerRegistered = false;
-private attackHandlerRegistered = false;
-private pickupWorldLootHandlerRegistered = false;
-private respawnHandlerRegistered = false;
+  private movementIntentHandlerRegistered = false;
+  private interactHandlerRegistered = false;
+  private attackHandlerRegistered = false;
+  private resetObjectiveHandlerRegistered = false;
+  private pickupWorldLootHandlerRegistered = false;
+  private respawnHandlerRegistered = false;
+  private dodgeHandlerRegistered = false;
+  private healingFlaskHandlerRegistered = false;
+  private skillSlotHandlerRegistered = false;
 
   public override async onCreate(options: TownRoomJoinOptions): Promise<void> {
     const log = createRoomLogger(
@@ -128,9 +515,13 @@ private respawnHandlerRegistered = false;
 
     this.registerMovementIntentHandler(log);
     this.registerInteractHandler(log);
+    this.registerResetObjectiveHandler(log);
     this.registerAttackHandler(log);
     this.registerPickupWorldLootHandler(log);
     this.registerRespawnHandler(log);
+    this.registerDodgeHandler(log);
+    this.registerHealingFlaskHandler(log);
+    this.registerSkillSlotHandler(log);
     this.setSimulationInterval((deltaMs: number) => {
       stepTownRoomMovement(this.state as TownRoomState, deltaMs, {
         now: Date.now(),
@@ -146,8 +537,8 @@ private respawnHandlerRegistered = false;
           }
         },
       });
-      this.applyEnemyAggroDamage(Date.now());
-      respawnTownEnemies(this.state as TownRoomState, Date.now());
+      this.applyEnemyAggroDamage(Date.now(), deltaMs);
+      respawnTownEnemies(this.state as TownRoomState, zoneId, Date.now());
     }, TOWN_MOVEMENT_TICK_RATE_MS);
 
     log.info(
@@ -247,6 +638,7 @@ private respawnHandlerRegistered = false;
       result.character.stats?.derived.attackCooldownMs,
     );
     const maxHp = Math.max(0, result.character.stats?.derived.maxHp ?? 0);
+    const currentHp = Math.min(maxHp, Math.max(0, result.character.stats?.currentHp ?? maxHp));
 
     // Delegate presence building (spawn point resolution + initial
     // world position copy) to a dedicated helper so this room file
@@ -255,8 +647,10 @@ private respawnHandlerRegistered = false;
       sessionId,
       characterId,
       displayName: characterName,
+      level: result.character.level,
+      xp: result.character.xp,
       resolvedZoneId,
-      hp: maxHp,
+      hp: currentHp,
       maxHp,
       movementSpeed,
       attackCooldownMs,
@@ -297,11 +691,14 @@ private respawnHandlerRegistered = false;
     if (presence !== undefined) {
       const characterService = new CharacterService();
       try {
+        // Leave/disconnect must persist the latest room-owned HP/location so a
+        // later join can restore valid runtime state instead of stale `/me` data.
         await characterService.updateCharacterLocation(
           presence.characterId,
           state.zoneId,
           presence.x,
           presence.y,
+          Math.max(0, Math.min(presence.maxHp, presence.hp)),
         );
       } catch (error: unknown) {
         safeLog.error?.(
@@ -583,6 +980,42 @@ private respawnHandlerRegistered = false;
 
       // Send response message to the requesting client
       const responseMessage = getInteractableResponseMessage(message.objectId);
+      if (message.objectId === "nightmarket_notice_board") {
+        const objectiveUpdate = startNoticeBoardObjective(player);
+        try {
+          client.send("objective_updated", objectiveUpdate);
+        } catch {}
+      }
+
+      // Task 180 — Handle loot container interaction
+      if (message.objectId === "nightmarket_loot_container_01") {
+        const containerResult = handleLootContainerInteraction(state, message.objectId);
+        const containerResponse: InteractResponseServerMessage = {
+          type: "interact_response",
+          objectId: message.objectId,
+          message: containerResult.message,
+        };
+        try {
+          client.send("interact_response", containerResponse);
+        } catch {
+          log.warn?.(
+            { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+            "TownRoom loot container interact_response send failed.",
+          );
+        }
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            objectId: message.objectId,
+            ok: containerResult.ok,
+          },
+          "TownRoom loot container interaction handled.",
+        );
+        return;
+      }
+
       const response: InteractResponseServerMessage = {
         type: "interact_response",
         objectId: message.objectId,
@@ -606,6 +1039,46 @@ private respawnHandlerRegistered = false;
           objectId: message.objectId,
         },
         "TownRoom request_interact accepted and response sent.",
+      );
+    });
+  }
+
+  private registerResetObjectiveHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.resetObjectiveHandlerRegistered) {
+      return;
+    }
+    this.resetObjectiveHandlerRegistered = true;
+
+    this.onMessage("request_reset_objective", (client: Client, raw: unknown) => {
+      const message = raw as Partial<RequestResetObjectiveClientMessage> | null;
+      if (message?.type !== "request_reset_objective") {
+        log.warn?.(
+          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+          "TownRoom request_reset_objective rejected: invalid shape.",
+        );
+        return;
+      }
+
+      const state = this.state as TownRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+      if (player === undefined) {
+        log.warn?.(
+          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+          "TownRoom request_reset_objective rejected: player not found.",
+        );
+        return;
+      }
+
+      if (!player.hasObjective && player.objectiveId.length === 0) {
+        return;
+      }
+
+      resetNoticeBoardObjective(player);
+      log.info?.(
+        { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, characterId: player.characterId },
+        "TownRoom objective reset accepted.",
       );
     });
   }
@@ -732,6 +1205,40 @@ private respawnHandlerRegistered = false;
       const spawnedLoot = damageResult.defeated
         ? spawnWorldLootOnEnemyDefeat(state, validation.enemy, now)
         : null;
+      if (damageResult.defeated) {
+        void advanceNoticeBoardObjective(player, validation.enemy.enemyId, (type, payload) => {
+          try {
+            client.send(type, payload);
+          } catch {
+            // ignore send failures; authoritative state persists
+          }
+        }).catch(() => {
+          // keep kill flow authoritative even if temporary objective progression fails
+        });
+        void grantEnemyDefeatXp(player, validation.enemy.enemyId, (type, payload) => {
+          try {
+            client.send(type, payload);
+          } catch {
+            // ignore send failures; authoritative state persists
+          }
+        }).catch((error: unknown) => {
+          log.warn?.(
+            {
+              roomId: this.roomId,
+              roomName: this.roomName,
+              sessionId: client.sessionId,
+              characterId: player.characterId,
+              enemyId: validation.enemy.enemyId,
+              enemyInstanceId: validation.enemy.id,
+              enemyLabel: validation.enemy.label,
+              errorMessage: error instanceof Error ? error.message : String(error),
+              errorStack: error instanceof Error ? error.stack : undefined,
+              errorName: error instanceof Error ? error.name : undefined,
+            },
+            "TownRoom enemy defeat XP grant failed after kill.",
+          );
+        });
+      }
       const accepted: RequestAttackAcceptedServerMessage = {
         type: "request_attack_accepted",
         targetEnemyId: validation.enemy.id,
@@ -977,7 +1484,15 @@ private respawnHandlerRegistered = false;
       player.targetX = respawnPosition.x;
       player.targetY = respawnPosition.y;
       player.hasMovementTarget = false;
+      // Task 096 -- respawn restores a full set of basic healing
+      // flask charges and resets the flask cooldown to "ready".
+      restoreFlaskToFull(player);
       clearPendingAction(player);
+      state.enemies.forEach((enemy) => {
+        if (enemy.targetPlayerSessionId === client.sessionId) {
+          clearEnemyTargetAndReturn(enemy);
+        }
+      });
 
       const message: PlayerRespawnedServerMessage = {
         type: "player_respawned",
@@ -994,11 +1509,386 @@ private respawnHandlerRegistered = false;
     });
   }
 
-  private applyEnemyAggroDamage(now: number): void {
+  /**
+   * Task 095 -- Register the `request_dodge` message handler on the
+   * room.
+   *
+   * Scope:
+   *   - validate the intent shape + direction finiteness via
+   *     {@link validateDodgeIntent}
+   *   - reject with safe `request_dodge_rejected` reason on
+   *     shape/finite/zero failures
+   *   - reject with `player_downed` if the player is downed
+   *   - reject with `dodge_on_cooldown` if the player cannot yet
+   *     dodge again
+   *   - on acceptance, apply the dodge via {@link applyDodgeIntent}
+   *     (which both moves the player and cancels any enemy
+   *     telegraph targeting the player) and consume the dodge
+   *     cooldown
+   *   - send `request_dodge_accepted` back to the originating
+   *     client so the UI can show safe "dodge sent" feedback
+   *
+   * The handler is registered once per room, never throws into
+   * Colyseus, and never trusts client-supplied damage, kills, XP,
+   * loot, inventory changes, equipment changes, level-up or quest
+   * completion.
+   */
+  private registerDodgeHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.dodgeHandlerRegistered) {
+      return;
+    }
+    this.dodgeHandlerRegistered = true;
+
+    this.onMessage("request_dodge", (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+
+      if (player === undefined) {
+        log.warn?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+          },
+          "TownRoom request_dodge rejected: player not found.",
+        );
+        return;
+      }
+
+      if (player.lifeState !== "alive") {
+        const rejection: RequestDodgeRejectedServerMessage = {
+          type: "request_dodge_rejected",
+          reason: "player_downed",
+        };
+        try {
+          client.send("request_dodge_rejected", rejection);
+        } catch {
+          // swallow send failures
+        }
+        return;
+      }
+
+      const validation = validateDodgeIntent({ message: raw });
+      if (!validation.ok) {
+        const rejection: RequestDodgeRejectedServerMessage = {
+          type: "request_dodge_rejected",
+          reason: validation.reason,
+        };
+        try {
+          client.send("request_dodge_rejected", rejection);
+        } catch {
+          // swallow send failures
+        }
+        log.warn?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            reason: validation.reason,
+          },
+          "TownRoom request_dodge rejected: invalid intent shape/direction.",
+        );
+        return;
+      }
+
+      const now = Date.now();
+      if (!isDodgeReady(player, now)) {
+        const rejection: RequestDodgeRejectedServerMessage = {
+          type: "request_dodge_rejected",
+          reason: "dodge_on_cooldown",
+        };
+        try {
+          client.send("request_dodge_rejected", rejection);
+        } catch {
+          // swallow send failures
+        }
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            nextDodgeAt: player.nextDodgeAt,
+          },
+          "TownRoom request_dodge rejected: dodge on cooldown.",
+        );
+        return;
+      }
+
+      const applied = applyDodgeIntent({
+        state,
+        player,
+        dirX: validation.dirX,
+        dirY: validation.dirY,
+        now,
+      });
+      consumeDodgeCooldown(player, now);
+
+      const accepted: RequestDodgeAcceptedServerMessage = {
+        type: "request_dodge_accepted",
+      };
+      try {
+        client.send("request_dodge_accepted", accepted);
+      } catch {
+        // swallow send failures; state sync remains authoritative
+      }
+
+      log.debug?.(
+        {
+          roomId: this.roomId,
+          roomName: this.roomName,
+          sessionId: client.sessionId,
+          dirX: validation.dirX,
+          dirY: validation.dirY,
+          newX: applied.newX,
+          newY: applied.newY,
+          cancelledTelegraphEnemyIds: applied.cancelledTelegraphEnemyIds,
+          nextDodgeAt: player.nextDodgeAt,
+        },
+        "TownRoom request_dodge accepted and player position updated; telegraphs cancelled.",
+      );
+    });
+  }
+
+  /**
+   * Task 096 — Register the `request_use_healing_flask` message
+   * handler on the room.
+   *
+   * Scope:
+   *   - validate the intent shape via {@link validateHealingFlaskIntent}
+   *   - apply the flask use through {@link applyHealingFlaskIntent}
+   *     which decides alive / charges / cooldown / full-HP outcomes
+   *   - on acceptance, send `request_use_healing_flask_accepted`
+   *     with safe healed / remainingHp / charges / nextFlaskAt values
+   *   - on rejection, send `request_use_healing_flask_rejected`
+   *     with a safe reason code so the UI can show "full HP" /
+   *     "no charges" / "cooldown" / "downed" feedback
+   *
+   * The handler is registered once per room, never throws into
+   * Colyseus, and never trusts client-supplied heal amount,
+   * charges, cooldown or HP.
+   */
+  private registerHealingFlaskHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.healingFlaskHandlerRegistered) {
+      return;
+    }
+    this.healingFlaskHandlerRegistered = true;
+
+    this.onMessage("request_use_healing_flask", (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+
+      if (player === undefined) {
+        log.warn?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+          },
+          "TownRoom request_use_healing_flask rejected: player not found.",
+        );
+        return;
+      }
+
+      const validation = validateHealingFlaskIntent({ message: raw });
+      if (!validation.ok) {
+        const rejection: RequestUseHealingFlaskRejectedServerMessage = {
+          type: "request_use_healing_flask_rejected",
+          reason: validation.reason,
+        };
+        try {
+          client.send("request_use_healing_flask_rejected", rejection);
+        } catch {
+          // swallow send failures
+        }
+        log.warn?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            reason: validation.reason,
+          },
+          "TownRoom request_use_healing_flask rejected: invalid intent shape.",
+        );
+        return;
+      }
+
+      const now = Date.now();
+      const result = applyHealingFlaskIntent({ player, now });
+      if (!result.ok) {
+        const rejection: RequestUseHealingFlaskRejectedServerMessage = {
+          type: "request_use_healing_flask_rejected",
+          reason: result.reason,
+        };
+        try {
+          client.send("request_use_healing_flask_rejected", rejection);
+        } catch {
+          // swallow send failures
+        }
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            reason: result.reason,
+            flaskCharges: player.flaskCharges,
+            nextFlaskAt: player.nextFlaskAt,
+            hp: player.hp,
+            maxHp: player.maxHp,
+          },
+          "TownRoom request_use_healing_flask rejected by application.",
+        );
+        return;
+      }
+
+      const accepted: RequestUseHealingFlaskAcceptedServerMessage = {
+        type: "request_use_healing_flask_accepted",
+        healedAmount: result.healedAmount,
+        remainingHp: result.remainingHp,
+        flaskCharges: result.flaskCharges,
+        nextFlaskAt: result.nextFlaskAt,
+      };
+      try {
+        client.send("request_use_healing_flask_accepted", accepted);
+      } catch {
+        // swallow send failures; state sync remains authoritative
+      }
+
+      log.debug?.(
+        {
+          roomId: this.roomId,
+          roomName: this.roomName,
+          sessionId: client.sessionId,
+          healedAmount: result.healedAmount,
+          remainingHp: result.remainingHp,
+          flaskCharges: result.flaskCharges,
+          nextFlaskAt: result.nextFlaskAt,
+        },
+        "TownRoom request_use_healing_flask accepted and HP / charges synced.",
+      );
+    });
+  }
+
+  private registerSkillSlotHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.skillSlotHandlerRegistered) {
+      return;
+    }
+    this.skillSlotHandlerRegistered = true;
+
+    this.onMessage("request_use_skill_slot", (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const message = raw as Partial<RequestUseSkillSlotClientMessage> | null;
+      const player = state.playerPresence.get(client.sessionId);
+      const rejectionBase = {
+        type: "request_use_skill_slot_rejected" as const,
+        slot: "secondary" as const,
+      };
+
+      if (message?.slot !== "secondary") {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "skill_unavailable",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      if (player === undefined || player.lifeState !== "alive" || player.hp <= 0) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "player_downed",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      const now = Date.now();
+      const nextSkillSlotAt = Number.isFinite(player.nextSkillSlotAt) ? player.nextSkillSlotAt : 0;
+      if (now < nextSkillSlotAt) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "skill_on_cooldown",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      player.nextSkillSlotAt = now + 750;
+      const rejection: RequestUseSkillSlotRejectedServerMessage = {
+        ...rejectionBase,
+        reason: "slot_not_learned",
+      };
+      try {
+        client.send(rejection.type, rejection);
+      } catch {
+        log.warn?.(
+          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+          "TownRoom request_use_skill_slot placeholder rejection send failed.",
+        );
+      }
+
+      log.debug?.(
+        {
+          roomId: this.roomId,
+          roomName: this.roomName,
+          sessionId: client.sessionId,
+          slot: message.slot,
+          nextSkillSlotAt: player.nextSkillSlotAt,
+        },
+        "TownRoom request_use_skill_slot cooldown consumed and placeholder slot rejected as not learned.",
+      );
+    });
+  }
+
+  private applyEnemyAggroDamage(now: number, deltaMs: number): void {
     const state = this.state as TownRoomState;
 
     state.enemies.forEach((enemy) => {
+      const enemyDefinition = contentRegistry.enemies.get(enemy.enemyId as ContentEnemyId);
+      const enemyMoveSpeed = enemyDefinition?.moveSpeed ?? 0;
+      const distanceFromSpawn = Math.hypot(enemy.x - enemy.spawnX, enemy.y - enemy.spawnY);
+
       if (enemy.defeated || enemy.hp <= 0) {
+        enemy.state = "defeated";
+        enemy.targetPlayerSessionId = "";
+        enemy.nextAttackAtMs = 0;
+        return;
+      }
+
+      const currentTargetSessionId =
+        typeof enemy.targetPlayerSessionId === "string" ? enemy.targetPlayerSessionId : "";
+
+      if (currentTargetSessionId.length > 0) {
+        const currentTarget = state.playerPresence.get(currentTargetSessionId);
+        if (currentTarget === undefined || currentTarget.hp <= 0) {
+          clearEnemyTargetAndReturn(enemy);
+        } else {
+          const targetDistance = Math.hypot(enemy.x - currentTarget.x, enemy.y - currentTarget.y);
+          if (targetDistance > ENEMY_AGGRO_RANGE || distanceFromSpawn > ENEMY_LEASH_RANGE) {
+            clearEnemyTargetAndReturn(enemy);
+          }
+        }
+      }
+
+      if (enemy.targetPlayerSessionId.length === 0 && enemy.state === "returning") {
+        moveEnemyTowardPoint(
+          enemy,
+          { x: enemy.spawnX, y: enemy.spawnY },
+          enemyMoveSpeed,
+          deltaMs,
+        );
+
+        const remainingDistanceToSpawn = Math.hypot(enemy.x - enemy.spawnX, enemy.y - enemy.spawnY);
+        if (remainingDistanceToSpawn <= ENEMY_RETURN_ARRIVAL_DISTANCE) {
+          resetEnemyCombatState(enemy);
+          enemy.x = enemy.spawnX;
+          enemy.y = enemy.spawnY;
+        }
         return;
       }
 
@@ -1017,16 +1907,111 @@ private respawnHandlerRegistered = false;
         }
       });
 
-      if (closestPlayerSessionId === null || closestDistance > ENEMY_AGGRO_RANGE) {
-        return;
+      if (enemy.targetPlayerSessionId.length === 0) {
+        const canReacquireWhileReturning = enemy.state !== "returning"
+          || distanceFromSpawn <= ENEMY_RETURN_REACQUIRE_BUFFER;
+        if (
+          closestPlayerSessionId === null
+          || closestDistance > ENEMY_AGGRO_RANGE
+          || !canReacquireWhileReturning
+        ) {
+          enemy.state = "idle";
+          // Task 107 — idle enemies wander near their spawn point
+          applyWanderMovement(enemy, enemyMoveSpeed, deltaMs, now);
+          return;
+        }
+
+        enemy.targetPlayerSessionId = closestPlayerSessionId;
       }
 
-      if (closestDistance > ENEMY_ATTACK_RANGE) {
-        return;
-      }
-
-      const targetPlayer = state.playerPresence.get(closestPlayerSessionId);
+      const targetPlayer = state.playerPresence.get(enemy.targetPlayerSessionId);
       if (targetPlayer === undefined || targetPlayer.hp <= 0) {
+        clearEnemyTargetAndReturn(enemy);
+        return;
+      }
+
+      const targetDistance = Math.hypot(enemy.x - targetPlayer.x, enemy.y - targetPlayer.y);
+      if (targetDistance > ENEMY_AGGRO_RANGE || distanceFromSpawn > ENEMY_LEASH_RANGE) {
+        clearEnemyTargetAndReturn(enemy);
+        return;
+      }
+
+      enemy.state = "chasing";
+      moveEnemyTowardTarget(
+        enemy,
+        targetPlayer,
+        enemyMoveSpeed,
+        deltaMs,
+      );
+
+      const distanceAfterMovement = Math.hypot(enemy.x - targetPlayer.x, enemy.y - targetPlayer.y);
+
+      if (distanceAfterMovement > ENEMY_ATTACK_RANGE) {
+        return;
+      }
+
+      // Task 094 -- Server-owned attack telegraph. Two phases:
+      // (1) telegraph + windup: when the enemy is in attack range,
+      // the cooldown has elapsed and no attack is currently
+      // mid-windup, the server sends `enemy_attack_telegraph` to the
+      // target client and stores the landing time on the enemy.
+      // (2) landing: once the windup elapses and the target is still
+      // alive and in attack range, the actual damage is applied and
+      // the existing `damage_applied` message is sent. The client
+      // never decides when damage lands.
+
+      if (enemy.attackLandingAtMs > 0) {
+        if (now < enemy.attackLandingAtMs) {
+          // Windup not yet elapsed; nothing to do this tick.
+          return;
+        }
+        // Windup elapsed. Validate that the target is still alive
+        // and still in attack range; only then apply damage.
+        const landingTarget = state.playerPresence.get(enemy.targetPlayerSessionId);
+        if (
+          landingTarget === undefined ||
+          landingTarget.hp <= 0 ||
+          Math.hypot(enemy.x - landingTarget.x, enemy.y - landingTarget.y) > ENEMY_ATTACK_RANGE
+        ) {
+          // Target moved out of range or died during the windup:
+          // cancel the telegraphed attack and re-arm the cooldown.
+          enemy.attackLandingAtMs = 0;
+          enemy.nextAttackAtMs = now + ENEMY_ATTACK_COOLDOWN_MS;
+          return;
+        }
+
+        enemy.attackLandingAtMs = 0;
+        const nextHp = Math.max(0, landingTarget.hp - ENEMY_ATTACK_DAMAGE);
+        landingTarget.hp = nextHp;
+        if (nextHp <= 0) {
+          landingTarget.lifeState = "downed";
+          landingTarget.hasMovementTarget = false;
+          landingTarget.targetX = landingTarget.x;
+          landingTarget.targetY = landingTarget.y;
+          clearPendingAction(landingTarget);
+          clearEnemyTargetAndReturn(enemy);
+        } else {
+          enemy.nextAttackAtMs = now + ENEMY_ATTACK_COOLDOWN_MS;
+        }
+
+        const landingClient = this.clients.find(
+          (client) => client.sessionId === landingTarget.sessionId,
+        );
+        if (landingClient !== undefined) {
+          const damageMessage: DamageAppliedServerMessage = {
+            type: "damage_applied",
+            targetEntityId: landingTarget.characterId as unknown as EntityId,
+            sourceEntityId: enemy.id as unknown as EntityId,
+            damage: ENEMY_ATTACK_DAMAGE,
+            remainingHp: nextHp,
+          };
+
+          try {
+            landingClient.send("damage_applied", damageMessage);
+          } catch {
+            // keep room state authoritative even if send fails
+          }
+        }
         return;
       }
 
@@ -1034,32 +2019,21 @@ private respawnHandlerRegistered = false;
         return;
       }
 
-      enemy.nextAttackAtMs = now + ENEMY_ATTACK_COOLDOWN_MS;
-      const nextHp = Math.max(0, targetPlayer.hp - ENEMY_ATTACK_DAMAGE);
-      targetPlayer.hp = nextHp;
-      if (nextHp <= 0) {
-        targetPlayer.lifeState = "downed";
-        targetPlayer.hasMovementTarget = false;
-        targetPlayer.targetX = targetPlayer.x;
-        targetPlayer.targetY = targetPlayer.y;
-        clearPendingAction(targetPlayer);
-      }
+      // Start a new telegraph + windup. Damage will only be applied
+      // after ENEMY_ATTACK_WINDUP_MS on a future tick.
+      enemy.attackLandingAtMs = now + ENEMY_ATTACK_WINDUP_MS;
+      enemy.nextAttackAtMs = enemy.attackLandingAtMs + ENEMY_ATTACK_COOLDOWN_MS;
 
-      const targetClient = this.clients.find((client) => client.sessionId === closestPlayerSessionId);
-      if (targetClient !== undefined) {
-        const message: DamageAppliedServerMessage = {
-          type: "damage_applied",
-          targetEntityId: targetPlayer.characterId as unknown as EntityId,
-          sourceEntityId: enemy.id as unknown as EntityId,
-          damage: ENEMY_ATTACK_DAMAGE,
-          remainingHp: nextHp,
-        };
-
-        try {
-          targetClient.send("damage_applied", message);
-        } catch {
-          // keep room state authoritative even if send fails
-        }
+      const telegraphClient = this.clients.find(
+        (client) => client.sessionId === targetPlayer.sessionId,
+      );
+      if (telegraphClient !== undefined) {
+        sendEnemyAttackTelegraph(
+          telegraphClient,
+          enemy.id,
+          targetPlayer.characterId,
+          ENEMY_ATTACK_WINDUP_MS,
+        );
       }
     });
   }

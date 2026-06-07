@@ -191,11 +191,33 @@ Client auth UI rules:
 - the player placeholder is a simple visual-only shape (circle body + triangle marker + ellipse shadow) rendered from synced server x/y only
 - the direction marker (triangle) rotates toward the last movement target / click direction as a facing indicator only
 - the player body position must come from server-synced PlayerPresence x/y only; no local prediction, no movement animation, no combat animation
+- world rendering must use the live `worldContainer` offset derived from the synced player position rather than a stale or separately-tracked camera value
+- enemy, loot and interactable hit testing must use the same world projection and live container offset as rendering so clicks resolve against the visible world state
+- input priority must resolve actionable targets before fallback ground-movement clicks when multiple hit candidates overlap
+- avoid rebuilding overlay DOM on every state tick; update stable overlay UI incrementally where practical
 - player placeholder visual rules apply only when the server syncs PlayerPresence with position data; if position is missing, the placeholder must be hidden
 - no final art, sprite animation, or gameplay-coupled facing system is implemented in placeholder tasks
 - basic attack placeholder UX may show safe client text such as "Attack sent.", "Attack confirmed." or "Too far away.", but enemy HP must still update only from synced room state and never from local client mutation
 - the current basic attack slice must keep fixed server-owned damage of 1 until a dedicated combat task changes the formula and documents the new authority rules
 - placeholder enemy death state may mark synced enemies as `defeated` when server-owned HP reaches 0; dedicated respawn-loop tasks may keep that defeated state briefly and then reset the same synced placeholder enemy back to full HP at the same static position through a server-owned timer. Such tasks still must not add loot, XP, corpse behavior, enemy AI, enemy attacks, player damage, death animation or persistence
+- defeated enemies may grant only real server-owned XP; any resulting level-up must be resolved server-side from the real level table
+- level-up max HP reward and all other derived-stat changes must come from server recalculation only; the client must not invent level-up outcomes locally
+- equipped item stat modifiers must feed the same server-side derived-stat recalculation used for progression/runtime joins; client UI may only display the resulting real derived/runtime values
+- current debug/account UI may show derived stats, runtime HP/flask state and equipment outcomes only from real synced room state or persisted account state
+- Q (healing flask) and Space (dodge) world hotkeys must share the same focus-filtering helper so they do not fire while text-entry style focus is active
+- projection preview modes must not keep click-to-move world input enabled when that would misrepresent the active world projection
+- WorldSession overlay mount points for interactive controls must stay stable across state updates
+- do not replace interactive panel root elements during overlay/state refreshes; update their contents in place
+- the inventory panel must capture and consume its own clicks so world-targeting input does not leak through interactive inventory UI
+- world target hit testing must use the same rendered projection and live offset used by the current world view so visible targets and click resolution stay aligned
+- enemy placeholder views must not be destroyed solely because they are currently off-screen or visually overlapped; visibility/cleanup must follow real synced entity lifetime instead
+- defeated and respawn visuals must follow synced server state only; the client must not locally invent defeat, removal, or respawn transitions
+- live HP and valid location must be saved on leave/disconnect through real server-owned persistence
+- a room join must restore saved valid HP/location when that persisted state exists and is valid
+- `/me` is persisted account state only and must not be treated as live combat/runtime room state
+- passive overlay containers must use `pointer-events: none`
+- real interactive controls inside those overlays must explicitly use `pointer-events: auto`
+- live combat HUD must read room-synced `PlayerPresence`; inventory/equipment panels must read persisted `/me` account state
 
 ## Interactable Object Rules
 
@@ -214,6 +236,9 @@ Interactable objects are simple world elements that respond to click-to-interact
 - the client renders objects as simple placeholder shapes (rectangles or circles) with labels
 - the client does not predict, animate, or fake any interaction outcomes
 - responses display as temporary messages for 3 seconds then clear
+- the temporary Notice Board objective is the only current exception to the no-reward rule for simple interactables: objective definitions live in `packages/content`, and interacting with the Notice Board may read `cull_trashboars` from content and start the session-temporary objective `Cull Trashboars 0/3`
+- that temporary objective may grant server-owned XP once per session objective only
+- it still must not add objective persistence, a quest log, NPC dialogue, multi-step conversation state, or multiple-objective support
 
 ---
 
@@ -271,6 +296,12 @@ connectedPlayerCount: derived from playerPresence.size on join/leave
 
 No player entity list, no map, no movement, no combat, no gameplay state exists yet.
 
+Town hostility checkpoint:
+
+- towns/hubs should not have hostile mobs long-term
+- neutral ambient creatures are allowed in towns/hubs
+- hostile Trashboars in Nightmarket are temporary Core 0.1 test content only
+
 TownRoom rules:
 
 - join options must include a real `sessionToken` and `characterId`
@@ -282,9 +313,12 @@ TownRoom rules:
 - the server creates a `PlayerPresence` entry on `onJoin` with `sessionId`, `characterId`, `characterName` (as `displayName`), the resolved `spawnPointId`, initial x/y and runtime `movementSpeed`
 - the server removes the `PlayerPresence` entry on `onLeave`
 - `connectedPlayerCount` must derive from `playerPresence.size` on join/leave, never be set independently
-- `TownRoomState` may include an `enemies` `MapSchema<EnemyPresence>` for strictly synced placeholder enemies only
-- Core 0.1 currently ships one static Nightmarket `Trashboar Runt` placeholder enemy with synced `id`, `enemyId`, `label`, `x`, `y`, `hp`, and `maxHp`
-- Core 0.1 currently ships one static Nightmarket `Trashboar Runt` placeholder enemy with synced `id`, `enemyId`, `label`, `x`, `y`, `hp`, `maxHp`, and `defeated`
+- `TownRoomState` may include an `enemies` `MapSchema<EnemyPresence>` for synced placeholder enemies spawned from content-driven spawn zones
+- `SpawnZoneDefinition` content data defines enemy type, count and bounding rectangle per zone; the content registry exposes `contentRegistry.spawnZones`
+- `initializeTownEnemies()` spawns enemies from spawn zone definitions using deterministic server RNG (seeded mulberry32) so the same zone always produces the same initial layout
+- `respawnTownEnemies()` picks a new random position inside the same spawn zone via the same seeded RNG when a defeated enemy's respawn timer elapses
+- `applyWanderMovement()` makes idle enemies wander near their spawn point at reduced speed with periodic random target pick-up
+- Core 0.1 currently ships multiple Nightmarket `Trashboar Runt` placeholder enemies (spawned from `nightmarket_trashboar_zone` with count 3) with synced `id`, `enemyId`, `label`, `x`, `y`, `hp`, `maxHp`, `defeated`, `state`, `spawnX`, `spawnY`
 - Core 0.1 basic attack intent may target only synced `TownRoomState.enemies` entries; the server validates player presence, enemy existence, non-defeated status and simple distance <= 64 before subtracting fixed damage, clamping hp at 0 and marking `defeated` when hp reaches 0
 - the client renders roomKind, zoneId and connectedPlayerCount from room state; additionally it may extract player presence via a dedicated helper (`getTownRoomPresence`) to display connected player names
 - client enemy extraction must live in a separate helper module (`apps/client/src/net/townRoomEnemies.ts`), not inside `WorldSessionScene` or `AccountShellScene`
@@ -319,6 +353,9 @@ Extraction examples (already applied):
 apps/server/src/realtime/rooms/roomLogger.ts             - shared Colyseus logger wrapper
 apps/server/src/realtime/rooms/resolveTownSpawnPoint.ts  - content-based spawn point lookup
 apps/server/src/realtime/rooms/buildPlayerPresence.ts    - presence builder (spawn + initial x/y copy)
+apps/server/src/realtime/rooms/initializeTownEnemies.ts  - content-driven enemy spawn from spawn zones
+apps/server/src/realtime/rooms/respawnTownEnemies.ts     - enemy respawn with new position inside spawn zone
+apps/server/src/realtime/rooms/wanderEnemies.ts          - idle enemy wander movement near spawn
 apps/client/src/net/townRoomPresence.ts                  - client presence extraction helper
 ```
 
@@ -549,6 +586,26 @@ Rules:
 - loot documentation and implementation must state clearly whether a task adds only planning, only data definitions, or real server-owned drop generation/pickup flow
 
 ---
+
+## Targeted Actions, Enemy AI, Player HP, Loot Pickup, HUD Direction Rules
+
+The recent Core 0.1 checkpoint added the first narrow slices of server-authoritative targeted gameplay. They are foundation-level only; the rules below lock down what is and is not in scope so they cannot accidentally be presented as full combat, full AI, full loot/inventory/equipment or final HUD art.
+
+Rules:
+
+- Server-authoritative movement remains mandatory: the client sends only `request_move` target intents, `TownRoom` stores the authoritative target and advances synced x/y on the server tick, and the client must not fake local arrival/teleportation
+- The targeted action approach is "move first, then act": when the client sends a click intent (attack / interact / pickup) against a target that is out of range, the server stores a pending action plus movement target and processes the original action only once the simulation tick brings the player in range; the client never decides whether the action succeeded
+- Enemy AI on the synced `Trashboar Runt` placeholder is intentionally limited to content-driven spawn zones (multiple enemies per zone), idle wander near spawn, aggro, chase, leash return, melee attack windup/landing, defeat and respawn with a new position inside the spawn zone; no pathfinding, no projectiles, no enemy ability bar, no enemy progression, no rarity tiers, no enemy packs, no persistence
+- Player HP / downed / respawn foundation is server-owned: `PlayerPresence` holds current HP and max HP, enemy hits reduce HP server-side, HP updates reach the client only through synced room state, at 0 HP the player is marked as downed (movement and combat disabled), and respawn is a real server flow that restores HP/flask state and places the player at a server-resolved safe location (last in-zone persisted position or content spawn point); no XP loss, no item durability loss, no corpse inventory, no recovery flow, no permadeath
+- Dodge and healing flask are server-authoritative only: dodge validates direction/cooldown and applies an authoritative short displacement; flask validates alive/full-hp/charges/cooldown and heals server-side only. No stamina system, no mana/resource globe system, no refill vendor flow and no client-owned healing numbers
+- Loot pickup is server-authoritative: the client sends only a `worldLootId`; the server validates ownership, distance and that the loot still exists, then removes the synced room-state entry and persists the item into the real character inventory; current account/inventory summary/detail views must read real persisted state, not fake local reward state
+- Current equipment/inventory checkpoint scope is narrow and must be documented that way: pickup writes a real inventory item, inventory detail is read-only, equip moves an item from inventory into an equipment slot, and unequip moves it back to the first free inventory slot
+- Current equipment/inventory checkpoint forbidden overstatement: do not describe the feature as supporting drag/drop, stat recalculation or item comparison until those behaviors are implemented for real
+- The current connected-room overlay is a temporary server-synced HUD/resource placeholder and debug shell only; it must remain clearly labeled as such in the UI and the docs
+- The future default HUD will use Diablo-like orbs (health globe + mana / resource globe) in the bottom corners
+- An optional WoW-like framed bars mode may be added later behind a setting, but the orbs are still the default; the framed-bars mode must not become the default HUD
+- None of these slices may add fake client-side prediction for action success, enemy death, player damage, loot pickup, flask results, dodge outcomes, or HUD numbers; every gameplay outcome still comes from synced room state
+- None of these slices may add XP, quests, equipment flow, inventory drag/drop, vendor/stash, full corpse recovery, full pathfinding, full AI variety, or final HUD art unless the related docs are updated in the same task and the implementation is real
 
 ## Final Rule
 
