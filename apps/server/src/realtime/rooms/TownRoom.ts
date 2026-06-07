@@ -690,6 +690,8 @@ export class TownRoom extends Room {
     if (presence !== undefined) {
       const characterService = new CharacterService();
       try {
+        // Leave/disconnect must persist the latest room-owned HP/location so a
+        // later join can restore valid runtime state instead of stale `/me` data.
         await characterService.updateCharacterLocation(
           presence.characterId,
           state.zoneId,

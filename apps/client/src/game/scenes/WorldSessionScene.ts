@@ -308,6 +308,8 @@ export class WorldSessionScene extends Phaser.Scene {
       return;
     }
 
+    // `account` is the persisted `/me` snapshot; live HP/objective/room data
+    // must continue to come from the joined room state rendered inside the view.
     const character = this.account.characters.find((nextCharacter) => nextCharacter.id === this.characterId) ?? null;
     const debugState = this.worldAreaView?.getDebugState() ?? {
       lastClickTarget: null,

@@ -482,6 +482,8 @@ export function createWorldSessionAreaView(
         worldProjection.viewport,
         projectionMode,
       );
+      // Keep this inverse transform aligned with the same projection + offset
+      // used by rendering/hit visuals, or visible clicks will resolve wrong.
       const worldX = screenPoint.x;
       const worldY = screenPoint.y;
       lastClickTarget = { x: Math.round(worldX), y: Math.round(worldY) };
@@ -507,6 +509,7 @@ export function createWorldSessionAreaView(
 
     const { x, y } = self.position;
     selfWorldPosition = { x, y };
+    // Render and click-space must share the same active projection math.
     const playerScreenPosition = worldToScreenActiveProjection(
       x,
       y,

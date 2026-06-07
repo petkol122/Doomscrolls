@@ -242,6 +242,8 @@ export function createWorldSessionOverlayView(
 
   const createMountedPanel = (): HTMLElement => {
     const panel = document.createElement("div");
+    // Keep these panel roots mounted across overlay refreshes so interactive
+    // controls do not lose listeners/focus from root replacement regressions.
     makePassive(panel);
     panel.style.display = "contents";
     return panel;
