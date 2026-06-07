@@ -95,6 +95,7 @@ model Character {
   xp                      Int      @default(0)
   currentZoneId           String
   currentHp               Int
+  currentFlaskCharges     Int      @default(3)
   lastLocationZoneId      String?
   lastLocationX           Float?
   lastLocationY           Float?

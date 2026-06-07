@@ -135,10 +135,18 @@ export class CharacterService {
     x: number,
     y: number,
     currentHp?: number,
+    currentFlaskCharges?: number,
   ): Promise<void> {
     try {
       const characterRepository = new CharacterRepository(this.db);
-      await characterRepository.updateCharacterLocation(characterId.toString(), zoneId, x, y, currentHp);
+      await characterRepository.updateCharacterLocation(
+        characterId.toString(),
+        zoneId,
+        x,
+        y,
+        currentHp,
+        currentFlaskCharges,
+      );
     } catch (error: unknown) {
       if (error instanceof CharacterError) {
         throw error;

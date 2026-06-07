@@ -63,6 +63,7 @@ export interface CharacterProgressionContext {
   readonly id: string;
   readonly level: number;
   readonly currentHp: number;
+  readonly currentFlaskCharges: number;
   readonly originId: string;
   readonly classId: string;
 }
@@ -74,6 +75,13 @@ export class CharacterRepository {
     return this.db.character.findFirst({
       where: { id: characterId, userId },
       include: { stats: true, passives: true, inventory: true },
+    });
+  }
+
+  public findCurrentFlaskChargesForUser(characterId: string, userId: string) {
+    return this.db.character.findFirst({
+      where: { id: characterId, userId },
+      select: { currentFlaskCharges: true },
     });
   }
 
@@ -168,6 +176,7 @@ export class CharacterRepository {
         id: true,
         level: true,
         currentHp: true,
+        currentFlaskCharges: true,
         originId: true,
         classId: true,
       },
@@ -212,6 +221,7 @@ export class CharacterRepository {
     lastLocationX: number,
     lastLocationY: number,
     currentHp?: number,
+    currentFlaskCharges?: number,
   ) {
     return this.db.character.update({
       where: { id: characterId },
@@ -220,6 +230,7 @@ export class CharacterRepository {
         lastLocationX,
         lastLocationY,
         ...(currentHp !== undefined ? { currentHp } : {}),
+        ...(currentFlaskCharges !== undefined ? { currentFlaskCharges } : {}),
       },
     });
   }

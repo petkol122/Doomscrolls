@@ -681,6 +681,10 @@ export class TownRoom extends Room {
     );
     const maxHp = Math.max(0, result.character.stats?.derived.maxHp ?? 0);
     const currentHp = Math.min(maxHp, Math.max(0, result.character.stats?.currentHp ?? maxHp));
+    const persistedFlaskState = await new CharacterRepository().findCurrentFlaskChargesForUser(
+      characterId,
+      resolvedUserId,
+    );
 
     // Delegate presence building (spawn point resolution + initial
     // world position copy) to a dedicated helper so this room file
@@ -694,6 +698,7 @@ export class TownRoom extends Room {
       resolvedZoneId,
       hp: currentHp,
       maxHp,
+      restoredFlaskCharges: persistedFlaskState?.currentFlaskCharges,
       movementSpeed,
       attackCooldownMs,
       restoredLocationZoneId: result.character.lastLocationZoneId ?? undefined,
@@ -741,6 +746,7 @@ export class TownRoom extends Room {
           presence.x,
           presence.y,
           Math.max(0, Math.min(presence.maxHp, presence.hp)),
+          Math.max(0, Math.min(presence.maxFlaskCharges, Math.floor(presence.flaskCharges))),
         );
       } catch (error: unknown) {
         safeLog.error?.(
