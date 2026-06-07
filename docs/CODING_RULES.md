@@ -607,6 +607,18 @@ Rules:
 - None of these slices may add fake client-side prediction for action success, enemy death, player damage, loot pickup, flask results, dodge outcomes, or HUD numbers; every gameplay outcome still comes from synced room state
 - None of these slices may add XP, quests, equipment flow, inventory drag/drop, vendor/stash, full corpse recovery, full pathfinding, full AI variety, or final HUD art unless the related docs are updated in the same task and the implementation is real
 
+## Shared Loot Container Foundation Rules
+
+Core 0.1 ships a shared loot container foundation that is intentionally limited to data flow and room-instance lifecycle, not persistence:
+
+- one shared Nightmarket crate exists
+- crate opens once per room instance
+- server rolls loot and spawns world loot near crate
+- opened state syncs to clients
+- not persisted yet
+- no stealing/crime/locks/respawn timers yet
+- the shared loot container foundation must not be presented as gameplay
+
 ## Final Rule
 
 If a feature only appears to work, it is not done.

@@ -828,6 +828,19 @@ HUD (temporary debug vs. future default):
 
 All five slices stay server-authoritative. The client never invents action success, enemy death, player damage, loot pickup, or HUD numbers. Every gameplay outcome still comes from synced room state. These slices do not add pathfinding, projectiles, multiple enemy types, full inventory/equipment UI, full corpse recovery, XP, currency, or persistence beyond the current real inventory/equipment writes. The current checkpoint is intentionally limited: pickup writes a real inventory item, inventory detail is read-only, equip moves inventory -> slot, unequip moves slot -> first free inventory slot, and there is still no drag/drop, stat recalculation, or item comparison yet. They are not final combat, not final AI, not final loot, and not final HUD art.
 
+### Shared Loot Container Foundation (Core 0.1)
+
+The Core 0.1 shared loot container foundation is in place but intentionally limited to data flow and room-instance lifecycle, not persistence:
+
+```text
+one shared Nightmarket crate exists
+crate opens once per room instance
+server rolls loot and spawns world loot near crate
+opened state syncs to clients
+not persisted yet
+no stealing/crime/locks/respawn timers yet
+```
+
 ## Core 0.1 Runtime Scope
 
 Core 0.1 must support:

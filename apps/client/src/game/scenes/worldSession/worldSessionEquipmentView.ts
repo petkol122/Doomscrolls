@@ -2,6 +2,7 @@ import type { Room } from "@colyseus/sdk";
 import { t } from "@doomscrolls/localization";
 import type { LocalizationKey } from "@doomscrolls/localization";
 import type {
+  CharacterSummary,
   EquipmentLoadout,
   EquipmentSlot,
   InventorySummaryItem,
@@ -11,6 +12,7 @@ import type { StatModifier } from "@doomscrolls/shared";
 import type { EquipmentUpdatedServerMessage } from "@doomscrolls/shared";
 import { createMutedText } from "./worldSessionOverlayView";
 import { makeInteractive } from "./worldSessionPointerEvents";
+import { formatMoneyCompact } from "../../moneyFormatting";
 
 const COMMON_ITEM_COLOR = "#d8c6a3";
 
@@ -75,6 +77,7 @@ export function createEquipmentPanelSection(
   isOpen = false,
   onOpenChange?: (isOpen: boolean) => void,
   onUnequipItem?: (slot: EquipmentSlot) => Promise<void>,
+  getCharacter?: () => CharacterSummary | null,
 ): HTMLElement {
   const wrapper = document.createElement("details");
   wrapper.open = isOpen;
@@ -98,13 +101,24 @@ export function createEquipmentPanelSection(
   makeInteractive(summary);
   wrapper.appendChild(summary);
 
+  if (getCharacter !== undefined) {
+    const money = document.createElement("div");
+    money.dataset.worldSessionMoneyLine = "true";
+    money.style.padding = "0 8px 6px";
+    money.style.fontSize = "12px";
+    money.style.fontFamily = "monospace";
+    money.style.color = "#e0c88a";
+    money.textContent = `${t("money.money_label")}: ${formatMoneyCompact(getCharacter()?.moneyCopper ?? 0)}`;
+    wrapper.appendChild(money);
+  }
+
   const content = document.createElement("div");
   content.dataset.worldSessionEquipmentContent = "true";
   content.style.padding = "0 8px 8px";
   content.style.display = "grid";
   content.style.gap = "4px";
   wrapper.appendChild(content);
-  updateEquipmentPanelSection(wrapper, getLoadout, getInventoryItems, isOpen, onUnequipItem);
+  updateEquipmentPanelSection(wrapper, getLoadout, getInventoryItems, isOpen, onUnequipItem, getCharacter);
 
   return wrapper;
 }
@@ -115,12 +129,20 @@ export function updateEquipmentPanelSection(
   getInventoryItems: () => readonly InventorySummaryItem[],
   isOpen = false,
   onUnequipItem?: (slot: EquipmentSlot) => Promise<void>,
+  getCharacter?: () => CharacterSummary | null,
 ): void {
   if (!(wrapper instanceof HTMLDetailsElement)) {
     return;
   }
 
   wrapper.open = isOpen;
+
+  if (getCharacter !== undefined) {
+    const money = wrapper.querySelector("[data-world-session-money-line]");
+    if (money instanceof HTMLElement) {
+      money.textContent = `${t("money.money_label")}: ${formatMoneyCompact(getCharacter()?.moneyCopper ?? 0)}`;
+    }
+  }
 
   const content = wrapper.querySelector("[data-world-session-equipment-content]");
   if (!(content instanceof HTMLElement)) {

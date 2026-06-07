@@ -609,6 +609,21 @@ pnpm lint
 pnpm test
 ```
 
+### Task 182 — Shared Loot Container Docs Checkpoint
+
+Document the shared room loot container foundation across `README.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG_CORE_0_1.md` and `docs/CODING_RULES.md`. This is a documentation-only task and must not add features, browser automation, or runtime reproduction.
+
+Status: documented. The docs now state that one shared Nightmarket crate exists, the crate opens once per room instance, the server rolls loot and spawns world loot near the crate, the opened state syncs to clients, it is not persisted yet, and there are no stealing/crime/locks/respawn timers yet.
+
+Required checks for this checkpoint:
+
+```text
+pnpm --filter @doomscrolls/content typecheck
+pnpm --filter @doomscrolls/server typecheck
+pnpm --filter @doomscrolls/client typecheck
+pnpm lint
+```
+
 ## Anti-Scope-Creep
 
 Do not implement before Core 0.1 is complete:

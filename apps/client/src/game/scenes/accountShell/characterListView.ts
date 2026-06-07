@@ -1,6 +1,7 @@
 import { t } from "@doomscrolls/localization";
 import type { CharacterId, CharacterSummary } from "@doomscrolls/shared";
 import { createButton } from "./accountShellDom";
+import { formatMoneyCompact } from "../../moneyFormatting";
 
 export function createCharacterList(
   characters: readonly CharacterSummary[],
@@ -80,6 +81,14 @@ function createCharacterListItem(
   details.style.margin = "0";
   details.style.color = "#c7ad84";
   content.appendChild(details);
+
+  const money = document.createElement("p");
+  money.textContent = `${t("money.money_label")}: ${formatMoneyCompact(character.moneyCopper)}`;
+  money.style.margin = "4px 0 0";
+  money.style.color = "#e0c88a";
+  money.style.fontFamily = "monospace";
+  money.style.fontSize = "12px";
+  content.appendChild(money);
   item.appendChild(content);
 
   const selectButton = createButton(t("character.select"));

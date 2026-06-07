@@ -447,6 +447,19 @@ login restored valid selected character
 Enter World button only enabled for selected character
 ```
 
+### Shared Loot Container Foundation (Core 0.1)
+
+The Core 0.1 shared loot container foundation is in place but intentionally limited to data flow and room-instance lifecycle, not persistence:
+
+```text
+one shared Nightmarket crate exists
+crate opens once per room instance
+server rolls loot and spawns world loot near crate
+opened state syncs to clients
+not persisted yet
+no stealing/crime/locks/respawn timers yet
+```
+
 Run the Node.js server foundation during local development:
 
 ```bash

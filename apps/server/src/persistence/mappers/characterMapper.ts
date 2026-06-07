@@ -45,6 +45,7 @@ export function toCharacterSummaryDto(character: Character): CharacterSummary {
     level: character.level,
     xp: character.xp,
     currentZoneId: character.currentZoneId as ZoneId,
+    moneyCopper: character.moneyCopper,
     createdAt: toIsoDateTimeString(character.createdAt),
     updatedAt: toIsoDateTimeString(character.updatedAt),
   };

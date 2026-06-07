@@ -88,6 +88,12 @@ export const en = {
   "character.level": "Level",
   "character.create_success": "Character created.",
 
+  "money.money_label": "Money",
+  "money.money_empty": "0c",
+  "money.gold_short": "g",
+  "money.silver_short": "s",
+  "money.copper_short": "c",
+
   "world_entry.title": "Selected character",
   "world_entry.enter_world": "Enter World",
   "world_entry.coming_next": "World entry coming next.",

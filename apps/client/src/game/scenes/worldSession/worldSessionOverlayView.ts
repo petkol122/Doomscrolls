@@ -219,6 +219,7 @@ export function createWorldSessionOverlayView(
       nextCharacter?.id !== undefined && onUnequipItem !== undefined
         ? (slot) => onUnequipItem(nextCharacter.id, slot)
         : undefined,
+      () => nextCharacter,
     ));
     panel.appendChild(createDerivedStatsSection(nextCharacter));
     panel.appendChild(createInventoryPanelSection(
@@ -494,6 +495,7 @@ function createStableUtilityContent(
     character?.id !== undefined && onUnequipItem !== undefined
       ? (slot) => onUnequipItem(character.id, slot)
       : undefined,
+    () => character,
   );
   const derivedStatsSection = createDerivedStatsSection(character);
   const inventorySection = createInventoryPanelSection(
@@ -545,6 +547,7 @@ function syncUtilityView(
     character?.id !== undefined && onUnequipItem !== undefined
       ? (slot) => onUnequipItem(character.id, slot)
       : undefined,
+    () => character,
   );
   updateInventoryPanelSection(
     refs.inventorySection,
