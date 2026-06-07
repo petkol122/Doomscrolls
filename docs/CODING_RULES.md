@@ -206,6 +206,11 @@ Client auth UI rules:
 - current debug/account UI may show derived stats, runtime HP/flask state and equipment outcomes only from real synced room state or persisted account state
 - Q (healing flask) and Space (dodge) world hotkeys must share the same focus-filtering helper so they do not fire while text-entry style focus is active
 - projection preview modes must not keep click-to-move world input enabled when that would misrepresent the active world projection
+- WorldSession overlay mount points for interactive controls must stay stable across state updates
+- do not replace interactive panel root elements during overlay/state refreshes; update their contents in place
+- passive overlay containers must use `pointer-events: none`
+- real interactive controls inside those overlays must explicitly use `pointer-events: auto`
+- live combat HUD must read room-synced `PlayerPresence`; inventory/equipment panels must read persisted `/me` account state
 
 ## Interactable Object Rules
 

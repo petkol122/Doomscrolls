@@ -247,6 +247,12 @@ Document the current movement-speed flow and, if already synchronized, show spee
 
 Status: implemented. The docs now state that `TownRoom` resolves runtime movement speed from character-derived stats on join, stores that speed in `PlayerPresence`, and that `stepTownRoomMovement()` uses each player's synced speed during the 50 ms authoritative movement tick. They also state that the fallback speed constant exists only as a server safety guard when runtime speed is missing or invalid. On the client, `apps/client/src/net/townRoomPresence.ts` now forwards synced `movementSpeed` when present, and `apps/client/src/game/scenes/accountShell/worldEntryView.ts` appends it to the existing debug player-presence text. No prediction, gameplay HUD, collision, pathfinding, combat, inventory or persistence changes were added.
 
+### Task 169 — World Overlay Stability Rule Docs
+
+Document the WorldSession overlay interaction rule so overlay regressions do not replace interactive roots or break pointer handling.
+
+Status: documented. `docs/CODING_RULES.md` now states that WorldSession overlay interactive mount points must stay stable across state updates, interactive panel roots must not be replaced during overlay refreshes, passive containers use `pointer-events: none`, real controls use `pointer-events: auto`, live combat HUD reads room-synced `PlayerPresence`, and inventory/equipment panels read persisted `/me` account state. This task is docs-only and adds no feature work.
+
 ### Task 017 — Enemy Spawn and AI
 
 Spawn Trashboar Runt from content and implement AI v1.
