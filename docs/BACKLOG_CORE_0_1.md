@@ -271,7 +271,7 @@ Status: partially implemented as the current basic attack intent foundation batc
 
 Task 062 milestone cleanup note: the current click-enemy UX now explicitly communicates dispatch (`Attack sent.`), out-of-range rejection (`Too far away.`), and acceptance (`Attack confirmed. Enemy HP updates from synced room state.`). Enemy HP remains visibly updated only through synced room-state changes. Damage remains fixed at 1 and server-owned.
 
-Task 164 status note: the current temporary Notice Board objective is documented as a narrow session-only slice. Notice Board interaction starts `Cull Trashboars 0/3`, completion grants XP once per session objective, and there is still no quest persistence, quest log, or dialogue system.
+Task 164 status note: the current temporary Notice Board objective is documented as a narrow session-only slice. Objective definitions now live in content, the Notice Board reads `cull_trashboars` from content, completion grants XP once per session objective, and there is still no objective persistence, quest log, dialogue system, or multiple-objective support.
 
 Task 078 milestone note: synced placeholder world loot can now be clicked for server-authoritative pickup. The client sends only `worldLootId`, `TownRoom` validates player presence + loot existence + distance <= 48, and on success removes the synced loot from room state before the client view disappears via Colyseus sync. There is still no inventory write, item stacking, equipment, currency, XP, persistence or client-side pickup authority.
 
