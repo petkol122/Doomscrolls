@@ -624,6 +624,17 @@ Changes:
 - both item loot and currency loot are server-authoritative WorldLoot entries and can drop simultaneously from the same defeat, each at its own scattered position
 - server returns `WorldLoot[]` (array) from `spawnWorldLootOnEnemyDefeat` to support multiple simultaneous drops; `TownRoom` updated accordingly
 
+### Task 231 — Core Interaction Stability Docs
+
+Document recent fixes for enemy movement, overlay clicks, and loot hit testing. No features, browser automation, or runtime reproduction.
+
+Changes documented:
+
+- enemy content `moveSpeed` is scaled to world units/sec in server movement: `ENEMY_MOVEMENT_SPEED_UNITS_PER_SECOND_MULTIPLIER = 220` applies the same scaling factor as `TOWN_MOVEMENT_SPEED_UNITS_PER_SECOND_MULTIPLIER` so enemy `moveSpeed: 1.0` yields 220 world-units/sec, matching player speed conventions
+- overlay visible panels capture clicks via `event.stopPropagation()` on respawn/reset/equip/unequip controls; passive empty overlay regions use `pointerEvents: "none"` so canvas clicks pass through
+- respawn/inventory/equip controls must stop click-through: `worldSessionOverlayView.ts` calls `event.stopPropagation()` on all interactive control clicks; `worldSessionPointerEvents.ts` exports `makeInteractive`/`makePassive` helpers
+- loot hit testing uses the same deterministic visual scatter as rendering: both `worldSessionLootPlaceholderView.ts` (render) and `worldSessionAreaView.ts` (hit test) call `getScatterOffset(loot.id)` with `SCATTER_RANGE = 12`; the client-side visual scatter range (12px) is independent of the server drop scatter (8px) — they serve different purposes (readability vs drop placement)
+
 ### Task 195 — Ground Loot Rules Docs Checkpoint
 
 Document current ground-loot readability and pickup rules. This is a documentation-only task and must not add features, browser automation, or runtime reproduction.

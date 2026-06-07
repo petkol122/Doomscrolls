@@ -598,6 +598,40 @@ Rules:
 
 ---
 
+## Enemy Movement Speed Rules
+
+Enemy `moveSpeed` values from content definitions must be scaled to world-units-per-second using the same multiplier as player speed, otherwise enemies move at <1 wu/sec and can never catch a player running at 200+ wu/sec.
+
+Rules:
+
+- `ENEMY_MOVEMENT_SPEED_UNITS_PER_SECOND_MULTIPLIER = 220` applies the same scaling factor as `TOWN_MOVEMENT_SPEED_UNITS_PER_SECOND_MULTIPLIER` to enemy content `moveSpeed`
+- enemy `moveSpeed: 1.0` yields 220 world-units/sec, matching the player speed convention from `resolvePlayerMovementSpeed`
+- the multiplier constant exists in `TownRoom.ts` and is applied at runtime when resolving `enemyDefinition.moveSpeed` during chase/pursuit movement
+- the same multiplier is used in wander movement (`wanderEnemies.ts`) through the existing `moveSpeedUnitsPerSecond` parameter passed to `applyWanderMovement()`
+- if content `moveSpeed` is missing or zero, the enemy effectively cannot move (speed = 0)
+
+## Overlay Click Capture Rules
+
+WorldSession DOM overlays must prevent click-through to the Phaser canvas while keeping empty overlay regions transparent to canvas clicks.
+
+Rules:
+
+- visible interactive overlay controls (respawn button, reset objective, inventory items, equip/unequip buttons) must call `event.stopPropagation()` on click handlers to prevent the event from reaching the canvas
+- passive overlay containers and wrapper/background zones must use `pointer-events: none` so canvas clicks pass through unblocked
+- `worldSessionPointerEvents.ts` exports `makeInteractive()` (sets `pointerEvents: "auto"`) and `makePassive()` (sets `pointerEvents: "none"`) as shared helpers
+- interactive panel roots (containing respawn, inventory, equipment, controls) must stay stable across state updates and must not be replaced during overlay refresh; only their inner content should update
+
+## Loot Hit Testing Rules
+
+Loot pickup hit testing on the client must use the same deterministic visual scatter offset as the loot rendering, so clicks on the visible body reliably resolve to the correct `worldLootId`.
+
+Rules:
+
+- both `worldSessionLootPlaceholderView.ts` (render) and `worldSessionAreaView.ts` (hit test) must call `getScatterOffset(loot.id)` with the same `SCATTER_RANGE = 12` for consistent visual-to-hit-test alignment
+- `lootScreenPositions` in `worldSessionAreaView.ts` stores the screen-space position as `loot.x + getScatterOffset(loot.id).x + worldOffset.x` (and same for y) — the same formula used by the loot placeholder rendering
+- `findClickedWorldLoot()` iterates the screen-position map and uses Euclidean distance (5px threshold) from the pointer to the stored scatter-adjusted position
+- the client-side visual scatter range (12px) is independent of the server-owned drop scatter range (8px) — they serve different purposes (readability vs drop placement) and use different RNG (deterministic hash vs seeded mulberry32)
+
 ## Loot Interaction Stability Rules
 
 Task 192 fixed the following loot/inventory interaction bugs and established these rules:
@@ -608,7 +642,6 @@ Task 192 fixed the following loot/inventory interaction bugs and established the
 - enemy drops scatter around the defeated enemy corpse using server-owned seeded RNG (mulberry32) so each drop gets a unique offset instead of stacking at one exact point
 - both item loot and currency loot are server-authoritative WorldLoot entries; they may drop simultaneously from the same defeat, each at its own scattered position
 - scatter offsets are clamped inside the zone bounds to avoid out-of-bounds drops
-- the server returns `WorldLoot[]` (array) from `spawnWorldLootOnEnemyDefeat` to support multiple simultaneous drops
 
 ## Ground Loot Readability and Pickup Rules
 
