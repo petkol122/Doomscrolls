@@ -418,14 +418,15 @@ Camera / world input projection rules:
   - actionable targets resolve before fallback ground movement when hit candidates overlap
   - top-down click-to-move input is allowed only in the current debug projection; projection preview modes must not fake gameplay input
 
- Loot drops, pickup, inventory persistence, inventory summary/detail, equipment checkpoint:
-  - Loot dropped by defeated enemies exists as a synced world-loot entry in room state (id, itemId, label, x, y)
-  - The client sends only a worldLootId pickup intent; the server validates ownership, distance and that the loot still exists
-   - On success the server removes the synced room-state loot and persists the picked-up item as a real inventory item through the persistence layer
-   - the current client slice exposes real inventory summary data plus a read-only inventory detail view from persisted account state rather than fake client-only loot
-   - equip moves a real item from inventory into the selected equipment slot
-   - unequip moves that real equipped item back into the first free inventory slot
-   - drag/drop, stat recalculation, item comparison, currency, XP, salvage, vendor/stash and full inventory UI polish are still deferred
+  Loot drops, pickup, inventory persistence, inventory summary/detail, equipment checkpoint:
+   - Loot dropped by defeated enemies exists as a synced world-loot entry in room state (id, itemId, label, x, y)
+   - The client sends only a worldLootId pickup intent; the server validates ownership, distance and that the loot still exists
+    - On success the server removes the synced room-state loot and persists the picked-up item as a real inventory item through the persistence layer
+    - Copper currency also drops via world loot: `rollCurrencyLoot()` rolls the enemy's `currencyDrop` range, server spawns a `WorldLoot` with `currencyCopper > 0` and `itemId = ""`, pickup increments `Character.moneyCopper` atomically via `CharacterRepository.incrementMoneyCopper()`, and a `currency_picked_up` message is sent back to the client
+    - the current client slice exposes real inventory summary data plus a read-only inventory detail view from persisted account state rather than fake client-only loot
+    - equip moves a real item from inventory into the selected equipment slot
+    - unequip moves that real equipped item back into the first free inventory slot
+    - drag/drop, stat recalculation, item comparison, XP, salvage, full inventory UI polish and vendor/shop/trading systems are still deferred
 
 HUD (temporary debug vs. future default):
   - The current connected-room overlay is a temporary server-synced HUD/resource placeholder and debug shell only

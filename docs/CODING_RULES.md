@@ -641,6 +641,20 @@ Core 0.1 ships a shared loot container foundation that is intentionally limited 
 - no stealing/crime/locks/respawn timers yet
 - the shared loot container foundation must not be presented as gameplay
 
+## Copper Currency Rules
+
+Core 0.1 ships a copper currency foundation: `Character.moneyCopper` is persisted in the database (initialized to 0 at character creation), copper drops from defeated enemies use the world loot system (`WorldLoot` with `currencyCopper > 0` and `itemId = ""`), and pickups increment the persisted `moneyCopper` total server-side through `CharacterRepository.incrementMoneyCopper()`.
+
+Copper currency rules:
+
+- copper drops are server-authoritative: the server rolls `currencyDrop` from the enemy's content definition in `rollCurrencyLoot()`, spawns a world loot entry, and the client sends only a `worldLootId` pickup intent
+- on pickup success the server increments `moneyCopper` in the database atomically and sends a `currency_picked_up` message back to the client; the client does not invent local copper totals
+- copper drops render as ground loot with a distinct gold-tinted visual (ellipse body) separate from item loot (rectangle body) as documented under ground loot readability rules
+- `currencyDrop` on enemy definitions is an optional `{ min, max }` range; enemies without it drop zero copper
+- vendors, shops, trading, NPC buying/selling, regional currency, honor currency, reputation, crypto, and any other money-spending or money-conversion systems are **not implemented** in Core 0.1
+
+---
+
 ## Final Rule
 
 If a feature only appears to work, it is not done.

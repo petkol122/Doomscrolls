@@ -649,6 +649,12 @@ pnpm --filter @doomscrolls/client typecheck
 pnpm lint
 ```
 
+### Copper Currency Foundation (Core 0.1)
+
+Core 0.1 ships a copper currency foundation. `Character.moneyCopper` exists via Prisma migration (default 0). Copper drops from defeated enemies use the world loot system: `rollCurrencyLoot()` rolls the enemy's `currencyDrop` range, `spawnWorldLootOnEnemyDefeat()` creates a `WorldLoot` entry with `currencyCopper > 0` and `itemId = ""`, and pickup calls `CharacterRepository.incrementMoneyCopper()` to atomically persist the total server-side. Vendors, shops, trading, NPC buying/selling, regional currency, honor, reputation, and crypto are not implemented.
+
+---
+
 ## Anti-Scope-Creep
 
 Do not implement before Core 0.1 is complete:
