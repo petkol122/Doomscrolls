@@ -18,7 +18,10 @@ export type LevelProgressionResult =
   | { readonly ok: true; readonly progression: ResolvedLevelProgression }
   | { readonly ok: false; readonly reason: LevelProgressionSkipReason };
 
-export function tryResolveLevelProgression(currentLevel: number, nextXp: number): LevelProgressionResult {
+export function tryResolveLevelProgression(
+  currentLevel: number,
+  nextXp: number,
+): LevelProgressionResult {
   const levelTable = contentRegistry.levelTables.get(DEFAULT_LEVEL_TABLE_ID);
 
   if (levelTable === undefined) {
@@ -46,6 +49,7 @@ export function tryResolveLevelProgression(currentLevel: number, nextXp: number)
     if (nextXp < threshold.requiredXp) {
       break;
     }
+
     resolvedLevel = Math.max(resolvedLevel, threshold.level);
   }
 
@@ -61,8 +65,12 @@ export function tryResolveLevelProgression(currentLevel: number, nextXp: number)
   };
 }
 
-export function resolveLevelProgression(currentLevel: number, nextXp: number): ResolvedLevelProgression {
+export function resolveLevelProgression(
+  currentLevel: number,
+  nextXp: number,
+): ResolvedLevelProgression {
   const result = tryResolveLevelProgression(currentLevel, nextXp);
+
   if (!result.ok) {
     if (result.reason === "missing_level_table") {
       throw new Error(`Missing level table content definition: ${DEFAULT_LEVEL_TABLE_ID}`);

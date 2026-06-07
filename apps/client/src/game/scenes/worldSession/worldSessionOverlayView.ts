@@ -1,4 +1,5 @@
 import type { Room } from "@colyseus/sdk";
+import { contentRegistry } from "@doomscrolls/content";
 import { t } from "@doomscrolls/localization";
 import type { CharacterSummary, InventorySummaryItem, RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
 import type { StatModifier } from "@doomscrolls/shared";
@@ -23,6 +24,7 @@ import type { WorldProjectionMode } from "../../worldProjection";
 
 const COMMON_ITEM_COLOR = "#d8c6a3";
 const COMMON_ITEM_ACCENT_COLOR = "#a88d63";
+const DEFAULT_TRACKED_OBJECTIVE_ID = "cull_trashboars" as const;
 
 export interface WorldSessionUtilityPanelOpenState {
   readonly controls: boolean;
@@ -49,6 +51,16 @@ export interface WorldSessionOverlayView {
     room: Room<DoomscrollsRoomState>,
     debugState: WorldSessionDebugState,
   ) => void;
+}
+
+interface ObjectiveTrackerViewModel {
+  readonly title: string;
+  readonly titleHint: string;
+  readonly stateLabel: string;
+  readonly current: number;
+  readonly target: number;
+  readonly completed: boolean;
+  readonly isHint: boolean;
 }
 
 interface StatusViewRefs {
@@ -876,9 +888,7 @@ function createHudSection(
 
   wrapper.appendChild(vitalityCard);
 
-  if (objective !== undefined && objective !== null) {
-    wrapper.appendChild(createObjectiveTrackerCard(objective, onResetObjective));
-  }
+  wrapper.appendChild(createObjectiveTrackerCard(resolveObjectiveTrackerViewModel(objective), onResetObjective));
 
   wrapper.appendChild(createMiniHudStat("Resource", t("world_session.resource_placeholder")));
   wrapper.appendChild(createMiniHudStat(t("character.level"), String(level ?? 1)));
@@ -994,20 +1004,29 @@ function createMiniHudStat(labelText: string, valueText: string): HTMLElement {
 }
 
 function createObjectiveTrackerCard(objective: {
-  readonly label: string;
+  readonly title: string;
+  readonly titleHint: string;
+  readonly stateLabel: string;
   readonly current: number;
   readonly target: number;
   readonly completed: boolean;
+  readonly isHint: boolean;
 }, onResetObjective?: () => void): HTMLElement {
   const card = document.createElement("div");
   card.style.display = "grid";
   card.style.gap = "4px";
   card.style.padding = "8px 10px";
-  card.style.border = objective.completed ? "1px solid #4f6b3d" : "1px solid #5a4727";
+  card.style.border = objective.completed
+    ? "1px solid #4f6b3d"
+    : objective.isHint
+      ? "1px solid #3c3122"
+      : "1px solid #5a4727";
   card.style.borderRadius = "12px";
   card.style.background = objective.completed
     ? "linear-gradient(180deg, rgba(20, 34, 18, 0.92) 0%, rgba(14, 22, 12, 0.92) 100%)"
-    : "linear-gradient(180deg, rgba(32, 24, 14, 0.92) 0%, rgba(18, 14, 10, 0.92) 100%)";
+    : objective.isHint
+      ? "linear-gradient(180deg, rgba(20, 18, 14, 0.9) 0%, rgba(14, 12, 10, 0.9) 100%)"
+      : "linear-gradient(180deg, rgba(32, 24, 14, 0.92) 0%, rgba(18, 14, 10, 0.92) 100%)";
   card.style.minWidth = "176px";
 
   const topRow = document.createElement("div");
@@ -1019,44 +1038,48 @@ function createObjectiveTrackerCard(objective: {
   const title = document.createElement("div");
   title.textContent = "Objective";
   title.style.fontSize = "10px";
-  title.style.color = objective.completed ? "#9fca8b" : "#c5a874";
+  title.style.color = objective.completed ? "#9fca8b" : objective.isHint ? "#b9ae95" : "#c5a874";
   topRow.appendChild(title);
 
   const state = document.createElement("div");
-  state.textContent = objective.completed ? "Complete" : "Active";
+  state.textContent = objective.stateLabel;
   state.style.fontSize = "10px";
   state.style.fontWeight = "bold";
   state.style.textTransform = "uppercase";
-  state.style.color = objective.completed ? "#b9e5a8" : "#e0c88a";
+  state.style.color = objective.completed ? "#b9e5a8" : objective.isHint ? "#d0c3aa" : "#e0c88a";
   topRow.appendChild(state);
 
   card.appendChild(topRow);
 
   const trackerLine = document.createElement("div");
-  trackerLine.textContent = `${objective.label}: ${objective.current}/${objective.target}`;
+  trackerLine.textContent = objective.isHint
+    ? objective.titleHint
+    : `${objective.title}: ${objective.current}/${objective.target}`;
   trackerLine.style.fontSize = "12px";
   trackerLine.style.fontWeight = "bold";
-  trackerLine.style.color = objective.completed ? "#d8f0c8" : "#f0ddbb";
+  trackerLine.style.color = objective.completed ? "#d8f0c8" : objective.isHint ? "#d6c8b0" : "#f0ddbb";
   card.appendChild(trackerLine);
 
-  const progressFrame = document.createElement("div");
-  progressFrame.style.width = "100%";
-  progressFrame.style.height = "8px";
-  progressFrame.style.border = objective.completed ? "1px solid #567546" : "1px solid #5f4a2f";
-  progressFrame.style.borderRadius = "999px";
-  progressFrame.style.background = "rgba(10, 10, 10, 0.45)";
-  progressFrame.style.overflow = "hidden";
+  if (!objective.isHint) {
+    const progressFrame = document.createElement("div");
+    progressFrame.style.width = "100%";
+    progressFrame.style.height = "8px";
+    progressFrame.style.border = objective.completed ? "1px solid #567546" : "1px solid #5f4a2f";
+    progressFrame.style.borderRadius = "999px";
+    progressFrame.style.background = "rgba(10, 10, 10, 0.45)";
+    progressFrame.style.overflow = "hidden";
 
-  const progressFill = document.createElement("div");
-  const ratio = objective.target <= 0 ? 0 : Math.max(0, Math.min(1, objective.current / objective.target));
-  progressFill.style.width = `${ratio * 100}%`;
-  progressFill.style.height = "100%";
-  progressFill.style.borderRadius = "999px";
-  progressFill.style.background = objective.completed
-    ? "linear-gradient(90deg, #4c7e42 0%, #9fd27e 100%)"
-    : "linear-gradient(90deg, #8c6131 0%, #d6a45a 100%)";
-  progressFrame.appendChild(progressFill);
-  card.appendChild(progressFrame);
+    const progressFill = document.createElement("div");
+    const ratio = objective.target <= 0 ? 0 : Math.max(0, Math.min(1, objective.current / objective.target));
+    progressFill.style.width = `${ratio * 100}%`;
+    progressFill.style.height = "100%";
+    progressFill.style.borderRadius = "999px";
+    progressFill.style.background = objective.completed
+      ? "linear-gradient(90deg, #4c7e42 0%, #9fd27e 100%)"
+      : "linear-gradient(90deg, #8c6131 0%, #d6a45a 100%)";
+    progressFrame.appendChild(progressFill);
+    card.appendChild(progressFrame);
+  }
 
   const resetButton = createButton("Reset objective");
   resetButton.style.width = "auto";
@@ -1070,6 +1093,40 @@ function createObjectiveTrackerCard(objective: {
   card.appendChild(resetButton);
 
   return card;
+}
+
+function resolveObjectiveTrackerViewModel(
+  objective: {
+    readonly label: string;
+    readonly current: number;
+    readonly target: number;
+    readonly completed: boolean;
+  } | null | undefined,
+): ObjectiveTrackerViewModel {
+  const defaultObjective = contentRegistry.objectives.get(DEFAULT_TRACKED_OBJECTIVE_ID);
+  const defaultTitle = defaultObjective === undefined ? "Objective available" : t(defaultObjective.titleKey);
+
+  if (objective === null || objective === undefined) {
+    return {
+      title: defaultTitle,
+      titleHint: `Notice Board: ${defaultTitle}`,
+      stateLabel: "Hint",
+      current: 0,
+      target: defaultObjective?.requiredKills ?? 1,
+      completed: false,
+      isHint: true,
+    };
+  }
+
+  return {
+    title: objective.label,
+    titleHint: objective.label,
+    stateLabel: objective.completed ? "Complete" : "Active",
+    current: objective.current,
+    target: objective.target,
+    completed: objective.completed,
+    isHint: false,
+  };
 }
 
 function createSkillSlotPlaceholder(): HTMLElement {

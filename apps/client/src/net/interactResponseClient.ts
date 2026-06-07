@@ -38,7 +38,7 @@ export function registerInteractResponseListener(
     if (
       !msg
       || msg.type !== "objective_updated"
-      || msg.objectiveId !== "cull_trashboars"
+      || typeof msg.objectiveId !== "string"
       || typeof msg.label !== "string"
       || typeof msg.current !== "number"
       || typeof msg.target !== "number"
@@ -48,7 +48,7 @@ export function registerInteractResponseListener(
     }
     onObjectiveUpdated?.({
       type: "objective_updated",
-      objectiveId: "cull_trashboars",
+      objectiveId: msg.objectiveId,
       label: msg.label,
       current: msg.current,
       target: msg.target,
