@@ -171,6 +171,12 @@ export function getInteractableResponseMessage(objectId: string): string {
       return t(service.unavailableMessageKey);
     }
   }
+  if (objectId === "nightmarket_trainer_01") {
+    const service = contentRegistry.townServices.get("nightmarket_trainer");
+    if (service !== undefined) {
+      return t(service.unavailableMessageKey);
+    }
+  }
   const responses: Record<string, string> = {
     nightmarket_notice_board: "The notice board hums quietly.",
     nightmarket_vendor_01: "Vendor trading is not available yet.",

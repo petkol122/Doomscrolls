@@ -230,7 +230,10 @@ export const en = {
 
   "town_service.vendor_panel.trading_locked": "Trading locked for Core 0.1.",
   "town_service.stash_keeper.name": "Stash Keeper",
-  "town_service.stash_keeper.unavailable": "Stash storage is not available yet."
+  "town_service.stash_keeper.unavailable": "Stash storage is not available yet.",
+
+  "town_service.trainer.name": "Trainer",
+  "town_service.trainer.unavailable": "Training is not available yet."
 } as const satisfies LocalizationDictionary;
 
 export type LocalizationKey = keyof typeof en;

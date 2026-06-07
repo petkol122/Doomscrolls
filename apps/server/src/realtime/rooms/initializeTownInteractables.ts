@@ -66,6 +66,19 @@ export function initializeTownInteractables(
       );
       state.interactables.set(stash.id, stash);
     }
+
+    // Task 208 — Trainer town-service placeholder
+    const trainerProp = contentRegistry.worldProps.get("nightmarket_trainer_01");
+    if (trainerProp !== undefined) {
+      const trainer = new Interactable(
+        trainerProp.id,
+        "town_service",
+        trainerProp.label,
+        trainerProp.x,
+        trainerProp.y,
+      );
+      state.interactables.set(trainer.id, trainer);
+    }
   }
   // Future: add more zones and objects
 }

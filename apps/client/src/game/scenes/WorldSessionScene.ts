@@ -186,6 +186,16 @@ export class WorldSessionScene extends Phaser.Scene {
           return;
         }
       }
+      // Task 208 — Trainer town-service placeholder panel.
+      if (objectId === "nightmarket_trainer_01") {
+        const service = contentRegistry.townServices.get("nightmarket_trainer");
+        if (service !== undefined) {
+          this.townServicePanel?.destroy();
+          this.townServicePanel = createTownServiceInteractionPanel(service);
+          this.townServicePanel.show();
+          return;
+        }
+      }
       this.feedbackView?.showNotice(message);
     }, (message: ObjectiveUpdatedServerMessage) => {
       if (message.completed) {
