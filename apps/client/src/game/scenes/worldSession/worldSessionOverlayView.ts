@@ -1269,6 +1269,9 @@ function createInventoryPanelSection(
   const items = character?.inventorySummaryItems ?? [];
   const wrapper = document.createElement("details");
   wrapper.open = isOpen;
+  wrapper.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
   wrapper.addEventListener("toggle", () => {
     onOpenChange?.(wrapper.open);
   });
@@ -1292,6 +1295,7 @@ function createInventoryPanelSection(
   const content = document.createElement("div");
   content.dataset.worldSessionInventoryContent = "true";
   content.style.padding = "0 8px 8px";
+  makeInteractive(content);
   wrapper.appendChild(content);
   updateInventoryPanelSection(wrapper, character, selection, equipmentLoadout, characterId, onEquipItem, isOpen);
   return wrapper;
@@ -1422,6 +1426,32 @@ function createInventorySummarySection(
   list.style.padding = "0";
   list.style.color = "#d8c6a3";
   list.style.fontSize = "12px";
+  makeInteractive(list);
+  list.addEventListener("click", (event) => {
+    event.stopPropagation();
+
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+
+    const itemTrigger = target.closest("[data-inventory-item-id]");
+    if (!(itemTrigger instanceof HTMLElement)) {
+      return;
+    }
+
+    const itemId = itemTrigger.dataset.inventoryItemId;
+    if (typeof itemId !== "string" || itemId.length === 0) {
+      return;
+    }
+
+    const selectedItem = items.find((item) => item.itemInstanceId === itemId);
+    if (selectedItem === undefined) {
+      return;
+    }
+
+    onSelectItem(selectedItem.itemInstanceId);
+  });
 
   for (const item of items) {
     const row = document.createElement("li");
@@ -1429,6 +1459,7 @@ function createInventorySummarySection(
     row.style.marginBottom = "6px";
     row.style.listStyle = "none";
     makeInteractive(row);
+    row.dataset.inventoryItemId = item.itemInstanceId;
 
     const button = createButton(item.label);
     button.style.width = "100%";
@@ -1439,12 +1470,11 @@ function createInventorySummarySection(
     button.style.background = isSelected ? "rgba(63, 83, 49, 0.9)" : "rgba(31, 24, 18, 0.95)";
     button.style.color = getItemRarityColor(item.rarity);
     button.setAttribute("aria-pressed", isSelected ? "true" : "false");
+    button.type = "button";
+    button.dataset.inventoryItemId = item.itemInstanceId;
     const sizeText = item.size === undefined ? "" : ` • ${item.size.width}x${item.size.height}`;
     const rarityText = formatItemRarityLabel(item.rarity);
     button.textContent = `${item.label} [${rarityText}]${sizeText}`;
-    button.addEventListener("click", () => {
-      onSelectItem(item.itemInstanceId);
-    });
     makeInteractive(button);
     row.appendChild(button);
     list.appendChild(row);

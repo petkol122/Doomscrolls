@@ -58,6 +58,14 @@ interface EnemyScreenPositionSnapshot {
   readonly worldY: number;
 }
 
+interface WorldLootScreenPositionSnapshot {
+  readonly id: string;
+  readonly x: number;
+  readonly y: number;
+  readonly worldX: number;
+  readonly worldY: number;
+}
+
 interface ProjectedEnemySnapshot {
   readonly enemy: TownRoomEnemySnapshot;
   readonly screenX: number;
@@ -141,6 +149,7 @@ export function createWorldSessionAreaView(
   const lootPlaceholders = new Map<string, WorldSessionLootPlaceholderView>();
   const floatingDamageView: FloatingDamageNumberView = createFloatingDamageNumberView(scene, worldContainer);
   const enemyScreenPositions = new Map<string, EnemyScreenPositionSnapshot>();
+  const lootScreenPositions = new Map<string, WorldLootScreenPositionSnapshot>();
 
   const targetMarker = scene.add.circle(-9999, -9999, 7, 0xff4a4a, 0.8);
   const targetLabel = scene.add.text(layout.originX + 10, layout.originY + layout.height - 20, "", {
@@ -274,6 +283,7 @@ export function createWorldSessionAreaView(
     const worldOffset = resolveWorldContainerOffset(layout, worldProjection, currentFocusPosition);
     worldContainer.setPosition(worldOffset.x, worldOffset.y);
     worldFrame.setPosition(worldOffset.x, worldOffset.y);
+    interactablesView.setScreenOffset(worldOffset.x, worldOffset.y);
 
     drawViewportFrame(frame, layout);
     drawBounds(worldFrame, layout, bounds, worldProjection);
@@ -332,8 +342,8 @@ export function createWorldSessionAreaView(
       }
 
       enemyScreenPositions.set(enemy.id, {
-        x: projectedEnemy.screenX,
-        y: projectedEnemy.screenY,
+        x: projectedEnemy.screenX + worldOffset.x,
+        y: projectedEnemy.screenY + worldOffset.y,
         worldX: enemy.x,
         worldY: enemy.y,
       });
@@ -382,6 +392,7 @@ export function createWorldSessionAreaView(
       if (!newWorldLootIds.has(id)) {
         view.destroy();
         lootPlaceholders.delete(id);
+        lootScreenPositions.delete(id);
         if (pendingPickupWorldLootId === id) {
           pendingPickupWorldLootId = null;
         }
@@ -389,6 +400,16 @@ export function createWorldSessionAreaView(
     }
 
     for (const loot of projectedWorldLoot) {
+      const sourceLoot = currentWorldLoot.find((entry) => entry.id === loot.id);
+      if (sourceLoot !== undefined) {
+        lootScreenPositions.set(loot.id, {
+          id: loot.id,
+          x: loot.x + worldOffset.x,
+          y: loot.y + worldOffset.y,
+          worldX: sourceLoot.x,
+          worldY: sourceLoot.y,
+        });
+      }
       const existing = lootPlaceholders.get(loot.id);
       if (existing === undefined) {
         lootPlaceholders.set(
@@ -446,6 +467,26 @@ export function createWorldSessionAreaView(
         lastClickTarget = {
           x: Math.round(clickedEnemy.worldX),
           y: Math.round(clickedEnemy.worldY),
+        };
+        onDebugStateChange?.();
+        pointerHandledByTarget = false;
+        return;
+      }
+
+      const clickedLoot = findClickedWorldLoot(lootScreenPositions, pointer.x, pointer.y);
+      if (clickedLoot !== null) {
+        pointerHandledByTarget = true;
+        const result = sendPickupWorldLootIntent(nextRoom, clickedLoot.id);
+        if (result.dispatched) {
+          pendingPickupWorldLootId = clickedLoot.id;
+          const targetLoot = getTownRoomWorldLoot(nextRoom.state).find((entry) => entry.id === clickedLoot.id);
+          if (targetLoot !== undefined) {
+            onPickupFeedback?.(`${t("world_area.pickup_sent")} ${formatPickupFeedbackLabel(targetLoot)}`);
+          }
+        }
+        lastClickTarget = {
+          x: Math.round(clickedLoot.worldX),
+          y: Math.round(clickedLoot.worldY),
         };
         onDebugStateChange?.();
         pointerHandledByTarget = false;
@@ -647,6 +688,7 @@ export function createWorldSessionAreaView(
         view.destroy();
       }
       lootPlaceholders.clear();
+      lootScreenPositions.clear();
       floatingDamageView.destroy();
       selfScreenPosition = null;
       container.destroy(true);
@@ -676,6 +718,44 @@ function findClickedEnemy(
         id,
         worldX: position.worldX,
         worldY: position.worldY,
+        distanceSquared,
+      };
+    }
+  }
+
+  if (closestHit === null) {
+    return null;
+  }
+
+  return {
+    id: closestHit.id,
+    worldX: closestHit.worldX,
+    worldY: closestHit.worldY,
+  };
+}
+
+function findClickedWorldLoot(
+  lootScreenPositions: ReadonlyMap<string, WorldLootScreenPositionSnapshot>,
+  pointerX: number,
+  pointerY: number,
+): { readonly id: string; readonly worldX: number; readonly worldY: number } | null {
+  const hitRadiusPx = 24;
+  const hitRadiusSquared = hitRadiusPx * hitRadiusPx;
+  let closestHit: { readonly id: string; readonly worldX: number; readonly worldY: number; readonly distanceSquared: number } | null = null;
+
+  for (const loot of lootScreenPositions.values()) {
+    const dx = pointerX - loot.x;
+    const dy = pointerY - loot.y;
+    const distanceSquared = (dx * dx) + (dy * dy);
+    if (distanceSquared > hitRadiusSquared) {
+      continue;
+    }
+
+    if (closestHit === null || distanceSquared < closestHit.distanceSquared) {
+      closestHit = {
+        id: loot.id,
+        worldX: loot.worldX,
+        worldY: loot.worldY,
         distanceSquared,
       };
     }

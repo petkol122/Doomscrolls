@@ -29,6 +29,7 @@ export interface WorldSessionInteractablesView {
     pointerX: number,
     pointerY: number,
   ) => { readonly objectId: string; readonly worldX: number; readonly worldY: number } | null;
+  readonly setScreenOffset: (x: number, y: number) => void;
   readonly destroy: () => void;
 }
 
@@ -46,6 +47,8 @@ export function createWorldSessionInteractablesView(
     string,
     { readonly screenX: number; readonly screenY: number; readonly worldX: number; readonly worldY: number }
   >();
+  let screenOffsetX = 0;
+  let screenOffsetY = 0;
 
   const refresh = (
     room: Room<RoomState>,
@@ -108,8 +111,8 @@ export function createWorldSessionInteractablesView(
       labelTexts.set(objectId, labelText);
 
       hitAreas.set(objectId, {
-        screenX: pixelX,
-        screenY: pixelY,
+        screenX: pixelX + screenOffsetX,
+        screenY: pixelY + screenOffsetY,
         worldX: x,
         worldY: y,
       });
@@ -158,6 +161,10 @@ export function createWorldSessionInteractablesView(
   return {
     refresh,
     findClickedInteractable,
+    setScreenOffset: (x: number, y: number) => {
+      screenOffsetX = x;
+      screenOffsetY = y;
+    },
     destroy: () => {
       graphicsObjects.forEach((g) => g.destroy());
       labelTexts.forEach((t) => t.destroy());
