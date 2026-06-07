@@ -18,6 +18,7 @@ export type SkillId = "heavy_strike";
 export type EnemyId = "trashboar_runt" | "trashboar_brute";
 export type LootTableId = "sewer_starter_loot";
 export type LevelTableId = "level_1_to_10";
+export type ObjectiveId = "cull_trashboars";
 export type ZoneContentId = "nightmarket" | "blackwire_sewers";
 export type ItemRarity = "common" | "rare";
 export type SkillTargetingMode = "target";
@@ -141,6 +142,15 @@ export interface LevelThresholdDefinition {
 export interface LevelTableDefinition {
   readonly id: LevelTableId;
   readonly levels: readonly LevelThresholdDefinition[];
+}
+
+export interface ObjectiveContentDefinition {
+  readonly id: ObjectiveId;
+  readonly titleKey: ContentLocalizationKey;
+  readonly descriptionKey: ContentLocalizationKey;
+  readonly targetEnemyIds: readonly EnemyId[];
+  readonly requiredKills: number;
+  readonly xpReward: number;
 }
 
 export interface SpawnPointContentDefinition {

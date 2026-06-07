@@ -40,6 +40,8 @@ export const REQUIRED_LOCALIZATION_KEYS = [
   "item.rustbound_ring.description",
   "skill.heavy_strike.name",
   "skill.heavy_strike.description",
+  "objective.cull_trashboars.title",
+  "objective.cull_trashboars.description",
   "auth.username",
   "auth.password",
   "auth.login",

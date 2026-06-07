@@ -27,6 +27,7 @@ import type {
   RequestResetObjectiveClientMessage,
   XpGainedServerMessage,
 } from "@doomscrolls/shared";
+import { t } from "@doomscrolls/localization";
 import { RoomJoinValidationService } from "../RoomJoinValidationService";
 import { CharacterService } from "../../character/CharacterService";
 import type { TownRoomJoinOptions } from "./townRoomTypes";
@@ -89,11 +90,10 @@ const characterStatsService = new CharacterStatsService();
 const progressionLog = createRoomLogger(undefined);
 type ContentEnemyId = Parameters<typeof contentRegistry.enemies.get>[0];
 const NOTICE_BOARD_OBJECTIVE_ID = "cull_trashboars" as const;
-const NOTICE_BOARD_OBJECTIVE_LABEL = "Cull Trashboars" as const;
-const NOTICE_BOARD_OBJECTIVE_TARGET = 3;
-const NOTICE_BOARD_OBJECTIVE_XP_REWARD = 5;
+const NOTICE_BOARD_OBJECTIVE = contentRegistry.objectives.require(NOTICE_BOARD_OBJECTIVE_ID);
 
 function buildObjectiveUpdatedMessage(player: {
+  objectiveLabel: string;
   objectiveCurrent: number;
   objectiveTarget: number;
   objectiveCompleted: boolean;
@@ -101,7 +101,7 @@ function buildObjectiveUpdatedMessage(player: {
   return {
     type: "objective_updated",
     objectiveId: NOTICE_BOARD_OBJECTIVE_ID,
-    label: NOTICE_BOARD_OBJECTIVE_LABEL,
+    label: player.objectiveLabel,
     current: player.objectiveCurrent,
     target: player.objectiveTarget,
     completed: player.objectiveCompleted,
@@ -118,10 +118,10 @@ function startNoticeBoardObjective(player: {
   objectiveRewardGranted: boolean;
 }): ObjectiveUpdatedServerMessage {
   player.hasObjective = true;
-  player.objectiveId = NOTICE_BOARD_OBJECTIVE_ID;
-  player.objectiveLabel = NOTICE_BOARD_OBJECTIVE_LABEL;
+  player.objectiveId = NOTICE_BOARD_OBJECTIVE.id;
+  player.objectiveLabel = t(NOTICE_BOARD_OBJECTIVE.titleKey);
   player.objectiveCurrent = 0;
-  player.objectiveTarget = NOTICE_BOARD_OBJECTIVE_TARGET;
+  player.objectiveTarget = NOTICE_BOARD_OBJECTIVE.requiredKills;
   player.objectiveCompleted = false;
   player.objectiveRewardGranted = false;
   return buildObjectiveUpdatedMessage(player);
@@ -146,7 +146,7 @@ function resetNoticeBoardObjective(player: {
 }
 
 function shouldCountForNoticeBoardObjective(enemyId: string): boolean {
-  return enemyId === "trashboar_runt" || enemyId === "trashboar_brute";
+  return NOTICE_BOARD_OBJECTIVE.targetEnemyIds.includes(enemyId as ContentEnemyId);
 }
 
 async function advanceNoticeBoardObjective(
@@ -155,6 +155,7 @@ async function advanceNoticeBoardObjective(
     xp: number;
     level: number;
     objectiveId: string;
+    objectiveLabel: string;
     objectiveCurrent: number;
     objectiveTarget: number;
     objectiveCompleted: boolean;
@@ -180,7 +181,7 @@ async function advanceNoticeBoardObjective(
 
   if (player.objectiveCompleted) {
     player.objectiveRewardGranted = true;
-    await grantFlatXpReward(player, NOTICE_BOARD_OBJECTIVE_XP_REWARD, sendToClient);
+    await grantFlatXpReward(player, NOTICE_BOARD_OBJECTIVE.xpReward, sendToClient);
   }
 }
 

@@ -280,7 +280,7 @@ export interface InteractResponseServerMessage {
 export interface ObjectiveUpdatedServerMessage {
   readonly type: "objective_updated";
   readonly objectiveId: "cull_trashboars";
-  readonly label: "Cull Trashboars";
+  readonly label: string;
   readonly current: number;
   readonly target: number;
   readonly completed: boolean;

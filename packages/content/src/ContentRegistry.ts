@@ -4,6 +4,7 @@ import { equipmentSlots } from "./data/equipmentSlots";
 import { items } from "./data/items";
 import { levelTables } from "./data/levelTables";
 import { lootTables } from "./data/lootTables";
+import { objectives } from "./data/objectives";
 import { origins } from "./data/origins";
 import { passives } from "./data/passives";
 import { skills } from "./data/skills";
@@ -18,6 +19,7 @@ import type {
   ItemContentDefinition,
   LevelTableDefinition,
   LootTableDefinition,
+  ObjectiveContentDefinition,
   OriginContentDefinition,
   PassiveContentDefinition,
   SkillContentDefinition,
@@ -43,6 +45,7 @@ export interface ContentRegistryInput {
   readonly enemies: readonly EnemyContentDefinition[];
   readonly items: readonly ItemContentDefinition[];
   readonly lootTables: readonly LootTableDefinition[];
+  readonly objectives: readonly ObjectiveContentDefinition[];
   readonly zones: readonly ZoneContentDefinition[];
   readonly levelTables: readonly LevelTableDefinition[];
   readonly equipmentSlots: readonly EquipmentSlotContentDefinition[];
@@ -90,6 +93,7 @@ export class ContentRegistry {
   public readonly enemies: ContentCollection<EnemyContentDefinition>;
   public readonly items: ContentCollection<ItemContentDefinition>;
   public readonly lootTables: ContentCollection<LootTableDefinition>;
+  public readonly objectives: ContentCollection<ObjectiveContentDefinition>;
   public readonly zones: ContentCollection<ZoneContentDefinition>;
   public readonly levelTables: ContentCollection<LevelTableDefinition>;
   public readonly equipmentSlots: ContentCollection<EquipmentSlotContentDefinition>;
@@ -105,6 +109,7 @@ export class ContentRegistry {
     this.enemies = createCollection("enemy", input.enemies);
     this.items = createCollection("item", input.items);
     this.lootTables = createCollection("loot table", input.lootTables);
+    this.objectives = createCollection("objective", input.objectives);
     this.zones = createCollection("zone", input.zones);
     this.levelTables = createCollection("level table", input.levelTables);
     this.equipmentSlots = createCollection("equipment slot", input.equipmentSlots);
@@ -122,6 +127,7 @@ export const contentRegistry = new ContentRegistry({
   enemies,
   items,
   lootTables,
+  objectives,
   zones,
   levelTables,
   equipmentSlots,

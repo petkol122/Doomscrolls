@@ -54,6 +54,10 @@ export const en = {
   "skill.heavy_strike.description":
     "A deliberate attack that solves immediate problems through blunt force.",
 
+  "objective.cull_trashboars.title": "Cull Trashboars",
+  "objective.cull_trashboars.description":
+    "Thin the Nightmarket trashboar pack before it spills deeper into the alleys.",
+
   "auth.username": "Username",
   "auth.password": "Password",
   "auth.login": "Log in",
