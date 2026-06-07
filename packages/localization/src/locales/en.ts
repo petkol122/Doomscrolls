@@ -236,7 +236,10 @@ export const en = {
   "town_service.trainer.unavailable": "Training is not available yet.",
 
   "town_service.waypoint.name": "Waypoint",
-  "town_service.waypoint.unavailable": "Waypoint activation is not available yet."
+  "town_service.waypoint.unavailable": "Waypoint activation is not available yet.",
+
+  "zone.blackwire_sewer_edge.name": "→ Blackwire Sewer Edge",
+  "zone.blackwire_sewer_edge.description": "The boundary where Nightmarket alleys give way to sewer tunnels crawling with trashboars."
 } as const satisfies LocalizationDictionary;
 
 export type LocalizationKey = keyof typeof en;

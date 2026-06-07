@@ -2,7 +2,10 @@ import type { EnemyId, SpawnZoneDefinition } from "./types";
 
 export const spawnZones = [
   {
-    id: "nightmarket_trashboar_zone",
+    // Conceptual combat edge area near/inside current Nightmarket bounds.
+    // zoneId stays "nightmarket" so the server still picks these up.
+    // Long-term these will move to blackwire_sewer_edge zone when multi-zone lands.
+    id: "sewer_edge_trashboar_runt_zone",
     zoneId: "nightmarket",
     enemyId: "trashboar_runt" as EnemyId,
     count: 3,
@@ -12,7 +15,7 @@ export const spawnZones = [
     maxY: 500,
   },
   {
-    id: "nightmarket_trashboar_brute_zone",
+    id: "sewer_edge_trashboar_brute_zone",
     zoneId: "nightmarket",
     enemyId: "trashboar_brute" as EnemyId,
     count: 1,

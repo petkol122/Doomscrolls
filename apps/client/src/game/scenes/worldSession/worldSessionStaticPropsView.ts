@@ -117,9 +117,11 @@ function buildPropContainer(
   const propContainer = scene.add.container(prop.screenX, prop.screenY);
   const shadow = scene.add.ellipse(0, 12, 42, 16, 0x000000, 0.18);
   const isAmbientCreature = prop.kind === "ambient_rat" || prop.kind === "ambient_pig" || prop.kind === "ambient_chicken";
+  const isCombatEdge = prop.kind === "combat_edge";
+  const labelColor = isCombatEdge ? "#cc6666" : isAmbientCreature ? "#f2d96b" : "#c8b08d";
   const label = scene.add
     .text(0, 18, prop.label, {
-      color: isAmbientCreature ? "#f2d96b" : "#c8b08d",
+      color: labelColor,
       fontFamily: "Arial, sans-serif",
       fontSize: "11px",
       stroke: "#120e0a",
@@ -207,6 +209,19 @@ function buildPropContainer(
       const legLeft = scene.add.rectangle(-3, 13, 2, 7, 0xd79c3a, 0.95);
       const legRight = scene.add.rectangle(3, 13, 2, 7, 0xd79c3a, 0.95);
       propContainer.add([body, head, beak, comb, legLeft, legRight]);
+      break;
+    }
+    case "combat_edge": {
+      const edgeGraphic = scene.add.graphics();
+      edgeGraphic.lineStyle(2, 0xcc4444, 0.6);
+      edgeGraphic.strokeCircle(0, 0, 16);
+      edgeGraphic.fillStyle(0xcc4444, 0.2);
+      edgeGraphic.fillCircle(0, 0, 16);
+      const dangerLine = scene.add.graphics();
+      dangerLine.lineStyle(2, 0xcc4444, 0.8);
+      dangerLine.lineBetween(-10, -10, 10, 10);
+      dangerLine.lineBetween(-10, 10, 10, -10);
+      propContainer.add([edgeGraphic, dangerLine]);
       break;
     }
   }

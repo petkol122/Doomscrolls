@@ -13,5 +13,8 @@ export const worldProps = [
   { id: "nightmarket_vendor_01", zoneId: "nightmarket", kind: "vendor", label: "Suspicious Vendor", x: 380, y: 600 },
   { id: "nightmarket_stash_keeper_01", zoneId: "nightmarket", kind: "town_service", label: "Stash Keeper", x: 700, y: 620 },
   { id: "nightmarket_trainer_01", zoneId: "nightmarket", kind: "town_service", label: "Trainer", x: 850, y: 680 },
-  { id: "nightmarket_waypoint_01", zoneId: "nightmarket", kind: "waypoint", label: "Waypoint", x: 980, y: 640 }
+  { id: "nightmarket_waypoint_01", zoneId: "nightmarket", kind: "waypoint", label: "Waypoint", x: 980, y: 640 },
+  // Visual marker for the combat edge boundary — no gameplay enforcement
+  { id: "nightmarket_sewer_edge_marker_01", zoneId: "nightmarket", kind: "combat_edge", label: "→ Blackwire Sewer Edge", x: 360, y: 260 },
+  { id: "nightmarket_sewer_edge_marker_02", zoneId: "nightmarket", kind: "combat_edge", label: "→ Blackwire Sewer Edge", x: 1180, y: 900 }
 ] as const satisfies readonly WorldPropContentDefinition[];
