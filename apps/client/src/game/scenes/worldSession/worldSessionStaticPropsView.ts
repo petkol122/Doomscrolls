@@ -225,6 +225,15 @@ function buildPropContainer(
       propContainer.add([edgeGraphic, dangerLine]);
       break;
     }
+    case "path_marker": {
+      const dotA = scene.add.circle(-6, 4, 3, 0x5c4f3e, 0.6);
+      dotA.setStrokeStyle(1, 0x7a6b55, 0.4);
+      const dotB = scene.add.circle(6, -2, 2.5, 0x4f4334, 0.5);
+      dotB.setStrokeStyle(1, 0x6e5f4b, 0.35);
+      const dotC = scene.add.circle(2, 8, 2, 0x554839, 0.45);
+      propContainer.add([dotA, dotB, dotC]);
+      break;
+    }
     case "area_label": {
       const bg = scene.add.rectangle(0, 0, 4, 2, 0x8a7f6e, 0.2);
       const deco = scene.add.text(0, -8, `— ${prop.label} —`, {

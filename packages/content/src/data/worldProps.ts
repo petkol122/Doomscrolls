@@ -16,11 +16,24 @@ export const worldProps = [
   { id: "nightmarket_loot_container_01", zoneId: "nightmarket", kind: "loot_container",label: "Crate",             x: 210, y: 340 },
   { id: "nightmarket_junk_01",           zoneId: "nightmarket", kind: "junk",          label: "Market Junk",       x: 420, y: 380 },
 
-  // ── Region 2: Mid travel space (empty path toward sewer edge) ──
+  // ── Path markers: service cluster → sewer edge ──
+  { id: "nightmarket_path_01", zoneId: "nightmarket", kind: "path_marker", label: "", x: 500, y: 450 },
+  { id: "nightmarket_path_02", zoneId: "nightmarket", kind: "path_marker", label: "", x: 650, y: 560 },
+  { id: "nightmarket_path_03", zoneId: "nightmarket", kind: "path_marker", label: "", x: 800, y: 680 },
+  { id: "nightmarket_path_04", zoneId: "nightmarket", kind: "path_marker", label: "", x: 950, y: 790 },
+  { id: "nightmarket_path_05", zoneId: "nightmarket", kind: "path_marker", label: "", x: 1100, y: 900 },
+
+  // ── Region 2: Mid travel space (existing props toward sewer edge) ──
   { id: "nightmarket_lamp_01",  zoneId: "nightmarket", kind: "lamp",  label: "Lamp",         x: 600,  y: 550 },
   { id: "nightmarket_pig_01",   zoneId: "nightmarket", kind: "ambient_pig", label: "Pig [Neutral]", x: 750, y: 600 },
   { id: "nightmarket_lamp_02",  zoneId: "nightmarket", kind: "lamp",  label: "Lamp",         x: 900,  y: 750 },
   { id: "nightmarket_crates_03",zoneId: "nightmarket", kind: "crate", label: "Roadside Crates", x: 950, y: 850 },
+
+  // ── Path markers: sewer edge → deep sewer edge ──
+  { id: "nightmarket_path_06", zoneId: "nightmarket", kind: "path_marker", label: "", x: 1550, y: 1250 },
+  { id: "nightmarket_path_07", zoneId: "nightmarket", kind: "path_marker", label: "", x: 1700, y: 1350 },
+  { id: "nightmarket_path_08", zoneId: "nightmarket", kind: "path_marker", label: "", x: 1850, y: 1480 },
+  { id: "nightmarket_path_09", zoneId: "nightmarket", kind: "path_marker", label: "", x: 2000, y: 1620 },
 
   // ── Region 3: First sewer edge combat pocket ──
   { id: "nightmarket_sewer_edge_marker_01", zoneId: "nightmarket", kind: "combat_edge", label: "→ Blackwire Sewer Edge", x: 1300, y: 1000 },
