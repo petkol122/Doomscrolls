@@ -413,11 +413,20 @@ Progression and equipment-derived stats:
   - equipment stat modifiers are included in that same recalculation and can change derived stats such as max HP, damage and movement speed
   - the current client debug UI shows these derived/runtime values from real synced/account state rather than inventing local values
 
+Basic attack and skills:
+  - left-click basic attack remains server-authoritative and uses the existing move-first-then-act deferred-action flow
+  - RMB Grave Spark is a real targeted skill sent through request_skill_slot with content-defined cooldown/cost/range/telegraph
+  - out-of-range Grave Spark queues a server-owned move-to-cast: the server stores the skill intent alongside the movement target and executes the skill once the player is in range
+
+Enemy telegraph and dodge:
+  - enemy telegraphs can miss if the player dodges or leaves attack range before the telegraph lands
+  - enemy pressure values (aggro range, leash range, attack cooldown, damage, telegraph duration) are content-driven
+
 Dodge and healing flask:
   - dodge is a server-authoritative short displacement with direction validation and a fixed cooldown; it can also cancel an in-flight enemy telegraph if the player leaves range in time
   - the starter healing flask is server-authoritative, uses fixed charges/cooldown, heals only living players, and is restored on join/respawn
   - Q (flask) and Space (dodge) input helpers share focus filtering so gameplay hotkeys do not fire while text-entry style UI focus is active
-  - there is still no stamina system, no mana/resource system, no vendor refill flow and no advanced consumable system
+  - there is still no mana/resource system, no skill tree, no pathfinding, no collision, no combat animations
 
 Camera / world input projection rules:
   - world rendering uses the live world-container offset derived from synced player position

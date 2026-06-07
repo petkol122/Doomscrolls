@@ -353,7 +353,10 @@ Movement:
   client movement rendering always comes from synced room state
 
 Targeted actions:
-  request_attack / request_interact / request_pickup_world_loot are target intents only
+  left-click basic attack remains server-authoritative and uses the existing move-first-then-act deferred-action flow
+  RMB Grave Spark is a real targeted skill sent through request_skill_slot with content-defined cooldown/cost/range/telegraph
+  out-of-range Grave Spark queues a server-owned move-to-cast: the server stores the skill intent alongside the movement target and executes the skill once the player is in range
+  request_attack / request_interact / request_pickup_world_loot remain target intents only
   when out of range, TownRoom stores a pending action plus movement target
   once the player is close enough, the server executes the deferred action
   the client never decides hit/pickup/interact success locally
@@ -368,6 +371,8 @@ Enemy loop:
   chase: aggroed enemy moves toward its target at full speed
   leash: when the player exceeds leash range the enemy breaks aggro and walks back to spawn
   attack: in melee range the enemy hits on its own cooldown with server-owned damage and telegraph windup
+  enemy telegraphs can miss if the player dodges or leaves attack range before the telegraph lands
+  enemy pressure values (aggro range, leash range, attack cooldown, damage, telegraph duration) are content-driven
   enemy damage to players is server-owned
   enemy defeat may spawn synced world loot from server-owned loot rolling
   still no collision, no pathfinding, no rarity tiers, no enemy packs, no persistence
@@ -399,7 +404,7 @@ HUD state:
 
 The overlay groups room info, player presence, controls, hp/flask state and movement/combat debug into readable sections. It states clearly that it is temporary server-synced debug UI, not the final gameplay HUD. Movement debug may show the last click target sent by the client, but position still comes only from synced room state. TownRoom currently syncs multiple content-driven Nightmarket placeholder Trashboars (spawned from a zone definition) in a reduced 480x320 test arena so movement/combat verification stays compact. Hotkey helpers for Q (healing flask) and Space (dodge) now share the same focus-filtering rule so world hotkeys are ignored while text-entry style focus is active.
 
-This is still placeholder visual UI, not final art or animation. Still deferred: XP, quests, equipment, drag/drop inventory, vendor/stash, the full corpse/death recovery loop, final Diablo-orb HUD art, sprites, map art, collision and pathfinding.
+This is still placeholder visual UI, not final art or animation. Still deferred: mana/resource system, skill trees, pathfinding, collision, animations, the full corpse/death recovery loop, final Diablo-orb HUD art, sprites and map art.
 
 The current world-area rendering must not be mistaken for the final camera direction. It is a practical 2D debug projection used to verify synced state, movement intents and placeholder world interactions. The intended shipping direction remains a fixed isometric / 2.5D look implemented on the existing Phaser 2D runtime via later visual techniques such as depth sorting, shadows, layered scene objects and pre-rendered / sprite-based assets. Rendering and input projection must stay aligned: world clicks and hit testing must use the same active projection and live world-container offset as rendering, actionable targets resolve before fallback ground movement, and non-debug projection previews must not pretend click-to-move gameplay is active.
 

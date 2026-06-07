@@ -657,6 +657,17 @@ Rules:
 - None of these slices may add fake client-side prediction for action success, enemy death, player damage, loot pickup, flask results, dodge outcomes, or HUD numbers; every gameplay outcome still comes from synced room state
 - None of these slices may add XP, quests, equipment flow, inventory drag/drop, vendor/stash, full corpse recovery, full pathfinding, full AI variety, or final HUD art unless the related docs are updated in the same task and the implementation is real
 
+## Combat Gameplay Rules
+
+Core 0.1 combat gameplay is intentionally narrow and must not be overstated:
+
+- left-click basic attack remains server-authoritative and uses the existing move-first-then-act deferred-action flow
+- RMB Grave Spark is a real targeted skill sent through `request_skill_slot` with content-defined cooldown/cost/range/telegraph; it must not be described as a placeholder or fake
+- out-of-range Grave Spark queues a server-owned move-to-cast: the server stores the skill intent alongside the movement target and executes the skill once the player is in range; the client must not decide cast success
+- enemy telegraphs can miss if the player dodges or leaves attack range before the telegraph lands; dodge relevance against enemy attacks is real and server-owned
+- enemy pressure values (aggro range, leash range, attack cooldown, damage, telegraph duration) are content-driven and must not be hardcoded in room logic
+- there is no mana/resource system, no skill tree, no pathfinding, no collision, and no combat animations yet; these must not be documented as implemented
+
 ## Shared Loot Container Foundation Rules
 
 Core 0.1 ships a shared loot container foundation that is intentionally limited to data flow and room-instance lifecycle, not persistence:

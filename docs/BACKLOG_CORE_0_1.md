@@ -670,6 +670,21 @@ Nightmarket classification notes:
 - No real trading, stash storage, skill training, teleport, waypoint persistence or money spending
 - Nightmarket remains test_hybrid, not a true safe_hub yet
 
+### Task 222 — Combat Gameplay Docs Checkpoint
+
+Document the current combat gameplay slice after Grave Spark, move-to-cast, dodge relevance and enemy pressure tuning. This is a documentation-only task and must not add features.
+
+Status: documented. `docs/ARCHITECTURE.md`, `docs/BACKLOG_CORE_0_1.md`, `docs/CODING_RULES.md` and `README.md` now briefly state that left-click basic attack remains server-authoritative, RMB Grave Spark is a real targeted skill with move-to-cast on out-of-range, enemy telegraphs can miss if the player dodges or leaves range, enemy pressure values are content-driven, and that no mana/resource/skill tree/pathfinding/collision/animations exist yet.
+
+Required checks:
+
+```text
+pnpm --filter @doomscrolls/content typecheck
+pnpm --filter @doomscrolls/server typecheck
+pnpm --filter @doomscrolls/client typecheck
+pnpm lint
+```
+
 ### Copper Currency Foundation (Core 0.1)
 
 Core 0.1 ships a copper currency foundation. `Character.moneyCopper` exists via Prisma migration (default 0). Copper drops from defeated enemies use the world loot system: `rollCurrencyLoot()` rolls the enemy's `currencyDrop` range, `spawnWorldLootOnEnemyDefeat()` creates a `WorldLoot` entry with `currencyCopper > 0` and `itemId = ""`, and pickup calls `CharacterRepository.incrementMoneyCopper()` to atomically persist the total server-side. Vendors, shops, trading, NPC buying/selling, regional currency, honor, reputation, and crypto are not implemented.
