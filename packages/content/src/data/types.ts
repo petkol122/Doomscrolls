@@ -25,7 +25,7 @@ export type SkillTargetingMode = "target";
 export type ZoneRoomType = "town" | "combat";
 export type SpawnPointContentId = "nightmarket_spawn";
 export type EquipmentSlotCategory = "weapon" | "armor" | "accessory" | "belt" | "flask";
-export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken";
+export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken" | "loot_container";
 
 export interface SpawnZoneDefinition {
   readonly id: string;

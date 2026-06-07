@@ -216,7 +216,11 @@ export const en = {
   "error.duplicate_character_name": "That character name is already used by this account.",
   "error.missing_localization_key": "Missing localization key: {key}",
 
-  "spawn.nightmarket.default": "Nightmarket Arrival"
+  "spawn.nightmarket.default": "Nightmarket Arrival",
+
+  "world_prop.loot_container.name": "Loot Container",
+  "world_prop.loot_container.description": "A shared container that may hold valuable finds.",
+  "world_prop.loot_container.empty": "The container has already been looted."
 } as const satisfies LocalizationDictionary;
 
 export type LocalizationKey = keyof typeof en;

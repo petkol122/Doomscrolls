@@ -15,6 +15,7 @@ import type { WorldSessionAreaLayout } from "./worldSessionAreaLayout";
  *
  * Render interactable objects as simple placeholder shapes + labels.
  * Handle click to send interact intent.
+ * Task 180 — Added loot container rendering with opened state.
  */
 export interface WorldSessionInteractablesView {
   readonly refresh: (
@@ -81,6 +82,7 @@ export function createWorldSessionInteractablesView(
       const label = String(value.label ?? "Object");
       const x = typeof value.x === "number" ? value.x : 0;
       const y = typeof value.y === "number" ? value.y : 0;
+      const opened = typeof value.opened === "boolean" ? value.opened : false;
 
       const projectedPosition = worldToScreenActiveProjection(
         x,
@@ -92,20 +94,41 @@ export function createWorldSessionInteractablesView(
       const pixelX = projectedPosition.x;
       const pixelY = projectedPosition.y;
 
-      // Draw a simple square placeholder for the object
+      // Task 180 — Different rendering for loot containers based on opened state
       const graphic = scene.add.graphics();
-      graphic.fillStyle(0xa8873f, 0.8); // Gold-ish color for objects
-      graphic.fillRect(pixelX - 8, pixelY - 8, 16, 16);
-      graphic.lineStyle(1, 0x6b5a2e, 0.9);
-      graphic.strokeRect(pixelX - 8, pixelY - 8, 16, 16);
+      if (objectType === "loot_container") {
+        if (opened) {
+          // Opened container - grey/dark color, smaller
+          graphic.fillStyle(0x5a4a3a, 0.8);
+          graphic.fillRect(pixelX - 10, pixelY - 6, 20, 12);
+          graphic.lineStyle(1, 0x3a2a1a, 0.9);
+          graphic.strokeRect(pixelX - 10, pixelY - 6, 20, 12);
+        } else {
+          // Unopened container - golden/bronze color, larger
+          graphic.fillStyle(0xc8a84a, 0.9);
+          graphic.fillRect(pixelX - 12, pixelY - 10, 24, 20);
+          graphic.lineStyle(1, 0x8a7a2a, 0.9);
+          graphic.strokeRect(pixelX - 12, pixelY - 10, 24, 20);
+        }
+      } else {
+        // Default square placeholder for other interactables
+        graphic.fillStyle(0xa8873f, 0.8); // Gold-ish color for objects
+        graphic.fillRect(pixelX - 8, pixelY - 8, 16, 16);
+        graphic.lineStyle(1, 0x6b5a2e, 0.9);
+        graphic.strokeRect(pixelX - 8, pixelY - 8, 16, 16);
+      }
       container.add(graphic);
       graphicsObjects.set(objectId, graphic);
 
-      // Draw label
-      const labelText = scene.add.text(pixelX + 12, pixelY - 12, label, {
+      // Draw label - show different label for opened containers
+      let displayLabel = label;
+      if (objectType === "loot_container" && opened) {
+        displayLabel = "Empty Container";
+      }
+      const labelText = scene.add.text(pixelX + 14, pixelY - 14, displayLabel, {
         color: "#d8c6a3",
         fontFamily: "Arial, sans-serif",
-        fontSize: "12px",
+        fontSize: "11px",
       });
       container.add(labelText);
       labelTexts.set(objectId, labelText);

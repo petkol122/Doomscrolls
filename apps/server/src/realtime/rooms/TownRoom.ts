@@ -44,7 +44,7 @@ import {
 } from "./stepTownRoomMovement";
 import { initializeTownInteractables } from "./initializeTownInteractables";
 import { initializeTownEnemies } from "./initializeTownEnemies";
-import { validateInteractIntent, getInteractableResponseMessage } from "./interactValidation";
+import { validateInteractIntent, getInteractableResponseMessage, handleLootContainerInteraction } from "./interactValidation";
 import { validateAttackIntent } from "./attackIntentValidation";
 import { consumeAttackCooldown, resolveAttackCooldownMs } from "./attackCooldown";
 import { applyEnemyDamage } from "./applyEnemyDamage";
@@ -986,6 +986,36 @@ export class TownRoom extends Room {
           client.send("objective_updated", objectiveUpdate);
         } catch {}
       }
+
+      // Task 180 — Handle loot container interaction
+      if (message.objectId === "nightmarket_loot_container_01") {
+        const containerResult = handleLootContainerInteraction(state, message.objectId);
+        const containerResponse: InteractResponseServerMessage = {
+          type: "interact_response",
+          objectId: message.objectId,
+          message: containerResult.message,
+        };
+        try {
+          client.send("interact_response", containerResponse);
+        } catch {
+          log.warn?.(
+            { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+            "TownRoom loot container interact_response send failed.",
+          );
+        }
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            objectId: message.objectId,
+            ok: containerResult.ok,
+          },
+          "TownRoom loot container interaction handled.",
+        );
+        return;
+      }
+
       const response: InteractResponseServerMessage = {
         type: "interact_response",
         objectId: message.objectId,
