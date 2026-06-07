@@ -53,6 +53,9 @@ export const en = {
   "skill.heavy_strike.name": "Heavy Strike",
   "skill.heavy_strike.description":
     "A deliberate attack that solves immediate problems through blunt force.",
+  "skill.grave_spark.name": "Grave Spark",
+  "skill.grave_spark.description":
+    "A crackling burst of grave-charged energy that sears a single target.",
 
   "objective.cull_trashboars.title": "Cull Trashboars",
   "objective.cull_trashboars.description":
@@ -142,12 +145,15 @@ export const en = {
   "world_session.controls": "Controls",
   "world_session.control_move": "Click ground: move",
   "world_session.control_attack": "Click enemy: attack / approach",
-  "world_session.control_skill_secondary": "Right click: placeholder skill slot",
+  "world_session.control_skill_secondary": "Right click: Grave Spark",
   "world_session.control_dodge": "Space: dodge",
   "world_session.control_flask": "Q: healing flask",
   "world_session.skill_slot_secondary": "Right Click",
-  "world_session.skill_slot_secondary_hint": "Reserved secondary skill slot",
+  "world_session.skill_slot_secondary_hint": "Server-synced secondary skill slot",
   "world_session.skill_slot_secondary_empty": "No skill learned",
+  "world_session.skill_slot_ready": "Status: Ready",
+  "world_session.skill_slot_cooldown": "Status: Cooldown {seconds}s",
+  "world_session.skill_slot_ready_now": "Ready now",
   "world_session.flask_charges": "Flask charges",
   "world_session.awaiting_flask": "Waiting for synced flask state...",
   // Future: Diablo-like right orb resource (mana/class resource) — placeholder until class resource system lands
@@ -164,6 +170,10 @@ export const en = {
   "world_area.attack_on_cooldown": "Attack is on cooldown.",
   "world_area.attack_unavailable": "Attack could not be used.",
   "world_area.player_damage_taken": "You take {damage} damage. HP now {hp}.",
+  "world_area.skill_hit": "Grave Spark hits for {damage}.",
+  "world_area.skill_hit_label": "Spark {damage}",
+  "world_area.skill_target_missing": "Grave Spark target missing.",
+  "world_area.skill_target_dead": "Grave Spark target already dead.",
   "world_area.pickup_sent": "Pickup request sent.",
   "world_area.pickup_too_far": "Too far away to pick that up.",
   "world_area.pickup_moving_closer": "Moving closer to pick that up.",
@@ -197,6 +207,9 @@ export const en = {
   "world_area.flask_on_cooldown": "Flask is on cooldown.",
   "world_area.flask_downed": "Cannot use flask while downed.",
   "world_area.flask_unavailable": "Flask unavailable.",
+  "world_area.skill_sent": "Grave Spark sent.",
+  "world_area.skill_too_far": "Grave Spark target too far.",
+  "world_area.skill_on_cooldown": "Grave Spark is on cooldown.",
   "world_area.skill_unlearned": "Skill slot not learned yet.",
   "world_area.skill_unavailable": "Skill unavailable.",
 

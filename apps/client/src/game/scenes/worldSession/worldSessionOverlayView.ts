@@ -75,6 +75,15 @@ interface HudViewRefs {
   readonly root: HTMLElement;
 }
 
+function formatSkillCooldownSeconds(nextSkillSlotAt?: number): string | null {
+  const readyAt = Number.isFinite(nextSkillSlotAt) ? Number(nextSkillSlotAt) : 0;
+  const remainingMs = readyAt - Date.now();
+  if (remainingMs <= 0) {
+    return null;
+  }
+  return (remainingMs / 1000).toFixed(1);
+}
+
 interface UtilityViewRefs {
   readonly root: HTMLElement;
   readonly equipmentSection: HTMLElement;
@@ -174,7 +183,7 @@ export function createWorldSessionOverlayView(
       selfPresence?.objective ?? null,
       onResetObjective,
     ));
-    panel.appendChild(createSkillSlotPlaceholder());
+    panel.appendChild(createSkillSlotPlaceholder(selfPresence?.nextSkillSlotAt));
 
     if (selfPresence?.lifeState === "downed") {
       const downedNotice = createMutedText(t("world_session.downed_notice"));
@@ -603,6 +612,7 @@ function createControlsSection(isOpen: boolean, onOpenChange: (open: boolean) =>
   const bindings: readonly { readonly key: string; readonly action: string }[] = [
     { key: "Click", action: t("world_session.control_move") },
     { key: "Click (enemy)", action: t("world_session.control_attack") },
+    { key: "RMB (enemy)", action: t("skill.grave_spark.name") },
     { key: "Click (loot)", action: "Pickup" },
     { key: "Click (object)", action: "Interact" },
     { key: "Space", action: t("world_session.control_dodge") },
@@ -1140,7 +1150,7 @@ function resolveObjectiveTrackerViewModel(
   };
 }
 
-function createSkillSlotPlaceholder(): HTMLElement {
+function createSkillSlotPlaceholder(nextSkillSlotAt?: number): HTMLElement {
   const card = document.createElement("div");
   card.style.display = "flex";
   card.style.alignItems = "center";
@@ -1178,17 +1188,29 @@ function createSkillSlotPlaceholder(): HTMLElement {
   textBlock.appendChild(title);
 
   const subtitle = document.createElement("div");
-  subtitle.textContent = t("world_session.skill_slot_secondary_hint");
-  subtitle.style.color = "#a88d63";
-  subtitle.style.fontSize = "10px";
+  subtitle.textContent = t("skill.grave_spark.name");
+  subtitle.style.color = "#b9d49a";
+  subtitle.style.fontSize = "11px";
+  subtitle.style.fontFamily = "monospace";
+  subtitle.style.fontWeight = "bold";
   textBlock.appendChild(subtitle);
 
-  const emptyState = document.createElement("div");
-  emptyState.textContent = t("world_session.skill_slot_secondary_empty");
-  emptyState.style.color = "#b9d49a";
-  emptyState.style.fontSize = "11px";
-  emptyState.style.fontFamily = "monospace";
-  textBlock.appendChild(emptyState);
+  const description = document.createElement("div");
+  description.textContent = t("skill.grave_spark.description");
+  description.style.color = "#a88d63";
+  description.style.fontSize = "10px";
+  textBlock.appendChild(description);
+
+  const cooldownStatus = document.createElement("div");
+  const remainingSeconds = formatSkillCooldownSeconds(nextSkillSlotAt);
+  cooldownStatus.textContent = remainingSeconds === null
+    ? `${t("world_session.skill_slot_ready")} • ${t("world_session.skill_slot_ready_now")}`
+    : t("world_session.skill_slot_cooldown", { seconds: remainingSeconds });
+  cooldownStatus.style.color = remainingSeconds === null ? "#8fce74" : "#d8a86a";
+  cooldownStatus.style.fontSize = "10px";
+  cooldownStatus.style.fontFamily = "monospace";
+  cooldownStatus.style.fontWeight = "bold";
+  textBlock.appendChild(cooldownStatus);
 
   card.appendChild(textBlock);
   return card;

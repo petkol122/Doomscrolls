@@ -8,10 +8,11 @@ import type {
 
 export type SendSkillSlotIntentResult =
   | { readonly dispatched: true }
-  | { readonly dispatched: false; readonly reason: "no_room" | "room_not_joined" };
+  | { readonly dispatched: false; readonly reason: "no_room" | "room_not_joined" | "no_target" };
 
 export function sendSkillSlotIntent(
   room: Room<RoomState> | null | undefined,
+  targetEnemyId?: string,
 ): SendSkillSlotIntentResult {
   if (!room) {
     return { dispatched: false, reason: "no_room" };
@@ -19,10 +20,14 @@ export function sendSkillSlotIntent(
   if (room.connection?.isOpen !== true) {
     return { dispatched: false, reason: "room_not_joined" };
   }
+  if (typeof targetEnemyId !== "string" || targetEnemyId.length === 0) {
+    return { dispatched: false, reason: "no_target" };
+  }
 
   const message: RequestUseSkillSlotClientMessage = {
     type: "request_use_skill_slot",
     slot: "secondary",
+    targetEnemyId,
   };
 
   room.send(message.type, message);

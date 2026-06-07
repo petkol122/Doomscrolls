@@ -67,6 +67,7 @@ export interface PlayerPresenceEntry {
    */
   readonly flaskCharges?: number;
   readonly maxFlaskCharges?: number;
+  readonly nextSkillSlotAt?: number;
   readonly objective?: {
     readonly id: "cull_trashboars";
     readonly label: string;
@@ -116,7 +117,8 @@ export function getTownRoomPresence(
     const withPosition = applyOptionalPosition(withPendingAction, value);
     const withMovementSpeed = applyOptionalMovementSpeed(withPosition, value);
     const withFlask = applyOptionalFlaskState(withMovementSpeed, value);
-    const withObjective = applyOptionalObjective(withFlask, value);
+    const withSkillSlot = applyOptionalSkillSlotCooldown(withFlask, value);
+    const withObjective = applyOptionalObjective(withSkillSlot, value);
     players.push(withObjective);
   }
 
@@ -311,6 +313,20 @@ function applyOptionalFlaskState(
     ...entry,
     flaskCharges: Math.max(0, rawCharges),
     maxFlaskCharges: Math.max(0, rawMax),
+  };
+}
+
+function applyOptionalSkillSlotCooldown(
+  entry: PlayerPresenceEntry,
+  value: Record<string, unknown>,
+): PlayerPresenceEntry {
+  const rawNextSkillSlotAt = value.nextSkillSlotAt;
+  if (typeof rawNextSkillSlotAt !== "number" || !Number.isFinite(rawNextSkillSlotAt)) {
+    return entry;
+  }
+  return {
+    ...entry,
+    nextSkillSlotAt: Math.max(0, rawNextSkillSlotAt),
   };
 }
 

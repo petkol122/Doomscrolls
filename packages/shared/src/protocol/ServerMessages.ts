@@ -212,11 +212,19 @@ export type RequestUseSkillSlotRejectedReason =
   | "player_downed"
   | "skill_on_cooldown"
   | "slot_not_learned"
-  | "skill_unavailable";
+  | "skill_unavailable"
+  | "enemy_not_found"
+  | "enemy_defeated"
+  | "out_of_range";
 
 export interface RequestUseSkillSlotAcceptedServerMessage {
   readonly type: "request_use_skill_slot_accepted";
   readonly slot: "secondary";
+  readonly targetEnemyId: string;
+  readonly damage: number;
+  readonly remainingHp: number;
+  readonly defeated: boolean;
+  readonly nextReadyAt: number;
 }
 
 export interface RequestUseSkillSlotRejectedServerMessage {

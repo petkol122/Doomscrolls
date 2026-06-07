@@ -355,12 +355,33 @@ export class WorldSessionScene extends Phaser.Scene {
     });
 
     registerSkillSlotResponseListeners(this.room, {
-      onAccepted: () => {
-        this.feedbackView?.showNotice(t("world_area.skill_unlearned"));
+      onAccepted: (message) => {
+        this.feedbackView?.showNotice(t("world_area.skill_hit", { damage: message.damage }));
+        this.worldAreaView?.showEnemyFloatingDamage(
+          message.targetEnemyId,
+          t("world_area.skill_hit_label", { damage: message.damage }),
+        );
+        this.renderOverlay();
       },
       onRejected: (message) => {
         if (message.reason === "slot_not_learned") {
           this.feedbackView?.showNotice(t("world_area.skill_unlearned"));
+          return;
+        }
+        if (message.reason === "out_of_range") {
+          this.feedbackView?.showNotice(t("world_area.skill_too_far"));
+          return;
+        }
+        if (message.reason === "skill_on_cooldown") {
+          this.feedbackView?.showNotice(t("world_area.skill_on_cooldown"));
+          return;
+        }
+        if (message.reason === "enemy_defeated") {
+          this.feedbackView?.showNotice(t("world_area.skill_target_dead"));
+          return;
+        }
+        if (message.reason === "enemy_not_found") {
+          this.feedbackView?.showNotice(t("world_area.skill_target_missing"));
           return;
         }
         this.feedbackView?.showNotice(t("world_area.skill_unavailable"));

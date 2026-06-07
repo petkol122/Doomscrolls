@@ -1856,29 +1856,93 @@ export class TownRoom extends Room {
         return;
       }
 
-      player.nextSkillSlotAt = now + 750;
-      const rejection: RequestUseSkillSlotRejectedServerMessage = {
-        ...rejectionBase,
-        reason: "slot_not_learned",
-      };
-      try {
-        client.send(rejection.type, rejection);
-      } catch {
-        log.warn?.(
-          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
-          "TownRoom request_use_skill_slot placeholder rejection send failed.",
-        );
+      // Task 217 — First real skill: Grave Spark. Validate target enemy.
+      const targetEnemyId = typeof message?.targetEnemyId === "string" && message.targetEnemyId.length > 0
+        ? message.targetEnemyId
+        : undefined;
+
+      if (targetEnemyId === undefined) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "skill_unavailable",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
       }
+
+      const enemy = state.enemies.get(targetEnemyId);
+      if (enemy === undefined) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "enemy_not_found",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      if (enemy.defeated || enemy.hp <= 0) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "enemy_defeated",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      // Grave Spark range: 96 (longer than basic attack range of 64)
+      const GRAVE_SPARK_RANGE = 96;
+      const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+      if (distance > GRAVE_SPARK_RANGE) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "out_of_range",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      // Consume cooldown: 1500ms
+      const GRAVE_SPARK_COOLDOWN_MS = 1500;
+      player.nextSkillSlotAt = now + GRAVE_SPARK_COOLDOWN_MS;
+
+      // Apply damage: 3
+      const GRAVE_SPARK_DAMAGE = 3;
+      const damageResult = applyEnemyDamage(enemy, GRAVE_SPARK_DAMAGE);
+
+      if (damageResult.defeated) {
+        spawnWorldLootOnEnemyDefeat(state, enemy, now);
+        void advanceNoticeBoardObjective(player, enemy.enemyId, (type, payload) => {
+          try { client.send(type, payload); } catch {}
+        }).catch(() => {});
+        void grantEnemyDefeatXp(player, enemy.enemyId, (type, payload) => {
+          try { client.send(type, payload); } catch {}
+        }).catch(() => {});
+      }
+
+      const accepted: RequestUseSkillSlotAcceptedServerMessage = {
+        type: "request_use_skill_slot_accepted",
+        slot: "secondary",
+        targetEnemyId: enemy.id,
+        damage: GRAVE_SPARK_DAMAGE,
+        remainingHp: damageResult.remainingHp,
+        defeated: damageResult.defeated,
+        nextReadyAt: player.nextSkillSlotAt,
+      };
+      try { client.send(accepted.type, accepted); } catch {}
 
       log.debug?.(
         {
           roomId: this.roomId,
           roomName: this.roomName,
           sessionId: client.sessionId,
-          slot: message.slot,
+          targetEnemyId: enemy.id,
+          remainingHp: damageResult.remainingHp,
+          appliedDamage: damageResult.appliedDamage,
+          defeated: damageResult.defeated,
+          respawnAtMs: damageResult.respawnAtMs,
           nextSkillSlotAt: player.nextSkillSlotAt,
         },
-        "TownRoom request_use_skill_slot cooldown consumed and placeholder slot rejected as not learned.",
+        "TownRoom request_use_skill_slot accepted: Grave Spark hit target.",
       );
     });
   }

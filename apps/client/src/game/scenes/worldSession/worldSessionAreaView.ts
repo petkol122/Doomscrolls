@@ -503,10 +503,26 @@ export function createWorldSessionAreaView(
         if (localX < 0 || localY < 0 || localX > layout.width || localY > layout.height) {
           return;
         }
-        const result = sendSkillSlotIntent(nextRoom);
-        if (!result.dispatched) {
-          onPickupFeedback?.(t("world_area.skill_unavailable"));
+        // Task 217 — RMB on enemy sends Grave Spark skill intent.
+        const clickedEnemy = findClickedEnemy(enemyScreenPositions, pointer.x, pointer.y);
+        if (clickedEnemy !== null) {
+          pointerHandledByTarget = true;
+          const result = sendSkillSlotIntent(nextRoom, clickedEnemy.id);
+          if (result.dispatched) {
+            onAttackFeedback?.(t("world_area.skill_sent"));
+          } else if (result.reason === "no_target") {
+            onPickupFeedback?.(t("world_area.skill_unavailable"));
+          } else {
+            onPickupFeedback?.(t("world_area.skill_unavailable"));
+          }
+          const targetEnemy = getTownRoomEnemies(nextRoom.state).find((e) => e.id === clickedEnemy.id);
+          if (targetEnemy) {
+            lastClickTarget = { x: targetEnemy.x, y: targetEnemy.y };
+            onDebugStateChange?.();
+          }
+          return;
         }
+        // RMB on empty ground: no skill target
         return;
       }
 
