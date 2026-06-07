@@ -24,6 +24,7 @@ import type {
   RequestDodgeRejectedServerMessage,
   RequestDodgeClientMessage,
   ObjectiveUpdatedServerMessage,
+  RequestResetObjectiveClientMessage,
   XpGainedServerMessage,
 } from "@doomscrolls/shared";
 import { RoomJoinValidationService } from "../RoomJoinValidationService";
@@ -124,6 +125,24 @@ function startNoticeBoardObjective(player: {
   player.objectiveCompleted = false;
   player.objectiveRewardGranted = false;
   return buildObjectiveUpdatedMessage(player);
+}
+
+function resetNoticeBoardObjective(player: {
+  hasObjective: boolean;
+  objectiveId: string;
+  objectiveLabel: string;
+  objectiveCurrent: number;
+  objectiveTarget: number;
+  objectiveCompleted: boolean;
+  objectiveRewardGranted: boolean;
+}): void {
+  player.hasObjective = false;
+  player.objectiveId = "";
+  player.objectiveLabel = "";
+  player.objectiveCurrent = 0;
+  player.objectiveTarget = 0;
+  player.objectiveCompleted = false;
+  player.objectiveRewardGranted = false;
 }
 
 function shouldCountForNoticeBoardObjective(enemyId: string): boolean {
@@ -471,6 +490,7 @@ export class TownRoom extends Room {
   private movementIntentHandlerRegistered = false;
   private interactHandlerRegistered = false;
   private attackHandlerRegistered = false;
+  private resetObjectiveHandlerRegistered = false;
   private pickupWorldLootHandlerRegistered = false;
   private respawnHandlerRegistered = false;
   private dodgeHandlerRegistered = false;
@@ -494,6 +514,7 @@ export class TownRoom extends Room {
 
     this.registerMovementIntentHandler(log);
     this.registerInteractHandler(log);
+    this.registerResetObjectiveHandler(log);
     this.registerAttackHandler(log);
     this.registerPickupWorldLootHandler(log);
     this.registerRespawnHandler(log);
@@ -984,6 +1005,46 @@ export class TownRoom extends Room {
           objectId: message.objectId,
         },
         "TownRoom request_interact accepted and response sent.",
+      );
+    });
+  }
+
+  private registerResetObjectiveHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.resetObjectiveHandlerRegistered) {
+      return;
+    }
+    this.resetObjectiveHandlerRegistered = true;
+
+    this.onMessage("request_reset_objective", (client: Client, raw: unknown) => {
+      const message = raw as Partial<RequestResetObjectiveClientMessage> | null;
+      if (message?.type !== "request_reset_objective") {
+        log.warn?.(
+          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+          "TownRoom request_reset_objective rejected: invalid shape.",
+        );
+        return;
+      }
+
+      const state = this.state as TownRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+      if (player === undefined) {
+        log.warn?.(
+          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+          "TownRoom request_reset_objective rejected: player not found.",
+        );
+        return;
+      }
+
+      if (!player.hasObjective && player.objectiveId.length === 0) {
+        return;
+      }
+
+      resetNoticeBoardObjective(player);
+      log.info?.(
+        { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, characterId: player.characterId },
+        "TownRoom objective reset accepted.",
       );
     });
   }

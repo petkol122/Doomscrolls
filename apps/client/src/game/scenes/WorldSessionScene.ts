@@ -16,6 +16,7 @@ import { clientEnv } from "../../config/env";
 import { registerAttackResponseListeners } from "../../net/attackIntentClient";
 import { registerInteractResponseListener } from "../../net/interactResponseClient";
 import { registerPickupWorldLootResponseListeners } from "../../net/pickupWorldLootClient";
+import { sendResetObjectiveIntent } from "../../net/resetObjectiveClient";
 import { registerRespawnListeners, sendRespawnRequest } from "../../net/respawnClient";
 import { registerSkillSlotResponseListeners } from "../../net/skillSlotIntentClient";
 import { createWorldSessionFeedbackView, type WorldSessionFeedbackView } from "./worldSession/worldSessionFeedbackView";
@@ -357,10 +358,15 @@ export class WorldSessionScene extends Phaser.Scene {
         this.handleRespawn();
       },
       () => {
+        if (this.room !== null) {
+          sendResetObjectiveIntent(this.room);
+        }
+      },
+      () => {
         void this.handleLeaveWorld();
       },
       () => this.utilityPanelOpenState,
-      (nextState) => {
+      (nextState: WorldSessionUtilityPanelOpenState) => {
         this.utilityPanelOpenState = nextState;
       },
       () => this.equipmentLoadout,

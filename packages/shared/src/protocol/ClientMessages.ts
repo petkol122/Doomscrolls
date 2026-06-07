@@ -155,6 +155,10 @@ export interface RequestInteractClientMessage {
   readonly objectId: string;
 }
 
+export interface RequestResetObjectiveClientMessage {
+  readonly type: "request_reset_objective";
+}
+
 export type ClientRoomMessage =
   | MoveToPointClientMessage
   | AttackTargetClientMessage
@@ -173,6 +177,7 @@ export type ClientRoomMessage =
   | TransitionZoneClientMessage
   | DropInventoryItemClientMessage
   | RequestInteractClientMessage
+  | RequestResetObjectiveClientMessage
   | RequestDodgeClientMessage
   | RequestUseHealingFlaskClientMessage
   | RequestUseSkillSlotClientMessage;

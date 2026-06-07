@@ -56,6 +56,7 @@ export function createWorldSessionOverlayView(
   debugState: WorldSessionDebugState,
   onProjectionModeChange: (mode: WorldProjectionMode) => void,
   onRespawn: () => void,
+  onResetObjective: () => void,
   onLeaveWorld: () => void,
   getUtilityState: () => WorldSessionUtilityPanelOpenState = () =>
     DEFAULT_WORLD_SESSION_UTILITY_PANEL_OPEN_STATE,
@@ -104,6 +105,7 @@ export function createWorldSessionOverlayView(
       selfPresence?.level ?? nextCharacter?.level ?? 1,
       selfPresence?.xp ?? nextCharacter?.xp ?? 0,
       selfPresence?.objective ?? null,
+      onResetObjective,
     ));
     panel.appendChild(createSkillSlotPlaceholder());
 
@@ -533,6 +535,7 @@ function createHudSection(
     readonly target: number;
     readonly completed: boolean;
   } | null,
+  onResetObjective?: () => void,
 ): HTMLElement {
   const wrapper = document.createElement("section");
   wrapper.style.display = "grid";
@@ -594,7 +597,7 @@ function createHudSection(
   wrapper.appendChild(vitalityCard);
 
   if (objective !== undefined && objective !== null) {
-    wrapper.appendChild(createObjectiveTrackerCard(objective));
+    wrapper.appendChild(createObjectiveTrackerCard(objective, onResetObjective));
   }
 
   wrapper.appendChild(createMiniHudStat("Resource", t("world_session.resource_placeholder")));
@@ -715,7 +718,7 @@ function createObjectiveTrackerCard(objective: {
   readonly current: number;
   readonly target: number;
   readonly completed: boolean;
-}): HTMLElement {
+}, onResetObjective?: () => void): HTMLElement {
   const card = document.createElement("div");
   card.style.display = "grid";
   card.style.gap = "4px";
@@ -774,6 +777,17 @@ function createObjectiveTrackerCard(objective: {
     : "linear-gradient(90deg, #8c6131 0%, #d6a45a 100%)";
   progressFrame.appendChild(progressFill);
   card.appendChild(progressFrame);
+
+  const resetButton = createButton("Reset objective");
+  resetButton.style.width = "auto";
+  resetButton.style.justifySelf = "start";
+  resetButton.style.padding = "4px 8px";
+  resetButton.style.fontSize = "11px";
+  resetButton.addEventListener("click", () => {
+    onResetObjective?.();
+  });
+  makeInteractive(resetButton);
+  card.appendChild(resetButton);
 
   return card;
 }
