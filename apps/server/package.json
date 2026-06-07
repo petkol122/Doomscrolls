@@ -11,7 +11,7 @@
     "test": "tsc --noEmit",
     "prisma:generate": "prisma generate --schema=prisma/schema.prisma",
     "prisma:migrate:dev": "prisma migrate dev --schema=prisma/schema.prisma",
-    "prisma:migrate:deploy": "prisma migrate deploy --schema=prisma/schema.prisma",
+    "prisma:migrate:deploy": "dotenv -e ../../.env.development -- prisma migrate deploy --schema=prisma/schema.prisma",
     "prisma:studio": "prisma studio --schema=prisma/schema.prisma"
   },
   "dependencies": {
@@ -30,6 +30,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
+    "dotenv-cli": "^11.0.0",
     "prisma": "^6.19.0",
     "tsx": "^4.22.4"
   }
