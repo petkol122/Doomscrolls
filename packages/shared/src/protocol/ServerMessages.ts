@@ -246,6 +246,13 @@ export interface RequestPickupWorldLootAcceptedServerMessage {
    */
   readonly currencyCopper?: number;
   readonly totalMoneyCopper?: number;
+  /**
+   * Server-formatted compact money text for the gained amount. Set
+   * only for currency world-loot pickups. The client MUST prefer this
+   * value when displaying pickup feedback so the same shared
+   * `formatMoneyCompact` helper is used everywhere money is shown.
+   */
+  readonly formattedMoneyText?: string;
 }
 
 export interface RequestPickupWorldLootRejectedServerMessage {

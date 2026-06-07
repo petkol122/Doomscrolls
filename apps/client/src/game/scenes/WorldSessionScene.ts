@@ -7,6 +7,7 @@ import type {
   PlayerRespawnedServerMessage,
   RoomState as DoomscrollsRoomState,
 } from "@doomscrolls/shared";
+import { formatMoneyCompact } from "@doomscrolls/shared";
 import { t } from "@doomscrolls/localization";
 import Phaser from "phaser";
 
@@ -50,8 +51,27 @@ function formatItemRarityLabel(rarity?: string): string | null {
   return rarity.charAt(0).toUpperCase() + rarity.slice(1);
 }
 
-function formatPickupAcceptedNotice(message: { readonly message: string; readonly itemLabel?: string; readonly rarity?: string }): string {
-  if (message.itemLabel === undefined || message.itemLabel.length === 0) {
+function formatPickupAcceptedNotice(
+  message: {
+    readonly message: string;
+    readonly itemLabel?: string;
+    readonly rarity?: string;
+    readonly formattedMoneyText?: string;
+  },
+): string {
+  // Currency world-loot pickup feedback: prefer the server-supplied
+  // formatted money text (e.g. "3g 25s 7c") so the same shared
+  // `formatMoneyCompact` helper is used everywhere money is shown.
+  if (
+    message.itemLabel === undefined ||
+    message.itemLabel.length === 0
+  ) {
+    if (
+      typeof message.formattedMoneyText === "string" &&
+      message.formattedMoneyText.length > 0
+    ) {
+      return `Picked up ${message.formattedMoneyText}.`;
+    }
     return message.message;
   }
 
@@ -183,10 +203,14 @@ export class WorldSessionScene extends Phaser.Scene {
     });
 
     this.room.onMessage("currency_picked_up", (message: { gainedCopper?: unknown; totalMoneyCopper?: unknown }) => {
-      const gained = typeof message.gainedCopper === "number" && Number.isFinite(message.gainedCopper)
-        ? Math.max(0, Math.floor(message.gainedCopper))
+      // Sanitise the gained copper value: ignore non-finite, negative or
+      // NaN values. Use the shared `formatMoneyCompact` helper so the
+      // same money text format is used everywhere.
+      const gained = typeof message.gainedCopper === "number" && Number.isFinite(message.gainedCopper) && message.gainedCopper > 0
+        ? Math.floor(message.gainedCopper)
         : 0;
-      this.feedbackView?.showNotice(`Picked up ${gained} copper.`);
+      const formatted = formatMoneyCompact(gained);
+      this.feedbackView?.showNotice(`Picked up ${formatted}.`);
       void this.refreshAccountStateAfterPickup();
     });
 
@@ -516,5 +540,4 @@ export class WorldSessionScene extends Phaser.Scene {
       // Ignore best-effort /me refresh failures; live room state still drives HP/XP/combat HUD.
     }
   }
-
 }
