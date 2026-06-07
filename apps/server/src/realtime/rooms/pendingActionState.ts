@@ -1,6 +1,6 @@
 import type { PlayerPresence } from "./PlayerPresence";
 
-export type PendingActionType = "attack" | "interact" | "pickup";
+export type PendingActionType = "attack" | "interact" | "pickup" | "skill_secondary";
 
 export interface PendingActionTarget {
   readonly type: PendingActionType;

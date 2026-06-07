@@ -90,6 +90,7 @@ const ENEMY_ATTACK_COOLDOWN_MS = 1200;
 // (with a snap-to-stop buffer) so the player never overshoots into
 // the enemy center.
 const BASIC_ATTACK_RANGE = 64;
+const GRAVE_SPARK_RANGE = 96;
 // PICKUP_APPROACH_DISTANCE is a close-in radius well under the
 // WORLD_LOOT_PICKUP_RANGE (48) validator boundary, with a snap-to-stop
 // buffer so the queued pickup reliably executes once the player
@@ -101,6 +102,8 @@ const PICKUP_APPROACH_DISTANCE = 24;
 // interact reliably executes once the player arrives (notice board,
 // vendor, stash keeper, etc.).
 const INTERACT_APPROACH_DISTANCE = 38;
+const GRAVE_SPARK_COOLDOWN_MS = 1500;
+const GRAVE_SPARK_DAMAGE = 3;
 // Task 094 -- server-owned enemy attack windup. The server sends
 // `enemy_attack_telegraph` to the target client when the windup starts;
 // damage is applied after this many ms only if the target is still alive
@@ -1856,7 +1859,7 @@ export class TownRoom extends Room {
         return;
       }
 
-      // Task 217 — First real skill: Grave Spark. Validate target enemy.
+      // Task 217/219 — Grave Spark target validation.
       const targetEnemyId = typeof message?.targetEnemyId === "string" && message.targetEnemyId.length > 0
         ? message.targetEnemyId
         : undefined;
@@ -1889,24 +1892,42 @@ export class TownRoom extends Room {
         return;
       }
 
-      // Grave Spark range: 96 (longer than basic attack range of 64)
-      const GRAVE_SPARK_RANGE = 96;
       const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
       if (distance > GRAVE_SPARK_RANGE) {
-        const rejection: RequestUseSkillSlotRejectedServerMessage = {
-          ...rejectionBase,
-          reason: "out_of_range",
+        setPendingAction(player, {
+          type: "skill_secondary",
+          targetId: enemy.id,
+          targetX: enemy.x,
+          targetY: enemy.y,
+        });
+        const approach = resolveApproachTarget(
+          player,
+          { x: enemy.x, y: enemy.y },
+          GRAVE_SPARK_RANGE,
+        );
+        applyMovementIntent(state, client.sessionId, approach.x, approach.y);
+        const queued: DeferredActionQueuedServerMessage = {
+          type: "deferred_action_queued",
+          actionType: "attack",
+          targetId: enemy.id,
+          message: "Moving closer.",
         };
-        try { client.send(rejection.type, rejection); } catch {}
+        try { client.send("deferred_action_queued", queued); } catch {}
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            targetEnemyId: enemy.id,
+          },
+          "TownRoom request_use_skill_slot queued as deferred move-to-cast action.",
+        );
         return;
       }
 
-      // Consume cooldown: 1500ms
-      const GRAVE_SPARK_COOLDOWN_MS = 1500;
+      clearPendingAction(player);
       player.nextSkillSlotAt = now + GRAVE_SPARK_COOLDOWN_MS;
 
-      // Apply damage: 3
-      const GRAVE_SPARK_DAMAGE = 3;
       const damageResult = applyEnemyDamage(enemy, GRAVE_SPARK_DAMAGE);
 
       if (damageResult.defeated) {

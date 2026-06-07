@@ -1,6 +1,8 @@
 import type {
   InteractResponseServerMessage,
   RequestAttackAcceptedServerMessage,
+  RequestUseSkillSlotAcceptedServerMessage,
+  RequestUseSkillSlotRejectedServerMessage,
   RequestPickupWorldLootAcceptedServerMessage,
   XpGainedServerMessage,
 } from "@doomscrolls/shared";
@@ -29,6 +31,10 @@ export interface DeferredActionExecutionContext {
   readonly now: number;
   readonly sendToClient: (type: string, payload: unknown) => void;
 }
+
+const GRAVE_SPARK_RANGE = 96;
+const GRAVE_SPARK_DAMAGE = 3;
+const GRAVE_SPARK_COOLDOWN_MS = 1500;
 
 const characterStatsService = new CharacterStatsService();
 const log = createRoomLogger(undefined);
@@ -200,6 +206,30 @@ export async function tryExecutePendingAction(context: DeferredActionExecutionCo
     }
   }
 
+  if (actionType === "skill_secondary") {
+    const enemy = state.enemies.get(targetId);
+    if (enemy === undefined) {
+      clearPendingAction(player);
+      const rejection: RequestUseSkillSlotRejectedServerMessage = {
+        type: "request_use_skill_slot_rejected",
+        slot: "secondary",
+        reason: "enemy_not_found",
+      };
+      sendToClient(rejection.type, rejection);
+      return;
+    }
+    if (enemy.defeated || enemy.hp <= 0) {
+      clearPendingAction(player);
+      const rejection: RequestUseSkillSlotRejectedServerMessage = {
+        type: "request_use_skill_slot_rejected",
+        slot: "secondary",
+        reason: "enemy_defeated",
+      };
+      sendToClient(rejection.type, rejection);
+      return;
+    }
+  }
+
   if (actionType === "attack") {
     const validation = validateAttackIntent(state, player, targetId, now);
     if (!validation.ok) {
@@ -278,6 +308,58 @@ export async function tryExecutePendingAction(context: DeferredActionExecutionCo
     }
     const accepted: RequestPickupWorldLootAcceptedServerMessage = dispatchResult.accepted;
     sendToClient("request_pickup_world_loot_accepted", accepted);
+    return;
+  }
+
+  if (actionType === "skill_secondary") {
+    const enemy = state.enemies.get(targetId);
+    if (enemy === undefined) {
+      clearPendingAction(player);
+      const rejection: RequestUseSkillSlotRejectedServerMessage = {
+        type: "request_use_skill_slot_rejected",
+        slot: "secondary",
+        reason: "enemy_not_found",
+      };
+      sendToClient(rejection.type, rejection);
+      return;
+    }
+    if (player.lifeState !== "alive" || player.hp <= 0) {
+      clearPendingAction(player);
+      const rejection: RequestUseSkillSlotRejectedServerMessage = {
+        type: "request_use_skill_slot_rejected",
+        slot: "secondary",
+        reason: "player_downed",
+      };
+      sendToClient(rejection.type, rejection);
+      return;
+    }
+    const nextSkillSlotAt = Number.isFinite(player.nextSkillSlotAt) ? player.nextSkillSlotAt : 0;
+    if (now < nextSkillSlotAt) {
+      return;
+    }
+    const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+    if (distance > GRAVE_SPARK_RANGE) {
+      return;
+    }
+
+    player.nextSkillSlotAt = now + GRAVE_SPARK_COOLDOWN_MS;
+    const damageResult = applyEnemyDamage(enemy, GRAVE_SPARK_DAMAGE);
+    if (damageResult.defeated) {
+      spawnWorldLootOnEnemyDefeat(state, enemy, now);
+      await grantEnemyDefeatXp(player, enemy.enemyId, sendToClient);
+    }
+
+    const accepted: RequestUseSkillSlotAcceptedServerMessage = {
+      type: "request_use_skill_slot_accepted",
+      slot: "secondary",
+      targetEnemyId: enemy.id,
+      damage: GRAVE_SPARK_DAMAGE,
+      remainingHp: damageResult.remainingHp,
+      defeated: damageResult.defeated,
+      nextReadyAt: player.nextSkillSlotAt,
+    };
+    sendToClient(accepted.type, accepted);
+    clearPendingAction(player);
     return;
   }
 
