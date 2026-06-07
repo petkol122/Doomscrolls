@@ -56,7 +56,7 @@ export const en = {
 
   "objective.cull_trashboars.title": "Cull Trashboars",
   "objective.cull_trashboars.description":
-    "Thin the Nightmarket trashboar pack before it spills deeper into the alleys.",
+    "Thin the trashboar pack at Blackwire Sewer Edge before it spills deeper into the alleys.",
 
   "auth.username": "Username",
   "auth.password": "Password",

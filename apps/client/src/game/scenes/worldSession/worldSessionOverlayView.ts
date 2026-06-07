@@ -1064,6 +1064,14 @@ function createObjectiveTrackerCard(objective: {
   card.appendChild(trackerLine);
 
   if (!objective.isHint) {
+    const subtitleLine = document.createElement("div");
+    subtitleLine.textContent = "Blackwire Sewer Edge";
+    subtitleLine.style.fontSize = "10px";
+    subtitleLine.style.color = "#a88d63";
+    card.appendChild(subtitleLine);
+  }
+
+  if (!objective.isHint) {
     const progressFrame = document.createElement("div");
     progressFrame.style.width = "100%";
     progressFrame.style.height = "8px";
