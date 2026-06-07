@@ -695,6 +695,7 @@ export class TownRoom extends Room {
           state.zoneId,
           presence.x,
           presence.y,
+          Math.max(0, Math.min(presence.maxHp, presence.hp)),
         );
       } catch (error: unknown) {
         safeLog.error?.(

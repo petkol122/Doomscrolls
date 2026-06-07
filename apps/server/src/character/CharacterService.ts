@@ -134,10 +134,11 @@ export class CharacterService {
     zoneId: string,
     x: number,
     y: number,
+    currentHp?: number,
   ): Promise<void> {
     try {
       const characterRepository = new CharacterRepository(this.db);
-      await characterRepository.updateCharacterLocation(characterId.toString(), zoneId, x, y);
+      await characterRepository.updateCharacterLocation(characterId.toString(), zoneId, x, y, currentHp);
     } catch (error: unknown) {
       if (error instanceof CharacterError) {
         throw error;

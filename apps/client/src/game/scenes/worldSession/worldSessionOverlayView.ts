@@ -51,6 +51,25 @@ export interface WorldSessionOverlayView {
   ) => void;
 }
 
+interface StatusViewRefs {
+  readonly root: HTMLElement;
+  readonly zoneLine: HTMLElement;
+  readonly testCombatLine: HTMLElement;
+  readonly nameLine: HTMLElement;
+  readonly subLine: HTMLElement;
+}
+
+interface HudViewRefs {
+  readonly root: HTMLElement;
+}
+
+interface UtilityViewRefs {
+  readonly root: HTMLElement;
+  readonly equipmentSection: HTMLElement;
+  readonly inventorySection: HTMLElement;
+  debugSection: HTMLElement;
+}
+
 export function createWorldSessionOverlayView(
   character: CharacterSummary | null,
   room: Room<DoomscrollsRoomState>,
@@ -69,11 +88,31 @@ export function createWorldSessionOverlayView(
 ): WorldSessionOverlayView {
   let selectedInventoryItemId: InventorySummaryItem["itemInstanceId"] | null = character?.inventorySummaryItems?.[0]?.itemInstanceId ?? null;
   let currentStatusPanel: HTMLElement | null = null;
-  let currentStatusContent: HTMLElement | null = null;
   let currentUtilityPanel: HTMLElement;
-  let currentUtilityContent: HTMLElement | null = null;
   let currentHudPanel: HTMLElement;
-  let currentHudContent: HTMLElement | null = null;
+
+  const statusRefs = character !== null ? createCharacterChip(character, character.characterName, character.level, onLeaveWorld) : null;
+  const utilityRefs = createStableUtilityContent(
+    character,
+    room,
+    debugState,
+    getUtilityState,
+    onUtilityStateChange,
+    getEquipmentLoadout,
+    onEquipItem,
+    onUnequipItem,
+    () => selectedInventoryItemId,
+    (itemId) => {
+      selectedInventoryItemId = itemId;
+    },
+    onProjectionModeChange,
+  );
+  const hudRefs = createStableHudContent(
+    character,
+    room,
+    onResetObjective,
+    onRespawn,
+  );
 
   const buildStatusContent = (
     nextCharacter: CharacterSummary | null,
@@ -94,7 +133,7 @@ export function createWorldSessionOverlayView(
       selfDisplayName,
       selfPresence?.level ?? nextCharacter.level,
       onLeaveWorld,
-    );
+    ).root;
   };
 
   const buildHudContent = (
@@ -211,42 +250,35 @@ export function createWorldSessionOverlayView(
   const statusPanel = createMountedPanel();
   const utilityPanel = createMountedPanel();
   const hudPanel = createMountedPanel();
-  const statusContent = buildStatusContent(character, room);
-  const utilityContent = buildUtilityContent(character, room, debugState);
-  const hudContent = buildHudContent(character, room);
-  if (statusContent !== null) {
-    statusPanel.replaceChildren(statusContent);
+  if (statusRefs !== null) {
+    statusPanel.appendChild(statusRefs.root);
+    if (character !== null) {
+      syncStatusView(statusRefs, character, room);
+    }
   }
-  utilityPanel.replaceChildren(utilityContent);
-  hudPanel.replaceChildren(hudContent);
+  utilityPanel.appendChild(utilityRefs.root);
+  hudPanel.appendChild(hudRefs.root);
+  syncUtilityView(utilityRefs, character, room, debugState, getUtilityState, onUtilityStateChange, getEquipmentLoadout, onEquipItem, onUnequipItem, () => selectedInventoryItemId, (itemId) => {
+    selectedInventoryItemId = itemId;
+  }, onProjectionModeChange);
+  syncHudView(hudRefs, character, room, onResetObjective, onRespawn);
   currentStatusPanel = statusPanel;
-  currentStatusContent = statusContent;
   currentUtilityPanel = utilityPanel;
-  currentUtilityContent = utilityContent;
   currentHudPanel = hudPanel;
-  currentHudContent = hudContent;
 
   const update = (
     nextCharacter: CharacterSummary | null,
     nextRoom: Room<DoomscrollsRoomState>,
     nextDebugState: WorldSessionDebugState,
   ): void => {
-    if (currentStatusPanel !== null) {
-      const nextStatus = buildStatusContent(nextCharacter, nextRoom);
-      currentStatusPanel.replaceChildren();
-      if (nextStatus !== null) {
-        currentStatusPanel.appendChild(nextStatus);
-      }
-      currentStatusContent = nextStatus;
+    if (statusRefs !== null && nextCharacter !== null && currentStatusPanel !== null) {
+      syncStatusView(statusRefs, nextCharacter, nextRoom);
     }
 
-    const nextHud = buildHudContent(nextCharacter, nextRoom);
-    currentHudPanel.replaceChildren(nextHud);
-    currentHudContent = nextHud;
-
-    const nextUtility = buildUtilityContent(nextCharacter, nextRoom, nextDebugState);
-    currentUtilityPanel.replaceChildren(nextUtility);
-    currentUtilityContent = nextUtility;
+    syncHudView(hudRefs, nextCharacter, nextRoom, onResetObjective, onRespawn);
+    syncUtilityView(utilityRefs, nextCharacter, nextRoom, nextDebugState, getUtilityState, onUtilityStateChange, getEquipmentLoadout, onEquipItem, onUnequipItem, () => selectedInventoryItemId, (itemId) => {
+      selectedInventoryItemId = itemId;
+    }, onProjectionModeChange);
   };
 
   return {
@@ -266,8 +298,9 @@ function createCharacterChip(
   displayName: string,
   level: number,
   onLeaveWorld: () => void,
-): HTMLElement {
+): StatusViewRefs {
   const panel = createCardSection();
+  makePassive(panel);
   panel.style.display = "flex";
   panel.style.alignItems = "center";
   panel.style.justifyContent = "space-between";
@@ -305,6 +338,7 @@ function createCharacterChip(
   subLine.style.color = "#b9d49a";
   textBlock.appendChild(subLine);
 
+  makePassive(textBlock);
   panel.appendChild(textBlock);
 
   const leaveButton = createButton(t("world_entry.leave_world"));
@@ -318,7 +352,207 @@ function createCharacterChip(
   makeInteractive(leaveButton);
   panel.appendChild(leaveButton);
 
+  return {
+    root: panel,
+    zoneLine,
+    testCombatLine,
+    nameLine,
+    subLine,
+  };
+}
+
+function syncStatusView(
+  refs: StatusViewRefs,
+  character: CharacterSummary,
+  room: Room<DoomscrollsRoomState>,
+): void {
+  const selfPresence = getCurrentPlayerPresence(
+    room.state as unknown as Record<string, unknown>,
+    room.sessionId,
+  );
+  const selfDisplayName = selfPresence?.displayName ?? character.characterName ?? t("world_session.selected_character");
+  refs.zoneLine.textContent = "The Nightmarket";
+  refs.testCombatLine.textContent = "Temporary test combat zone";
+  refs.nameLine.textContent = character.characterName;
+  refs.subLine.textContent = `${selfDisplayName} • ${t("character.level")} ${selfPresence?.level ?? character.level}`;
+}
+
+function createStableHudContent(
+  character: CharacterSummary | null,
+  room: Room<DoomscrollsRoomState>,
+  onResetObjective: () => void,
+  onRespawn: () => void,
+): HudViewRefs {
+  const root = document.createElement("div");
+  makePassive(root);
+  syncHudView({ root }, character, room, onResetObjective, onRespawn);
+  return { root };
+}
+
+function syncHudView(
+  refs: HudViewRefs,
+  character: CharacterSummary | null,
+  room: Room<DoomscrollsRoomState>,
+  onResetObjective: () => void,
+  onRespawn: () => void,
+): void {
+  refs.root.replaceChildren(renderHudContent(character, room, onResetObjective, onRespawn));
+}
+
+function renderHudContent(
+  nextCharacter: CharacterSummary | null,
+  nextRoom: Room<DoomscrollsRoomState>,
+  onResetObjective: () => void,
+  onRespawn: () => void,
+): HTMLElement {
+  const selfPresence = getCurrentPlayerPresence(
+    nextRoom.state as unknown as Record<string, unknown>,
+    nextRoom.sessionId,
+  );
+  const selfHpSummary = formatPlayerHpSummary(selfPresence?.hp, selfPresence?.maxHp);
+  const selfHpRatio = resolvePlayerHpRatio(selfPresence?.hp, selfPresence?.maxHp);
+
+  const panel = createCardSection();
+  panel.style.display = "grid";
+  panel.style.gap = "6px";
+  panel.style.padding = "8px 12px";
+  panel.appendChild(createHudSection(
+    selfHpSummary,
+    selfHpRatio,
+    selfPresence?.lifeState,
+    selfPresence?.flaskCharges,
+    selfPresence?.maxFlaskCharges,
+    selfPresence?.level ?? nextCharacter?.level ?? 1,
+    selfPresence?.xp ?? nextCharacter?.xp ?? 0,
+    selfPresence?.objective ?? null,
+    onResetObjective,
+  ));
+  panel.appendChild(createSkillSlotPlaceholder());
+
+  if (selfPresence?.lifeState === "downed") {
+    const downedNotice = createMutedText(t("world_session.downed_notice"));
+    downedNotice.style.color = "#e3a6a6";
+    panel.appendChild(downedNotice);
+
+    const respawnButton = createButton(t("world_session.respawn"));
+    respawnButton.style.marginTop = "4px";
+    respawnButton.style.width = "220px";
+    respawnButton.addEventListener("click", () => {
+      onRespawn();
+    });
+    makeInteractive(respawnButton);
+    panel.appendChild(respawnButton);
+  }
+
   return panel;
+}
+
+function createStableUtilityContent(
+  character: CharacterSummary | null,
+  room: Room<DoomscrollsRoomState>,
+  debugState: WorldSessionDebugState,
+  getUtilityState: () => WorldSessionUtilityPanelOpenState,
+  onUtilityStateChange: ((next: WorldSessionUtilityPanelOpenState) => void) | undefined,
+  getEquipmentLoadout: () => EquipmentLoadout,
+  onEquipItem: ((characterId: string, itemInstanceId: string, slot: string) => Promise<void>) | undefined,
+  onUnequipItem: ((characterId: string, slot: string) => Promise<void>) | undefined,
+  getSelectedItemId: () => InventorySummaryItem["itemInstanceId"] | null,
+  onSelectItem: (itemId: InventorySummaryItem["itemInstanceId"]) => void,
+  onProjectionModeChange: (mode: WorldProjectionMode) => void,
+): UtilityViewRefs {
+  const root = createScrollableCardSection();
+  makePassive(root);
+  root.style.display = "grid";
+  root.style.gap = "8px";
+  root.style.alignContent = "start";
+
+  const utilityState = getUtilityState();
+  const controlsSection = createControlsSection(utilityState.controls, (open) => {
+    onUtilityStateChange?.({ ...getUtilityState(), controls: open });
+  });
+  const equipmentSection = createEquipmentPanelSection(
+    getEquipmentLoadout,
+    () => character?.inventorySummaryItems ?? [],
+    utilityState.equipment,
+    (open) => {
+      onUtilityStateChange?.({ ...getUtilityState(), equipment: open });
+    },
+    character?.id !== undefined && onUnequipItem !== undefined
+      ? (slot) => onUnequipItem(character.id, slot)
+      : undefined,
+  );
+  const derivedStatsSection = createDerivedStatsSection(character);
+  const inventorySection = createInventoryPanelSection(
+    character,
+    { getSelectedItemId, onSelectItem },
+    getEquipmentLoadout(),
+    character?.id ?? null,
+    onEquipItem,
+    utilityState.inventory,
+    (open) => {
+      onUtilityStateChange?.({ ...getUtilityState(), inventory: open });
+    },
+  );
+  const debugSection = createDebugPanel(
+    room,
+    formatTownRoomState(room.state),
+    debugState,
+    onProjectionModeChange,
+    utilityState.debug,
+    (open) => {
+      onUtilityStateChange?.({ ...getUtilityState(), debug: open });
+    },
+  );
+
+  root.append(controlsSection, equipmentSection, derivedStatsSection, inventorySection, debugSection);
+  return { root, equipmentSection, inventorySection, debugSection };
+}
+
+function syncUtilityView(
+  refs: UtilityViewRefs,
+  character: CharacterSummary | null,
+  room: Room<DoomscrollsRoomState>,
+  debugState: WorldSessionDebugState,
+  getUtilityState: () => WorldSessionUtilityPanelOpenState,
+  onUtilityStateChange: ((next: WorldSessionUtilityPanelOpenState) => void) | undefined,
+  getEquipmentLoadout: () => EquipmentLoadout,
+  onEquipItem: ((characterId: string, itemInstanceId: string, slot: string) => Promise<void>) | undefined,
+  onUnequipItem: ((characterId: string, slot: string) => Promise<void>) | undefined,
+  getSelectedItemId: () => InventorySummaryItem["itemInstanceId"] | null,
+  onSelectItem: (itemId: InventorySummaryItem["itemInstanceId"]) => void,
+  onProjectionModeChange: (mode: WorldProjectionMode) => void,
+): void {
+  const utilityState = getUtilityState();
+  updateEquipmentPanelSection(
+    refs.equipmentSection,
+    getEquipmentLoadout,
+    () => character?.inventorySummaryItems ?? [],
+    utilityState.equipment,
+    character?.id !== undefined && onUnequipItem !== undefined
+      ? (slot) => onUnequipItem(character.id, slot)
+      : undefined,
+  );
+  updateInventoryPanelSection(
+    refs.inventorySection,
+    character,
+    { getSelectedItemId, onSelectItem },
+    getEquipmentLoadout(),
+    character?.id ?? null,
+    onEquipItem,
+    utilityState.inventory,
+  );
+  const nextDebugSection = createDebugPanel(
+    room,
+    formatTownRoomState(room.state),
+    debugState,
+    onProjectionModeChange,
+    utilityState.debug,
+    (open) => {
+      onUtilityStateChange?.({ ...getUtilityState(), debug: open });
+    },
+  );
+  refs.debugSection.replaceWith(nextDebugSection);
+  refs.debugSection = nextDebugSection;
 }
 
 function createControlsSection(isOpen: boolean, onOpenChange: (open: boolean) => void): HTMLElement {

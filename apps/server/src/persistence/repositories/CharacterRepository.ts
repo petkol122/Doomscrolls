@@ -211,10 +211,16 @@ export class CharacterRepository {
     lastLocationZoneId: string,
     lastLocationX: number,
     lastLocationY: number,
+    currentHp?: number,
   ) {
     return this.db.character.update({
       where: { id: characterId },
-      data: { lastLocationZoneId, lastLocationX, lastLocationY },
+      data: {
+        lastLocationZoneId,
+        lastLocationX,
+        lastLocationY,
+        ...(currentHp !== undefined ? { currentHp } : {}),
+      },
     });
   }
 }
