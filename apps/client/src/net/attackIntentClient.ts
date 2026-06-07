@@ -1,6 +1,7 @@
 import type { Room } from "@colyseus/sdk";
 import type {
   DamageAppliedServerMessage,
+  EnemyAttackResolvedServerMessage,
   EnemyAttackTelegraphServerMessage,
   RequestAttackAcceptedServerMessage,
   RequestAttackClientMessage,
@@ -43,6 +44,7 @@ export function registerAttackResponseListeners(
     readonly onDamageApplied?: (message: DamageAppliedServerMessage) => void;
     // Task 094 - server-owned enemy attack telegraph warning.
     readonly onEnemyAttackTelegraph?: (message: EnemyAttackTelegraphServerMessage) => void;
+    readonly onEnemyAttackResolved?: (message: EnemyAttackResolvedServerMessage) => void;
   },
 ): void {
   room.onMessage("request_attack_accepted", (raw: unknown) => {
@@ -71,6 +73,13 @@ export function registerAttackResponseListeners(
       return;
     }
     callbacks.onEnemyAttackTelegraph?.(raw);
+  });
+
+  room.onMessage("enemy_attack_resolved", (raw: unknown) => {
+    if (!isEnemyAttackResolvedServerMessage(raw)) {
+      return;
+    }
+    callbacks.onEnemyAttackResolved?.(raw);
   });
 }
 
@@ -140,5 +149,23 @@ function isEnemyAttackTelegraphServerMessage(
     typeof candidate.enemyId === "string" &&
     typeof candidate.targetEntityId === "string" &&
     typeof candidate.windupMs === "number"
+  );
+}
+
+function isEnemyAttackResolvedServerMessage(
+  value: unknown,
+): value is EnemyAttackResolvedServerMessage {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return (
+    candidate.type === "enemy_attack_resolved"
+    && typeof candidate.enemyId === "string"
+    && typeof candidate.targetEntityId === "string"
+    && (candidate.outcome === "hit" || candidate.outcome === "miss")
+    && (candidate.damage === undefined || typeof candidate.damage === "number")
+    && (candidate.remainingHp === undefined || typeof candidate.remainingHp === "number")
   );
 }

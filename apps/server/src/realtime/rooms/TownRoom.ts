@@ -2,6 +2,7 @@ import { Room, Client } from "colyseus";
 import type {
   CharacterId,
   DamageAppliedServerMessage,
+  EnemyAttackResolvedServerMessage,
   EntityId,
   RequestAttackAcceptedServerMessage,
   RequestAttackRejectedServerMessage,
@@ -362,6 +363,17 @@ function sendEnemyAttackTelegraph(
   };
   try {
     targetClient.send("enemy_attack_telegraph", telegraph);
+  } catch {
+    // keep room state authoritative even if send fails
+  }
+}
+
+function sendEnemyAttackResolved(
+  targetClient: Client,
+  message: EnemyAttackResolvedServerMessage,
+): void {
+  try {
+    targetClient.send("enemy_attack_resolved", message);
   } catch {
     // keep room state authoritative even if send fails
   }
@@ -1684,10 +1696,9 @@ export class TownRoom extends Room {
           dirY: validation.dirY,
           newX: applied.newX,
           newY: applied.newY,
-          cancelledTelegraphEnemyIds: applied.cancelledTelegraphEnemyIds,
           nextDodgeAt: player.nextDodgeAt,
         },
-        "TownRoom request_dodge accepted and player position updated; telegraphs cancelled.",
+        "TownRoom request_dodge accepted and player position updated.",
       );
     });
   }
@@ -2091,15 +2102,27 @@ export class TownRoom extends Room {
         // Windup elapsed. Validate that the target is still alive
         // and still in attack range; only then apply damage.
         const landingTarget = state.playerPresence.get(enemy.targetPlayerSessionId);
+        const landingClient = landingTarget === undefined
+          ? undefined
+          : this.clients.find((client) => client.sessionId === landingTarget.sessionId);
         if (
           landingTarget === undefined ||
           landingTarget.hp <= 0 ||
           Math.hypot(enemy.x - landingTarget.x, enemy.y - landingTarget.y) > ENEMY_ATTACK_RANGE
         ) {
           // Target moved out of range or died during the windup:
-          // cancel the telegraphed attack and re-arm the cooldown.
+          // Target left range before windup completion, so the
+          // telegraphed hit resolves to a server-authoritative miss.
           enemy.attackLandingAtMs = 0;
           enemy.nextAttackAtMs = now + ENEMY_ATTACK_COOLDOWN_MS;
+          if (landingClient !== undefined) {
+            sendEnemyAttackResolved(landingClient, {
+              type: "enemy_attack_resolved",
+              enemyId: enemy.id,
+              targetEntityId: (landingTarget?.characterId ?? "") as unknown as EntityId,
+              outcome: "miss",
+            });
+          }
           return;
         }
 
@@ -2117,9 +2140,6 @@ export class TownRoom extends Room {
           enemy.nextAttackAtMs = now + ENEMY_ATTACK_COOLDOWN_MS;
         }
 
-        const landingClient = this.clients.find(
-          (client) => client.sessionId === landingTarget.sessionId,
-        );
         if (landingClient !== undefined) {
           const damageMessage: DamageAppliedServerMessage = {
             type: "damage_applied",
@@ -2134,6 +2154,14 @@ export class TownRoom extends Room {
           } catch {
             // keep room state authoritative even if send fails
           }
+          sendEnemyAttackResolved(landingClient, {
+            type: "enemy_attack_resolved",
+            enemyId: enemy.id,
+            targetEntityId: landingTarget.characterId as unknown as EntityId,
+            outcome: "hit",
+            damage: ENEMY_ATTACK_DAMAGE,
+            remainingHp: nextHp,
+          });
         }
         return;
       }

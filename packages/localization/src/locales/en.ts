@@ -170,6 +170,8 @@ export const en = {
   "world_area.attack_on_cooldown": "Attack is on cooldown.",
   "world_area.attack_unavailable": "Attack could not be used.",
   "world_area.player_damage_taken": "You take {damage} damage. HP now {hp}.",
+  "world_area.enemy_attack_hit": "Enemy attack hits for {damage}.",
+  "world_area.enemy_attack_missed": "Enemy attack missed.",
   "world_area.skill_hit": "Grave Spark hits for {damage}.",
   "world_area.skill_hit_label": "Spark {damage}",
   "world_area.skill_target_missing": "Grave Spark target missing.",

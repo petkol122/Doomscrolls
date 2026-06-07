@@ -41,6 +41,15 @@ export interface EnemyAttackTelegraphServerMessage {
   readonly windupMs: number;
 }
 
+export interface EnemyAttackResolvedServerMessage {
+  readonly type: "enemy_attack_resolved";
+  readonly enemyId: string;
+  readonly targetEntityId: EntityId;
+  readonly outcome: "hit" | "miss";
+  readonly damage?: number;
+  readonly remainingHp?: number;
+}
+
 export interface EntityDiedServerMessage {
   readonly type: "entity_died";
   readonly entityId: EntityId;
@@ -330,6 +339,7 @@ export type ServerRoomMessage =
   | RoomStatePatchServerMessage
   | DamageAppliedServerMessage
   | EnemyAttackTelegraphServerMessage
+  | EnemyAttackResolvedServerMessage
   | EntityDiedServerMessage
   | XpGainedServerMessage
   | LootDroppedServerMessage

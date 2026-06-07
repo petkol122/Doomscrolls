@@ -254,6 +254,16 @@ export class WorldSessionScene extends Phaser.Scene {
       onEnemyAttackTelegraph: (message) => {
         this.worldAreaView?.showEnemyTelegraph(message.enemyId);
       },
+      onEnemyAttackResolved: (message) => {
+        this.worldAreaView?.resolveEnemyAttackOutcome(message.enemyId, message.outcome);
+        if (message.outcome === "miss") {
+          this.feedbackView?.showNotice(t("world_area.enemy_attack_missed"));
+        } else {
+          this.feedbackView?.showNotice(
+            t("world_area.enemy_attack_hit", { damage: message.damage ?? 0 }),
+          );
+        }
+      },
     });
 
     this.room.onMessage("currency_picked_up", (message: { gainedCopper?: unknown; totalMoneyCopper?: unknown }) => {

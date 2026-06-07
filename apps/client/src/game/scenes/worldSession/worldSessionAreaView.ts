@@ -116,6 +116,7 @@ export interface WorldSessionAreaView {
   readonly showEnemyFloatingDamage: (enemyId: string, text: string) => void;
   readonly showPlayerFloatingDamage: (text: string) => void;
   readonly showEnemyTelegraph: (enemyId: string) => void;
+  readonly resolveEnemyAttackOutcome: (enemyId: string, outcome: "hit" | "miss") => void;
   readonly getSelfWorldPosition: () => { readonly x: number; readonly y: number } | null;
   readonly getLastClickTarget: () => ClickTargetSnapshot | null;
   readonly setPendingPickupTarget: (worldLootId: string | null) => void;
@@ -761,6 +762,20 @@ export function createWorldSessionAreaView(
     view.setTelegraphing(true);
   };
 
+  const resolveEnemyAttackOutcome = (enemyId: string, outcome: "hit" | "miss"): void => {
+    const view = enemyPlaceholders.get(enemyId);
+    if (view === undefined) {
+      return;
+    }
+    view.setTelegraphing(false);
+    if (outcome === "miss") {
+      const screenPos = enemyScreenPositions.get(enemyId);
+      if (screenPos !== undefined) {
+        floatingDamageView.show(screenPos.x, screenPos.y - 18, "MISS");
+      }
+    }
+  };
+
   return {
     refreshFromRoomState,
     getDebugState: () => ({
@@ -773,6 +788,7 @@ export function createWorldSessionAreaView(
     showEnemyFloatingDamage,
     showPlayerFloatingDamage,
     showEnemyTelegraph,
+    resolveEnemyAttackOutcome,
     getSelfWorldPosition: () => selfWorldPosition,
     getLastClickTarget: () => lastClickTarget,
     setPendingPickupTarget: (worldLootId: string | null) => {
