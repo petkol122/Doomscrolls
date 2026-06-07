@@ -45,6 +45,23 @@ export function createWorldSessionEnemyPlaceholderView(
   body.setInteractive({ useHandCursor: true });
   const core = scene.add.circle(0, isBrute ? -4 : -2, isBrute ? 6 : 5, isBrute ? 0xffe2b8 : 0xffe2e2, 0.95);
 
+  // Task 206 -- an "enraged" exclamation marker that is shown only
+  // while the enemy is in the `chasing` state. The marker is purely
+  // visual and reuses only existing placeholder shapes (a single
+  // text element); the server still owns the chase state and damage
+  // outcome.
+  const aggroExclaim = scene.add
+    .text(0, -52, "!", {
+      color: "#ff2a1a",
+      fontFamily: "Arial, sans-serif",
+      fontSize: "18px",
+      fontStyle: "bold",
+      stroke: "#160909",
+      strokeThickness: 4,
+    })
+    .setOrigin(0.5);
+  aggroExclaim.setVisible(false);
+
   const hpBarFrame = scene.add.rectangle(0, -31, 44, 8, 0x120707, 0.92);
   hpBarFrame.setStrokeStyle(1, 0xf4d3d3, 0.45);
   const hpBarFill = scene.add.rectangle(-21, -31, 42, 4, 0xcf3e3e, 0.98).setOrigin(0, 0.5);
@@ -95,7 +112,7 @@ export function createWorldSessionEnemyPlaceholderView(
     .setOrigin(0.5);
   telegraphExclaim.setVisible(false);
 
-  container.add([shadow, ring, body, core, hpBarFrame, hpBarFill, hpText, labelText, stateText, telegraphMarker, telegraphExclaim]);
+  container.add([shadow, ring, body, core, hpBarFrame, hpBarFill, hpText, labelText, stateText, telegraphMarker, telegraphExclaim, aggroExclaim]);
 
   body.on(Phaser.Input.Events.POINTER_DOWN, () => {
     onClick?.(enemy.id);
@@ -147,32 +164,46 @@ export function createWorldSessionEnemyPlaceholderView(
         }),
       );
       hpBarFill.setVisible(false);
+      aggroExclaim.setVisible(false);
+      core.setScale(1);
       return;
     }
 
     hpBarFill.setVisible(true);
     shadow.setFillStyle(0x000000, 0.28);
     if (nextEnemy.state === "chasing") {
-      ring.setFillStyle(nextIsBrute ? 0x8a4f1e : 0x8a4515, 0.34);
-      ring.setStrokeStyle(2, 0xffc27a, nextIsBrute ? 0.65 : 0.5);
-      body.setFillStyle(nextIsBrute ? 0xd07c25 : 0xc8611d, 0.95);
-      body.setStrokeStyle(2, nextIsBrute ? 0xffe0b6 : 0xffd3a3, 0.95);
-      stateText.setColor("#ffe0aa");
+      // Task 206 -- make aggro/chasing state much clearer in the
+      // existing placeholder visual: a brighter, more saturated red
+      // body, a glowing yellow ring, an enlarged inner core, an
+      // "enraged" state label, and a floating "!" above the enemy.
+      // The visual still reuses only the existing placeholder
+      // shapes (no animations, no new sprites).
+      ring.setFillStyle(nextIsBrute ? 0x7a1a05 : 0x6b0a0a, 0.55);
+      ring.setStrokeStyle(3, 0xff3a1a, 0.95);
+      body.setFillStyle(nextIsBrute ? 0xff5a1a : 0xff2a1a, 1);
+      body.setStrokeStyle(3, 0xffe066, 1);
+      core.setFillStyle(nextIsBrute ? 0xffe066 : 0xfff0aa, 1);
+      core.setScale(1.4);
+      stateText.setColor("#ff3a1a");
+      aggroExclaim.setVisible(true);
     } else if (nextEnemy.state === "returning") {
       ring.setFillStyle(0x2b466f, 0.3);
       ring.setStrokeStyle(2, 0x8ab8ff, 0.48);
       body.setFillStyle(nextIsBrute ? 0x597eb3 : 0x426ca8, 0.95);
       body.setStrokeStyle(2, 0xbfd8ff, 0.95);
       stateText.setColor("#cfe0ff");
+      aggroExclaim.setVisible(false);
+      core.setScale(1);
     } else {
       ring.setFillStyle(nextIsBrute ? 0x5e2b10 : 0x6f1414, 0.28);
       ring.setStrokeStyle(2, nextIsBrute ? 0xffc16e : 0xff7a7a, nextIsBrute ? 0.52 : 0.4);
       body.setFillStyle(nextIsBrute ? 0x8f4d1e : 0xb12222, 0.95);
       body.setStrokeStyle(2, nextIsBrute ? 0xffddae : 0xf0b0b0, 0.95);
       stateText.setColor("#d7d7ff");
+      aggroExclaim.setVisible(false);
+      core.setScale(1);
     }
     body.setInteractive({ useHandCursor: true });
-    core.setFillStyle(nextIsBrute ? 0xffdfba : 0xffd7d7, 0.9);
     stateText.setText(formatStateText(nextEnemy));
     labelText.setColor("#ffffff");
     labelText.setText(t(nextEnemy.label));

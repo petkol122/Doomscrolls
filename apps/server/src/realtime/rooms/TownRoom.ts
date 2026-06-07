@@ -73,11 +73,29 @@ import { CharacterRepository } from "../../persistence/repositories";
 import { ItemRepository } from "../../persistence/repositories/ItemRepository";
 import { tryResolveLevelProgression } from "./levelProgression";
 import { CharacterStatsService } from "../../character/CharacterStatsService";
+// Task 206 -- server-owned approach stop point for deferred queues
+// (attack / pickup / interact). The server still applies the
+// resolved target through applyMovementIntent; the client never
+// decides the stop point.
+import { resolveApproachTarget } from "./resolveApproachTarget";
 
 const ENEMY_AGGRO_RANGE = 120;
 const ENEMY_LEASH_RANGE = 180;
 const ENEMY_ATTACK_RANGE = 44;
 const ENEMY_ATTACK_COOLDOWN_MS = 1200;
+// Task 206 -- server-owned engagement / pickup / interact ranges used
+// by resolveApproachTarget when queuing deferred move-closer actions.
+// BASIC_ATTACK_RANGE mirrors the value in attackIntentValidation so
+// the player stops at exactly the engagement boundary the validator
+// will then accept.
+const BASIC_ATTACK_RANGE = 64;
+// PICKUP_APPROACH_DISTANCE is a small close-in radius so the player
+// stops just outside the loot pickable instead of standing on top
+// of it.
+const PICKUP_APPROACH_DISTANCE = 24;
+// INTERACT_APPROACH_DISTANCE matches the server's INTERACT_DISTANCE
+// in interactValidation.ts.
+const INTERACT_APPROACH_DISTANCE = 50;
 // Task 094 -- server-owned enemy attack windup. The server sends
 // `enemy_attack_telegraph` to the target client when the windup starts;
 // damage is applied after this many ms only if the target is still alive
@@ -949,7 +967,13 @@ export class TownRoom extends Room {
               targetX: interactable.x,
               targetY: interactable.y,
             });
-            applyMovementIntent(state, client.sessionId, interactable.x, interactable.y);
+            // Task 206 -- walk to interact range, not on top of the object.
+            const approach = resolveApproachTarget(
+              player,
+              { x: interactable.x, y: interactable.y },
+              INTERACT_APPROACH_DISTANCE,
+            );
+            applyMovementIntent(state, client.sessionId, approach.x, approach.y);
             const queued: DeferredActionQueuedServerMessage = {
               type: "deferred_action_queued",
               actionType: "interact",
@@ -1111,7 +1135,13 @@ export class TownRoom extends Room {
               targetX: enemy.x,
               targetY: enemy.y,
             });
-            applyMovementIntent(state, client.sessionId, enemy.x, enemy.y);
+            // Task 206 -- walk to engagement range, not on top of the enemy.
+            const approach = resolveApproachTarget(
+              player,
+              { x: enemy.x, y: enemy.y },
+              BASIC_ATTACK_RANGE,
+            );
+            applyMovementIntent(state, client.sessionId, approach.x, approach.y);
             const queued: DeferredActionQueuedServerMessage = {
               type: "deferred_action_queued",
               actionType: "attack",
@@ -1296,7 +1326,13 @@ export class TownRoom extends Room {
               targetX: worldLoot.x,
               targetY: worldLoot.y,
             });
-            applyMovementIntent(state, client.sessionId, worldLoot.x, worldLoot.y);
+            // Task 206 -- walk to a close pickup distance, not on top of the loot.
+            const approach = resolveApproachTarget(
+              player,
+              { x: worldLoot.x, y: worldLoot.y },
+              PICKUP_APPROACH_DISTANCE,
+            );
+            applyMovementIntent(state, client.sessionId, approach.x, approach.y);
             const queued: DeferredActionQueuedServerMessage = {
               type: "deferred_action_queued",
               actionType: "pickup",
@@ -2035,3 +2071,4 @@ export class TownRoom extends Room {
     });
   }
 }
+

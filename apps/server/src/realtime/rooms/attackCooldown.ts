@@ -1,6 +1,9 @@
 import type { PlayerPresence } from "./PlayerPresence";
 
-export const DEFAULT_ATTACK_COOLDOWN_MS = 1000;
+// Task 206 -- lower default attack cooldown for snappier Diablo-like
+// combat feel. The server is still the sole authority for cooldown
+// timing; clients may not influence it.
+export const DEFAULT_ATTACK_COOLDOWN_MS = 700;
 
 export function resolveAttackCooldownMs(value: number | null | undefined): number {
   return Number.isFinite(value) && value !== undefined && value !== null && value >= 100
