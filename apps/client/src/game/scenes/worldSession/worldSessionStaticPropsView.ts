@@ -117,8 +117,9 @@ function buildPropContainer(
   const propContainer = scene.add.container(prop.screenX, prop.screenY);
   const shadow = scene.add.ellipse(0, 12, 42, 16, 0x000000, 0.18);
   const isAmbientCreature = prop.kind === "ambient_rat" || prop.kind === "ambient_pig" || prop.kind === "ambient_chicken";
+  const isAreaLabel = prop.kind === "area_label";
   const isCombatEdge = prop.kind === "combat_edge";
-  const labelColor = isCombatEdge ? "#cc6666" : isAmbientCreature ? "#f2d96b" : "#c8b08d";
+  const labelColor = isAreaLabel ? "#8a7f6e" : isCombatEdge ? "#cc6666" : isAmbientCreature ? "#f2d96b" : "#c8b08d";
   const label = scene.add
     .text(0, 18, prop.label, {
       color: labelColor,
@@ -220,8 +221,20 @@ function buildPropContainer(
       const dangerLine = scene.add.graphics();
       dangerLine.lineStyle(2, 0xcc4444, 0.8);
       dangerLine.lineBetween(-10, -10, 10, 10);
-      dangerLine.lineBetween(-10, 10, 10, -10);
+      dangerLine.lineBetween(-10, 10, 10, -1);
       propContainer.add([edgeGraphic, dangerLine]);
+      break;
+    }
+    case "area_label": {
+      const bg = scene.add.rectangle(0, 0, 4, 2, 0x8a7f6e, 0.2);
+      const deco = scene.add.text(0, -8, `— ${prop.label} —`, {
+        color: "#8a7f6e",
+        fontFamily: "Arial, sans-serif",
+        fontSize: "13px",
+        stroke: "#0f0c09",
+        strokeThickness: 4,
+      }).setOrigin(0.5);
+      propContainer.add([bg, deco]);
       break;
     }
   }
@@ -229,6 +242,8 @@ function buildPropContainer(
   if (stateLabel !== null) {
     propContainer.add(stateLabel);
   }
-  propContainer.add(label);
+  if (!isAreaLabel) {
+    propContainer.add(label);
+  }
   return propContainer;
 }

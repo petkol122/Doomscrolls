@@ -1,6 +1,11 @@
 import type { WorldPropContentDefinition } from "./types";
 
 export const worldProps = [
+  // ── Area labels ──
+  { id: "nightmarket_label_services",     zoneId: "nightmarket", kind: "area_label", label: "Nightmarket Services",  x: 260, y: 280 },
+  { id: "nightmarket_label_sewer_edge",   zoneId: "nightmarket", kind: "area_label", label: "Blackwire Sewer Edge", x: 1400, y: 1100 },
+  { id: "nightmarket_label_deep_sewer",   zoneId: "nightmarket", kind: "area_label", label: "Deep Sewer Edge",       x: 2100, y: 1700 },
+
   // ── Region 1: Spawn/service cluster (compact, near player start ~160,160) ──
   { id: "nightmarket_notice_board_01", zoneId: "nightmarket", kind: "town_service", label: "Notice Board", x: 200, y: 180 },
   { id: "nightmarket_vendor_01",         zoneId: "nightmarket", kind: "vendor",        label: "Suspicious Vendor",  x: 280, y: 280 },
