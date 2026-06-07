@@ -79,6 +79,19 @@ export function initializeTownInteractables(
       );
       state.interactables.set(trainer.id, trainer);
     }
+
+    // Task 209 — Waypoint town-service placeholder
+    const waypointProp = contentRegistry.worldProps.get("nightmarket_waypoint_01");
+    if (waypointProp !== undefined) {
+      const waypoint = new Interactable(
+        waypointProp.id,
+        "town_service",
+        waypointProp.label,
+        waypointProp.x,
+        waypointProp.y,
+      );
+      state.interactables.set(waypoint.id, waypoint);
+    }
   }
   // Future: add more zones and objects
 }

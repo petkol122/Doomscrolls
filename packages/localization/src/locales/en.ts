@@ -233,7 +233,10 @@ export const en = {
   "town_service.stash_keeper.unavailable": "Stash storage is not available yet.",
 
   "town_service.trainer.name": "Trainer",
-  "town_service.trainer.unavailable": "Training is not available yet."
+  "town_service.trainer.unavailable": "Training is not available yet.",
+
+  "town_service.waypoint.name": "Waypoint",
+  "town_service.waypoint.unavailable": "Waypoint activation is not available yet."
 } as const satisfies LocalizationDictionary;
 
 export type LocalizationKey = keyof typeof en;

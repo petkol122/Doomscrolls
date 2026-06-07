@@ -196,6 +196,16 @@ export class WorldSessionScene extends Phaser.Scene {
           return;
         }
       }
+      // Task 209 — Waypoint town-service placeholder panel.
+      if (objectId === "nightmarket_waypoint_01") {
+        const service = contentRegistry.townServices.get("nightmarket_waypoint");
+        if (service !== undefined) {
+          this.townServicePanel?.destroy();
+          this.townServicePanel = createTownServiceInteractionPanel(service);
+          this.townServicePanel.show();
+          return;
+        }
+      }
       this.feedbackView?.showNotice(message);
     }, (message: ObjectiveUpdatedServerMessage) => {
       if (message.completed) {

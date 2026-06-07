@@ -24,5 +24,12 @@ export const townServices = [
     serviceKind: "trainer",
     labelKey: "town_service.trainer.name",
     unavailableMessageKey: "town_service.trainer.unavailable"
+  },
+  {
+    id: townServiceId("nightmarket_waypoint"),
+    serviceId: townServiceId("nightmarket_waypoint"),
+    serviceKind: "waypoint",
+    labelKey: "town_service.waypoint.name",
+    unavailableMessageKey: "town_service.waypoint.unavailable"
   }
 ] as const satisfies readonly TownServiceContentDefinition[];

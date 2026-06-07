@@ -12,5 +12,6 @@ export const worldProps = [
   { id: "nightmarket_loot_container_01", zoneId: "nightmarket", kind: "loot_container", label: "Crate", x: 500, y: 300 },
   { id: "nightmarket_vendor_01", zoneId: "nightmarket", kind: "vendor", label: "Suspicious Vendor", x: 380, y: 600 },
   { id: "nightmarket_stash_keeper_01", zoneId: "nightmarket", kind: "town_service", label: "Stash Keeper", x: 700, y: 620 },
-  { id: "nightmarket_trainer_01", zoneId: "nightmarket", kind: "town_service", label: "Trainer", x: 850, y: 680 }
+  { id: "nightmarket_trainer_01", zoneId: "nightmarket", kind: "town_service", label: "Trainer", x: 850, y: 680 },
+  { id: "nightmarket_waypoint_01", zoneId: "nightmarket", kind: "waypoint", label: "Waypoint", x: 980, y: 640 }
 ] as const satisfies readonly WorldPropContentDefinition[];
