@@ -50,7 +50,11 @@ export function applyWorldSessionOverlayHudStyles(panel: HTMLElement): void {
 }
 
 export function applyWorldSessionOverlayPanelStyles(panel: HTMLElement): void {
-  makeOverlayPassive(panel);
+  // Card sections are visible interactive panels; do NOT make them passive.
+  // Passive leaves empty padding/gap areas transparent to pointer events,
+  // causing clicks inside a visible panel to pass through to the Phaser
+  // canvas underneath and trigger ground movement.
+  panel.style.pointerEvents = "auto";
   panel.style.padding = "8px 10px";
   panel.style.border = "1px solid #4d3f2a";
   panel.style.borderRadius = "12px";
@@ -66,6 +70,8 @@ export function applyWorldSessionOverlayPanelStyles(panel: HTMLElement): void {
 }
 
 export function applyWorldSessionOverlayScrollablePanelStyles(panel: HTMLElement): void {
+  // Same as the non-scrollable variant — card panels must be pointer-events: auto
+  // so clicks inside visible panel areas do not reach the canvas underneath.
   applyWorldSessionOverlayPanelStyles(panel);
   panel.style.maxHeight = "calc(100vh - 28px)";
   panel.style.overflowY = "auto";

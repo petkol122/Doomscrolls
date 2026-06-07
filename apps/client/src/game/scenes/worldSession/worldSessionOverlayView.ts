@@ -386,6 +386,14 @@ function syncHudView(
   onResetObjective: () => void,
   onRespawn: () => void,
 ): void {
+  // Task 229: HUD content is rebuilt on every update pass. This means
+  // the respawn button and any other interactive HUD control is destroyed
+  // and recreated each frame. To make clicks reliable we must NOT
+  // destroy children while a pointer-down is in flight. The browser
+  // already handles this for native button clicks — the click event
+  // fires on the element that received mousedown, even if it gets
+  // removed before mouseup. The real problem was pointer-events: none
+  // on parent panels blocking the click entirely (fixed in overlayLayout).
   refs.root.replaceChildren(renderHudContent(character, room, skillTargeting, lastSkillRejectedReason, onResetObjective, onRespawn));
 }
 
@@ -429,7 +437,8 @@ function renderHudContent(
     const respawnButton = createButton(t("world_session.respawn"));
     respawnButton.style.marginTop = "4px";
     respawnButton.style.width = "220px";
-    respawnButton.addEventListener("click", () => {
+    respawnButton.addEventListener("click", (event) => {
+      event.stopPropagation();
       onRespawn();
     });
     makeInteractive(respawnButton);
@@ -1075,7 +1084,8 @@ function createObjectiveTrackerCard(objective: {
   resetButton.style.justifySelf = "start";
   resetButton.style.padding = "4px 8px";
   resetButton.style.fontSize = "11px";
-  resetButton.addEventListener("click", () => {
+  resetButton.addEventListener("click", (event) => {
+    event.stopPropagation();
     onResetObjective?.();
   });
   makeInteractive(resetButton);
@@ -1602,7 +1612,8 @@ function createInventoryDetailSection(
     equipButton.style.background = "rgba(49, 65, 38, 0.9)";
     equipButton.style.border = "1px solid #6a8a4a";
     makeInteractive(equipButton);
-    equipButton.addEventListener("click", async () => {
+    equipButton.addEventListener("click", async (event) => {
+      event.stopPropagation();
       equipButton.disabled = true;
       equipButton.textContent = "Equipping...";
       try {
