@@ -665,6 +665,10 @@ Nightmarket classification notes:
 - `classification: "test_hybrid"` — has enemies despite being a town room
 - Long-term towns/villages should be `safe_hub` with no enemy spawns
 - Neutral ambient creatures (rats, pigs, chickens) are allowed in towns/hubs
+- Nightmarket has placeholder town services: Vendor, Stash Keeper, Trainer, Waypoint
+- Services are interactable/content-driven with open placeholder panels/messages
+- No real trading, stash storage, skill training, teleport, waypoint persistence or money spending
+- Nightmarket remains test_hybrid, not a true safe_hub yet
 
 ### Copper Currency Foundation (Core 0.1)
 

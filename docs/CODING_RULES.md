@@ -669,6 +669,19 @@ Core 0.1 ships a shared loot container foundation that is intentionally limited 
 - no stealing/crime/locks/respawn timers yet
 - the shared loot container foundation must not be presented as gameplay
 
+## Town Service Placeholder Rules
+
+Core 0.1 ships placeholder town services in the Nightmarket: Vendor (Suspicious Vendor), Stash Keeper, Trainer and Waypoint. All are content-driven interactables with placeholder panels/messages and no real behavior.
+
+Rules:
+
+- services are defined in `packages/content/src/data/townServices.ts` with `serviceKind` and `unavailableMessageKey`
+- services render as interactable `town_service` or `vendor` objects from `worldProps` content definitions
+- Vendor has a dedicated DOM overlay panel (`apps/client/src/game/scenes/worldSession/vendorInteractionPanel.ts`) showing "Trading is not available yet." with current money snapshot
+- Stash Keeper, Trainer and Waypoint return content-driven localization messages via `getInteractableResponseMessage()`
+- no real trading, stash storage, skill training, teleport, waypoint persistence or money spending exists
+- Nightmarket remains `test_hybrid` (not `safe_hub`) for Core 0.1
+
 ## Copper Currency Rules
 
 Core 0.1 ships a copper currency foundation: `Character.moneyCopper` is persisted in the database (initialized to 0 at character creation), copper drops from defeated enemies use the world loot system (`WorldLoot` with `currencyCopper > 0` and `itemId = ""`), and pickups increment the persisted `moneyCopper` total server-side through `CharacterRepository.incrementMoneyCopper()`.

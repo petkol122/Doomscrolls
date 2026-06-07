@@ -64,7 +64,7 @@ future visual language: depth sorting, shadows, layered objects, pre-rendered / 
 
 ## Zone Classification
 
-Zones have a classification field: `safe_hub` / `combat` / `test_hybrid`. The Nightmarket is `test_hybrid` for Core 0.1 because it has enemies despite being a town room. Long-term towns/villages should be `safe_hub` with no enemy spawns.
+Zones have a classification field: `safe_hub` / `combat` / `test_hybrid`. The Nightmarket is `test_hybrid` for Core 0.1 because it has enemies despite being a town room. Long-term towns/villages should be `safe_hub` with no enemy spawns. Town services are interactable placeholders only — no real trading, stash storage, skill training, teleport, waypoint persistence or money spending exists yet.
 
 ---
 

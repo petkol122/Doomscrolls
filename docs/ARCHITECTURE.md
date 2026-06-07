@@ -300,12 +300,26 @@ Vendor placeholder:
   panel lives at apps/client/src/game/scenes/worldSession/vendorInteractionPanel.ts
   no shop UI, prices, vendor stock, spending, selling or reputation
 
+Town-service placeholders (Core 0.1):
+  Nightmarket has four placeholder services from content-driven townService definitions:
+    - Stash Keeper (nightmarket_stash_keeper_01) at (700, 620) — serviceKind: "stash"
+    - Trainer (nightmarket_trainer_01) at (850, 680) — serviceKind: "trainer"
+    - Waypoint (nightmarket_waypoint_01) at (980, 640) — serviceKind: "waypoint"
+  All three are content-driven interactable town_service objects with:
+    - `unavailableMessageKey` read from `packages/content/src/data/townServices.ts`
+    - response text served through `getInteractableResponseMessage()` from the localization dictionary
+    - no real stash storage, skill training, teleport or waypoint persistence yet
+  Vendor has its own dedicated DOM overlay panel; the three new services render the same
+  generic server text response that all town_service interactables already support
+
 Core 0.1 Scope:
-  Nightmarket has visible objects: notice board at (120, 140), vendor at (380, 600)
+  Nightmarket has visible objects: notice board at (120, 140), vendor at (380, 600),
+  stash keeper at (700, 620), trainer at (850, 680), waypoint at (980, 640)
   Objects are rendered as simple gold rectangles with labels
   Distance validation is 50 unit radius from player
   Responses are safe text only; no game logic coupling
   No quests, loot, inventory effects, NPC dialogue, combat, collision or rewards
+  No real trading, stash storage, skill training, teleport, waypoint persistence or money spending
 ```
 
 Current WorldSession visual layer status:
