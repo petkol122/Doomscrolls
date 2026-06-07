@@ -535,22 +535,41 @@ export function createWorldSessionAreaView(
             projectionMode,
           );
           let marker = corpseMarkers.get(player.sessionId);
+          const isOwnCorpse = player.sessionId === selfSessionId;
           if (marker === undefined) {
             marker = scene.add.container(screenPos.x, screenPos.y);
-            const markerBg = scene.add.ellipse(0, 12, 24, 12, 0x330000, 0.3);
-            const markerBody = scene.add.rectangle(0, 0, 14, 20, 0x5c2a2a, 0.85);
-            markerBody.setStrokeStyle(2, 0x8f3f3f, 0.9);
-            const markerHead = scene.add.circle(0, -14, 5, 0x4a2020, 0.85);
-            markerHead.setStrokeStyle(2, 0x8f3f3f, 0.9);
-            const markerLabel = scene.add.text(0, -28, player.displayName, {
-              color: "#b04a4a",
-              fontFamily: "Arial, sans-serif",
-              fontSize: "9px",
-              fontStyle: "bold",
-              stroke: "#1a0808",
-              strokeThickness: 3,
-            }).setOrigin(0.5);
-            marker.add([markerBg, markerBody, markerHead, markerLabel]);
+            if (isOwnCorpse) {
+              // Own corpse marker: teal glow, cross icon, larger, more distinct
+              const markerBg = scene.add.ellipse(0, 12, 28, 16, 0x003333, 0.5);
+              const markerBody = scene.add.rectangle(0, 0, 16, 24, 0x2a5c5c, 0.9);
+              markerBody.setStrokeStyle(2, 0x4ab0b0, 0.95);
+              const markerCross = scene.add.circle(0, -14, 6, 0x206060, 0.9);
+              markerCross.setStrokeStyle(2, 0x4ab0b0, 0.95);
+              const markerLabel = scene.add.text(0, -30, "☠ " + player.displayName, {
+                color: "#4ad8d8",
+                fontFamily: "Arial, sans-serif",
+                fontSize: "10px",
+                fontStyle: "bold",
+                stroke: "#0a2020",
+                strokeThickness: 3,
+              }).setOrigin(0.5);
+              marker.add([markerBg, markerBody, markerCross, markerLabel]);
+            } else {
+              const markerBg = scene.add.ellipse(0, 12, 24, 12, 0x330000, 0.3);
+              const markerBody = scene.add.rectangle(0, 0, 14, 20, 0x5c2a2a, 0.85);
+              markerBody.setStrokeStyle(2, 0x8f3f3f, 0.9);
+              const markerHead = scene.add.circle(0, -14, 5, 0x4a2020, 0.85);
+              markerHead.setStrokeStyle(2, 0x8f3f3f, 0.9);
+              const markerLabel = scene.add.text(0, -28, player.displayName, {
+                color: "#b04a4a",
+                fontFamily: "Arial, sans-serif",
+                fontSize: "9px",
+                fontStyle: "bold",
+                stroke: "#1a0808",
+                strokeThickness: 3,
+              }).setOrigin(0.5);
+              marker.add([markerBg, markerBody, markerHead, markerLabel]);
+            }
             worldContainer.add(marker);
             corpseMarkers.set(player.sessionId, marker);
           } else {

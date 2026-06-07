@@ -313,6 +313,18 @@ export class WorldSessionScene extends Phaser.Scene {
       },
     });
 
+    // Task 236 -- corpse interact rejection feedback
+    this.room.onMessage("corpse_interact_rejected", (message: { reason?: unknown }) => {
+      const reason = typeof message?.reason === "string" ? message.reason : "";
+      if (reason === "player_downed") {
+        this.feedbackView?.showNotice(t("world_area.corpse_interact_downed"));
+      } else if (reason === "no_corpse") {
+        this.feedbackView?.showNotice(t("world_area.corpse_interact_no_corpse"));
+      } else if (reason === "out_of_range") {
+        this.feedbackView?.showNotice(t("world_area.corpse_interact_out_of_range"));
+      }
+    });
+
     this.dodgeInput?.destroy();
     this.dodgeInput = null;
     this.healingFlaskInput?.destroy();

@@ -1613,8 +1613,18 @@ export class TownRoom extends Room {
         return;
       }
 
-      // Must be alive (after respawn) and have a corpse marker
-      if (player.lifeState !== "alive" || !player.hasCorpse) {
+      // Must be alive (after respawn) to interact with a corpse marker
+      if (player.lifeState !== "alive") {
+        const rejection: import("@doomscrolls/shared").CorpseInteractRejectedServerMessage = {
+          type: "corpse_interact_rejected",
+          reason: "player_downed",
+        };
+        try { client.send("corpse_interact_rejected", rejection); } catch {}
+        return;
+      }
+
+      // Must have an active corpse marker
+      if (!player.hasCorpse) {
         const rejection: import("@doomscrolls/shared").CorpseInteractRejectedServerMessage = {
           type: "corpse_interact_rejected",
           reason: "no_corpse",

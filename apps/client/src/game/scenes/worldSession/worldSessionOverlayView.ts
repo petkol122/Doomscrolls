@@ -450,7 +450,7 @@ function renderHudContent(
   }
 
   if (selfPresence?.hasCorpse === true && selfPresence?.lifeState !== "downed") {
-    const corpseNotice = createMutedText(t("world_session.corpse_marker"));
+    const corpseNotice = createMutedText(t("world_session.corpse_return_hint"));
     corpseNotice.style.color = "#8f5f5f";
     panel.appendChild(corpseNotice);
   }

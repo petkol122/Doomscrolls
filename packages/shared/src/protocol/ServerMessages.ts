@@ -104,7 +104,7 @@ export interface PlayerRespawnedServerMessage {
 
 export interface CorpseInteractRejectedServerMessage {
   readonly type: "corpse_interact_rejected";
-  readonly reason: "out_of_range" | "no_corpse" | "player_alive";
+  readonly reason: "out_of_range" | "no_corpse" | "player_downed";
 }
 
 export interface CorpseInteractAcceptedServerMessage {

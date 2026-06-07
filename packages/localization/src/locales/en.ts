@@ -225,7 +225,11 @@ export const en = {
   "world_area.skill_unlearned": "Skill slot not learned yet.",
   "world_area.corpse_recovered": "Corpse recovered.",
   "world_area.corpse_interact_out_of_range": "Moving to corpse.",
+  "world_area.corpse_interact_downed": "You are downed. Respawn first.",
+  "world_area.corpse_interact_no_corpse": "No corpse to recover.",
+  "world_area.corpse_return_hint": "Return to your corpse",
   "world_area.skill_unavailable": "Skill unavailable.",
+  "world_session.corpse_return_hint": "Return to your corpse",
 
   "inventory.title": "Inventory",
   "equipment.title": "Equipment",
