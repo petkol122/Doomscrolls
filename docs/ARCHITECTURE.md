@@ -260,6 +260,12 @@ no seed character data
 no fake characters
 ```
 
+## Zone Classification
+
+Zones have a `classification` field: `safe_hub` / `combat` / `test_hybrid`. Nightmarket is `test_hybrid` for Core 0.1 because it has enemies despite being a town room. Long-term towns/villages should be `safe_hub` with no enemy spawns.
+
+---
+
 ### Interactable object architecture (Core 0.1)
 
 ```text
@@ -282,8 +288,15 @@ Client-side:
   worldSessionInteractablesView.ts: renders objects as geometric shapes + labels, handles clicks
   WorldSessionScene: listens for responses, displays message for 3 seconds
 
+Vendor placeholder:
+  Suspicious Vendor (nightmarket_vendor_01) at (380, 600)
+  non-hostile town service NPC; trading not available yet
+  rendered as a purple 24x32 rectangle (visually distinct from props/enemies)
+  responds with "Vendor trading is not available yet." on interact
+  no shop UI, prices, vendor stock, spending or reputation
+
 Core 0.1 Scope:
-  Nightmarket has one visible object: notice board at (120, 140)
+  Nightmarket has visible objects: notice board at (120, 140), vendor at (380, 600)
   Objects are rendered as simple gold rectangles with labels
   Distance validation is 50 unit radius from player
   Responses are safe text only; no game logic coupling

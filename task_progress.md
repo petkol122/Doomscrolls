@@ -1,7 +1,7 @@
-- [ ] Read existing content types, zones, interactables, and rendering code
-- [ ] Add vendor content definition (spawn point, label, visual hint)
-- [ ] Add interactable handling for vendor (server-side registration)
-- [ ] Render vendor visually distinct from props/enemies (client-side)
-- [ ] Handle click/interaction feedback ("Vendor trading is not available yet.")
-- [ ] Run typecheck checks
+- [x] Read existing docs to understand current state
+- [ ] Update README.md with zone classification and vendor placeholder notes
+- [ ] Update docs/ARCHITECTURE.md with zone classification and vendor notes
+- [ ] Update docs/BACKLOG_CORE_0_1.md with vendor placeholder status
+- [ ] Update docs/CODING_RULES.md with zone classification rules
+- [ ] Run typecheck + lint
 - [ ] Final report

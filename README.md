@@ -62,14 +62,21 @@ future visual language: depth sorting, shadows, layered objects, pre-rendered / 
 
 ---
 
+## Zone Classification
+
+Zones have a classification field: `safe_hub` / `combat` / `test_hybrid`. The Nightmarket is `test_hybrid` for Core 0.1 because it has enemies despite being a town room. Long-term towns/villages should be `safe_hub` with no enemy spawns.
+
+---
+
 ## Core 0.1 Locked Content
 
 - First Origin: **Sewer Dweller**
 - First Passive: **Nightvision**
 - First Class: **Gravewalker**
-- First Hub: **The Nightmarket**
+- First Hub: **The Nightmarket** (test_hybrid zone)
 - First Combat Zone: **Blackwire Sewers**
 - First Enemy: **Trashboar Runt**
+- First Vendor Placeholder: **Suspicious Vendor** (non-hostile town service NPC; trading not available yet, no shop UI/prices/stock/spending/reputation)
 
 ---
 

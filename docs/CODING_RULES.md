@@ -219,6 +219,27 @@ Client auth UI rules:
 - real interactive controls inside those overlays must explicitly use `pointer-events: auto`
 - live combat HUD must read room-synced `PlayerPresence`; inventory/equipment panels must read persisted `/me` account state
 
+## Zone Classification Rules
+
+Zones have a `classification` field: `safe_hub` / `combat` / `test_hybrid`.
+
+- `safe_hub`: intended for towns/villages; no enemy spawns long-term
+- `combat`: active combat zones with enemy spawns
+- `test_hybrid`: temporary Core 0.1 classification — town room that still has enemies (e.g. Nightmarket)
+- Long-term towns/villages should be `safe_hub` with no enemy spawns
+- Neutral ambient creatures (rats, pigs, chickens) are allowed in any classification
+
+## Vendor Placeholder Rules
+
+The Suspicious Vendor (nightmarket_vendor_01) is a neutral vendor placeholder interactable:
+
+- non-hostile, town service style
+- `kind: "vendor"` in world props; `type: "vendor"` in interactable state
+- rendered as a purple 24×32 rectangle (visually distinct from gold props and red enemies)
+- click/interact shows: "Vendor trading is not available yet."
+- no shop UI, prices, vendor stock, buying, selling, spending or reputation
+- no vendor inventory, no money spending
+
 ## Interactable Object Rules
 
 Interactable objects are simple world elements that respond to click-to-interact with server-validated safe text messages. Forbidden scope is strict:

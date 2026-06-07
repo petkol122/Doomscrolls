@@ -649,6 +649,15 @@ pnpm --filter @doomscrolls/client typecheck
 pnpm lint
 ```
 
+### Vendor Placeholder (Core 0.1)
+
+The Suspicious Vendor placeholder lives in Nightmarket at (380, 600). It is a non-hostile town service NPC with `kind: "vendor"` in world props. On interact, it responds with "Vendor trading is not available yet." There is no shop UI, no prices, no vendor stock, no buying/selling, no spending, and no reputation system. The client renders it as a visually distinct purple 24x32 rectangle.
+
+Nightmarket classification notes:
+- `classification: "test_hybrid"` — has enemies despite being a town room
+- Long-term towns/villages should be `safe_hub` with no enemy spawns
+- Neutral ambient creatures (rats, pigs, chickens) are allowed in towns/hubs
+
 ### Copper Currency Foundation (Core 0.1)
 
 Core 0.1 ships a copper currency foundation. `Character.moneyCopper` exists via Prisma migration (default 0). Copper drops from defeated enemies use the world loot system: `rollCurrencyLoot()` rolls the enemy's `currencyDrop` range, `spawnWorldLootOnEnemyDefeat()` creates a `WorldLoot` entry with `currencyCopper > 0` and `itemId = ""`, and pickup calls `CharacterRepository.incrementMoneyCopper()` to atomically persist the total server-side. Vendors, shops, trading, NPC buying/selling, regional currency, honor, reputation, and crypto are not implemented.
