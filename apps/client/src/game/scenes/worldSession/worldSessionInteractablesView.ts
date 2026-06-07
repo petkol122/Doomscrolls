@@ -123,7 +123,7 @@ export function createWorldSessionInteractablesView(
       // Draw label - show different label for opened containers
       let displayLabel = label;
       if (objectType === "loot_container" && opened) {
-        displayLabel = "Empty Container";
+        displayLabel = "Empty";
       }
       const labelText = scene.add.text(pixelX + 14, pixelY - 14, displayLabel, {
         color: "#d8c6a3",

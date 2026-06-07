@@ -1,5 +1,6 @@
 import type { TownRoomState } from "./TownRoomState";
 import { spawnWorldLootOnEnemyDefeat } from "./spawnWorldLootOnEnemyDefeat";
+import { resolveZoneBounds } from "./resolveZoneBounds";
 import { t } from "@doomscrolls/localization";
 
 /**
@@ -57,6 +58,7 @@ export function validateInteractIntent(
 /**
  * Handle loot container interaction - spawns loot near the container.
  * Task 180 — Shared loot container foundation.
+ * Task 181 — Validate loot position against zone bounds.
  */
 export function handleLootContainerInteraction(
   state: TownRoomState,
@@ -71,12 +73,29 @@ export function handleLootContainerInteraction(
     return { ok: false, message: t("world_prop.loot_container.empty") };
   }
 
+  // Calculate loot position near the container
+  const lootX = interactable.x + 14;
+  const lootY = interactable.y + 10;
+
+  // Validate loot position is within zone bounds
+  const zoneBounds = resolveZoneBounds(state.zoneId);
+  if (
+    lootX < zoneBounds.minX ||
+    lootX > zoneBounds.maxX ||
+    lootY < zoneBounds.minY ||
+    lootY > zoneBounds.maxY
+  ) {
+    // If position is out of bounds, still mark as opened but don't spawn loot
+    interactable.opened = true;
+    return { ok: true, message: "The container is empty." };
+  }
+
   // Spawn loot near the container (using the same loot table as trashboar runts)
   const fakeEnemy = {
     id: `container_${objectId}`,
     enemyId: "trashboar_runt",
-    x: interactable.x + 14,
-    y: interactable.y + 10,
+    x: lootX,
+    y: lootY,
   } as { id: string; enemyId: string; x: number; y: number };
 
   const worldLoot = spawnWorldLootOnEnemyDefeat(state, fakeEnemy as any, Date.now());
