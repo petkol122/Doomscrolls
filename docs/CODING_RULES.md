@@ -208,6 +208,10 @@ Client auth UI rules:
 - projection preview modes must not keep click-to-move world input enabled when that would misrepresent the active world projection
 - WorldSession overlay mount points for interactive controls must stay stable across state updates
 - do not replace interactive panel root elements during overlay/state refreshes; update their contents in place
+- the inventory panel must capture and consume its own clicks so world-targeting input does not leak through interactive inventory UI
+- world target hit testing must use the same rendered projection and live offset used by the current world view so visible targets and click resolution stay aligned
+- enemy placeholder views must not be destroyed solely because they are currently off-screen or visually overlapped; visibility/cleanup must follow real synced entity lifetime instead
+- defeated and respawn visuals must follow synced server state only; the client must not locally invent defeat, removal, or respawn transitions
 - live HP and valid location must be saved on leave/disconnect through real server-owned persistence
 - a room join must restore saved valid HP/location when that persisted state exists and is valid
 - `/me` is persisted account state only and must not be treated as live combat/runtime room state

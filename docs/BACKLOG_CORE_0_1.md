@@ -259,6 +259,12 @@ Record the fixed WorldSession stability rules without adding features.
 
 Status: documented. `docs/CODING_RULES.md` now states that interactive WorldSession overlay nodes must stay mounted across updates, live HP and valid location are saved on leave/disconnect through real persistence, room join restores saved valid HP/location when present, and `/me` remains persisted account state rather than live combat/runtime state. This task is docs-only and adds no feature work.
 
+### Task 179 — Target/Input Stability Checkpoint
+
+Document the recent WorldSession interaction/render stability fixes without adding features.
+
+Status: documented. `docs/CODING_RULES.md` now records that the inventory panel must capture its own clicks, world target hit testing must use the same rendered projection/live offset as the visible world, enemy views must not be destroyed merely because they are off-screen or overlapped, and defeated/respawn visuals must follow synced server state only. This task is docs-only and adds no feature work.
+
 ### Task 017 — Enemy Spawn and AI
 
 Spawn Trashboar Runt from content and implement AI v1.
