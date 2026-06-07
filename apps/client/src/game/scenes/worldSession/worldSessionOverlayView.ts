@@ -11,8 +11,9 @@ import type { WorldSessionDebugState } from "./worldSessionAreaView";
 import {
   createEmptyEquipmentLoadout,
   createEquipmentPanelSection,
+  updateEquipmentPanelSection,
 } from "./worldSessionEquipmentView";
-import { makeInteractive } from "./worldSessionPointerEvents";
+import { makeInteractive, makePassive } from "./worldSessionPointerEvents";
 import type { EquipmentLoadout } from "@doomscrolls/shared";
 import {
   applyWorldSessionOverlayPanelStyles,
@@ -68,10 +69,13 @@ export function createWorldSessionOverlayView(
 ): WorldSessionOverlayView {
   let selectedInventoryItemId: InventorySummaryItem["itemInstanceId"] | null = character?.inventorySummaryItems?.[0]?.itemInstanceId ?? null;
   let currentStatusPanel: HTMLElement | null = null;
+  let currentStatusContent: HTMLElement | null = null;
   let currentUtilityPanel: HTMLElement;
+  let currentUtilityContent: HTMLElement | null = null;
   let currentHudPanel: HTMLElement;
+  let currentHudContent: HTMLElement | null = null;
 
-  const buildStatusPanel = (
+  const buildStatusContent = (
     nextCharacter: CharacterSummary | null,
     nextRoom: Room<DoomscrollsRoomState>,
   ): HTMLElement | null => {
@@ -93,7 +97,7 @@ export function createWorldSessionOverlayView(
     );
   };
 
-  const buildHudPanel = (
+  const buildHudContent = (
     nextCharacter: CharacterSummary | null,
     nextRoom: Room<DoomscrollsRoomState>,
   ): HTMLElement => {
@@ -139,7 +143,7 @@ export function createWorldSessionOverlayView(
     return panel;
   };
 
-  const buildUtilityPanel = (
+  const buildUtilityContent = (
     nextCharacter: CharacterSummary | null,
     nextRoom: Room<DoomscrollsRoomState>,
     nextDebugState: WorldSessionDebugState,
@@ -197,12 +201,30 @@ export function createWorldSessionOverlayView(
     return panel;
   };
 
-  const statusPanel = buildStatusPanel(character, room);
-  const utilityPanel = buildUtilityPanel(character, room, debugState);
-  const hudPanel = buildHudPanel(character, room);
+  const createMountedPanel = (): HTMLElement => {
+    const panel = document.createElement("div");
+    makePassive(panel);
+    panel.style.display = "contents";
+    return panel;
+  };
+
+  const statusPanel = createMountedPanel();
+  const utilityPanel = createMountedPanel();
+  const hudPanel = createMountedPanel();
+  const statusContent = buildStatusContent(character, room);
+  const utilityContent = buildUtilityContent(character, room, debugState);
+  const hudContent = buildHudContent(character, room);
+  if (statusContent !== null) {
+    statusPanel.replaceChildren(statusContent);
+  }
+  utilityPanel.replaceChildren(utilityContent);
+  hudPanel.replaceChildren(hudContent);
   currentStatusPanel = statusPanel;
+  currentStatusContent = statusContent;
   currentUtilityPanel = utilityPanel;
+  currentUtilityContent = utilityContent;
   currentHudPanel = hudPanel;
+  currentHudContent = hudContent;
 
   const update = (
     nextCharacter: CharacterSummary | null,
@@ -210,22 +232,21 @@ export function createWorldSessionOverlayView(
     nextDebugState: WorldSessionDebugState,
   ): void => {
     if (currentStatusPanel !== null) {
-      const nextStatus = buildStatusPanel(nextCharacter, nextRoom);
+      const nextStatus = buildStatusContent(nextCharacter, nextRoom);
+      currentStatusPanel.replaceChildren();
       if (nextStatus !== null) {
-        currentStatusPanel.replaceWith(nextStatus);
-        currentStatusPanel = nextStatus;
+        currentStatusPanel.appendChild(nextStatus);
       }
-    } else {
-      currentStatusPanel = buildStatusPanel(nextCharacter, nextRoom);
+      currentStatusContent = nextStatus;
     }
 
-    const nextHud = buildHudPanel(nextCharacter, nextRoom);
-    currentHudPanel.replaceWith(nextHud);
-    currentHudPanel = nextHud;
+    const nextHud = buildHudContent(nextCharacter, nextRoom);
+    currentHudPanel.replaceChildren(nextHud);
+    currentHudContent = nextHud;
 
-    const nextUtility = buildUtilityPanel(nextCharacter, nextRoom, nextDebugState);
-    currentUtilityPanel.replaceWith(nextUtility);
-    currentUtilityPanel = nextUtility;
+    const nextUtility = buildUtilityContent(nextCharacter, nextRoom, nextDebugState);
+    currentUtilityPanel.replaceChildren(nextUtility);
+    currentUtilityContent = nextUtility;
   };
 
   return {
@@ -976,7 +997,40 @@ function createInventoryPanelSection(
   wrapper.appendChild(summary);
 
   const content = document.createElement("div");
+  content.dataset.worldSessionInventoryContent = "true";
   content.style.padding = "0 8px 8px";
+  wrapper.appendChild(content);
+  updateInventoryPanelSection(wrapper, character, selection, equipmentLoadout, characterId, onEquipItem, isOpen);
+  return wrapper;
+}
+
+function updateInventoryPanelSection(
+  wrapper: HTMLElement,
+  character: CharacterSummary | null,
+  selection: {
+    readonly getSelectedItemId: () => InventorySummaryItem["itemInstanceId"] | null;
+    readonly onSelectItem: (itemId: InventorySummaryItem["itemInstanceId"]) => void;
+  },
+  equipmentLoadout: EquipmentLoadout,
+  characterId: string | null,
+  onEquipItem?: (characterId: string, itemInstanceId: string, slot: string) => Promise<void>,
+  isOpen: boolean = false,
+): void {
+  if (!(wrapper instanceof HTMLDetailsElement)) {
+    return;
+  }
+
+  wrapper.open = isOpen;
+  const items = character?.inventorySummaryItems ?? [];
+  const summary = wrapper.querySelector("summary");
+  if (summary instanceof HTMLElement) {
+    summary.textContent = `Inventory (${items.length})`;
+  }
+
+  const content = wrapper.querySelector("[data-world-session-inventory-content]");
+  if (!(content instanceof HTMLElement)) {
+    return;
+  }
 
   const render = (): void => {
     content.replaceChildren();
@@ -993,8 +1047,6 @@ function createInventoryPanelSection(
   };
 
   render();
-  wrapper.appendChild(content);
-  return wrapper;
 }
 
 function createDebugPanel(
