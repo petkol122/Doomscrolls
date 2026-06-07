@@ -27,6 +27,10 @@ import {
   createVendorInteractionPanel,
   type VendorInteractionPanel,
 } from "./worldSession/vendorInteractionPanel";
+import {
+  createTownServiceInteractionPanel,
+  type TownServiceInteractionPanel,
+} from "./worldSession/townServiceInteractionPanel";
 import { createWorldSessionAreaView, type WorldSessionAreaView } from "./worldSession/worldSessionAreaView";
 import { attachWorldSessionDodgeInput, type WorldSessionDodgeInput } from "./worldSession/worldSessionDodgeInput";
 import {
@@ -64,9 +68,6 @@ function formatPickupAcceptedNotice(
     readonly formattedMoneyText?: string;
   },
 ): string {
-  // Currency world-loot pickup feedback: prefer the server-supplied
-  // formatted money text (e.g. "3g 25s 7c") so the same shared
-  // `formatMoneyCompact` helper is used everywhere money is shown.
   if (
     message.itemLabel === undefined ||
     message.itemLabel.length === 0
@@ -107,6 +108,7 @@ export class WorldSessionScene extends Phaser.Scene {
   private equipmentLoadout: EquipmentLoadout = createEmptyEquipmentLoadout();
   private lastObjectiveCompletionNotice: string | null = null;
   private vendorPanel: VendorInteractionPanel | null = null;
+  private townServicePanel: TownServiceInteractionPanel | null = null;
   private utilityPanelOpenState: WorldSessionUtilityPanelOpenState = {
     controls: false,
     equipment: false,
@@ -174,6 +176,16 @@ export class WorldSessionScene extends Phaser.Scene {
         this.vendorPanel.show();
         return;
       }
+      // Task 205 — Stash keeper / future town-service placeholder panel.
+      if (objectId === "nightmarket_stash_keeper_01") {
+        const service = contentRegistry.townServices.get("nightmarket_stash_keeper");
+        if (service !== undefined) {
+          this.townServicePanel?.destroy();
+          this.townServicePanel = createTownServiceInteractionPanel(service);
+          this.townServicePanel.show();
+          return;
+        }
+      }
       this.feedbackView?.showNotice(message);
     }, (message: ObjectiveUpdatedServerMessage) => {
       if (message.completed) {
@@ -225,9 +237,6 @@ export class WorldSessionScene extends Phaser.Scene {
     });
 
     this.room.onMessage("currency_picked_up", (message: { gainedCopper?: unknown; totalMoneyCopper?: unknown }) => {
-      // Sanitise the gained copper value: ignore non-finite, negative or
-      // NaN values. Use the shared `formatMoneyCompact` helper so the
-      // same money text format is used everywhere.
       const gained = typeof message.gainedCopper === "number" && Number.isFinite(message.gainedCopper) && message.gainedCopper > 0
         ? Math.floor(message.gainedCopper)
         : 0;
@@ -362,8 +371,6 @@ export class WorldSessionScene extends Phaser.Scene {
       return;
     }
 
-    // `account` is the persisted `/me` snapshot; live HP/objective/room data
-    // must continue to come from the joined room state rendered inside the view.
     const character = this.account.characters.find((nextCharacter) => nextCharacter.id === this.characterId) ?? null;
     const debugState = this.worldAreaView?.getDebugState() ?? {
       lastClickTarget: null,
@@ -448,19 +455,11 @@ export class WorldSessionScene extends Phaser.Scene {
   private async handleLeaveWorld(): Promise<void> {
     const room = this.room;
     const account = this.account;
-
     this.room = null;
-
     if (room !== null) {
-      try {
-        room.leave();
-      } catch {
-        // Ignore leave errors.
-      }
+      try { room.leave(); } catch { /* ignore */ }
     }
-
     this.destroyOverlay();
-
     if (account !== null) {
       this.scene.start("AccountShellScene", { account });
     }
@@ -493,6 +492,8 @@ export class WorldSessionScene extends Phaser.Scene {
     this.feedbackView = null;
     this.vendorPanel?.destroy();
     this.vendorPanel = null;
+    this.townServicePanel?.destroy();
+    this.townServicePanel = null;
     this.worldAreaView?.destroy();
     this.worldAreaView = null;
     this.destroyOverlay();
@@ -506,40 +507,19 @@ export class WorldSessionScene extends Phaser.Scene {
     }
   }
 
-  private async handleEquipItem(
-    characterId: string,
-    itemInstanceId: string,
-    slot: string,
-  ): Promise<void> {
-    if (this.apiClient === null) {
-      throw new Error("API client not available");
-    }
-
+  private async handleEquipItem(characterId: string, itemInstanceId: string, slot: string): Promise<void> {
+    if (this.apiClient === null) throw new Error("API client not available");
     const sessionToken = window.localStorage.getItem("doomscrolls.sessionToken");
-    if (typeof sessionToken !== "string" || sessionToken.length === 0) {
-      throw new Error("Not authenticated");
-    }
-
+    if (typeof sessionToken !== "string" || sessionToken.length === 0) throw new Error("Not authenticated");
     await this.apiClient.equipItem(sessionToken, characterId, itemInstanceId, slot);
-
     await this.refreshAccountStateFromMe();
   }
 
-  private async handleUnequipItem(
-    characterId: string,
-    slot: string,
-  ): Promise<void> {
-    if (this.apiClient === null) {
-      throw new Error("API client not available");
-    }
-
+  private async handleUnequipItem(characterId: string, slot: string): Promise<void> {
+    if (this.apiClient === null) throw new Error("API client not available");
     const sessionToken = window.localStorage.getItem("doomscrolls.sessionToken");
-    if (typeof sessionToken !== "string" || sessionToken.length === 0) {
-      throw new Error("Not authenticated");
-    }
-
+    if (typeof sessionToken !== "string" || sessionToken.length === 0) throw new Error("Not authenticated");
     await this.apiClient.unequipItem(sessionToken, characterId, slot);
-
     await this.refreshAccountStateFromMe();
   }
 
@@ -548,20 +528,12 @@ export class WorldSessionScene extends Phaser.Scene {
   }
 
   private async refreshAccountStateFromMe(): Promise<void> {
-    if (this.apiClient === null) {
-      return;
-    }
-
+    if (this.apiClient === null) return;
     const sessionToken = window.localStorage.getItem("doomscrolls.sessionToken");
-    if (typeof sessionToken !== "string" || sessionToken.length === 0) {
-      return;
-    }
-
+    if (typeof sessionToken !== "string" || sessionToken.length === 0) return;
     try {
       this.account = await this.apiClient.getMe(sessionToken);
       this.renderOverlay();
-    } catch {
-      // Ignore best-effort /me refresh failures; live room state still drives HP/XP/combat HUD.
-    }
+    } catch { /* ignore */ }
   }
 }

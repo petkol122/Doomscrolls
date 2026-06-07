@@ -1,10 +1,12 @@
 /**
  * Task 200 — Basic Vendor Interaction Panel Placeholder
  * Task 204 — Basic Sell-Disabled Vendor Inventory Preview
+ * Task 205 — Vendor Preview + Safe-Zone Services Batch
  *
- * Compact dismissible vendor panel showing vendor name, placeholder stock rows
- * (item label + formatted price) and a disabled Buy button per row. The
- * "Unavailable" status reflects that no purchase flow exists yet.
+ * Compact dismissible vendor panel showing vendor name, money line,
+ * placeholder stock rows (item label + formatted price) and a disabled
+ * Buy button per row. The "Trading locked for Core 0.1" note reflects
+ * that no purchase flow exists yet.
  *
  * No buying, selling, stock persistence, stock mutation or reputation.
  */
@@ -116,11 +118,15 @@ export function createVendorInteractionPanel(
       }
     }
 
-    // Unavailable notice
+    // Task 205 — Clear "Trading locked for Core 0.1" note replaces the
+    // previous generic "Trading is not available yet." copy.
     const note = document.createElement("div");
-    note.textContent = "Trading is not available yet.";
+    note.textContent = t("town_service.vendor_panel.trading_locked");
     note.style.cssText = `
-      color: #7a6a4f; font-size: 11px; font-style: italic;
+      color: #c8a86b; font-size: 12px; font-weight: bold;
+      text-align: center; padding: 6px 8px;
+      border: 1px solid #5f4a2f; border-radius: 6px;
+      background: rgba(60, 40, 20, 0.45);
     `;
     card.appendChild(note);
 

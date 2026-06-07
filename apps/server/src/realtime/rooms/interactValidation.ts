@@ -159,9 +159,18 @@ function buildCrateWorldLootId(
 
 /**
  * Get a safe response message for an interactable object.
- * Currently hardcoded. Future: read from content definitions.
+ *
+ * Task 205 — Town-service placeholders (Stash Keeper) read the
+ * `unavailableMessageKey` from the content registry so server and
+ * client stay aligned on the "not available yet" copy.
  */
 export function getInteractableResponseMessage(objectId: string): string {
+  if (objectId === "nightmarket_stash_keeper_01") {
+    const service = contentRegistry.townServices.get("nightmarket_stash_keeper");
+    if (service !== undefined) {
+      return t(service.unavailableMessageKey);
+    }
+  }
   const responses: Record<string, string> = {
     nightmarket_notice_board: "The notice board hums quietly.",
     nightmarket_vendor_01: "Vendor trading is not available yet.",

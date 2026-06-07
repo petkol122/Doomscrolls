@@ -26,6 +26,7 @@ export { spawnZones } from "./data/spawnZones";
 export { levelTables } from "./data/levelTables";
 export { equipmentSlots } from "./data/equipmentSlots";
 export { vendorStocks } from "./data/vendorStocks";
+export { townServices } from "./data/townServices";
 
 export type {
   CharacterClassContentDefinition,
@@ -49,6 +50,9 @@ export type {
   SpawnPointContentDefinition,
   SpawnPointContentId,
   SpawnZoneDefinition,
+  TownServiceContentDefinition,
+  TownServiceId,
+  TownServiceKind,
   VendorId,
   VendorStockEntryDefinition,
   WorldPropContentDefinition,

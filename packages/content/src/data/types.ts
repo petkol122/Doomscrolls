@@ -26,8 +26,18 @@ export type ZoneRoomType = "town" | "combat";
 export type ZoneClassification = "safe_hub" | "combat" | "test_hybrid";
 export type SpawnPointContentId = "nightmarket_spawn";
 export type EquipmentSlotCategory = "weapon" | "armor" | "accessory" | "belt" | "flask";
-export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken" | "loot_container" | "vendor";
+export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken" | "loot_container" | "vendor" | "town_service";
 export type VendorId = "nightmarket_suspicious_vendor";
+export type TownServiceId = "nightmarket_stash_keeper";
+export type TownServiceKind = "vendor" | "stash" | "trainer";
+
+export interface TownServiceContentDefinition {
+  readonly id: TownServiceId;
+  readonly serviceId: TownServiceId;
+  readonly serviceKind: TownServiceKind;
+  readonly labelKey: ContentLocalizationKey;
+  readonly unavailableMessageKey: ContentLocalizationKey;
+}
 
 export interface VendorStockEntryDefinition {
   readonly id: string;

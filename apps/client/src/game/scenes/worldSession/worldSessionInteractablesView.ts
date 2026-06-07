@@ -16,6 +16,8 @@ import type { WorldSessionAreaLayout } from "./worldSessionAreaLayout";
  * Render interactable objects as simple placeholder shapes + labels.
  * Handle click to send interact intent.
  * Task 180 — Added loot container rendering with opened state.
+ * Task 197 — Added vendor rendering (purple NPC-like).
+ * Task 205 — Added town_service rendering (teal NPC-like).
  */
 export interface WorldSessionInteractablesView {
   readonly refresh: (
@@ -94,12 +96,20 @@ export function createWorldSessionInteractablesView(
       const pixelX = projectedPosition.x;
       const pixelY = projectedPosition.y;
 
-      // Task 197 — Vendor placeholder (purple, larger, NPC-like)
       const graphic = scene.add.graphics();
       if (objectType === "vendor") {
+        // Task 197 — Vendor placeholder (purple, larger, NPC-like)
         graphic.fillStyle(0x7a4a8a, 0.9);
         graphic.fillRect(pixelX - 12, pixelY - 16, 24, 32);
         graphic.lineStyle(2, 0x5a2a6a, 0.9);
+        graphic.strokeRect(pixelX - 12, pixelY - 16, 24, 32);
+      } else if (objectType === "town_service") {
+        // Task 205 — Town-service placeholder (teal, NPC-like, slightly
+        // distinct from the purple vendor so the player can tell them
+        // apart at a glance).
+        graphic.fillStyle(0x2f7a7a, 0.9);
+        graphic.fillRect(pixelX - 12, pixelY - 16, 24, 32);
+        graphic.lineStyle(2, 0x1f5a5a, 0.9);
         graphic.strokeRect(pixelX - 12, pixelY - 16, 24, 32);
       } else if (objectType === "loot_container") {
         if (opened) {

@@ -226,7 +226,11 @@ export const en = {
 
   "world_prop.loot_container.name": "Loot Container",
   "world_prop.loot_container.description": "A shared container that may hold valuable finds.",
-  "world_prop.loot_container.empty": "The container has already been looted."
+  "world_prop.loot_container.empty": "The container has already been looted.",
+
+  "town_service.vendor_panel.trading_locked": "Trading locked for Core 0.1.",
+  "town_service.stash_keeper.name": "Stash Keeper",
+  "town_service.stash_keeper.unavailable": "Stash storage is not available yet."
 } as const satisfies LocalizationDictionary;
 
 export type LocalizationKey = keyof typeof en;
