@@ -224,6 +224,9 @@ Interactable objects are simple world elements that respond to click-to-interact
 - the client renders objects as simple placeholder shapes (rectangles or circles) with labels
 - the client does not predict, animate, or fake any interaction outcomes
 - responses display as temporary messages for 3 seconds then clear
+- the temporary Notice Board objective is the only current exception to the no-reward rule for simple interactables: interacting with the Notice Board may start the session-temporary objective `Cull Trashboars 0/3`
+- that temporary objective may grant server-owned XP once per session objective only
+- it still must not add quest persistence, a quest log, NPC dialogue, or multi-step conversation state
 
 ---
 
