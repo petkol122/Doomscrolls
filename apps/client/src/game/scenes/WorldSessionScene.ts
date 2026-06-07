@@ -134,7 +134,7 @@ export class WorldSessionScene extends Phaser.Scene {
       this.feedbackView?.showNotice(message);
     }, (message: ObjectiveUpdatedServerMessage) => {
       if (message.completed) {
-        const completionText = `${message.label} complete.`;
+        const completionText = "Objective complete";
         if (this.lastObjectiveCompletionNotice !== completionText) {
           this.lastObjectiveCompletionNotice = completionText;
           this.feedbackView?.showNotice(completionText);

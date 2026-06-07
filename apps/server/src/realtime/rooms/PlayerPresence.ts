@@ -70,6 +70,7 @@ export class PlayerPresence extends Schema {
   @type("number") public objectiveCurrent: number;
   @type("number") public objectiveTarget: number;
   @type("boolean") public objectiveCompleted: boolean;
+  @type("boolean") public objectiveRewardGranted: boolean;
 
   constructor(
     sessionId: string,
@@ -124,5 +125,6 @@ export class PlayerPresence extends Schema {
     this.objectiveCurrent = 0;
     this.objectiveTarget = 0;
     this.objectiveCompleted = false;
+    this.objectiveRewardGranted = false;
   }
 }

@@ -114,6 +114,7 @@ function startNoticeBoardObjective(player: {
   objectiveCurrent: number;
   objectiveTarget: number;
   objectiveCompleted: boolean;
+  objectiveRewardGranted: boolean;
 }): ObjectiveUpdatedServerMessage {
   player.hasObjective = true;
   player.objectiveId = NOTICE_BOARD_OBJECTIVE_ID;
@@ -121,6 +122,7 @@ function startNoticeBoardObjective(player: {
   player.objectiveCurrent = 0;
   player.objectiveTarget = NOTICE_BOARD_OBJECTIVE_TARGET;
   player.objectiveCompleted = false;
+  player.objectiveRewardGranted = false;
   return buildObjectiveUpdatedMessage(player);
 }
 
@@ -137,13 +139,14 @@ async function advanceNoticeBoardObjective(
     objectiveCurrent: number;
     objectiveTarget: number;
     objectiveCompleted: boolean;
+    objectiveRewardGranted: boolean;
   },
   enemyId: string,
   sendToClient: (type: string, payload: unknown) => void,
 ): Promise<void> {
   if (
     player.objectiveId !== NOTICE_BOARD_OBJECTIVE_ID
-    || player.objectiveCompleted
+    || player.objectiveRewardGranted
     || !shouldCountForNoticeBoardObjective(enemyId)
   ) {
     return;
@@ -157,6 +160,7 @@ async function advanceNoticeBoardObjective(
   sendToClient("objective_updated", buildObjectiveUpdatedMessage(player));
 
   if (player.objectiveCompleted) {
+    player.objectiveRewardGranted = true;
     await grantFlatXpReward(player, NOTICE_BOARD_OBJECTIVE_XP_REWARD, sendToClient);
   }
 }
