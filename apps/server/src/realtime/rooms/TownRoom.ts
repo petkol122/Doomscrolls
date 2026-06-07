@@ -1552,9 +1552,9 @@ export class TownRoom extends Room {
 
       player.hp = player.maxHp;
       player.lifeState = "alive";
-      player.hasCorpse = false;
-      player.corpseX = 0;
-      player.corpseY = 0;
+      // Keep the corpse marker so the player can walk back and
+      // recover it after respawn. The corpse is cleared on
+      // successful `request_corpse_interact` instead.
       player.x = respawnPosition.x;
       player.y = respawnPosition.y;
       player.targetX = respawnPosition.x;
@@ -1586,12 +1586,13 @@ export class TownRoom extends Room {
   }
 
   /**
-   * Task 234 -- Register the `request_corpse_interact` message handler.
+   * Task 235 -- Register the `request_corpse_interact` message handler.
    *
-   * Validates that the player is downed with an active corpse marker,
-   * is within interact range (~30 world units), and on acceptance,
-   * clears the corpse marker and sends a "Corpse recovered" feedback.
-   * No gear/inventory state changes happen here.
+   * Validates that the player is alive with an active corpse marker,
+   * owns the corpse (only own corpse is tracked), is within interact
+   * range (~30 world units), and on acceptance clears the corpse marker.
+   * Rejects if player is still downed. Corpse recovery must happen
+   * after respawn, not while downed.
    */
   private registerCorpseInteractHandler(
     log: ReturnType<typeof createRoomLogger>,
@@ -1612,8 +1613,8 @@ export class TownRoom extends Room {
         return;
       }
 
-      // Must be downed and have a corpse
-      if (player.lifeState !== "downed" || !player.hasCorpse) {
+      // Must be alive (after respawn) and have a corpse marker
+      if (player.lifeState !== "alive" || !player.hasCorpse) {
         const rejection: import("@doomscrolls/shared").CorpseInteractRejectedServerMessage = {
           type: "corpse_interact_rejected",
           reason: "no_corpse",
