@@ -62,7 +62,7 @@ import type {
 import { respawnTownEnemies } from "./respawnTownEnemies";
 import { spawnWorldLootOnEnemyDefeat } from "./spawnWorldLootOnEnemyDefeat";
 import { applyWanderMovement, clearWanderState } from "./wanderEnemies";
-import { persistPickedUpWorldLootToInventory } from "./pickupWorldLootInventory";
+import { dispatchPickedUpWorldLoot } from "./pickupWorldLootDispatcher";
 import { validatePickupWorldLootIntent } from "./pickupWorldLootValidation";
 import { clearPendingAction, setPendingAction } from "./pendingActionState";
 import { resolvePlayerInitialPosition } from "./validateCharacterLocation";
@@ -1385,21 +1385,14 @@ export class TownRoom extends Room {
       }
 
       clearPendingAction(player);
-      const pickupResult = await persistPickedUpWorldLootToInventory({
+      const dispatchResult = await dispatchPickedUpWorldLoot({
         characterId: player.characterId,
-        itemDefinitionId: validation.worldLoot.itemId,
-        itemLabel: validation.worldLoot.label,
+        worldLoot: validation.worldLoot,
       });
 
-      if (!pickupResult.ok) {
-        const rejection: RequestPickupWorldLootRejectedServerMessage = {
-          type: "request_pickup_world_loot_rejected",
-          reason: pickupResult.reason === "inventory_full" ? "inventory_full" : "world_loot_not_found",
-          worldLootId: validation.worldLoot.id,
-        };
-
+      if (!dispatchResult.ok) {
         try {
-          client.send("request_pickup_world_loot_rejected", rejection);
+          client.send("request_pickup_world_loot_rejected", dispatchResult.rejected);
         } catch {
           // swallow send failures; never crash room on rejected pickup intent
         }
@@ -1411,20 +1404,24 @@ export class TownRoom extends Room {
             sessionId: client.sessionId,
             worldLootId: validation.worldLoot.id,
             worldLootItemId: validation.worldLoot.itemId,
-            reason: rejection.reason,
+            reason: dispatchResult.rejected.reason,
           },
-          "TownRoom request_pickup_world_loot rejected during inventory persistence.",
+          "TownRoom request_pickup_world_loot rejected during persistence.",
         );
         return;
       }
 
       state.worldLoot.delete(validation.worldLoot.id);
 
-      const accepted: RequestPickupWorldLootAcceptedServerMessage = {
-        type: "request_pickup_world_loot_accepted",
-        worldLootId: validation.worldLoot.id,
-        message: pickupResult.message,
-      };
+      if (dispatchResult.currencyMessage !== null) {
+        try {
+          client.send("currency_picked_up", dispatchResult.currencyMessage);
+        } catch {
+          // swallow send failures; state sync remains authoritative
+        }
+      }
+
+      const accepted: RequestPickupWorldLootAcceptedServerMessage = dispatchResult.accepted;
 
       try {
         client.send("request_pickup_world_loot_accepted", accepted);

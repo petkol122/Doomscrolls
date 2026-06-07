@@ -1,13 +1,20 @@
 import { contentRegistry } from "@doomscrolls/content";
-import type { EnemyPresence, WorldLootId } from "@doomscrolls/shared";
+import type { EnemyPresence, ItemDefinitionId, WorldLootId } from "@doomscrolls/shared";
 
 import { TownRoomState } from "./TownRoomState";
 import { WorldLoot } from "./WorldLoot";
+import { rollCurrencyLoot } from "./rollCurrencyLoot";
 import { rollLoot } from "./rollLoot";
 
 const MAX_ACTIVE_WORLD_LOOT = 20;
 const WORLD_LOOT_OFFSET_X = 14;
 const WORLD_LOOT_OFFSET_Y = 10;
+const CURRENCY_LABEL_KEY = "money.currency_drop_label";
+
+export interface SpawnedWorldLoot {
+  readonly item: WorldLoot;
+  readonly isCurrency: boolean;
+}
 
 export function spawnWorldLootOnEnemyDefeat(
   state: TownRoomState,
@@ -15,32 +22,52 @@ export function spawnWorldLootOnEnemyDefeat(
   now: number,
 ): WorldLoot | null {
   const itemId = rollLoot(enemy.enemyId);
-  if (itemId === null) {
-    return null;
+  const currencyAmount = rollCurrencyLoot(enemy.enemyId, now);
+  const spawnX = enemy.x + WORLD_LOOT_OFFSET_X;
+  const spawnY = enemy.y + WORLD_LOOT_OFFSET_Y;
+
+  if (itemId !== null) {
+    const itemDefinition = contentRegistry.items.get(itemId);
+    if (itemDefinition !== undefined) {
+      const loot = new WorldLoot(
+        buildWorldLootId(enemy.id, "item", now),
+        itemId,
+        itemDefinition.nameKey,
+        itemDefinition.rarity,
+        spawnX,
+        spawnY,
+        0,
+      );
+      evictOldestWorldLootIfNeeded(state);
+      state.worldLoot.set(loot.id, loot);
+      return loot;
+    }
   }
 
-  const itemDefinition = contentRegistry.items.get(itemId);
-  if (itemDefinition === undefined) {
-    return null;
+  if (currencyAmount > 0) {
+    const loot = new WorldLoot(
+      buildWorldLootId(enemy.id, "coin", now),
+      "" as ItemDefinitionId,
+      CURRENCY_LABEL_KEY,
+      "common",
+      spawnX,
+      spawnY,
+      currencyAmount,
+    );
+    evictOldestWorldLootIfNeeded(state);
+    state.worldLoot.set(loot.id, loot);
+    return loot;
   }
 
-  const lootId = buildWorldLootId(enemy.id, now);
-  const worldLoot = new WorldLoot(
-    lootId,
-    itemId,
-    itemDefinition.nameKey,
-    itemDefinition.rarity,
-    enemy.x + WORLD_LOOT_OFFSET_X,
-    enemy.y + WORLD_LOOT_OFFSET_Y,
-  );
-  evictOldestWorldLootIfNeeded(state);
-
-  state.worldLoot.set(lootId, worldLoot);
-  return worldLoot;
+  return null;
 }
 
-function buildWorldLootId(enemyInstanceId: string, now: number): WorldLootId {
-  return `world_loot:${enemyInstanceId}:${now}` as WorldLootId;
+function buildWorldLootId(
+  enemyInstanceId: string,
+  kind: "item" | "coin",
+  now: number,
+): WorldLootId {
+  return `world_loot:${enemyInstanceId}:${kind}:${now}` as WorldLootId;
 }
 
 function evictOldestWorldLootIfNeeded(state: TownRoomState): void {

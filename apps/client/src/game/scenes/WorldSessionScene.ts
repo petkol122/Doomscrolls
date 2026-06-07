@@ -182,6 +182,14 @@ export class WorldSessionScene extends Phaser.Scene {
       },
     });
 
+    this.room.onMessage("currency_picked_up", (message: { gainedCopper?: unknown; totalMoneyCopper?: unknown }) => {
+      const gained = typeof message.gainedCopper === "number" && Number.isFinite(message.gainedCopper)
+        ? Math.max(0, Math.floor(message.gainedCopper))
+        : 0;
+      this.feedbackView?.showNotice(`Picked up ${gained} copper.`);
+      void this.refreshAccountStateAfterPickup();
+    });
+
     this.room.onMessage("xp_gained", (message: { amount?: unknown; totalXp?: unknown; leveledUp?: unknown; hp?: unknown; maxHp?: unknown }) => {
       const amount = typeof message.amount === "number" && Number.isFinite(message.amount)
         ? Math.max(0, Math.floor(message.amount))

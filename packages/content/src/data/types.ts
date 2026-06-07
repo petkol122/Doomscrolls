@@ -70,6 +70,11 @@ export interface SkillContentDefinition extends LocalizedContentDefinition {
   readonly baseDamage: number;
 }
 
+export interface EnemyCurrencyDropDefinition {
+  readonly min: number;
+  readonly max: number;
+}
+
 export interface EnemyContentDefinition extends LocalizedContentDefinition {
   readonly id: EnemyId;
   readonly level: number;
@@ -82,6 +87,7 @@ export interface EnemyContentDefinition extends LocalizedContentDefinition {
   readonly aggroRange: number;
   readonly xp: number;
   readonly lootTableId: LootTableId;
+  readonly currencyDrop?: EnemyCurrencyDropDefinition;
   readonly spriteKey: string;
 }
 

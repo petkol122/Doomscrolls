@@ -16,7 +16,7 @@ import { applyEnemyDamage } from "./applyEnemyDamage";
 import { getInteractableResponseMessage, validateInteractIntent } from "./interactValidation";
 import type { PlayerPresence } from "./PlayerPresence";
 import { clearPendingAction } from "./pendingActionState";
-import { persistPickedUpWorldLootToInventory } from "./pickupWorldLootInventory";
+import { dispatchPickedUpWorldLoot } from "./pickupWorldLootDispatcher";
 import { validatePickupWorldLootIntent } from "./pickupWorldLootValidation";
 import { spawnWorldLootOnEnemyDefeat } from "./spawnWorldLootOnEnemyDefeat";
 import type { TownRoomState } from "./TownRoomState";
@@ -254,21 +254,16 @@ export async function tryExecutePendingAction(context: DeferredActionExecutionCo
     }
 
     clearPendingAction(player);
-    const pickupResult = await persistPickedUpWorldLootToInventory({
+    const dispatchResult = await dispatchPickedUpWorldLoot({
       characterId: player.characterId,
-      itemDefinitionId: validation.worldLoot.itemId,
-      itemLabel: validation.worldLoot.label,
+      worldLoot: validation.worldLoot,
     });
 
-    if (!pickupResult.ok) {
-      const message = pickupResult.reason === "inventory_full"
+    if (!dispatchResult.ok) {
+      const message = dispatchResult.rejected.reason === "inventory_full"
         ? "Inventory full."
         : "Pickup unavailable.";
-      sendToClient("request_pickup_world_loot_rejected", {
-        type: "request_pickup_world_loot_rejected",
-        reason: pickupResult.reason === "inventory_full" ? "inventory_full" : "world_loot_not_found",
-        worldLootId: validation.worldLoot.id,
-      });
+      sendToClient("request_pickup_world_loot_rejected", dispatchResult.rejected);
       sendToClient("interact_response", {
         type: "interact_response",
         objectId: validation.worldLoot.id,
@@ -278,13 +273,10 @@ export async function tryExecutePendingAction(context: DeferredActionExecutionCo
     }
 
     state.worldLoot.delete(validation.worldLoot.id);
-    const accepted: RequestPickupWorldLootAcceptedServerMessage = {
-      type: "request_pickup_world_loot_accepted",
-      worldLootId: validation.worldLoot.id,
-      message: pickupResult.message,
-      itemLabel: validation.worldLoot.label,
-      ...(validation.worldLoot.rarity === undefined ? {} : { rarity: validation.worldLoot.rarity }),
-    };
+    if (dispatchResult.currencyMessage !== null) {
+      sendToClient("currency_picked_up", dispatchResult.currencyMessage);
+    }
+    const accepted: RequestPickupWorldLootAcceptedServerMessage = dispatchResult.accepted;
     sendToClient("request_pickup_world_loot_accepted", accepted);
     return;
   }

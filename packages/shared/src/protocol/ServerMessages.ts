@@ -238,6 +238,14 @@ export interface RequestPickupWorldLootAcceptedServerMessage {
   readonly message: string;
   readonly itemLabel?: string;
   readonly rarity?: string;
+  /**
+   * Set when the picked-up world-loot was a currency drop. The amount
+   * is the copper gained by the character. Absent (undefined) for
+   * item pickups. The client may use this to display pickup-specific
+   * feedback; the new total is always re-read from `/me`.
+   */
+  readonly currencyCopper?: number;
+  readonly totalMoneyCopper?: number;
 }
 
 export interface RequestPickupWorldLootRejectedServerMessage {
@@ -286,6 +294,22 @@ export interface ObjectiveUpdatedServerMessage {
   readonly completed: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Currency pickup feedback (Task 185)
+//
+// Sent to the originating client after a currency world-loot drop has
+// been picked up and the character's `moneyCopper` total has been
+// updated in the database. The client uses `gainedCopper` for
+// transient pickup feedback and then refreshes `/me` to read the
+// authoritative `totalMoneyCopper` for HUD / overlay rendering.
+// ---------------------------------------------------------------------------
+export interface CurrencyPickedUpServerMessage {
+  readonly type: "currency_picked_up";
+  readonly characterId: CharacterId;
+  readonly gainedCopper: number;
+  readonly totalMoneyCopper: number;
+}
+
 export type ServerRoomMessage =
   | RoomStateSnapshotServerMessage
   | RoomStatePatchServerMessage
@@ -316,4 +340,5 @@ export type ServerRoomMessage =
   | RequestUseHealingFlaskRejectedServerMessage
   | RequestUseSkillSlotAcceptedServerMessage
   | RequestUseSkillSlotRejectedServerMessage
+  | CurrencyPickedUpServerMessage
   | ErrorServerMessage;

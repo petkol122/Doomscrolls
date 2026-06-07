@@ -223,4 +223,56 @@ export class CharacterRepository {
       },
     });
   }
+
+  /**
+   * Atomically add `delta` copper to a character's `moneyCopper` total.
+   *
+   * Returns the new `moneyCopper` total on success, or `null` when the
+   * character could not be found. The transaction makes the read-then-
+   * increment safe against concurrent pickup attempts.
+   */
+  public async incrementMoneyCopper(characterId: string, delta: number): Promise<number | null> {
+    if (!Number.isFinite(delta) || delta <= 0) {
+      return 0;
+    }
+    const safeDelta = Math.max(0, Math.floor(delta));
+
+    if ("$transaction" in this.db) {
+      return this.db.$transaction(async (tx: Prisma.TransactionClient) => {
+        const current = await tx.character.findUnique({
+          where: { id: characterId },
+          select: { moneyCopper: true },
+        });
+        if (current === null) {
+          return null;
+        }
+        const safeCurrent = Number.isFinite(current.moneyCopper)
+          ? Math.max(0, current.moneyCopper)
+          : 0;
+        const next = safeCurrent + safeDelta;
+        const updated = await tx.character.update({
+          where: { id: characterId },
+          data: { moneyCopper: next },
+          select: { moneyCopper: true },
+        });
+        return updated.moneyCopper;
+      });
+    }
+
+    const current = await this.db.character.findUnique({
+      where: { id: characterId },
+      select: { moneyCopper: true },
+    });
+    if (current === null) {
+      return null;
+    }
+    const safeCurrent = Number.isFinite(current.moneyCopper) ? Math.max(0, current.moneyCopper) : 0;
+    const next = safeCurrent + safeDelta;
+    const updated = await this.db.character.update({
+      where: { id: characterId },
+      data: { moneyCopper: next },
+      select: { moneyCopper: true },
+    });
+    return updated.moneyCopper;
+  }
 }

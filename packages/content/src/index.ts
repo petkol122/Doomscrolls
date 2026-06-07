@@ -30,6 +30,7 @@ export type {
   CharacterClassContentDefinition,
   ContentLocalizationKey,
   EnemyContentDefinition,
+  EnemyCurrencyDropDefinition,
   EquipmentSlotCategory,
   EquipmentSlotContentDefinition,
   ItemContentDefinition,

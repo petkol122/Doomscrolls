@@ -49,5 +49,25 @@ export function validatePickupWorldLootIntent(
     return { ok: false, reason: "out_of_range" };
   }
 
-  return { ok: true, worldLoot, distance };
+  // Build a snapshot of the loot entry that the room handler can use
+  // for both item-pickup and currency-pickup branches. The pickup
+  // pipeline never trusts the client about the loot's actual kind;
+  // it always reads the authoritative `currencyCopper` field.
+  const currencyCopper = Number.isFinite(worldLoot.currencyCopper) && worldLoot.currencyCopper > 0
+    ? worldLoot.currencyCopper
+    : 0;
+
+  const shared: SharedWorldLoot = {
+    id: worldLoot.id,
+    itemId: worldLoot.itemId,
+    label: worldLoot.label,
+    ...(typeof worldLoot.rarity === "string" && worldLoot.rarity.length > 0
+      ? { rarity: worldLoot.rarity }
+      : {}),
+    ...(currencyCopper > 0 ? { currencyCopper } : {}),
+    x: worldLoot.x,
+    y: worldLoot.y,
+  };
+
+  return { ok: true, worldLoot: shared, distance };
 }
