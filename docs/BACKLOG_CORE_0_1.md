@@ -253,6 +253,12 @@ Document the WorldSession overlay interaction rule so overlay regressions do not
 
 Status: documented. `docs/CODING_RULES.md` now states that WorldSession overlay interactive mount points must stay stable across state updates, interactive panel roots must not be replaced during overlay refreshes, passive containers use `pointer-events: none`, real controls use `pointer-events: auto`, live combat HUD reads room-synced `PlayerPresence`, and inventory/equipment panels read persisted `/me` account state. This task is docs-only and adds no feature work.
 
+### Task 172 — Stability Checkpoint Docs
+
+Record the fixed WorldSession stability rules without adding features.
+
+Status: documented. `docs/CODING_RULES.md` now states that interactive WorldSession overlay nodes must stay mounted across updates, live HP and valid location are saved on leave/disconnect through real persistence, room join restores saved valid HP/location when present, and `/me` remains persisted account state rather than live combat/runtime state. This task is docs-only and adds no feature work.
+
 ### Task 017 — Enemy Spawn and AI
 
 Spawn Trashboar Runt from content and implement AI v1.

@@ -208,6 +208,9 @@ Client auth UI rules:
 - projection preview modes must not keep click-to-move world input enabled when that would misrepresent the active world projection
 - WorldSession overlay mount points for interactive controls must stay stable across state updates
 - do not replace interactive panel root elements during overlay/state refreshes; update their contents in place
+- live HP and valid location must be saved on leave/disconnect through real server-owned persistence
+- a room join must restore saved valid HP/location when that persisted state exists and is valid
+- `/me` is persisted account state only and must not be treated as live combat/runtime room state
 - passive overlay containers must use `pointer-events: none`
 - real interactive controls inside those overlays must explicitly use `pointer-events: auto`
 - live combat HUD must read room-synced `PlayerPresence`; inventory/equipment panels must read persisted `/me` account state
