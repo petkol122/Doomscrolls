@@ -570,6 +570,28 @@ Rules:
 
 ---
 
+## Loot Interaction Stability Rules
+
+Task 192 fixed the following loot/inventory interaction bugs and established these rules:
+
+- inventory item selection in the overlay panel must not auto-reselect the first item on every render; doing so caused an infinite re-render loop that prevented reliable row clicks
+- defeated enemies must not block loot clicks: `findClickedEnemy()` must skip enemies whose `defeated` flag is true so the loot entry underneath is reachable
+- input/target priority: alive enemy > world loot > interactable > ground movement; defeated enemies are transparent to clicks
+- enemy drops scatter around the defeated enemy corpse using server-owned seeded RNG (mulberry32) so each drop gets a unique offset instead of stacking at one exact point
+- both item loot and currency loot are server-authoritative WorldLoot entries; they may drop simultaneously from the same defeat, each at its own scattered position
+- scatter offsets are clamped inside the zone bounds to avoid out-of-bounds drops
+- the server returns `WorldLoot[]` (array) from `spawnWorldLootOnEnemyDefeat` to support multiple simultaneous drops
+
+## Ground Loot Readability and Pickup Rules
+
+Core 0.1 ground loot readability and pickup rules ensure the client visual representation stays aligned with server-authoritative state and that item/currency loot remain visually distinct at a glance.
+
+Rules:
+
+- both item loot and currency loot render as ground loot placeholder visuals in the world session; neither is invisible or gated behind a toggle
+- client-side deterministic hash-based scatter (`SCATTER_RANGE = 12`) is visual-only and separates overlapping labels; the server owns actual loot positions via seeded-RNG scatter (`SCATTER_RANGE = 8`) and may produce different absolute coordinates — the client must render at server-synced x/y plus its own visual scatter, not the other way around
+- pickup hit radius (the interactive body area) must stay visually aligned with the rendered loot placeholder so clicks against the visible body reliably resolve to the correct `worldLootId`; if body rendering or scaling changes, the interactive hit area must be updated in lockstep
+- currency loot remains visually distinct from item loot: currency uses an ellipse body with gold-tinted palette, item loot uses a rectangle body with rarity-based palette; this distinction must be preserved in any future visual refresh so players can identify currency at a glance without clicking
 ## RNG and Loot Foundation Rules
 
 Future RNG and loot systems must stay server-authoritative, deterministic to test, and free of fake outcomes.

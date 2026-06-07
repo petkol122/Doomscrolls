@@ -609,8 +609,33 @@ pnpm lint
 pnpm test
 ```
 
-### Task 182 — Shared Loot Container Docs Checkpoint
+### Task 192 — Fix Inventory Selection + Loot Pickup Priority + Drop Scatter
 
+Fix current loot/inventory interaction bugs and make drops feel more Diablo-like.
+
+Changes:
+
+- inventory item selection in the overlay panel no longer auto-reselects the first item on every render, which caused an infinite re-render loop that prevented reliable row clicks
+- defeated enemies no longer block loot clicks: `findClickedEnemy()` skips enemies whose `defeated` flag is true, so loot entries underneath are reachable
+- input/target priority: alive enemy > world loot > interactable > ground movement; defeated enemies are transparent to clicks
+- enemy drops scatter around the defeated enemy corpse using server-owned seeded RNG (mulberry32) with 8px range, clamped inside zone bounds
+- both item loot and currency loot are server-authoritative WorldLoot entries and can drop simultaneously from the same defeat, each at its own scattered position
+- server returns `WorldLoot[]` (array) from `spawnWorldLootOnEnemyDefeat` to support multiple simultaneous drops; `TownRoom` updated accordingly
+
+### Task 195 — Ground Loot Rules Docs Checkpoint
+
+Document current ground-loot readability and pickup rules. This is a documentation-only task and must not add features, browser automation, or runtime reproduction.
+
+Status: documented. `docs/CODING_RULES.md` now records that item/currency loot both render as ground loot visuals, the client visual-only scatter (`SCATTER_RANGE = 12`) is separate from server-owned loot positions (`SCATTER_RANGE = 8`), pickup hit radius must stay aligned with visible loot body, and currency loot remains visually distinct from item loot (ellipse vs rectangle, gold vs rarity palette).
+
+Required checks for this checkpoint:
+
+```text
+pnpm --filter @doomscrolls/client typecheck
+pnpm lint
+```
+
+### Task 182 — Shared Loot Container Docs Checkpoint
 Document the shared room loot container foundation across `README.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG_CORE_0_1.md` and `docs/CODING_RULES.md`. This is a documentation-only task and must not add features, browser automation, or runtime reproduction.
 
 Status: documented. The docs now state that one shared Nightmarket crate exists, the crate opens once per room instance, the server rolls loot and spawns world loot near the crate, the opened state syncs to clients, it is not persisted yet, and there are no stealing/crime/locks/respawn timers yet.

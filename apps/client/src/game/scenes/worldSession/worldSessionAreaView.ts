@@ -56,6 +56,7 @@ interface EnemyScreenPositionSnapshot {
   readonly y: number;
   readonly worldX: number;
   readonly worldY: number;
+  readonly defeated: boolean;
 }
 
 interface WorldLootScreenPositionSnapshot {
@@ -353,6 +354,7 @@ export function createWorldSessionAreaView(
         y: projectedEnemy.screenY + worldOffset.y,
         worldX: enemy.x,
         worldY: enemy.y,
+        defeated: enemy.defeated,
       });
 
       const lastHp = previousEnemyHp.get(enemy.id);
@@ -409,10 +411,13 @@ export function createWorldSessionAreaView(
     for (const loot of projectedWorldLoot) {
       const sourceLoot = currentWorldLoot.find((entry) => entry.id === loot.id);
       if (sourceLoot !== undefined) {
+        // Scatter offset must match worldSessionLootPlaceholderView's getScatterOffset
+        const scatterLootX = loot.x + worldOffset.x;
+        const scatterLootY = loot.y + worldOffset.y;
         lootScreenPositions.set(loot.id, {
           id: loot.id,
-          x: loot.x + worldOffset.x,
-          y: loot.y + worldOffset.y,
+          x: scatterLootX,
+          y: scatterLootY,
           worldX: sourceLoot.x,
           worldY: sourceLoot.y,
         });
@@ -713,6 +718,11 @@ function findClickedEnemy(
   let closestHit: { readonly id: string; readonly worldX: number; readonly worldY: number; readonly distanceSquared: number } | null = null;
 
   for (const [id, position] of enemyScreenPositions.entries()) {
+    // Skip defeated enemies so loot/interactable clicks underneath are not blocked
+    if (position.defeated) {
+      continue;
+    }
+
     const dx = pointerX - position.x;
     const dy = pointerY - position.y;
     const distanceSquared = (dx * dx) + (dy * dy);
@@ -746,7 +756,7 @@ function findClickedWorldLoot(
   pointerX: number,
   pointerY: number,
 ): { readonly id: string; readonly worldX: number; readonly worldY: number } | null {
-  const hitRadiusPx = 24;
+  const hitRadiusPx = 30;
   const hitRadiusSquared = hitRadiusPx * hitRadiusPx;
   let closestHit: { readonly id: string; readonly worldX: number; readonly worldY: number; readonly distanceSquared: number } | null = null;
 

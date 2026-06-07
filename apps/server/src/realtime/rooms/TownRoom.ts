@@ -1202,9 +1202,9 @@ export class TownRoom extends Room {
       clearPendingAction(player);
       consumeAttackCooldown(player, now);
       const damageResult = applyEnemyDamage(validation.enemy, 1);
-      const spawnedLoot = damageResult.defeated
+      const spawnedLootList = damageResult.defeated
         ? spawnWorldLootOnEnemyDefeat(state, validation.enemy, now)
-        : null;
+        : [];
       if (damageResult.defeated) {
         void advanceNoticeBoardObjective(player, validation.enemy.enemyId, (type, payload) => {
           try {
@@ -1260,8 +1260,8 @@ export class TownRoom extends Room {
           appliedDamage: damageResult.appliedDamage,
           defeated: damageResult.defeated,
           respawnAtMs: damageResult.respawnAtMs,
-          worldLootId: spawnedLoot?.id,
-          worldLootItemId: spawnedLoot?.itemId,
+          worldLootCount: spawnedLootList.length,
+          worldLootFirstId: spawnedLootList[0]?.id,
           nextAttackAt: player.nextAttackAt,
         },
         "TownRoom request_attack accepted and synced enemy defeat/placeholder loot state updated.",

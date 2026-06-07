@@ -1334,14 +1334,12 @@ function updateInventoryPanelSection(
 
   const render = (): void => {
     content.replaceChildren();
+    const currentSelection = selection.getSelectedItemId();
     const summarySection = createInventorySummarySection(items, () => selection.getSelectedItemId(), (itemId) => {
       selection.onSelectItem(itemId);
       render();
     });
-    const selectedItem = items.find((item) => item.itemInstanceId === selection.getSelectedItemId()) ?? items[0] ?? null;
-    if (selectedItem !== null) {
-      selection.onSelectItem(selectedItem.itemInstanceId);
-    }
+    const selectedItem = items.find((item) => item.itemInstanceId === currentSelection) ?? null;
     const detailSection = createInventoryDetailSection(selectedItem, items, equipmentLoadout, characterId, onEquipItem);
     content.append(summarySection, detailSection);
   };

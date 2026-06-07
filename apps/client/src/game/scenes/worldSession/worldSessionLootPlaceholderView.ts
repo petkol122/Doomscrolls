@@ -13,6 +13,26 @@ const CURRENCY_LOOT_GLOW = 0xf0c674;
 const CURRENCY_LOOT_PING = 0xffd58a;
 const CURRENCY_LOOT_PING_STROKE = 0xffe7b3;
 
+// Deterministic scatter offset per loot id so items at the same world
+// position spread apart visually. Range ±12px on each axis.
+const SCATTER_RANGE = 12;
+
+function hashLootId(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) {
+    h = ((h << 5) - h + id.charCodeAt(i)) | 0;
+  }
+  return h;
+}
+
+function getScatterOffset(id: string): { readonly x: number; readonly y: number } {
+  const h = hashLootId(id);
+  return {
+    x: (h % (SCATTER_RANGE * 2 + 1)) - SCATTER_RANGE,
+    y: ((h >> 8) % (SCATTER_RANGE * 2 + 1)) - SCATTER_RANGE,
+  };
+}
+
 function getItemRarityColor(rarity?: string): string {
   if (rarity === "rare") {
     return "#8fc7ff";
@@ -110,31 +130,39 @@ export function createWorldSessionLootPlaceholderView(
   onClick?: (worldLootId: string) => void,
 ): WorldSessionLootPlaceholderView {
   const initialPalette = getLootPlaceholderPalette(loot);
-  const container = scene.add.container(loot.x, loot.y);
+  const scatter = getScatterOffset(loot.id);
+  const container = scene.add.container(loot.x + scatter.x, loot.y + scatter.y);
   parentContainer?.add(container);
   const glow = scene.add.ellipse(0, 10, 26, 12, initialPalette.glow, 0.26);
   const ping = scene.add.ellipse(0, 9, 34, 14, initialPalette.ping, 0.12);
   ping.setStrokeStyle(2, initialPalette.pingStroke, 0.3);
-  const body = scene.add.rectangle(0, 0, 16, 16, initialPalette.body, 0.98);
+  const body: Phaser.GameObjects.Rectangle | Phaser.GameObjects.Ellipse = isCurrencyLoot(loot)
+    ? scene.add.ellipse(0, 0, 20, 20, initialPalette.body, 0.98)
+    : scene.add.rectangle(0, 0, 20, 20, initialPalette.body, 0.98);
   body.setStrokeStyle(2, initialPalette.bodyStroke, 0.98);
   body.setInteractive({ useHandCursor: true });
-  const targetRing = scene.add.ellipse(0, 0, 28, 28);
+  const targetRing = scene.add.ellipse(0, 0, 32, 32);
   targetRing.setStrokeStyle(2, 0xfbf2a2, 0);
+  const labelBg = scene.add.rectangle(0, 17, 0, 14, 0x000000, 0.55);
   const labelText = scene.add
     .text(0, 16, getLootLabelText(loot), {
       color: getLootLabelColor(loot),
       fontFamily: "Arial, sans-serif",
-      fontSize: "12px",
+      fontSize: "13px",
       stroke: getLootLabelStrokeColor(loot),
       strokeThickness: 3,
     })
     .setOrigin(0.5);
 
+  // Size label background to fit text
+  const labelBounds = labelText.getBounds();
+  labelBg.setSize(labelBounds.width + 6, 16);
+
   body.on(Phaser.Input.Events.POINTER_DOWN, () => {
     onClick?.(loot.id);
   });
 
-  container.add([glow, ping, targetRing, body, labelText]);
+  container.add([glow, ping, targetRing, body, labelBg, labelText]);
 
   const applyPendingTargetState = (isPendingTarget: boolean): void => {
     if (isPendingTarget) {
@@ -152,10 +180,13 @@ export function createWorldSessionLootPlaceholderView(
 
   return {
     refresh: (nextLoot: TownRoomWorldLootSnapshot, isPendingTarget = false) => {
-      container.setPosition(nextLoot.x, nextLoot.y);
+      const nextScatter = getScatterOffset(nextLoot.id);
+      container.setPosition(nextLoot.x + nextScatter.x, nextLoot.y + nextScatter.y);
       labelText.setText(getLootLabelText(nextLoot));
       labelText.setColor(getLootLabelColor(nextLoot));
       labelText.setStroke(getLootLabelStrokeColor(nextLoot), 3);
+      const nextLabelBounds = labelText.getBounds();
+      labelBg.setSize(nextLabelBounds.width + 6, 16);
       const palette = getLootPlaceholderPalette(nextLoot);
       glow.setFillStyle(palette.glow, 0.26);
       ping.setFillStyle(palette.ping, 0.12);
