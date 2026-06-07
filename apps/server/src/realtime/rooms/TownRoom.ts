@@ -80,10 +80,7 @@ import { CharacterStatsService } from "../../character/CharacterStatsService";
 // decides the stop point.
 import { resolveApproachTarget } from "./resolveApproachTarget";
 
-const ENEMY_AGGRO_RANGE = 120;
-const ENEMY_LEASH_RANGE = 180;
 const ENEMY_ATTACK_RANGE = 44;
-const ENEMY_ATTACK_COOLDOWN_MS = 1200;
 // Task 207 -- server-owned engagement / pickup / interact ranges used
 // by resolveApproachTarget when queuing deferred move-closer actions.
 // BASIC_ATTACK_RANGE is the engagement radius from
@@ -110,7 +107,6 @@ const GRAVE_SPARK_DAMAGE = 3;
 // damage is applied after this many ms only if the target is still alive
 // and in attack range.
 const ENEMY_ATTACK_WINDUP_MS = 350;
-const ENEMY_ATTACK_DAMAGE = 2;
 const ENEMY_RETURN_ARRIVAL_DISTANCE = 1;
 const ENEMY_RETURN_REACQUIRE_BUFFER = 8;
 const characterStatsService = new CharacterStatsService();
@@ -411,6 +407,14 @@ function moveEnemyTowardTarget(
   const scale = distanceToTravel / distance;
   enemy.x += deltaX * scale;
   enemy.y += deltaY * scale;
+}
+
+function toWorldUnits(contentUnits: number, fallback: number): number {
+  if (!Number.isFinite(contentUnits) || contentUnits <= 0) {
+    return fallback;
+  }
+
+  return contentUnits * 24;
 }
 
 function clearEnemyTargetAndReturn(enemy: {
@@ -1985,6 +1989,10 @@ export class TownRoom extends Room {
     state.enemies.forEach((enemy) => {
       const enemyDefinition = contentRegistry.enemies.get(enemy.enemyId as ContentEnemyId);
       const enemyMoveSpeed = enemyDefinition?.moveSpeed ?? 0;
+      const enemyAggroRange = toWorldUnits(enemyDefinition?.aggroRange ?? 0, 120);
+      const enemyLeashRange = toWorldUnits(enemyDefinition?.leashRange ?? 0, 180);
+      const enemyAttackCooldownMs = enemyDefinition?.attackCooldownMs ?? 1200;
+      const enemyAttackDamage = enemyDefinition?.damage ?? 2;
       const distanceFromSpawn = Math.hypot(enemy.x - enemy.spawnX, enemy.y - enemy.spawnY);
 
       if (enemy.defeated || enemy.hp <= 0) {
@@ -2003,7 +2011,7 @@ export class TownRoom extends Room {
           clearEnemyTargetAndReturn(enemy);
         } else {
           const targetDistance = Math.hypot(enemy.x - currentTarget.x, enemy.y - currentTarget.y);
-          if (targetDistance > ENEMY_AGGRO_RANGE || distanceFromSpawn > ENEMY_LEASH_RANGE) {
+          if (targetDistance > enemyAggroRange || distanceFromSpawn > enemyLeashRange) {
             clearEnemyTargetAndReturn(enemy);
           }
         }
@@ -2046,7 +2054,7 @@ export class TownRoom extends Room {
           || distanceFromSpawn <= ENEMY_RETURN_REACQUIRE_BUFFER;
         if (
           closestPlayerSessionId === null
-          || closestDistance > ENEMY_AGGRO_RANGE
+          || closestDistance > enemyAggroRange
           || !canReacquireWhileReturning
         ) {
           enemy.state = "idle";
@@ -2065,7 +2073,7 @@ export class TownRoom extends Room {
       }
 
       const targetDistance = Math.hypot(enemy.x - targetPlayer.x, enemy.y - targetPlayer.y);
-      if (targetDistance > ENEMY_AGGRO_RANGE || distanceFromSpawn > ENEMY_LEASH_RANGE) {
+      if (targetDistance > enemyAggroRange || distanceFromSpawn > enemyLeashRange) {
         clearEnemyTargetAndReturn(enemy);
         return;
       }
@@ -2114,7 +2122,7 @@ export class TownRoom extends Room {
           // Target left range before windup completion, so the
           // telegraphed hit resolves to a server-authoritative miss.
           enemy.attackLandingAtMs = 0;
-          enemy.nextAttackAtMs = now + ENEMY_ATTACK_COOLDOWN_MS;
+          enemy.nextAttackAtMs = now + enemyAttackCooldownMs;
           if (landingClient !== undefined) {
             sendEnemyAttackResolved(landingClient, {
               type: "enemy_attack_resolved",
@@ -2127,7 +2135,7 @@ export class TownRoom extends Room {
         }
 
         enemy.attackLandingAtMs = 0;
-        const nextHp = Math.max(0, landingTarget.hp - ENEMY_ATTACK_DAMAGE);
+        const nextHp = Math.max(0, landingTarget.hp - enemyAttackDamage);
         landingTarget.hp = nextHp;
         if (nextHp <= 0) {
           landingTarget.lifeState = "downed";
@@ -2137,7 +2145,7 @@ export class TownRoom extends Room {
           clearPendingAction(landingTarget);
           clearEnemyTargetAndReturn(enemy);
         } else {
-          enemy.nextAttackAtMs = now + ENEMY_ATTACK_COOLDOWN_MS;
+          enemy.nextAttackAtMs = now + enemyAttackCooldownMs;
         }
 
         if (landingClient !== undefined) {
@@ -2145,7 +2153,7 @@ export class TownRoom extends Room {
             type: "damage_applied",
             targetEntityId: landingTarget.characterId as unknown as EntityId,
             sourceEntityId: enemy.id as unknown as EntityId,
-            damage: ENEMY_ATTACK_DAMAGE,
+            damage: enemyAttackDamage,
             remainingHp: nextHp,
           };
 
@@ -2159,7 +2167,7 @@ export class TownRoom extends Room {
             enemyId: enemy.id,
             targetEntityId: landingTarget.characterId as unknown as EntityId,
             outcome: "hit",
-            damage: ENEMY_ATTACK_DAMAGE,
+            damage: enemyAttackDamage,
             remainingHp: nextHp,
           });
         }
@@ -2173,7 +2181,7 @@ export class TownRoom extends Room {
       // Start a new telegraph + windup. Damage will only be applied
       // after ENEMY_ATTACK_WINDUP_MS on a future tick.
       enemy.attackLandingAtMs = now + ENEMY_ATTACK_WINDUP_MS;
-      enemy.nextAttackAtMs = enemy.attackLandingAtMs + ENEMY_ATTACK_COOLDOWN_MS;
+      enemy.nextAttackAtMs = enemy.attackLandingAtMs + enemyAttackCooldownMs;
 
       const telegraphClient = this.clients.find(
         (client) => client.sessionId === targetPlayer.sessionId,

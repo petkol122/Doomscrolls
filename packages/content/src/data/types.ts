@@ -104,6 +104,7 @@ export interface EnemyContentDefinition extends LocalizedContentDefinition {
   readonly attackRange: number;
   readonly attackCooldownMs: number;
   readonly aggroRange: number;
+  readonly leashRange: number;
   readonly xp: number;
   readonly lootTableId: LootTableId;
   readonly currencyDrop?: EnemyCurrencyDropDefinition;
