@@ -17,7 +17,7 @@ export const zones = [
     enemyIds: ["trashboar_runt", "trashboar_brute"],
     transitionZoneIds: ["blackwire_sewers"],
     mapKey: "map_nightmarket_placeholder",
-    bounds: { minX: 0, maxX: 2400, minY: 0, maxY: 1800 }
+    bounds: { minX: 0, maxX: 3600, minY: 0, maxY: 2600 }
   },
   {
     id: "blackwire_sewers",
