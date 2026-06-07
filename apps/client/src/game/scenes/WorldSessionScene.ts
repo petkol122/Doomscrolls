@@ -31,7 +31,11 @@ import {
   createTownServiceInteractionPanel,
   type TownServiceInteractionPanel,
 } from "./worldSession/townServiceInteractionPanel";
-import { createWorldSessionAreaView, type WorldSessionAreaView } from "./worldSession/worldSessionAreaView";
+import {
+  createWorldSessionAreaView,
+  type WorldSessionAreaView,
+  type WorldSessionSkillTargetingState,
+} from "./worldSession/worldSessionAreaView";
 import { attachWorldSessionDodgeInput, type WorldSessionDodgeInput } from "./worldSession/worldSessionDodgeInput";
 import {
   attachWorldSessionHealingFlaskInput,
@@ -115,6 +119,7 @@ export class WorldSessionScene extends Phaser.Scene {
     inventory: false,
     debug: false,
   };
+  private latestSkillRejectedReason: string | null = null;
 
   public constructor() {
     super("WorldSessionScene");
@@ -366,6 +371,7 @@ export class WorldSessionScene extends Phaser.Scene {
 
     registerSkillSlotResponseListeners(this.room, {
       onAccepted: (message) => {
+        this.latestSkillRejectedReason = null;
         this.feedbackView?.showNotice(t("world_area.skill_hit", { damage: message.damage }));
         this.worldAreaView?.showEnemyFloatingDamage(
           message.targetEnemyId,
@@ -374,27 +380,34 @@ export class WorldSessionScene extends Phaser.Scene {
         this.renderOverlay();
       },
       onRejected: (message) => {
+        this.latestSkillRejectedReason = message.reason;
         if (message.reason === "slot_not_learned") {
           this.feedbackView?.showNotice(t("world_area.skill_unlearned"));
+          this.renderOverlay();
           return;
         }
         if (message.reason === "out_of_range") {
           this.feedbackView?.showNotice(t("world_area.skill_too_far"));
+          this.renderOverlay();
           return;
         }
         if (message.reason === "skill_on_cooldown") {
           this.feedbackView?.showNotice(t("world_area.skill_on_cooldown"));
+          this.renderOverlay();
           return;
         }
         if (message.reason === "enemy_defeated") {
           this.feedbackView?.showNotice(t("world_area.skill_target_dead"));
+          this.renderOverlay();
           return;
         }
         if (message.reason === "enemy_not_found") {
           this.feedbackView?.showNotice(t("world_area.skill_target_missing"));
+          this.renderOverlay();
           return;
         }
         this.feedbackView?.showNotice(t("world_area.skill_unavailable"));
+        this.renderOverlay();
       },
     });
 
@@ -429,21 +442,29 @@ export class WorldSessionScene extends Phaser.Scene {
       isMovementInputEnabled: true,
       zoom: 1,
     };
+    const skillTargeting = this.worldAreaView?.getSkillTargetingState() ?? {
+      hoveredEnemyId: null,
+      selectedEnemyId: null,
+      targetEnemyLabel: null,
+      targetDistance: null,
+      isTargetInRange: null,
+    } satisfies WorldSessionSkillTargetingState;
 
     if (this.overlay === null || this.overlayView === null) {
-      const overlay = this.createOverlay(character, this.room, debugState);
+      const overlay = this.createOverlay(character, this.room, debugState, skillTargeting);
       this.overlay = overlay.root;
       this.overlayView = overlay.view;
       return;
     }
 
-    this.overlayView.update(character, this.room, debugState);
+    this.overlayView.update(character, this.room, debugState, skillTargeting, this.latestSkillRejectedReason);
   }
 
   private createOverlay(
     character: CharacterSummary | null,
     room: Room<DoomscrollsRoomState>,
     debugState: ReturnType<WorldSessionAreaView["getDebugState"]>,
+    skillTargeting: WorldSessionSkillTargetingState,
   ): { readonly root: HTMLDivElement; readonly view: ReturnType<typeof createWorldSessionOverlayView> } {
     const root = document.createElement("div");
     applyWorldSessionOverlayRootStyles(root);
@@ -464,6 +485,8 @@ export class WorldSessionScene extends Phaser.Scene {
       character,
       room,
       debugState,
+      skillTargeting,
+      this.latestSkillRejectedReason,
       (mode) => {
         this.handleProjectionModeChange(mode);
       },

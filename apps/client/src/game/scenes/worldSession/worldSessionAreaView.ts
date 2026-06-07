@@ -56,6 +56,8 @@ interface HeldMovementTargetSnapshot extends ClickTargetSnapshot {
 }
 
 interface EnemyScreenPositionSnapshot {
+  readonly id: string;
+  readonly label: string;
   readonly x: number;
   readonly y: number;
   readonly worldX: number;
@@ -109,6 +111,14 @@ export interface WorldSessionDebugState {
   readonly zoom: number;
 }
 
+export interface WorldSessionSkillTargetingState {
+  readonly hoveredEnemyId: string | null;
+  readonly selectedEnemyId: string | null;
+  readonly targetEnemyLabel: string | null;
+  readonly targetDistance: number | null;
+  readonly isTargetInRange: boolean | null;
+}
+
 export interface WorldSessionAreaView {
   readonly refreshFromRoomState: (room: Room<DoomscrollsRoomState>) => void;
   readonly getDebugState: () => WorldSessionDebugState;
@@ -119,6 +129,7 @@ export interface WorldSessionAreaView {
   readonly resolveEnemyAttackOutcome: (enemyId: string, outcome: "hit" | "miss") => void;
   readonly getSelfWorldPosition: () => { readonly x: number; readonly y: number } | null;
   readonly getLastClickTarget: () => ClickTargetSnapshot | null;
+  readonly getSkillTargetingState: () => WorldSessionSkillTargetingState;
   readonly setPendingPickupTarget: (worldLootId: string | null) => void;
   readonly destroy: () => void;
 }
@@ -130,6 +141,7 @@ export function createWorldSessionAreaView(
   onPickupFeedback?: (message: string) => void,
   onDebugStateChange?: () => void,
 ): WorldSessionAreaView {
+  const graveSparkRange = 96;
   const movementHoldThrottleMs = 125;
   const layout = resolveWorldSessionAreaLayout(scene);
   const container = scene.add.container(0, 0);
@@ -238,6 +250,8 @@ export function createWorldSessionAreaView(
   let pendingPickupWorldLootId: string | null = null;
   let heldMovementTarget: HeldMovementTargetSnapshot | null = null;
   let lastHeldMovementIntentAtMs = 0;
+  let hoveredEnemyId: string | null = null;
+  let selectedSkillTargetEnemyId: string | null = null;
 
   const isPointerInsideViewport = (pointerX: number, pointerY: number): boolean => {
     const localX = pointerX - layout.originX;
@@ -400,6 +414,8 @@ export function createWorldSessionAreaView(
       }
 
       enemyScreenPositions.set(enemy.id, {
+        id: enemy.id,
+        label: t(enemy.label),
         x: projectedEnemy.screenX + worldOffset.x,
         y: projectedEnemy.screenY + worldOffset.y,
         worldX: enemy.x,
@@ -508,9 +524,19 @@ export function createWorldSessionAreaView(
         const clickedEnemy = findClickedEnemy(enemyScreenPositions, pointer.x, pointer.y);
         if (clickedEnemy !== null) {
           pointerHandledByTarget = true;
+          selectedSkillTargetEnemyId = clickedEnemy.id;
+          hoveredEnemyId = clickedEnemy.id;
           const result = sendSkillSlotIntent(nextRoom, clickedEnemy.id);
+          const selfPosition = selfWorldPosition;
+          const skillDistance = selfPosition === null
+            ? null
+            : Math.hypot(clickedEnemy.worldX - selfPosition.x, clickedEnemy.worldY - selfPosition.y);
           if (result.dispatched) {
-            onAttackFeedback?.(t("world_area.skill_sent"));
+            onAttackFeedback?.(
+              skillDistance !== null && skillDistance > graveSparkRange
+                ? t("world_area.skill_moving_closer" as never)
+                : t("world_area.skill_sent"),
+            );
           } else if (result.reason === "no_target") {
             onPickupFeedback?.(t("world_area.skill_unavailable"));
           } else {
@@ -600,6 +626,13 @@ export function createWorldSessionAreaView(
     });
 
     inputZone.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
+      const hoveredEnemy = findClickedEnemy(enemyScreenPositions, pointer.x, pointer.y);
+      const nextHoveredEnemyId = hoveredEnemy?.id ?? null;
+      if (nextHoveredEnemyId !== hoveredEnemyId) {
+        hoveredEnemyId = nextHoveredEnemyId;
+        onDebugStateChange?.();
+      }
+
       if (!pointer.leftButtonDown()) {
         clearHeldMovementTarget();
         return;
@@ -629,6 +662,7 @@ export function createWorldSessionAreaView(
     }
 
     if (self?.position === undefined) {
+      hoveredEnemyId = null;
       playerPlaceholder.hide();
       targetMarker.setPosition(-9999, -9999);
       targetLabel.setText("");
@@ -791,6 +825,38 @@ export function createWorldSessionAreaView(
     resolveEnemyAttackOutcome,
     getSelfWorldPosition: () => selfWorldPosition,
     getLastClickTarget: () => lastClickTarget,
+    getSkillTargetingState: () => {
+      const resolvedTargetEnemyId = hoveredEnemyId ?? selectedSkillTargetEnemyId;
+      if (resolvedTargetEnemyId === null) {
+        return {
+          hoveredEnemyId,
+          selectedEnemyId: selectedSkillTargetEnemyId,
+          targetEnemyLabel: null,
+          targetDistance: null,
+          isTargetInRange: null,
+        };
+      }
+
+      const target = enemyScreenPositions.get(resolvedTargetEnemyId);
+      if (target === undefined || selfWorldPosition === null || target.defeated) {
+        return {
+          hoveredEnemyId,
+          selectedEnemyId: selectedSkillTargetEnemyId,
+          targetEnemyLabel: target?.label ?? null,
+          targetDistance: null,
+          isTargetInRange: null,
+        };
+      }
+
+      const targetDistance = Math.hypot(target.worldX - selfWorldPosition.x, target.worldY - selfWorldPosition.y);
+      return {
+        hoveredEnemyId,
+        selectedEnemyId: selectedSkillTargetEnemyId,
+        targetEnemyLabel: target.label,
+        targetDistance,
+        isTargetInRange: targetDistance <= graveSparkRange,
+      };
+    },
     setPendingPickupTarget: (worldLootId: string | null) => {
       pendingPickupWorldLootId = worldLootId;
       refreshFromRoomState(room);

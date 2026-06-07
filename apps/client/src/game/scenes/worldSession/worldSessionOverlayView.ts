@@ -8,7 +8,7 @@ import type { EquipmentSlot } from "@doomscrolls/shared";
 import { formatTownRoomState } from "../../../net/RealtimeClient";
 import { getCurrentPlayerPresence, getTownRoomPresence } from "../../../net/townRoomPresence";
 import { createButton, createInfoLine } from "../accountShell/accountShellDom";
-import type { WorldSessionDebugState } from "./worldSessionAreaView";
+import type { WorldSessionDebugState, WorldSessionSkillTargetingState } from "./worldSessionAreaView";
 import {
   createEmptyEquipmentLoadout,
   createEquipmentPanelSection,
@@ -50,6 +50,8 @@ export interface WorldSessionOverlayView {
     character: CharacterSummary | null,
     room: Room<DoomscrollsRoomState>,
     debugState: WorldSessionDebugState,
+    skillTargeting: WorldSessionSkillTargetingState,
+    lastSkillRejectedReason: string | null,
   ) => void;
 }
 
@@ -95,6 +97,8 @@ export function createWorldSessionOverlayView(
   character: CharacterSummary | null,
   room: Room<DoomscrollsRoomState>,
   debugState: WorldSessionDebugState,
+  skillTargeting: WorldSessionSkillTargetingState,
+  lastSkillRejectedReason: string | null,
   onProjectionModeChange: (mode: WorldProjectionMode) => void,
   onRespawn: () => void,
   onResetObjective: () => void,
@@ -131,6 +135,8 @@ export function createWorldSessionOverlayView(
   const hudRefs = createStableHudContent(
     character,
     room,
+    skillTargeting,
+    lastSkillRejectedReason,
     onResetObjective,
     onRespawn,
   );
@@ -155,52 +161,6 @@ export function createWorldSessionOverlayView(
       selfPresence?.level ?? nextCharacter.level,
       onLeaveWorld,
     ).root;
-  };
-
-  const buildHudContent = (
-    nextCharacter: CharacterSummary | null,
-    nextRoom: Room<DoomscrollsRoomState>,
-  ): HTMLElement => {
-    const selfPresence = getCurrentPlayerPresence(
-      nextRoom.state as unknown as Record<string, unknown>,
-      nextRoom.sessionId,
-    );
-    const selfHpSummary = formatPlayerHpSummary(selfPresence?.hp, selfPresence?.maxHp);
-    const selfHpRatio = resolvePlayerHpRatio(selfPresence?.hp, selfPresence?.maxHp);
-
-    const panel = createCardSection();
-    panel.style.display = "grid";
-    panel.style.gap = "6px";
-    panel.style.padding = "8px 12px";
-    panel.appendChild(createHudSection(
-      selfHpSummary,
-      selfHpRatio,
-      selfPresence?.lifeState,
-      selfPresence?.flaskCharges,
-      selfPresence?.maxFlaskCharges,
-      selfPresence?.level ?? nextCharacter?.level ?? 1,
-      selfPresence?.xp ?? nextCharacter?.xp ?? 0,
-      selfPresence?.objective ?? null,
-      onResetObjective,
-    ));
-    panel.appendChild(createSkillSlotPlaceholder(selfPresence?.nextSkillSlotAt));
-
-    if (selfPresence?.lifeState === "downed") {
-      const downedNotice = createMutedText(t("world_session.downed_notice"));
-      downedNotice.style.color = "#e3a6a6";
-      panel.appendChild(downedNotice);
-
-      const respawnButton = createButton(t("world_session.respawn"));
-      respawnButton.style.marginTop = "4px";
-      respawnButton.style.width = "220px";
-      respawnButton.addEventListener("click", () => {
-        onRespawn();
-      });
-      makeInteractive(respawnButton);
-      panel.appendChild(respawnButton);
-    }
-
-    return panel;
   };
 
   const buildUtilityContent = (
@@ -285,7 +245,7 @@ export function createWorldSessionOverlayView(
   syncUtilityView(utilityRefs, character, room, debugState, getUtilityState, onUtilityStateChange, getEquipmentLoadout, onEquipItem, onUnequipItem, () => selectedInventoryItemId, (itemId) => {
     selectedInventoryItemId = itemId;
   }, onProjectionModeChange);
-  syncHudView(hudRefs, character, room, onResetObjective, onRespawn);
+  syncHudView(hudRefs, character, room, skillTargeting, lastSkillRejectedReason, onResetObjective, onRespawn);
   currentStatusPanel = statusPanel;
   currentUtilityPanel = utilityPanel;
   currentHudPanel = hudPanel;
@@ -294,12 +254,14 @@ export function createWorldSessionOverlayView(
     nextCharacter: CharacterSummary | null,
     nextRoom: Room<DoomscrollsRoomState>,
     nextDebugState: WorldSessionDebugState,
+    nextSkillTargeting: WorldSessionSkillTargetingState,
+    nextLastSkillRejectedReason: string | null,
   ): void => {
     if (statusRefs !== null && nextCharacter !== null && currentStatusPanel !== null) {
       syncStatusView(statusRefs, nextCharacter, nextRoom);
     }
 
-    syncHudView(hudRefs, nextCharacter, nextRoom, onResetObjective, onRespawn);
+    syncHudView(hudRefs, nextCharacter, nextRoom, nextSkillTargeting, nextLastSkillRejectedReason, onResetObjective, onRespawn);
     syncUtilityView(utilityRefs, nextCharacter, nextRoom, nextDebugState, getUtilityState, onUtilityStateChange, getEquipmentLoadout, onEquipItem, onUnequipItem, () => selectedInventoryItemId, (itemId) => {
       selectedInventoryItemId = itemId;
     }, onProjectionModeChange);
@@ -404,12 +366,14 @@ function syncStatusView(
 function createStableHudContent(
   character: CharacterSummary | null,
   room: Room<DoomscrollsRoomState>,
+  skillTargeting: WorldSessionSkillTargetingState,
+  lastSkillRejectedReason: string | null,
   onResetObjective: () => void,
   onRespawn: () => void,
 ): HudViewRefs {
   const root = document.createElement("div");
   makePassive(root);
-  syncHudView({ root }, character, room, onResetObjective, onRespawn);
+  syncHudView({ root }, character, room, skillTargeting, lastSkillRejectedReason, onResetObjective, onRespawn);
   return { root };
 }
 
@@ -417,15 +381,19 @@ function syncHudView(
   refs: HudViewRefs,
   character: CharacterSummary | null,
   room: Room<DoomscrollsRoomState>,
+  skillTargeting: WorldSessionSkillTargetingState,
+  lastSkillRejectedReason: string | null,
   onResetObjective: () => void,
   onRespawn: () => void,
 ): void {
-  refs.root.replaceChildren(renderHudContent(character, room, onResetObjective, onRespawn));
+  refs.root.replaceChildren(renderHudContent(character, room, skillTargeting, lastSkillRejectedReason, onResetObjective, onRespawn));
 }
 
 function renderHudContent(
   nextCharacter: CharacterSummary | null,
   nextRoom: Room<DoomscrollsRoomState>,
+  skillTargeting: WorldSessionSkillTargetingState,
+  lastSkillRejectedReason: string | null,
   onResetObjective: () => void,
   onRespawn: () => void,
 ): HTMLElement {
@@ -451,7 +419,7 @@ function renderHudContent(
     selfPresence?.objective ?? null,
     onResetObjective,
   ));
-  panel.appendChild(createSkillSlotPlaceholder());
+  panel.appendChild(createSkillSlotPlaceholder(selfPresence?.nextSkillSlotAt, skillTargeting, lastSkillRejectedReason));
 
   if (selfPresence?.lifeState === "downed") {
     const downedNotice = createMutedText(t("world_session.downed_notice"));
@@ -1150,21 +1118,29 @@ function resolveObjectiveTrackerViewModel(
   };
 }
 
-function createSkillSlotPlaceholder(nextSkillSlotAt?: number): HTMLElement {
+function createSkillSlotPlaceholder(
+  nextSkillSlotAt: number | undefined,
+  skillTargeting: WorldSessionSkillTargetingState,
+  lastSkillRejectedReason: string | null,
+): HTMLElement {
   const card = document.createElement("div");
   card.style.display = "flex";
-  card.style.alignItems = "center";
+  card.style.alignItems = "flex-start";
   card.style.gap = "10px";
   card.style.padding = "8px 10px";
-  card.style.border = "1px solid #3c3122";
+  const remainingSeconds = formatSkillCooldownSeconds(nextSkillSlotAt);
+  const isReady = remainingSeconds === null;
+  card.style.border = isReady ? "1px solid #355a2f" : "1px solid #5a3c22";
   card.style.borderRadius = "12px";
-  card.style.background = "rgba(18, 14, 10, 0.9)";
+  card.style.background = isReady
+    ? "linear-gradient(180deg, rgba(16, 24, 14, 0.92) 0%, rgba(12, 18, 10, 0.92) 100%)"
+    : "linear-gradient(180deg, rgba(28, 20, 12, 0.92) 0%, rgba(18, 14, 10, 0.92) 100%)";
 
   const slotKey = document.createElement("div");
   slotKey.textContent = "RMB";
   slotKey.style.minWidth = "42px";
   slotKey.style.padding = "6px 0";
-  slotKey.style.border = "1px solid #6b5738";
+  slotKey.style.border = isReady ? "1px solid #6aa25e" : "1px solid #6b5738";
   slotKey.style.borderRadius = "8px";
   slotKey.style.background = "linear-gradient(180deg, rgba(42, 32, 22, 0.96) 0%, rgba(24, 18, 13, 0.96) 100%)";
   slotKey.style.color = "#e0c88a";
@@ -1179,6 +1155,7 @@ function createSkillSlotPlaceholder(nextSkillSlotAt?: number): HTMLElement {
   textBlock.style.display = "grid";
   textBlock.style.gap = "2px";
   textBlock.style.minWidth = "0";
+  textBlock.style.flex = "1 1 auto";
 
   const title = document.createElement("div");
   title.textContent = t("world_session.skill_slot_secondary");
@@ -1202,7 +1179,6 @@ function createSkillSlotPlaceholder(nextSkillSlotAt?: number): HTMLElement {
   textBlock.appendChild(description);
 
   const cooldownStatus = document.createElement("div");
-  const remainingSeconds = formatSkillCooldownSeconds(nextSkillSlotAt);
   cooldownStatus.textContent = remainingSeconds === null
     ? `${t("world_session.skill_slot_ready")} • ${t("world_session.skill_slot_ready_now")}`
     : t("world_session.skill_slot_cooldown", { seconds: remainingSeconds });
@@ -1211,6 +1187,44 @@ function createSkillSlotPlaceholder(nextSkillSlotAt?: number): HTMLElement {
   cooldownStatus.style.fontFamily = "monospace";
   cooldownStatus.style.fontWeight = "bold";
   textBlock.appendChild(cooldownStatus);
+
+  const targetHint = document.createElement("div");
+  targetHint.style.fontSize = "10px";
+  targetHint.style.fontFamily = "monospace";
+  targetHint.style.whiteSpace = "normal";
+  targetHint.style.wordBreak = "break-word";
+
+  const targetPrefix = skillTargeting.hoveredEnemyId !== null
+    ? t("world_session.skill_target_hover")
+    : skillTargeting.selectedEnemyId !== null
+      ? t("world_session.skill_target_selected")
+      : t("world_session.skill_target_none");
+
+  if (skillTargeting.targetEnemyLabel === null) {
+    targetHint.textContent = `${targetPrefix} • ${t("world_session.skill_target_none")}`;
+    targetHint.style.color = "#a88d63";
+  } else {
+    const roundedDistance = skillTargeting.targetDistance === null
+      ? null
+      : Math.round(skillTargeting.targetDistance);
+    const rangeText = roundedDistance === null
+      ? t("world_session.skill_range_unknown")
+      : skillTargeting.isTargetInRange === true
+        ? t("world_session.skill_target_in_range", { distance: roundedDistance })
+        : t("world_session.skill_target_out_of_range", { distance: roundedDistance, range: 96 });
+    targetHint.textContent = `${targetPrefix} • ${skillTargeting.targetEnemyLabel} • ${rangeText}`;
+    targetHint.style.color = skillTargeting.isTargetInRange === false ? "#d9936b" : "#b9d49a";
+  }
+  textBlock.appendChild(targetHint);
+
+  if (lastSkillRejectedReason === "out_of_range") {
+    const unavailableHint = document.createElement("div");
+    unavailableHint.textContent = t("world_session.skill_target_move_to_cast");
+    unavailableHint.style.color = "#e0c88a";
+    unavailableHint.style.fontSize = "10px";
+    unavailableHint.style.fontWeight = "bold";
+    textBlock.appendChild(unavailableHint);
+  }
 
   card.appendChild(textBlock);
   return card;
