@@ -8,6 +8,7 @@ import { sendInteractIntent } from "../../../net/interactIntentClient";
 import { sendAttackIntent } from "../../../net/attackIntentClient";
 import { sendPickupWorldLootIntent } from "../../../net/pickupWorldLootClient";
 import { sendSkillSlotIntent } from "../../../net/skillSlotIntentClient";
+import { sendCorpseInteractIntent } from "../../../net/corpseInteractClient";
 import { getTownRoomPresence } from "../../../net/townRoomPresence";
 import {
   defaultWorldProjection,
@@ -254,6 +255,8 @@ export function createWorldSessionAreaView(
   let lastHeldMovementIntentAtMs = 0;
   let hoveredEnemyId: string | null = null;
   let selectedSkillTargetEnemyId: string | null = null;
+  const CORPSE_INTERACT_RANGE = 30;
+  let selfSessionId: string | null = null;
 
   const isPointerInsideViewport = (pointerX: number, pointerY: number): boolean => {
     const localX = pointerX - layout.originX;
@@ -337,6 +340,7 @@ export function createWorldSessionAreaView(
       : "nightmarket";
     const bounds = resolveWorldAreaBounds(zoneId);
     const presence = getTownRoomPresence(nextRoom.state as unknown as Record<string, unknown>);
+    selfSessionId = nextRoom.sessionId;
     const self = presence?.players.find((player) => player.sessionId === nextRoom.sessionId) ?? null;
     const currentFocusPosition = self?.position === undefined
       ? selfWorldPosition
@@ -647,6 +651,30 @@ export function createWorldSessionAreaView(
         return;
       }
 
+      // Click on own corpse marker to recover (Task 234)
+      const clickedOwnCorpse = findClickedOwnCorpse(
+        corpseMarkers,
+        pointer.x,
+        pointer.y,
+        worldOffset,
+        selfSessionId,
+        selfWorldPosition,
+      );
+      if (clickedOwnCorpse !== null) {
+        pointerHandledByTarget = true;
+        clearHeldMovementTarget();
+        if (clickedOwnCorpse.inRange) {
+          sendCorpseInteractIntent(nextRoom);
+          onAttackFeedback?.(t("world_area.corpse_recovered"));
+        } else {
+          // Move to corpse first
+          dispatchMovementIntent(nextRoom, { x: clickedOwnCorpse.worldX, y: clickedOwnCorpse.worldY });
+          onAttackFeedback?.(t("world_area.corpse_interact_out_of_range"));
+        }
+        pointerHandledByTarget = false;
+        return;
+      }
+
       const clickedInteractable = interactablesView.findClickedInteractable(pointer.x, pointer.y);
       if (clickedInteractable !== null) {
         pointerHandledByTarget = true;
@@ -936,6 +964,52 @@ export function createWorldSessionAreaView(
       selfScreenPosition = null;
       container.destroy(true);
     },
+  };
+}
+
+function findClickedOwnCorpse(
+  corpseMarkers: ReadonlyMap<string, Phaser.GameObjects.Container>,
+  pointerX: number,
+  pointerY: number,
+  worldOffset: WorldContainerOffset,
+  selfSessionId: string | null,
+  selfWorldPosition: { readonly x: number; readonly y: number } | null,
+): { readonly worldX: number; readonly worldY: number; readonly inRange: boolean } | null {
+  // Only the player's own corpse is interactable; others' corpses are visual-only.
+  if (selfSessionId === null || selfWorldPosition === null) {
+    return null;
+  }
+  const marker = corpseMarkers.get(selfSessionId);
+  if (marker === undefined) {
+    return null;
+  }
+
+  // World position of the corpse
+  const corpseWorldX = marker.x;
+  const corpseWorldY = marker.y;
+
+  // Hit-test on screen position
+  const markerScreenX = corpseWorldX + worldOffset.x;
+  const markerScreenY = corpseWorldY + worldOffset.y;
+  const dx = pointerX - markerScreenX;
+  const dy = pointerY - markerScreenY;
+  const hitRadiusPx = 24;
+  const distanceSquared = dx * dx + dy * dy;
+  if (distanceSquared > hitRadiusPx * hitRadiusPx) {
+    return null;
+  }
+
+  // Check range: distance from player world position to corpse world position
+  const worldDx = corpseWorldX - selfWorldPosition.x;
+  const worldDy = corpseWorldY - selfWorldPosition.y;
+  const worldDist = Math.sqrt(worldDx * worldDx + worldDy * worldDy);
+  // CORPSE_INTERACT_RANGE constant from closure (30 world units)
+  const inRange = worldDist <= 30;
+
+  return {
+    worldX: corpseWorldX,
+    worldY: corpseWorldY,
+    inRange,
   };
 }
 

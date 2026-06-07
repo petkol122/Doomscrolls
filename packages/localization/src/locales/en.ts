@@ -223,6 +223,8 @@ export const en = {
   "world_area.skill_too_far": "Grave Spark target too far.",
   "world_area.skill_on_cooldown": "Grave Spark is on cooldown.",
   "world_area.skill_unlearned": "Skill slot not learned yet.",
+  "world_area.corpse_recovered": "Corpse recovered.",
+  "world_area.corpse_interact_out_of_range": "Moving to corpse.",
   "world_area.skill_unavailable": "Skill unavailable.",
 
   "inventory.title": "Inventory",

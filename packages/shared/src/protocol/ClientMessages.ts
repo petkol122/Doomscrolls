@@ -128,6 +128,10 @@ export interface RequestUseSkillSlotClientMessage {
   readonly targetEnemyId?: string;
 }
 
+export interface RequestCorpseInteractClientMessage {
+  readonly type: "request_corpse_interact";
+}
+
 export interface RequestRespawnClientMessage {
   readonly type: "request_respawn";
 }
@@ -180,6 +184,7 @@ export type ClientRoomMessage =
   | RequestMoveClientMessage
   | RequestAttackClientMessage
   | RequestPickupWorldLootClientMessage
+  | RequestCorpseInteractClientMessage
   | RequestRespawnClientMessage
   | RetrieveCorpseClientMessage
   | ForceRecoverCorpseClientMessage

@@ -544,6 +544,7 @@ export class TownRoom extends Room {
   private resetObjectiveHandlerRegistered = false;
   private pickupWorldLootHandlerRegistered = false;
   private respawnHandlerRegistered = false;
+  private corpseInteractHandlerRegistered = false;
   private dodgeHandlerRegistered = false;
   private healingFlaskHandlerRegistered = false;
   private skillSlotHandlerRegistered = false;
@@ -569,6 +570,7 @@ export class TownRoom extends Room {
     this.registerAttackHandler(log);
     this.registerPickupWorldLootHandler(log);
     this.registerRespawnHandler(log);
+    this.registerCorpseInteractHandler(log);
     this.registerDodgeHandler(log);
     this.registerHealingFlaskHandler(log);
     this.registerSkillSlotHandler(log);
@@ -1580,6 +1582,74 @@ export class TownRoom extends Room {
       } catch {}
 
       log.debug?.({ roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, characterId: player.characterId }, "TownRoom player respawned.");
+    });
+  }
+
+  /**
+   * Task 234 -- Register the `request_corpse_interact` message handler.
+   *
+   * Validates that the player is downed with an active corpse marker,
+   * is within interact range (~30 world units), and on acceptance,
+   * clears the corpse marker and sends a "Corpse recovered" feedback.
+   * No gear/inventory state changes happen here.
+   */
+  private registerCorpseInteractHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.corpseInteractHandlerRegistered) {
+      return;
+    }
+    this.corpseInteractHandlerRegistered = true;
+
+    this.onMessage("request_corpse_interact", (client: Client) => {
+      const state = this.state as TownRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+      if (player === undefined) {
+        log.warn?.(
+          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+          "TownRoom request_corpse_interact rejected: player not found.",
+        );
+        return;
+      }
+
+      // Must be downed and have a corpse
+      if (player.lifeState !== "downed" || !player.hasCorpse) {
+        const rejection: import("@doomscrolls/shared").CorpseInteractRejectedServerMessage = {
+          type: "corpse_interact_rejected",
+          reason: "no_corpse",
+        };
+        try { client.send("corpse_interact_rejected", rejection); } catch {}
+        return;
+      }
+
+      // Range check
+      const dx = player.corpseX - player.x;
+      const dy = player.corpseY - player.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance > 30) {
+        const rejection: import("@doomscrolls/shared").CorpseInteractRejectedServerMessage = {
+          type: "corpse_interact_rejected",
+          reason: "out_of_range",
+        };
+        try { client.send("corpse_interact_rejected", rejection); } catch {}
+        return;
+      }
+
+      // Accept and clear corpse
+      player.hasCorpse = false;
+      player.corpseX = 0;
+      player.corpseY = 0;
+
+      const accepted: import("@doomscrolls/shared").CorpseInteractAcceptedServerMessage = {
+        type: "corpse_interact_accepted",
+        message: "Corpse recovered.",
+      };
+      try { client.send("corpse_interact_accepted", accepted); } catch {}
+
+      log.debug?.(
+        { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, characterId: player.characterId },
+        "TownRoom corpse interact accepted. Corpse marker cleared.",
+      );
     });
   }
 

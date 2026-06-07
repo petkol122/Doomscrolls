@@ -102,6 +102,16 @@ export interface PlayerRespawnedServerMessage {
   readonly hp: number;
 }
 
+export interface CorpseInteractRejectedServerMessage {
+  readonly type: "corpse_interact_rejected";
+  readonly reason: "out_of_range" | "no_corpse" | "player_alive";
+}
+
+export interface CorpseInteractAcceptedServerMessage {
+  readonly type: "corpse_interact_accepted";
+  readonly message: string;
+}
+
 export interface CorpseRecoveredServerMessage {
   readonly type: "corpse_recovered";
   readonly characterId: CharacterId;
@@ -350,6 +360,8 @@ export type ServerRoomMessage =
   | CharacterUpdatedServerMessage
   | PlayerDiedServerMessage
   | PlayerRespawnedServerMessage
+  | CorpseInteractRejectedServerMessage
+  | CorpseInteractAcceptedServerMessage
   | CorpseRecoveredServerMessage
   | ChatMessageServerMessage
   | ZoneTransitionApprovedServerMessage
