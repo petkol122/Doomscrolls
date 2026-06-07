@@ -292,8 +292,13 @@ Vendor placeholder:
   Suspicious Vendor (nightmarket_vendor_01) at (380, 600)
   non-hostile town service NPC; trading not available yet
   rendered as a purple 24x32 rectangle (visually distinct from props/enemies)
-  responds with "Vendor trading is not available yet." on interact
-  no shop UI, prices, vendor stock, spending or reputation
+  on interact, opens a compact dismissible DOM overlay panel with:
+    - vendor name ("Suspicious Vendor")
+    - "Trading is not available yet." placeholder message
+    - current money snapshot from /me (formatted via formatMoneyCompact)
+    - Close button and click-anywhere dismiss
+  panel lives at apps/client/src/game/scenes/worldSession/vendorInteractionPanel.ts
+  no shop UI, prices, vendor stock, spending, selling or reputation
 
 Core 0.1 Scope:
   Nightmarket has visible objects: notice board at (120, 140), vendor at (380, 600)

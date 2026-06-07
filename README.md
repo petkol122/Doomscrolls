@@ -76,7 +76,7 @@ Zones have a classification field: `safe_hub` / `combat` / `test_hybrid`. The Ni
 - First Hub: **The Nightmarket** (test_hybrid zone)
 - First Combat Zone: **Blackwire Sewers**
 - First Enemy: **Trashboar Runt**
-- First Vendor Placeholder: **Suspicious Vendor** (non-hostile town service NPC; trading not available yet, no shop UI/prices/stock/spending/reputation)
+- First Vendor Placeholder: **Suspicious Vendor** (non-hostile town service NPC; interact opens a compact dismissible panel showing vendor name + "Trading is not available yet." + current money snapshot; no shop UI/prices/stock/spending/selling/reputation)
 
 ---
 

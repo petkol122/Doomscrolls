@@ -229,14 +229,16 @@ Zones have a `classification` field: `safe_hub` / `combat` / `test_hybrid`.
 - Long-term towns/villages should be `safe_hub` with no enemy spawns
 - Neutral ambient creatures (rats, pigs, chickens) are allowed in any classification
 
-## Vendor Placeholder Rules
+## Vendor Placeholder Panel Rules
 
 The Suspicious Vendor (nightmarket_vendor_01) is a neutral vendor placeholder interactable:
 
 - non-hostile, town service style
 - `kind: "vendor"` in world props; `type: "vendor"` in interactable state
 - rendered as a purple 24×32 rectangle (visually distinct from gold props and red enemies)
-- click/interact shows: "Vendor trading is not available yet."
+- on interact, opens a compact dismissible DOM overlay panel showing: vendor name, "Trading is not available yet." with current money snapshot from `/me` character
+- panel is non-blocking: Close button + click-anywhere dismiss
+- panel module: `apps/client/src/game/scenes/worldSession/vendorInteractionPanel.ts`
 - no shop UI, prices, vendor stock, buying, selling, spending or reputation
 - no vendor inventory, no money spending
 

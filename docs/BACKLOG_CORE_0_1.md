@@ -649,9 +649,15 @@ pnpm --filter @doomscrolls/client typecheck
 pnpm lint
 ```
 
-### Vendor Placeholder (Core 0.1)
+### Vendor Placeholder Panel (Core 0.1)
 
-The Suspicious Vendor placeholder lives in Nightmarket at (380, 600). It is a non-hostile town service NPC with `kind: "vendor"` in world props. On interact, it responds with "Vendor trading is not available yet." There is no shop UI, no prices, no vendor stock, no buying/selling, no spending, and no reputation system. The client renders it as a visually distinct purple 24x32 rectangle.
+The Suspicious Vendor placeholder lives in Nightmarket at (380, 600). It is a non-hostile town service NPC with `kind: "vendor"` in world props. On interact, the server sends an `interact_response` with `objectId: "nightmarket_vendor_01"` and the client now shows a compact dismissible DOM panel instead of a plain text notice:
+- Vendor name ("Suspicious Vendor")
+- "Trading is not available yet." placeholder message
+- current money snapshot from `/me` character (formatted via `formatMoneyCompact`)
+- Close button + click-anywhere backdrop dismiss
+- No shop UI, prices, vendor stock, spending, selling or reputation
+- Panel implementation: `apps/client/src/game/scenes/worldSession/vendorInteractionPanel.ts`
 
 Nightmarket classification notes:
 - `classification: "test_hybrid"` — has enemies despite being a town room
