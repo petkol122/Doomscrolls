@@ -1,7 +1,13 @@
 import type { TownRoomState } from "./TownRoomState";
-import { spawnWorldLootOnEnemyDefeat } from "./spawnWorldLootOnEnemyDefeat";
+import { contentRegistry } from "@doomscrolls/content";
+import type { ItemDefinitionId, WorldLootId } from "@doomscrolls/shared";
 import { resolveZoneBounds } from "./resolveZoneBounds";
+import { rollCrateCurrencyChance } from "./rollCrateCurrencyChance";
+import { rollLoot } from "./rollLoot";
+import { WorldLoot } from "./WorldLoot";
 import { t } from "@doomscrolls/localization";
+
+const CRATE_CURRENCY_LABEL_KEY = "money.currency_drop_label";
 
 /**
  * Task 057 — Interactable Object Foundation Batch
@@ -59,6 +65,9 @@ export function validateInteractIntent(
  * Handle loot container interaction - spawns loot near the container.
  * Task 180 — Shared loot container foundation.
  * Task 181 — Validate loot position against zone bounds.
+ * Task 188 — Adds a small copper chance via the existing currency
+ * world-loot pickup path. Item loot continues to work; the container
+ * still opens once per room instance (no respawn, no client roll).
  */
 export function handleLootContainerInteraction(
   state: TownRoomState,
@@ -73,6 +82,10 @@ export function handleLootContainerInteraction(
     return { ok: false, message: t("world_prop.loot_container.empty") };
   }
 
+  // Mark as opened immediately so the container is one-shot per room
+  // instance regardless of which downstream rolls happen.
+  interactable.opened = true;
+
   // Calculate loot position near the container
   const lootX = interactable.x + 14;
   const lootY = interactable.y + 10;
@@ -85,29 +98,63 @@ export function handleLootContainerInteraction(
     lootY < zoneBounds.minY ||
     lootY > zoneBounds.maxY
   ) {
-    // If position is out of bounds, still mark as opened but don't spawn loot
-    interactable.opened = true;
     return { ok: true, message: "The container is empty." };
   }
 
-  // Spawn loot near the container (using the same loot table as trashboar runts)
-  const fakeEnemy = {
-    id: `container_${objectId}`,
-    enemyId: "trashboar_runt",
-    x: lootX,
-    y: lootY,
-  } as { id: string; enemyId: string; x: number; y: number };
+  const now = Date.now();
+  let spawned = 0;
 
-  const worldLoot = spawnWorldLootOnEnemyDefeat(state, fakeEnemy as any, Date.now());
-
-  if (worldLoot !== null) {
-    interactable.opened = true;
-    return { ok: true, message: "The container opens, revealing its contents!" };
+  // 1. Item loot — uses the shared sewer starter loot table so the
+  //    crate's item drops match the rest of the world. Server-only
+  //    roll, no client input.
+  const itemId = rollLoot("trashboar_runt");
+  if (itemId !== null) {
+    const itemDefinition = contentRegistry.items.get(itemId);
+    if (itemDefinition !== undefined) {
+      const itemLoot = new WorldLoot(
+        buildCrateWorldLootId(objectId, "item", now),
+        itemId,
+        itemDefinition.nameKey,
+        itemDefinition.rarity,
+        lootX,
+        lootY,
+        0,
+      );
+      state.worldLoot.set(itemLoot.id, itemLoot);
+      spawned += 1;
+    }
   }
 
-  // If no loot spawned, still mark as opened to prevent re-tries
-  interactable.opened = true;
+  // 2. Currency chance — independent small copper drop that flows
+  //    through the existing currency world-loot pickup path
+  //    (persistPickedUpCurrencyToCharacter + dispatchPickedUpWorldLoot).
+  const currencyAmount = rollCrateCurrencyChance(objectId, now);
+  if (currencyAmount > 0) {
+    const currencyLoot = new WorldLoot(
+      buildCrateWorldLootId(objectId, "coin", now),
+      "" as ItemDefinitionId,
+      CRATE_CURRENCY_LABEL_KEY,
+      "common",
+      lootX + 6,
+      lootY,
+      currencyAmount,
+    );
+    state.worldLoot.set(currencyLoot.id, currencyLoot);
+    spawned += 1;
+  }
+
+  if (spawned > 0) {
+    return { ok: true, message: "The container opens, revealing its contents!" };
+  }
   return { ok: true, message: "The container is empty." };
+}
+
+function buildCrateWorldLootId(
+  containerId: string,
+  kind: "item" | "coin",
+  now: number,
+): WorldLootId {
+  return `world_loot:crate:${containerId}:${kind}:${now}` as WorldLootId;
 }
 
 /**
