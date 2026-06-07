@@ -304,12 +304,19 @@ export function createWorldSessionAreaView(
     const projectedEnemies = currentEnemies
       .map((enemy: TownRoomEnemySnapshot) => projectEnemyToArea(enemy, worldProjection))
       .filter((enemy: ProjectedEnemySnapshot | null): enemy is ProjectedEnemySnapshot => enemy !== null);
-    const newEnemyIds = new Set(projectedEnemies.map((projectedEnemy: ProjectedEnemySnapshot) => projectedEnemy.enemy.id));
+    const currentEnemyIds = new Set(currentEnemies.map((enemy: TownRoomEnemySnapshot) => enemy.id));
 
     for (const [id, view] of enemyPlaceholders.entries()) {
-      if (!newEnemyIds.has(id)) {
+      if (!currentEnemyIds.has(id)) {
         view.destroy();
         enemyPlaceholders.delete(id);
+        enemyScreenPositions.delete(id);
+      }
+    }
+
+    for (const [id, view] of enemyPlaceholders.entries()) {
+      if (currentEnemyIds.has(id) && !projectedEnemies.some((projectedEnemy) => projectedEnemy.enemy.id === id)) {
+        view.hide();
         enemyScreenPositions.delete(id);
       }
     }

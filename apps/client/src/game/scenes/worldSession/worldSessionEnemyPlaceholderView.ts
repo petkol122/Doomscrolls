@@ -32,6 +32,7 @@ export function createWorldSessionEnemyPlaceholderView(
   onClick?: (enemyId: string) => void,
 ): WorldSessionEnemyPlaceholderView {
   const container = scene.add.container(enemy.x, enemy.y);
+  container.setDepth(400);
   parentContainer?.add(container);
 
   const isBrute = isBruteEnemy(enemy);
@@ -185,6 +186,7 @@ export function createWorldSessionEnemyPlaceholderView(
 
   const refresh = (nextEnemy: TownRoomEnemySnapshot): void => {
     container.setPosition(nextEnemy.x, nextEnemy.y);
+    container.setDepth(400 + nextEnemy.y);
     applyEnemyVisualState(nextEnemy);
   };
 
@@ -216,6 +218,7 @@ export function createWorldSessionEnemyPlaceholderView(
   };
 
   applyEnemyVisualState(enemy);
+  container.setDepth(400 + enemy.y);
 
   return {
     refresh,
