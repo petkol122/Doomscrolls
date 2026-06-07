@@ -170,6 +170,7 @@ export function createWorldSessionAreaView(
   const floatingDamageView: FloatingDamageNumberView = createFloatingDamageNumberView(scene, worldContainer);
   const enemyScreenPositions = new Map<string, EnemyScreenPositionSnapshot>();
   const lootScreenPositions = new Map<string, WorldLootScreenPositionSnapshot>();
+  const corpseMarkers = new Map<string, Phaser.GameObjects.Container>();
 
   const targetMarker = scene.add.circle(-9999, -9999, 7, 0xff4a4a, 0.8);
   const targetLabel = scene.add.text(layout.originX + 10, layout.originY + layout.height - 20, "", {
@@ -512,6 +513,52 @@ export function createWorldSessionAreaView(
         lootPlaceholders.get(loot.id)?.refresh(loot, pendingPickupWorldLootId === loot.id);
       } else {
         existing.refresh(loot, pendingPickupWorldLootId === loot.id);
+      }
+    }
+
+    // Sync corpse markers from presence data
+    const currentCorpsePlayerIds = new Set<string>();
+    if (presence !== null) {
+      for (const player of presence.players) {
+        if (player.hasCorpse === true && player.corpsePosition !== undefined) {
+          currentCorpsePlayerIds.add(player.sessionId);
+          const corpsePos = player.corpsePosition;
+          const screenPos = worldToScreenActiveProjection(
+            corpsePos.x,
+            corpsePos.y,
+            worldProjection.bounds,
+            worldProjection.viewport,
+            projectionMode,
+          );
+          let marker = corpseMarkers.get(player.sessionId);
+          if (marker === undefined) {
+            marker = scene.add.container(screenPos.x, screenPos.y);
+            const markerBg = scene.add.ellipse(0, 12, 24, 12, 0x330000, 0.3);
+            const markerBody = scene.add.rectangle(0, 0, 14, 20, 0x5c2a2a, 0.85);
+            markerBody.setStrokeStyle(2, 0x8f3f3f, 0.9);
+            const markerHead = scene.add.circle(0, -14, 5, 0x4a2020, 0.85);
+            markerHead.setStrokeStyle(2, 0x8f3f3f, 0.9);
+            const markerLabel = scene.add.text(0, -28, player.displayName, {
+              color: "#b04a4a",
+              fontFamily: "Arial, sans-serif",
+              fontSize: "9px",
+              fontStyle: "bold",
+              stroke: "#1a0808",
+              strokeThickness: 3,
+            }).setOrigin(0.5);
+            marker.add([markerBg, markerBody, markerHead, markerLabel]);
+            worldContainer.add(marker);
+            corpseMarkers.set(player.sessionId, marker);
+          } else {
+            marker.setPosition(screenPos.x, screenPos.y);
+          }
+        }
+      }
+    }
+    for (const [sessionId, marker] of corpseMarkers.entries()) {
+      if (!currentCorpsePlayerIds.has(sessionId)) {
+        marker.destroy(true);
+        corpseMarkers.delete(sessionId);
       }
     }
 
@@ -881,6 +928,10 @@ export function createWorldSessionAreaView(
       }
       lootPlaceholders.clear();
       lootScreenPositions.clear();
+      for (const marker of corpseMarkers.values()) {
+        marker.destroy(true);
+      }
+      corpseMarkers.clear();
       floatingDamageView.destroy();
       selfScreenPosition = null;
       container.destroy(true);

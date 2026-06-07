@@ -1550,6 +1550,9 @@ export class TownRoom extends Room {
 
       player.hp = player.maxHp;
       player.lifeState = "alive";
+      player.hasCorpse = false;
+      player.corpseX = 0;
+      player.corpseY = 0;
       player.x = respawnPosition.x;
       player.y = respawnPosition.y;
       player.targetX = respawnPosition.x;
@@ -2162,6 +2165,9 @@ export class TownRoom extends Room {
           landingTarget.hasMovementTarget = false;
           landingTarget.targetX = landingTarget.x;
           landingTarget.targetY = landingTarget.y;
+          landingTarget.hasCorpse = true;
+          landingTarget.corpseX = landingTarget.x;
+          landingTarget.corpseY = landingTarget.y;
           clearPendingAction(landingTarget);
           clearEnemyTargetAndReturn(enemy);
         } else {

@@ -75,6 +75,8 @@ export interface PlayerPresenceEntry {
     readonly target: number;
     readonly completed: boolean;
   };
+  readonly hasCorpse?: boolean;
+  readonly corpsePosition?: PlayerPosition;
 }
 
 export interface TownRoomPresence {
@@ -119,7 +121,8 @@ export function getTownRoomPresence(
     const withFlask = applyOptionalFlaskState(withMovementSpeed, value);
     const withSkillSlot = applyOptionalSkillSlotCooldown(withFlask, value);
     const withObjective = applyOptionalObjective(withSkillSlot, value);
-    players.push(withObjective);
+    const withCorpse = applyOptionalCorpse(withObjective, value);
+    players.push(withCorpse);
   }
 
   return {
@@ -328,6 +331,21 @@ function applyOptionalSkillSlotCooldown(
     ...entry,
     nextSkillSlotAt: Math.max(0, rawNextSkillSlotAt),
   };
+}
+
+function applyOptionalCorpse(
+  entry: PlayerPresenceEntry,
+  value: Record<string, unknown>,
+): PlayerPresenceEntry {
+  if (value.hasCorpse === true) {
+    const rawX = value.corpseX;
+    const rawY = value.corpseY;
+    if (typeof rawX === "number" && typeof rawY === "number" && Number.isFinite(rawX) && Number.isFinite(rawY)) {
+      return { ...entry, hasCorpse: true, corpsePosition: { x: rawX, y: rawY } };
+    }
+    return { ...entry, hasCorpse: true };
+  }
+  return entry;
 }
 
 function applyOptionalObjective(

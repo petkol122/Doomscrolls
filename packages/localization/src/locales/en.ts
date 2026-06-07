@@ -137,6 +137,8 @@ export const en = {
   "world_session.projection_click_top_down_only": "Enabled in debug top-down.",
   "world_session.projection_click_disabled_preview": "Disabled in isometric preview until safe screen-to-world mapping exists.",
   "world_session.downed_notice": "You are downed.",
+  "world_session.downed_respawn_hint": "Respawn at safe point.",
+  "world_session.corpse_marker": "Corpse remains.",
   "world_session.damage_feedback": "-{damage} HP  ({hp} remaining)",
   "world_session.downed_damage_feedback": "-{damage} HP  You are downed.",
   "world_session.respawn": "Respawn",

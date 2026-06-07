@@ -434,6 +434,10 @@ function renderHudContent(
     downedNotice.style.color = "#e3a6a6";
     panel.appendChild(downedNotice);
 
+    const respawnHint = createMutedText(t("world_session.downed_respawn_hint"));
+    respawnHint.style.color = "#a88d63";
+    panel.appendChild(respawnHint);
+
     const respawnButton = createButton(t("world_session.respawn"));
     respawnButton.style.marginTop = "4px";
     respawnButton.style.width = "220px";
@@ -443,6 +447,12 @@ function renderHudContent(
     });
     makeInteractive(respawnButton);
     panel.appendChild(respawnButton);
+  }
+
+  if (selfPresence?.hasCorpse === true && selfPresence?.lifeState !== "downed") {
+    const corpseNotice = createMutedText(t("world_session.corpse_marker"));
+    corpseNotice.style.color = "#8f5f5f";
+    panel.appendChild(corpseNotice);
   }
 
   return panel;
