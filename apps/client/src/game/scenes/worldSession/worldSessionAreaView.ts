@@ -639,6 +639,11 @@ export function createWorldSessionAreaView(
 
     playerPlaceholder.setPosition(playerScreenPosition.x, playerScreenPosition.y);
     playerPlaceholder.setInfo(self.displayName, self.hp, self.maxHp);
+    // Task 207 -- show a transient "Moving to loot / interact / attack"
+    // label above the player placeholder while the server-owned
+    // pendingActionType is active. Purely visual; the server still
+    // owns the action outcome.
+    playerPlaceholder.setApproachLabel(self.pendingActionType ?? null);
 
     if (lastClickTarget) {
       const targetScreenPosition = worldToScreenActiveProjection(

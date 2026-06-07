@@ -47,6 +47,13 @@ export interface PlayerPresenceEntry {
    * collision, or interpolation is implied by this display helper.
    */
   readonly position?: PlayerPosition;
+// Task 207 -- server-owned deferred action target kind for this
+// player, when present. Used by the client to show a small "Moving
+// to loot / interact / attack" approach label above the local player
+// placeholder while the player is walking toward a queued target.
+// The server still owns the action; the client only reads this for
+// transient display.
+  readonly pendingActionType?: "attack" | "interact" | "pickup";
   /**
    * Server-synced runtime movement speed for this player, when present.
    * Optional because older / partial state objects may not carry the field
@@ -105,7 +112,8 @@ export function getTownRoomPresence(
     const withProgression = applyOptionalProgression(withSpawn, value);
     const withLifeState = applyOptionalLifeState(withProgression, value);
     const withVitality = applyOptionalVitality(withLifeState, value);
-    const withPosition = applyOptionalPosition(withVitality, value);
+    const withPendingAction = applyOptionalPendingAction(withVitality, value);
+    const withPosition = applyOptionalPosition(withPendingAction, value);
     const withMovementSpeed = applyOptionalMovementSpeed(withPosition, value);
     const withFlask = applyOptionalFlaskState(withMovementSpeed, value);
     const withObjective = applyOptionalObjective(withFlask, value);
@@ -235,6 +243,26 @@ function applyOptionalSpawnPoint(
     ...entry,
     spawnPointId: rawSpawnPointId as SpawnPointId,
   };
+}
+
+// Task 207 -- extract the server-owned deferred action kind for
+// this player, when present. The local UI uses this to show a
+// transient "Moving to ..." label above the player placeholder while
+// the player is walking toward a queued target. The client only
+// reads this for display; the server still owns the action outcome.
+function applyOptionalPendingAction(
+  entry: PlayerPresenceEntry,
+  value: Record<string, unknown>,
+): PlayerPresenceEntry {
+  const hasPending = value.hasPendingAction === true;
+  const rawType = value.pendingActionType;
+  if (!hasPending) {
+    return entry;
+  }
+  if (rawType !== "attack" && rawType !== "interact" && rawType !== "pickup") {
+    return entry;
+  }
+  return { ...entry, pendingActionType: rawType };
 }
 
 function applyOptionalPosition(

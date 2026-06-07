@@ -83,19 +83,24 @@ const ENEMY_AGGRO_RANGE = 120;
 const ENEMY_LEASH_RANGE = 180;
 const ENEMY_ATTACK_RANGE = 44;
 const ENEMY_ATTACK_COOLDOWN_MS = 1200;
-// Task 206 -- server-owned engagement / pickup / interact ranges used
+// Task 207 -- server-owned engagement / pickup / interact ranges used
 // by resolveApproachTarget when queuing deferred move-closer actions.
-// BASIC_ATTACK_RANGE mirrors the value in attackIntentValidation so
-// the player stops at exactly the engagement boundary the validator
-// will then accept.
+// BASIC_ATTACK_RANGE is the engagement radius from
+// attackIntentValidation; the approach stop sits inside that radius
+// (with a snap-to-stop buffer) so the player never overshoots into
+// the enemy center.
 const BASIC_ATTACK_RANGE = 64;
-// PICKUP_APPROACH_DISTANCE is a small close-in radius so the player
-// stops just outside the loot pickable instead of standing on top
-// of it.
+// PICKUP_APPROACH_DISTANCE is a close-in radius well under the
+// WORLD_LOOT_PICKUP_RANGE (48) validator boundary, with a snap-to-stop
+// buffer so the queued pickup reliably executes once the player
+// arrives. Player stops just outside the loot pickable instead of
+// standing on top of it.
 const PICKUP_APPROACH_DISTANCE = 24;
-// INTERACT_APPROACH_DISTANCE matches the server's INTERACT_DISTANCE
-// in interactValidation.ts.
-const INTERACT_APPROACH_DISTANCE = 50;
+// INTERACT_APPROACH_DISTANCE sits inside the interact validator's
+// INTERACT_DISTANCE (50) with a snap-to-stop buffer so the queued
+// interact reliably executes once the player arrives (notice board,
+// vendor, stash keeper, etc.).
+const INTERACT_APPROACH_DISTANCE = 38;
 // Task 094 -- server-owned enemy attack windup. The server sends
 // `enemy_attack_telegraph` to the target client when the windup starts;
 // damage is applied after this many ms only if the target is still alive
