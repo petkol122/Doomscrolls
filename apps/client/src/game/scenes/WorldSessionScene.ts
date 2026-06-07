@@ -202,7 +202,6 @@ export class WorldSessionScene extends Phaser.Scene {
       if (leveledUp) {
         this.feedbackView?.showAttackFeedback(t("world_area.level_up"));
       }
-      void this.refreshAccountStateAfterProgression();
       this.renderOverlay();
     });
 
@@ -465,13 +464,7 @@ export class WorldSessionScene extends Phaser.Scene {
 
     await this.apiClient.equipItem(sessionToken, characterId, itemInstanceId, slot);
 
-    // Refresh account state to get updated inventory + equipment
-    try {
-      this.account = await this.apiClient.getMe(sessionToken);
-      this.renderOverlay();
-    } catch {
-      // Refresh happened best-effort
-    }
+    await this.refreshAccountStateFromMe();
   }
 
   private async handleUnequipItem(
@@ -489,15 +482,14 @@ export class WorldSessionScene extends Phaser.Scene {
 
     await this.apiClient.unequipItem(sessionToken, characterId, slot);
 
-    try {
-      this.account = await this.apiClient.getMe(sessionToken);
-      this.renderOverlay();
-    } catch {
-      // Refresh happened best-effort
-    }
+    await this.refreshAccountStateFromMe();
   }
 
   private async refreshAccountStateAfterPickup(): Promise<void> {
+    await this.refreshAccountStateFromMe();
+  }
+
+  private async refreshAccountStateFromMe(): Promise<void> {
     if (this.apiClient === null) {
       return;
     }
@@ -511,25 +503,8 @@ export class WorldSessionScene extends Phaser.Scene {
       this.account = await this.apiClient.getMe(sessionToken);
       this.renderOverlay();
     } catch {
-      // Ignore refresh failures; pickup feedback already came from realtime server authority.
+      // Ignore best-effort /me refresh failures; live room state still drives HP/XP/combat HUD.
     }
   }
 
-  private async refreshAccountStateAfterProgression(): Promise<void> {
-    if (this.apiClient === null) {
-      return;
-    }
-
-    const sessionToken = window.localStorage.getItem("doomscrolls.sessionToken");
-    if (typeof sessionToken !== "string" || sessionToken.length === 0) {
-      return;
-    }
-
-    try {
-      this.account = await this.apiClient.getMe(sessionToken);
-      this.renderOverlay();
-    } catch {
-      // Ignore refresh failures; realtime state already carries the live progression values.
-    }
-  }
 }

@@ -5,7 +5,7 @@ import type { StatModifier } from "@doomscrolls/shared";
 import type { EquipmentSlot } from "@doomscrolls/shared";
 
 import { formatTownRoomState } from "../../../net/RealtimeClient";
-import { getTownRoomPresence } from "../../../net/townRoomPresence";
+import { getCurrentPlayerPresence, getTownRoomPresence } from "../../../net/townRoomPresence";
 import { createButton, createInfoLine } from "../accountShell/accountShellDom";
 import type { WorldSessionDebugState } from "./worldSessionAreaView";
 import {
@@ -78,20 +78,29 @@ export function createWorldSessionOverlayView(
     if (nextCharacter === null) {
       return null;
     }
-    const selfPresence = getTownRoomPresence(nextRoom.state as unknown as Record<string, unknown>)
-      ?.players.find((player) => player.sessionId === nextRoom.sessionId);
+    const selfPresence = getCurrentPlayerPresence(
+      nextRoom.state as unknown as Record<string, unknown>,
+      nextRoom.sessionId,
+    );
     const selfDisplayName = selfPresence?.displayName
       ?? nextCharacter.characterName
       ?? t("world_session.selected_character");
-    return createCharacterChip(nextCharacter, selfDisplayName, onLeaveWorld);
+    return createCharacterChip(
+      nextCharacter,
+      selfDisplayName,
+      selfPresence?.level ?? nextCharacter.level,
+      onLeaveWorld,
+    );
   };
 
   const buildHudPanel = (
     nextCharacter: CharacterSummary | null,
     nextRoom: Room<DoomscrollsRoomState>,
   ): HTMLElement => {
-    const selfPresence = getTownRoomPresence(nextRoom.state as unknown as Record<string, unknown>)
-      ?.players.find((player) => player.sessionId === nextRoom.sessionId);
+    const selfPresence = getCurrentPlayerPresence(
+      nextRoom.state as unknown as Record<string, unknown>,
+      nextRoom.sessionId,
+    );
     const selfHpSummary = formatPlayerHpSummary(selfPresence?.hp, selfPresence?.maxHp);
     const selfHpRatio = resolvePlayerHpRatio(selfPresence?.hp, selfPresence?.maxHp);
 
@@ -234,6 +243,7 @@ export function createWorldSessionOverlayView(
 function createCharacterChip(
   character: CharacterSummary,
   displayName: string,
+  level: number,
   onLeaveWorld: () => void,
 ): HTMLElement {
   const panel = createCardSection();
@@ -269,7 +279,7 @@ function createCharacterChip(
   textBlock.appendChild(nameLine);
 
   const subLine = document.createElement("div");
-  subLine.textContent = `${displayName} • ${t("character.level")} ${character.level}`;
+  subLine.textContent = `${displayName} • ${t("character.level")} ${level}`;
   subLine.style.fontSize = "11px";
   subLine.style.color = "#b9d49a";
   textBlock.appendChild(subLine);
@@ -495,8 +505,10 @@ function createMovementDebugSection(
   room: Room<DoomscrollsRoomState>,
   debugState: WorldSessionDebugState,
 ): HTMLElement {
-  const presence = getTownRoomPresence(room.state as unknown as Record<string, unknown>);
-  const self = presence?.players.find((player) => player.sessionId === room.sessionId) ?? null;
+  const self = getCurrentPlayerPresence(
+    room.state as unknown as Record<string, unknown>,
+    room.sessionId,
+  );
 
   return createSectionBlock(t("world_session.movement_debug"), [
     createInfoLine(

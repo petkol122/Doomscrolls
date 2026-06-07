@@ -118,6 +118,18 @@ export function getTownRoomPresence(
   };
 }
 
+export function getCurrentPlayerPresence(
+  state: Record<string, unknown>,
+  sessionId: string,
+): PlayerPresenceEntry | null {
+  const presence = getTownRoomPresence(state);
+  if (presence === null) {
+    return null;
+  }
+
+  return presence.players.find((player) => player.sessionId === sessionId) ?? null;
+}
+
 function iteratePresenceEntries(source: unknown): readonly Record<string, unknown>[] {
   if (source === null || source === undefined) {
     return [];
