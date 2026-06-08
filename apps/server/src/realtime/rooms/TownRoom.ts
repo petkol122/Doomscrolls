@@ -28,6 +28,7 @@ import type {
   RequestResetObjectiveClientMessage,
   XpGainedServerMessage,
 } from "@doomscrolls/shared";
+import { formatMoneyCompact } from "@doomscrolls/shared";
 import { t } from "@doomscrolls/localization";
 import { RoomJoinValidationService } from "../RoomJoinValidationService";
 import { CharacterService } from "../../character/CharacterService";
@@ -67,8 +68,8 @@ import { dispatchPickedUpWorldLoot } from "./pickupWorldLootDispatcher";
 import { validatePickupWorldLootIntent } from "./pickupWorldLootValidation";
 import { clearPendingAction, setPendingAction } from "./pendingActionState";
 import { resolvePlayerInitialPosition } from "./validateCharacterLocation";
-import { contentRegistry } from "@doomscrolls/content";
-import type { SpawnPointContentId } from "@doomscrolls/content";
+import { contentRegistry, NOTICE_BOARD_OBJECTIVE_SEQUENCE } from "@doomscrolls/content";
+import type { SpawnPointContentId, ObjectiveId } from "@doomscrolls/content";
 import { NIGHTMARKET_DEFAULT_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
 import { CharacterRepository } from "../../persistence/repositories";
 import { ItemRepository } from "../../persistence/repositories/ItemRepository";
@@ -120,18 +121,62 @@ const ENEMY_RETURN_REACQUIRE_BUFFER = 8;
 const characterStatsService = new CharacterStatsService();
 const progressionLog = createRoomLogger(undefined);
 type ContentEnemyId = Parameters<typeof contentRegistry.enemies.get>[0];
-const NOTICE_BOARD_OBJECTIVE_ID = "cull_trashboars" as const;
-const NOTICE_BOARD_OBJECTIVE = contentRegistry.objectives.require(NOTICE_BOARD_OBJECTIVE_ID);
 
-function buildObjectiveUpdatedMessage(player: {
-  objectiveLabel: string;
-  objectiveCurrent: number;
-  objectiveTarget: number;
+/**
+ * Find the next available objective in the Notice Board sequence.
+ * Returns the content definition for the first objective whose reward has
+ * not yet been granted, or `undefined` if the player has completed the
+ * entire sequence.
+ */
+function findNextNoticeBoardObjective(player: {
+  objectiveRewardGranted: boolean;
   objectiveCompleted: boolean;
-}): ObjectiveUpdatedServerMessage {
+  objectiveId: string;
+}): { readonly objective: import("@doomscrolls/content").ObjectiveContentDefinition; readonly index: number } | undefined {
+  const currentSeqIndex = NOTICE_BOARD_OBJECTIVE_SEQUENCE.indexOf(player.objectiveId);
+  for (const candidateId of NOTICE_BOARD_OBJECTIVE_SEQUENCE) {
+    const candidate = contentRegistry.objectives.get(candidateId as ObjectiveId);
+    if (candidate === undefined) {
+      continue;
+    }
+    const candidateIndex = NOTICE_BOARD_OBJECTIVE_SEQUENCE.indexOf(candidateId);
+    // Skip objectives that come before the current one in the sequence,
+    // since they must have been completed to have advanced past them.
+    // This correctly handles the case where the player's current objectiveId
+    // is the last one and rewardGranted is true — earlier candidates are
+    // skipped so the function returns undefined (chain complete).
+    if (currentSeqIndex >= 0 && candidateIndex < currentSeqIndex) {
+      continue;
+    }
+    // If the player's current objective is this one and reward is not yet
+    // granted, it's the one they're working on — keep it.
+    if (player.objectiveId === candidateId && !player.objectiveRewardGranted) {
+      return { objective: candidate, index: candidateIndex };
+    }
+    // If the player's current objective is this one and reward IS granted,
+    // skip it (completed). Look for the next one.
+    if (player.objectiveId === candidateId && player.objectiveRewardGranted) {
+      continue;
+    }
+    // First uncompleted candidate in sequence: offer it.
+    return { objective: candidate, index: candidateIndex };
+  }
+  return undefined;
+}
+
+function buildObjectiveUpdatedMessage(
+  player: {
+    objectiveId: string;
+    objectiveLabel: string;
+    objectiveCurrent: number;
+    objectiveTarget: number;
+    objectiveCompleted: boolean;
+  },
+  objectiveId: string,
+): ObjectiveUpdatedServerMessage {
   return {
     type: "objective_updated",
-    objectiveId: NOTICE_BOARD_OBJECTIVE_ID,
+    objectiveId,
     label: player.objectiveLabel,
     current: player.objectiveCurrent,
     target: player.objectiveTarget,
@@ -139,23 +184,26 @@ function buildObjectiveUpdatedMessage(player: {
   };
 }
 
-function startNoticeBoardObjective(player: {
-  hasObjective: boolean;
-  objectiveId: string;
-  objectiveLabel: string;
-  objectiveCurrent: number;
-  objectiveTarget: number;
-  objectiveCompleted: boolean;
-  objectiveRewardGranted: boolean;
-}): ObjectiveUpdatedServerMessage {
+function startNoticeBoardObjective(
+  player: {
+    hasObjective: boolean;
+    objectiveId: string;
+    objectiveLabel: string;
+    objectiveCurrent: number;
+    objectiveTarget: number;
+    objectiveCompleted: boolean;
+    objectiveRewardGranted: boolean;
+  },
+  objectiveDef: import("@doomscrolls/content").ObjectiveContentDefinition,
+): ObjectiveUpdatedServerMessage {
   player.hasObjective = true;
-  player.objectiveId = NOTICE_BOARD_OBJECTIVE.id;
-  player.objectiveLabel = t(NOTICE_BOARD_OBJECTIVE.titleKey);
+  player.objectiveId = objectiveDef.id;
+  player.objectiveLabel = t(objectiveDef.titleKey);
   player.objectiveCurrent = 0;
-  player.objectiveTarget = NOTICE_BOARD_OBJECTIVE.requiredKills;
+  player.objectiveTarget = objectiveDef.requiredKills;
   player.objectiveCompleted = false;
   player.objectiveRewardGranted = false;
-  return buildObjectiveUpdatedMessage(player);
+  return buildObjectiveUpdatedMessage(player, objectiveDef.id);
 }
 
 function resetNoticeBoardObjective(player: {
@@ -176,8 +224,21 @@ function resetNoticeBoardObjective(player: {
   player.objectiveRewardGranted = false;
 }
 
-function shouldCountForNoticeBoardObjective(enemyId: string): boolean {
-  return NOTICE_BOARD_OBJECTIVE.targetEnemyIds.includes(enemyId as ContentEnemyId);
+function getActiveObjectiveContent(
+  player: { objectiveId: string },
+): import("@doomscrolls/content").ObjectiveContentDefinition | undefined {
+  if (player.objectiveId.length === 0) {
+    return undefined;
+  }
+  return contentRegistry.objectives.get(player.objectiveId as ObjectiveId);
+}
+
+function shouldCountForNoticeBoardObjective(player: { objectiveId: string }, enemyId: string): boolean {
+  const activeObjective = getActiveObjectiveContent(player);
+  if (activeObjective === undefined) {
+    return false;
+  }
+  return activeObjective.targetEnemyIds.includes(enemyId as ContentEnemyId);
 }
 
 async function advanceNoticeBoardObjective(
@@ -195,11 +256,16 @@ async function advanceNoticeBoardObjective(
   enemyId: string,
   sendToClient: (type: string, payload: unknown) => void,
 ): Promise<void> {
-  if (
-    player.objectiveId !== NOTICE_BOARD_OBJECTIVE_ID
-    || player.objectiveRewardGranted
-    || !shouldCountForNoticeBoardObjective(enemyId)
-  ) {
+  if (player.objectiveRewardGranted || player.objectiveId.length === 0) {
+    return;
+  }
+
+  const activeObjective = getActiveObjectiveContent(player);
+  if (activeObjective === undefined) {
+    return;
+  }
+
+  if (!activeObjective.targetEnemyIds.includes(enemyId as ContentEnemyId)) {
     return;
   }
 
@@ -208,11 +274,26 @@ async function advanceNoticeBoardObjective(
     player.objectiveCompleted = true;
   }
 
-  sendToClient("objective_updated", buildObjectiveUpdatedMessage(player));
+  sendToClient("objective_updated", buildObjectiveUpdatedMessage(player, activeObjective.id));
 
   if (player.objectiveCompleted) {
     player.objectiveRewardGranted = true;
-    await grantFlatXpReward(player, NOTICE_BOARD_OBJECTIVE.xpReward, sendToClient);
+    await grantFlatXpReward(player, activeObjective.xpReward, sendToClient);
+
+    const copperReward = activeObjective.copperReward;
+    if (Number.isFinite(copperReward) && copperReward > 0) {
+      const rep = new CharacterRepository();
+      const total = await rep.incrementMoneyCopper(player.characterId.toString(), copperReward);
+      if (total !== null) {
+        const currencyMsg: import("@doomscrolls/shared").CurrencyPickedUpServerMessage = {
+          type: "currency_picked_up",
+          characterId: player.characterId,
+          gainedCopper: copperReward,
+          totalMoneyCopper: total,
+        };
+        sendToClient("currency_picked_up", currencyMsg);
+      }
+    }
   }
 }
 
@@ -1046,10 +1127,33 @@ export class TownRoom extends Room {
       // Send response message to the requesting client
       const responseMessage = getInteractableResponseMessage(message.objectId);
       if (message.objectId === "nightmarket_notice_board") {
-        const objectiveUpdate = startNoticeBoardObjective(player);
-        try {
-          client.send("objective_updated", objectiveUpdate);
-        } catch {}
+        // If the player already has an active objective that is not yet
+        // completed and not yet rewarded, re-interacting just re-sends
+        // the current state without resetting or duplicating.
+        if (player.hasObjective && player.objectiveId.length > 0 && !player.objectiveCompleted && !player.objectiveRewardGranted) {
+          const reSend = buildObjectiveUpdatedMessage(player, player.objectiveId);
+          try { client.send("objective_updated", reSend); } catch {}
+        } else {
+          // Find the next available objective in the sequence (skips
+          // already-completed ones where reward was granted).
+          const next = findNextNoticeBoardObjective(player);
+          if (next !== undefined) {
+            const objectiveUpdate = startNoticeBoardObjective(player, next.objective);
+            try { client.send("objective_updated", objectiveUpdate); } catch {}
+          } else {
+            // All objectives completed – clear hasObjective so the
+            // tracker does not show stale completed data, but keep the
+            // reward-granted state so findNextNoticeBoardObjective can
+            // properly skip all completed objectives on re-interact.
+            player.hasObjective = false;
+            const doneMessage: import("@doomscrolls/shared").InteractResponseServerMessage = {
+              type: "interact_response",
+              objectId: message.objectId,
+              message: "No more notices for now.",
+            };
+            try { client.send("interact_response", doneMessage); } catch {}
+          }
+        }
       }
 
       // Task 180 — Handle loot container interaction

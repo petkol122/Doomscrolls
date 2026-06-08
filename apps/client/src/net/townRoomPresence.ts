@@ -69,7 +69,7 @@ export interface PlayerPresenceEntry {
   readonly maxFlaskCharges?: number;
   readonly nextSkillSlotAt?: number;
   readonly objective?: {
-    readonly id: "cull_trashboars";
+    readonly id: string;
     readonly label: string;
     readonly current: number;
     readonly target: number;
@@ -363,7 +363,7 @@ function applyOptionalObjective(
   const rawCompleted = value.objectiveCompleted;
 
   if (
-    rawId !== "cull_trashboars"
+    typeof rawId !== "string" || rawId.length === 0
     || typeof rawLabel !== "string"
     || typeof rawCurrent !== "number"
     || typeof rawTarget !== "number"

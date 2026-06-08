@@ -63,6 +63,9 @@ export const en = {
   "objective.cull_trashboars.title": "Cull Trashboars",
   "objective.cull_trashboars.description":
     "Thin the trashboar pack at Blackwire Sewer Edge before it spills deeper into the alleys.",
+  "objective.break_the_brute.title": "Break the Brute",
+  "objective.break_the_brute.description":
+    "The trashboar brute is the pack's backbone. Put it down and watch the rest scatter.",
 
   "auth.username": "Username",
   "auth.password": "Password",

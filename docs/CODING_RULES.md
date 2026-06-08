@@ -260,9 +260,8 @@ Interactable objects are simple world elements that respond to click-to-interact
 - the client renders objects as simple placeholder shapes (rectangles or circles) with labels
 - the client does not predict, animate, or fake any interaction outcomes
 - responses display as temporary messages for 3 seconds then clear
-- the temporary Notice Board objective is the only current exception to the no-reward rule for simple interactables: objective definitions live in `packages/content`, and interacting with the Notice Board may read `cull_trashboars` from content and start the session-temporary objective `Cull Trashboars 0/3`
-- that temporary objective may grant server-owned XP once per session objective only
-- it still must not add objective persistence, a quest log, NPC dialogue, multi-step conversation state, or multiple-objective support
+- the session-only Notice Board objective sequence is the current exception to the no-reward rule for simple interactables: objective definitions live in `packages/content`, the Notice Board offers `Cull Trashboars` first and `Break the Brute` second, one active objective at a time, rewards are XP + copper with per-objective duplicate reward guard
+- it still must not add objective persistence, a quest log, NPC dialogue, multi-step conversation state, selection UI, map markers, or multiple-objective support
 
 ---
 
