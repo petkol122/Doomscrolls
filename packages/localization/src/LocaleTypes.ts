@@ -155,6 +155,7 @@ export const REQUIRED_LOCALIZATION_KEYS = [
   "world_area.enemy_defeated_respawn",
   "world_area.enemy_respawning_in",
   "world_area.enemy_respawned",
+  "world_area.enemy_respawned_label",
   "inventory.title",
   "equipment.title",
   "equipment.slot.weapon",

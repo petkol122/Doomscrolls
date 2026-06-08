@@ -143,7 +143,8 @@ export function createWorldSessionLootPlaceholderView(
   body.setInteractive({ useHandCursor: true });
   const targetRing = scene.add.ellipse(0, 0, 32, 32);
   targetRing.setStrokeStyle(2, 0xfbf2a2, 0);
-  const labelBg = scene.add.rectangle(0, 17, 0, 14, 0x000000, 0.55);
+  const labelBg = scene.add.rectangle(0, 17, 0, 16, 0x0a0a0a, 0.82);
+  labelBg.setStrokeStyle(1, 0x4a4a4a, 0.6);
   const labelText = scene.add
     .text(0, 16, getLootLabelText(loot), {
       color: getLootLabelColor(loot),
@@ -156,7 +157,7 @@ export function createWorldSessionLootPlaceholderView(
 
   // Size label background to fit text
   const labelBounds = labelText.getBounds();
-  labelBg.setSize(labelBounds.width + 6, 16);
+  labelBg.setSize(labelBounds.width + 8, 18);
 
   body.on(Phaser.Input.Events.POINTER_DOWN, () => {
     onClick?.(loot.id);
@@ -186,7 +187,7 @@ export function createWorldSessionLootPlaceholderView(
       labelText.setColor(getLootLabelColor(nextLoot));
       labelText.setStroke(getLootLabelStrokeColor(nextLoot), 3);
       const nextLabelBounds = labelText.getBounds();
-      labelBg.setSize(nextLabelBounds.width + 6, 16);
+      labelBg.setSize(nextLabelBounds.width + 8, 18);
       const palette = getLootPlaceholderPalette(nextLoot);
       glow.setFillStyle(palette.glow, 0.26);
       ping.setFillStyle(palette.ping, 0.12);

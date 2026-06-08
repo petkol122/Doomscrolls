@@ -19,6 +19,11 @@ import type { TownRoomEnemySnapshot } from "../../../net/townRoomEnemies";
 // applied to a live (non-defeated) enemy placeholder.
 const HIDDEN_POSITION = -9999;
 
+// Task 244 — how long the "Respawned" label stays visible after the
+// server flips the enemy back from defeated -> alive, so the visual
+// no longer looks like a random teleport. Server rules are unchanged.
+const RESPAWNED_LABEL_DURATION_MS = 1500;
+
 function isBruteEnemy(enemy: TownRoomEnemySnapshot): boolean {
   return enemy.id.includes("trashboar_brute");
 }
@@ -140,7 +145,39 @@ export function createWorldSessionEnemyPlaceholderView(
     .setOrigin(0.5);
   heavyTelegraphLabel.setVisible(false);
 
-  container.add([shadow, ring, body, core, hpBarFrame, hpBarFill, hpText, labelText, stateText, telegraphMarker, telegraphExclaim, heavyTelegraphLabel, aggroExclaim]);
+  // Task 244 — defeated "X" cross marker, hidden by default. Shown
+  // only while the server reports `defeated: true` so the corpse
+  // reads clearly as downed, not just a darker copy of the live
+  // enemy. Reuses only existing placeholder shapes (two crossed
+  // rectangles + outline), no animations, no new sprites.
+  const defeatedCrossV = scene.add.rectangle(0, 0, isBrute ? 4 : 3, isBrute ? 22 : 18, 0xff3a3a, 0.95);
+  const defeatedCrossH = scene.add.rectangle(0, 0, isBrute ? 22 : 18, isBrute ? 4 : 3, 0xff3a3a, 0.95);
+  defeatedCrossV.setStrokeStyle(1, 0x160909, 0.95);
+  defeatedCrossH.setStrokeStyle(1, 0x160909, 0.95);
+  defeatedCrossV.setVisible(false);
+  defeatedCrossH.setVisible(false);
+  const defeatedCrossOutline = scene.add.circle(0, 0, isBrute ? 14 : 11, 0x1a0808, 0.78);
+  defeatedCrossOutline.setStrokeStyle(1, 0xff5a5a, 0.85);
+  defeatedCrossOutline.setVisible(false);
+
+  container.add([
+    shadow,
+    ring,
+    body,
+    core,
+    hpBarFrame,
+    hpBarFill,
+    hpText,
+    labelText,
+    stateText,
+    telegraphMarker,
+    telegraphExclaim,
+    heavyTelegraphLabel,
+    aggroExclaim,
+    defeatedCrossOutline,
+    defeatedCrossV,
+    defeatedCrossH,
+  ]);
 
   body.on(Phaser.Input.Events.POINTER_DOWN, () => {
     onClick?.(enemy.id);
@@ -162,6 +199,13 @@ export function createWorldSessionEnemyPlaceholderView(
     return `state=${nextEnemy.state}`;
   };
 
+  // Task 244 — track the previous `defeated` value to detect the
+  // server-driven respawn transition. On the first refresh after
+  // respawn we briefly show a "Respawned" label so the visual no
+  // longer looks like a random teleport. Server rules are unchanged.
+  let lastDefeated: boolean = enemy.defeated;
+  let respawnedAtMs: number | null = null;
+
   const applyEnemyVisualState = (nextEnemy: TownRoomEnemySnapshot): void => {
     const nextIsBrute = isBruteEnemy(nextEnemy);
     const hpRatio = getHpRatio(nextEnemy);
@@ -174,13 +218,24 @@ export function createWorldSessionEnemyPlaceholderView(
         0,
         Math.ceil((nextEnemy.respawnAtMs - Date.now()) / 1000),
       );
+      // Task 244 — corpse polish: dimmer shadow, dimmer ring, greyed
+      // body, squashed body (taller → wider, lower) so the silhouette
+      // reads as "downed", hidden HP bar, and a red ✕ mark floating
+      // over the body. All visual, server still owns the state.
       shadow.setFillStyle(0x000000, 0.18);
       ring.setFillStyle(0x3a3a3a, 0.14);
       ring.setStrokeStyle(2, 0x9a9a9a, 0.24);
       body.setFillStyle(0x4a4a4a, 0.75);
       body.setStrokeStyle(2, 0x9a9a9a, 0.7);
       body.disableInteractive();
+      // Squash the body horizontally and lower it so it looks like it
+      // has fallen to the ground. Width and Y offset are visual only.
+      const squashedBodyWidth = (isBrute ? 32 : 24) * 1.4;
+      const squashedBodyHeight = (isBrute ? 30 : 24) * 0.5;
+      body.setSize(squashedBodyWidth, squashedBodyHeight);
+      body.setPosition(0, 4);
       core.setFillStyle(0x9c9c9c, 0.55);
+      core.setVisible(false);
       stateText.setColor("#b8b8b8");
       stateText.setText(formatStateText(nextEnemy));
       labelText.setColor("#b8b8b8");
@@ -192,10 +247,34 @@ export function createWorldSessionEnemyPlaceholderView(
         }),
       );
       hpBarFill.setVisible(false);
+      hpBarFrame.setVisible(false);
       aggroExclaim.setVisible(false);
-      core.setScale(1);
+      // Show the "X" cross on top of the corpse body, anchored above
+      // the squashed silhouette.
+      defeatedCrossOutline.setVisible(true);
+      defeatedCrossOutline.setPosition(0, 2);
+      defeatedCrossV.setVisible(true);
+      defeatedCrossV.setPosition(0, 2);
+      defeatedCrossH.setVisible(true);
+      defeatedCrossH.setPosition(0, 2);
+      lastDefeated = true;
+      respawnedAtMs = null;
       return;
     }
+
+    // Restore body size / position from any previous defeated state
+    // so live enemies always render at their standard silhouette.
+    const liveBodyWidth = isBrute ? 32 : 24;
+    const liveBodyHeight = isBrute ? 30 : 24;
+    if (body.width !== liveBodyWidth || body.height !== liveBodyHeight) {
+      body.setSize(liveBodyWidth, liveBodyHeight);
+    }
+    body.setPosition(0, 0);
+    core.setVisible(true);
+    defeatedCrossOutline.setVisible(false);
+    defeatedCrossV.setVisible(false);
+    defeatedCrossH.setVisible(false);
+    hpBarFrame.setVisible(true);
 
     hpBarFill.setVisible(true);
     shadow.setFillStyle(0x000000, 0.28);
@@ -235,8 +314,27 @@ export function createWorldSessionEnemyPlaceholderView(
     stateText.setText(formatStateText(nextEnemy));
     labelText.setColor("#ffffff");
     labelText.setText(t(nextEnemy.label));
-    hpText.setColor("#ffdddd");
-    hpText.setText(`${nextEnemy.hp}/${nextEnemy.maxHp} HP`);
+
+    // Task 244 — respawn transition: on the first refresh where the
+    // server flips `defeated: true -> false`, briefly show a
+    // "Respawned" label so the visual is not a random teleport.
+    if (lastDefeated === true && nextEnemy.defeated === false) {
+      respawnedAtMs = Date.now();
+    }
+    lastDefeated = nextEnemy.defeated;
+
+    if (
+      respawnedAtMs !== null
+      && Date.now() - respawnedAtMs < RESPAWNED_LABEL_DURATION_MS
+    ) {
+      hpText.setColor("#b8e0ff");
+      hpText.setText(t("world_area.enemy_respawned_label"));
+    } else {
+      respawnedAtMs = null;
+      hpText
+      hpText.setColor('#ffdddd');
+      hpText.setText(`${nextEnemy.hp}/${nextEnemy.maxHp} HP`);
+    }
   };
 
   const hide = (): void => {
@@ -249,15 +347,14 @@ export function createWorldSessionEnemyPlaceholderView(
     applyEnemyVisualState(nextEnemy);
   };
 
-  // Task 094 - show or hide the telegraph warning marker. Driven
-  // exclusively by the server-sent `enemy_attack_telegraph` event.
+  // Task 094 - show or hide the telegraph warning marker.
   let telegraphTween: Phaser.Tweens.Tween | null = null;
-  const setTelegraphing = (active: boolean, attackKind: "normal" | "heavy" = "normal"): void => {
-    const isHeavy = attackKind === "heavy";
+  const setTelegraphing = (active: boolean, attackKind: 'normal' | 'heavy' = 'normal'): void => {
+    const isHeavy = attackKind === 'heavy';
     telegraphMarker.setFillStyle(isHeavy ? 0xff6a3d : 0xffe14a, 0.95);
     telegraphMarker.setStrokeStyle(2, isHeavy ? 0x5c1200 : 0x6b4a00, 0.9);
-    telegraphExclaim.setText(isHeavy ? "!!" : "!");
-    telegraphExclaim.setColor(isHeavy ? "#fff3e0" : "#1a0e00");
+    telegraphExclaim.setText(isHeavy ? '!!' : '!');
+    telegraphExclaim.setColor(isHeavy ? '#fff3e0' : '#1a0e00');
     telegraphMarker.setVisible(active);
     telegraphExclaim.setVisible(active);
     heavyTelegraphLabel.setVisible(active && isHeavy);
