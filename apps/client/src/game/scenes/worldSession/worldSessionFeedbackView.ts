@@ -17,9 +17,22 @@ import Phaser from "phaser";
  * existing container is reused.
  */
 
+// Task 246 -- Distinct dodge rejection reason feedback.
+//   - "sent"        -> dodge intent dispatched to the server
+//   - "accepted"    -> server accepted the dodge
+//   - "cooldown"    -> server rejected with `dodge_on_cooldown`
+//   - "downed"      -> server rejected with `player_downed` (downed header shown)
+//   - "no_direction"-> client could not derive a dodge direction (no recent move)
+//   - "rejected"    -> generic server rejection or client-send failure
 export type WorldSessionFeedbackVariant = "damage" | "heal" | "dodge";
 
-export type WorldSessionDodgeFeedbackState = "sent" | "accepted" | "cooldown" | "downed";
+export type WorldSessionDodgeFeedbackState =
+  | "sent"
+  | "accepted"
+  | "cooldown"
+  | "downed"
+  | "no_direction"
+  | "rejected";
 
 export interface WorldSessionFeedbackView {
   readonly showNotice: (message: string) => void;

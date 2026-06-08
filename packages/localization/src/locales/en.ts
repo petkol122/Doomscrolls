@@ -208,6 +208,7 @@ export const en = {
   "world_area.dodge_sent": "Dodge sent.",
   "world_area.dodge_confirmed": "Dodge confirmed.",
   "world_area.dodge_on_cooldown": "Dodge is on cooldown.",
+  "world_area.dodge_downed": "Cannot dodge while downed.",
   "world_area.dodge_unavailable": "Dodge unavailable.",
   "world_area.dodge_test_button": "Send test dodge (Space)",
   "world_area.dodge_test_help":

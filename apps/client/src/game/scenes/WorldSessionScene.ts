@@ -350,6 +350,10 @@ export class WorldSessionScene extends Phaser.Scene {
     this.healingFlaskInput?.destroy();
     this.healingFlaskInput = null;
 
+    // Task 246 -- wire each typed reason to its own feedback state so
+    // cooldown, downed, no-direction and generic rejection are distinct
+    // in the UI. Server rejection reasons stay authoritative; the scene
+    // does not interpret intent validity.
     this.dodgeInput = attachWorldSessionDodgeInput(
       this,
       this.room,
@@ -360,8 +364,10 @@ export class WorldSessionScene extends Phaser.Scene {
       {
         onDodgeSentFeedback: (message) => { this.feedbackView?.showDodgeFeedback("sent", message); },
         onDodgeConfirmedFeedback: (message) => { this.feedbackView?.showDodgeFeedback("accepted", message); },
-        onDodgeRejectedFeedback: (message) => { this.feedbackView?.showDodgeFeedback("cooldown", message); },
-        onDodgeNoDirectionFeedback: (message) => { this.feedbackView?.showDodgeFeedback("downed", message); },
+        onDodgeCooldownFeedback: (message) => { this.feedbackView?.showDodgeFeedback("cooldown", message); },
+        onDodgeDownedFeedback: (message) => { this.feedbackView?.showDodgeFeedback("downed", message); },
+        onDodgeNoDirectionFeedback: (message) => { this.feedbackView?.showDodgeFeedback("no_direction", message); },
+        onDodgeRejectedFeedback: (message) => { this.feedbackView?.showDodgeFeedback("rejected", message); },
       },
     );
 

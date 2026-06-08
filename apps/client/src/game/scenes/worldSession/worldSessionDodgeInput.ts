@@ -31,11 +31,20 @@ import { shouldIgnoreWorldSessionCombatHotkey } from "./worldSessionCombatHotkey
 // safe "no direction" notice and does not send anything.
 // ---------------------------------------------------------------------------
 
+// Task 246 -- the input module forwards the typed reason, not just text.
+//   - onDodgeSentFeedback         -> dispatched
+//   - onDodgeConfirmedFeedback    -> server accepted
+//   - onDodgeCooldownFeedback     -> server reason "dodge_on_cooldown"
+//   - onDodgeDownedFeedback       -> server reason "player_downed"
+//   - onDodgeNoDirectionFeedback  -> client could not derive a direction
+//   - onDodgeRejectedFeedback     -> generic server rejection or send failure
 export interface WorldSessionDodgeInputCallbacks {
   readonly onDodgeSentFeedback: (message: string) => void;
   readonly onDodgeConfirmedFeedback: (message: string) => void;
-  readonly onDodgeRejectedFeedback: (message: string) => void;
+  readonly onDodgeCooldownFeedback: (message: string) => void;
+  readonly onDodgeDownedFeedback: (message: string) => void;
   readonly onDodgeNoDirectionFeedback: (message: string) => void;
+  readonly onDodgeRejectedFeedback: (message: string) => void;
 }
 
 export interface LastClickTargetProvider {
@@ -130,13 +139,15 @@ export function attachWorldSessionDodgeInput(
     },
     onRejected: (message) => {
       if (message.reason === "dodge_on_cooldown") {
-        callbacks.onDodgeRejectedFeedback(t("world_area.dodge_on_cooldown"));
+        callbacks.onDodgeCooldownFeedback(t("world_area.dodge_on_cooldown"));
         return;
       }
       if (message.reason === "player_downed") {
-        callbacks.onDodgeRejectedFeedback(t("world_area.dodge_unavailable"));
+        callbacks.onDodgeDownedFeedback(t("world_area.dodge_downed"));
         return;
       }
+      // Server stays authoritative; any other reason maps to a safe
+      // generic rejection. Server must never leak Prisma/stack details.
       callbacks.onDodgeRejectedFeedback(t("world_area.dodge_unavailable"));
     },
   });
