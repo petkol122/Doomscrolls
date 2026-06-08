@@ -16,7 +16,7 @@ export type ContentLocalizationKey = LocalizationKey;
 
 export type SkillId = "heavy_strike";
 export type EnemyId = "trashboar_runt" | "trashboar_brute" | "trashboar_skitter";
-export type LootTableId = "sewer_starter_loot";
+export type LootTableId = "sewer_starter_loot" | "sewer_brute_loot";
 export type LevelTableId = "level_1_to_10";
 export type ObjectiveId = "cull_trashboars";
 export type ZoneContentId = "nightmarket" | "blackwire_sewers";

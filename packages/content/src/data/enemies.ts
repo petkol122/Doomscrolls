@@ -37,7 +37,8 @@ export const enemies = [
     aggroRange: 5.6,
     leashRange: 8,
     xp: 15,
-    lootTableId: "sewer_starter_loot",
+    lootTableId: "sewer_brute_loot",
+    currencyDrop: { min: 4, max: 12 },
     spriteKey: "enemy_trashboar_runt_placeholder"
   },
   {

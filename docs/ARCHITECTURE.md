@@ -835,7 +835,7 @@ Targeted action approach:
   - once the simulation tick brings the player in range, the original action intent is processed server-side
   - the client never decides action success; it only sends intents and renders synced room state
 
-Enemy AI (Trashboar Runt placeholder, multiple per zone):
+Enemy AI (Trashboar-family placeholder variants: Runt baseline, Skitter, Brute — multiple per zone):
   - spawn zones are content-driven: each SpawnZoneDefinition defines enemy type, count and bounding rectangle per zone
   - multiple enemies per zone (Nightmarket spawns 3 Trashboar Runt placeholders)
   - deterministic server RNG (seeded mulberry32) places enemies within spawn zone bounds on room creation

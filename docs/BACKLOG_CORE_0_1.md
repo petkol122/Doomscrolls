@@ -38,6 +38,8 @@ nightvision
 gravewalker
 heavy_strike
 trashboar_runt
+trashboar_skitter
+trashboar_brute
 nightmarket
 blackwire_sewers
 starter_pipe
@@ -286,6 +288,22 @@ Task 078 milestone note: synced placeholder world loot can now be clicked for se
 Task 063 status note: the same synced placeholder-enemy slice now includes a minimal defeated state. When enemy HP reaches 0, the server marks that synced enemy as defeated, keeps it in room state, clamps HP at 0, and safely rejects further attacks against it. The client renders defeated enemies differently and may show `Enemy defeated.` as safe feedback.
 
 Task 071 status note: the placeholder Trashboar now supports a basic server-owned dev respawn loop. After defeat it remains visibly defeated for a short delay, then the same synced enemy resets to full HP, clears `defeated`, and becomes attackable again at the same static position. This remains a narrow debug loop only: no loot, XP, enemy AI, enemy attacks, player damage, corpse system or persistence was added.
+
+### Task 251 — Enemy Variant Docs Checkpoint
+
+Document the current Trashboar-family enemy variants. This is a documentation-only task and must not change code, add features, or run browser automation.
+
+Status: documented. `README.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG_CORE_0_1.md` and `docs/CODING_RULES.md` now briefly state:
+
+```text
+Trashboar Runt = baseline content variant
+Trashboar Skitter = lower HP, faster move speed, lower XP
+Trashboar Brute = tougher / deeper, with a heavy attack window
+all three variants share the existing AI / loot / XP / render pipeline
+all three variants are content-only and use placeholder visuals
+```
+
+The three variants are defined in `packages/content/src/data/enemies.ts` and are consumed by the existing spawn-zone / AI / loot / XP / render pipeline without any new states, sprites, abilities or rarity tiers. The Runt is the default Nightmarket spawn; the Skitter and Brute entries are content-only placeholders for now and are not yet wired to spawn zones.
 
 ### Task 019 — Corpse and Respawn
 

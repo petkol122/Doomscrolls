@@ -75,7 +75,7 @@ Zones have a classification field: `safe_hub` / `combat` / `test_hybrid`. The Ni
 - First Class: **Gravewalker**
 - First Hub: **The Nightmarket** (test_hybrid zone)
 - First Combat Zone: **Blackwire Sewers**
-- First Enemy: **Trashboar Runt**
+- First Enemy: **Trashboar Runt** (baseline) — content-driven variants exist as `trashboar_skitter` (lower HP, faster, lower XP) and `trashboar_brute` (tougher, deeper, heavy attack). All variants share the existing AI / loot / XP / render pipeline; visuals are placeholder-only.
 - First Vendor Placeholder: **Suspicious Vendor** (non-hostile town service NPC; interact opens a compact dismissible panel showing vendor name + "Trading is not available yet." + current money snapshot; no shop UI/prices/stock/spending/selling/reputation)
 
 ---
@@ -387,7 +387,7 @@ Server-authoritative movement:
   - TownRoom stores the authoritative movement target and advances synced x/y on its simulation tick
   - newer clicks replace older movement targets; the client never teleports or predicts arrival locally
 
-Enemy AI (Trashboar Runt placeholder):
+Enemy AI (Trashboar-family placeholder variants: Runt baseline, Skitter, Brute):
   - content-driven spawn zones define enemy type, count and bounding rectangle per zone
   - Nightmarket currently spawns 3 Trashboar Runt placeholders from one spawn zone
   - deterministic server RNG (seeded mulberry32) chooses initial spawn positions inside the spawn zone
@@ -716,7 +716,7 @@ The package currently defines the locked foundation content for:
 - Sewer Dweller origin and Nightvision passive
 - Gravewalker class and Heavy Strike skill definition
 - The Nightmarket and Blackwire Sewers zones
-- Trashboar Runt enemy definition
+- Trashboar Runt, Skitter and Brute enemy definitions (content variants on the same AI / loot / XP / render pipeline; placeholder visuals)
 - starter pipe, sewer jacket, starter blood flask and blackwire scrap items
 - Core 0.1 equipment slots, starter sewer loot table and level 1-10 XP table
 
