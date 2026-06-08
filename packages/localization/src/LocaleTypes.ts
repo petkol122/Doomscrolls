@@ -24,6 +24,8 @@ export const REQUIRED_LOCALIZATION_KEYS = [
   "enemy.trashboar_runt.description",
   "enemy.trashboar_brute.name",
   "enemy.trashboar_brute.description",
+  "enemy.trashboar_skitter.name",
+  "enemy.trashboar_skitter.description",
   "zone.nightmarket.name",
   "zone.nightmarket.description",
   "zone.blackwire_sewers.name",

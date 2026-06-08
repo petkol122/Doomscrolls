@@ -19,6 +19,9 @@ export const en = {
   "enemy.trashboar_brute.name": "Trashboar Brute",
   "enemy.trashboar_brute.description":
     "A broader, meaner slab of tusk and scar tissue that hits the alleys like a living battering ram.",
+  "enemy.trashboar_skitter.name": "Trashboar Skitter",
+  "enemy.trashboar_skitter.description":
+    "A nervous runt cousin — all twitch and tusk, faster than it has any right to be and gone before you finish the swing.",
 
   "zone.nightmarket.name": "The Nightmarket",
   "zone.nightmarket.description":

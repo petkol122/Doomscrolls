@@ -15,7 +15,7 @@ import type { LocalizationKey } from "@doomscrolls/localization";
 export type ContentLocalizationKey = LocalizationKey;
 
 export type SkillId = "heavy_strike";
-export type EnemyId = "trashboar_runt" | "trashboar_brute";
+export type EnemyId = "trashboar_runt" | "trashboar_brute" | "trashboar_skitter";
 export type LootTableId = "sewer_starter_loot";
 export type LevelTableId = "level_1_to_10";
 export type ObjectiveId = "cull_trashboars";

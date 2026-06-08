@@ -153,6 +153,35 @@ export function createWorldSessionFeedbackView(scene: Phaser.Scene): WorldSessio
     });
   };
 
+  // Shared body render for damage / heal / dodge variants.
+  // Owns downed-header show/clear and the body text + timer lifecycle
+  // so the three public methods only differ in style and duration.
+  const showVitalBody = (
+    variant: WorldSessionFeedbackVariant,
+    message: string,
+    options: { readonly isDowned: boolean; readonly durationMs: number },
+  ): void => {
+    const isDowned = options.isDowned;
+    applyVariantStyle(variant, isDowned);
+    damageText.setText(message);
+    clearTimer(damageTimer);
+    if (isDowned) {
+      showDownedHeader();
+    } else {
+      downedHeader.setText("");
+      clearTimer(downedHeaderTimer);
+      downedHeaderTimer = null;
+    }
+    damageTimer = scene.time.delayedCall(options.durationMs, () => {
+      damageText.setText("");
+      damageTimer = null;
+      if (isDowned) {
+        downedHeader.setText("");
+        downedHeaderTimer = null;
+      }
+    });
+  };
+
   return {
     showNotice: (message: string) => {
       noticeText.setText(message);
@@ -172,54 +201,19 @@ export function createWorldSessionFeedbackView(scene: Phaser.Scene): WorldSessio
     },
     showDamageFeedback: (message: string, options) => {
       const isDowned = options?.isDowned === true;
-      applyVariantStyle("damage", isDowned);
-      damageText.setText(message);
-      clearTimer(damageTimer);
-      if (isDowned) {
-        showDownedHeader();
-      } else {
-        downedHeader.setText("");
-        clearTimer(downedHeaderTimer);
-        downedHeaderTimer = null;
-      }
-      damageTimer = scene.time.delayedCall(isDowned ? 2500 : 1400, () => {
-        damageText.setText("");
-        damageTimer = null;
-        if (isDowned) {
-          downedHeader.setText("");
-          downedHeaderTimer = null;
-        }
+      showVitalBody("damage", message, {
+        isDowned,
+        durationMs: isDowned ? 2500 : 1400,
       });
     },
     showHealFeedback: (message: string) => {
-      applyVariantStyle("heal", false);
-      downedHeader.setText("");
-      clearTimer(downedHeaderTimer);
-      downedHeaderTimer = null;
-      damageText.setText(message);
-      clearTimer(damageTimer);
-      damageTimer = scene.time.delayedCall(1500, () => {
-        damageText.setText("");
-        damageTimer = null;
-      });
+      showVitalBody("heal", message, { isDowned: false, durationMs: 1500 });
     },
     showDodgeFeedback: (state, message) => {
-      applyVariantStyle("dodge", false);
-      downedHeader.setText("");
-      clearTimer(downedHeaderTimer);
-      downedHeaderTimer = null;
-      damageText.setText(message);
-      clearTimer(damageTimer);
-      if (state === "downed") {
-        showDownedHeader();
-      }
-      damageTimer = scene.time.delayedCall(state === "accepted" ? 900 : 1500, () => {
-        damageText.setText("");
-        damageTimer = null;
-        if (state === "downed") {
-          downedHeader.setText("");
-          downedHeaderTimer = null;
-        }
+      const isDowned = state === "downed";
+      showVitalBody("dodge", message, {
+        isDowned,
+        durationMs: state === "accepted" ? 900 : 1500,
       });
     },
     showRareDropNotice: (message: string) => {
