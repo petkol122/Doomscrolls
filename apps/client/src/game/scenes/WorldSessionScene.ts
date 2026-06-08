@@ -358,10 +358,10 @@ export class WorldSessionScene extends Phaser.Scene {
         getSelfPosition: () => this.worldAreaView?.getSelfWorldPosition() ?? null,
       },
       {
-        onDodgeSentFeedback: (message) => { this.feedbackView?.showNotice(message); },
-        onDodgeConfirmedFeedback: (message) => { this.feedbackView?.showNotice(message); },
-        onDodgeRejectedFeedback: (message) => { this.feedbackView?.showNotice(message); },
-        onDodgeNoDirectionFeedback: (message) => { this.feedbackView?.showNotice(message); },
+        onDodgeSentFeedback: (message) => { this.feedbackView?.showDodgeFeedback("sent", message); },
+        onDodgeConfirmedFeedback: (message) => { this.feedbackView?.showDodgeFeedback("accepted", message); },
+        onDodgeRejectedFeedback: (message) => { this.feedbackView?.showDodgeFeedback("cooldown", message); },
+        onDodgeNoDirectionFeedback: (message) => { this.feedbackView?.showDodgeFeedback("downed", message); },
       },
     );
 
@@ -370,7 +370,7 @@ export class WorldSessionScene extends Phaser.Scene {
         this.feedbackView?.showNotice(message);
       },
       onFlaskAcceptedFeedback: (message) => {
-        this.feedbackView?.showNotice(
+        this.feedbackView?.showHealFeedback(
           t("world_area.flask_healed", { healed: message.healedAmount, hp: message.remainingHp }),
         );
       },
