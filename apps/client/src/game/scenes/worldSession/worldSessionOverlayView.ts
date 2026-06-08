@@ -63,6 +63,7 @@ interface ObjectiveTrackerViewModel {
   readonly target: number;
   readonly completed: boolean;
   readonly isHint: boolean;
+  readonly allDone: boolean;
 }
 
 interface StatusViewRefs {
@@ -432,6 +433,7 @@ function renderHudContent(
     selfPresence?.xp ?? nextCharacter?.xp ?? 0,
     selfPresence?.objective ?? null,
     onResetObjective,
+    selfPresence?.objectiveRewardGranted,
   ));
   panel.appendChild(createSkillSlotPlaceholder(selfPresence?.nextSkillSlotAt, skillTargeting, lastSkillRejectedReason));
 
@@ -834,6 +836,7 @@ function createHudSection(
     readonly completed: boolean;
   } | null,
   onResetObjective?: () => void,
+  objectiveRewardGranted?: boolean,
 ): HTMLElement {
   const wrapper = document.createElement("section");
   wrapper.style.display = "grid";
@@ -894,7 +897,7 @@ function createHudSection(
 
   wrapper.appendChild(vitalityCard);
 
-  wrapper.appendChild(createObjectiveTrackerCard(resolveObjectiveTrackerViewModel(objective), onResetObjective));
+  wrapper.appendChild(createObjectiveTrackerCard(resolveObjectiveTrackerViewModel(objective, objectiveRewardGranted), onResetObjective));
 
   wrapper.appendChild(createMiniHudStat("Resource", t("world_session.resource_placeholder")));
   wrapper.appendChild(createMiniHudStat(t("character.level"), String(level ?? 1)));
@@ -1017,11 +1020,28 @@ function createObjectiveTrackerCard(objective: {
   readonly target: number;
   readonly completed: boolean;
   readonly isHint: boolean;
+  readonly allDone: boolean;
 }, onResetObjective?: () => void): HTMLElement {
   const card = document.createElement("div");
   card.style.display = "grid";
   card.style.gap = "4px";
   card.style.padding = "8px 10px";
+
+  if (objective.allDone) {
+    // All objectives in chain are complete — show a dim "No more notices"
+    card.style.border = "1px solid #3c3122";
+    card.style.borderRadius = "12px";
+    card.style.background = "linear-gradient(180deg, rgba(20, 18, 14, 0.9) 0%, rgba(14, 12, 10, 0.9) 100%)";
+    card.style.minWidth = "176px";
+
+    const line = document.createElement("div");
+    line.textContent = t("objective.no_more_notices");
+    line.style.fontSize = "12px";
+    line.style.color = "#b9ae95";
+    card.appendChild(line);
+    return card;
+  }
+
   card.style.border = objective.completed
     ? "1px solid #4f6b3d"
     : objective.isHint
@@ -1095,8 +1115,9 @@ function createObjectiveTrackerCard(objective: {
     card.appendChild(progressFrame);
   }
 
-  const resetButton = createButton(t("objective.clear"));
-  resetButton.title = t("objective.reset_hint");
+  // Show chain-level reset button (resets entire objective chain)
+  const resetButton = createButton(t("objective.reset_chain"));
+  resetButton.title = t("objective.reset_chain_hint");
   resetButton.style.width = "auto";
   resetButton.style.justifySelf = "start";
   resetButton.style.padding = "4px 8px";
@@ -1118,19 +1139,35 @@ function resolveObjectiveTrackerViewModel(
     readonly target: number;
     readonly completed: boolean;
   } | null | undefined,
+  objectiveRewardGranted?: boolean,
 ): ObjectiveTrackerViewModel {
-  const defaultObjective = contentRegistry.objectives.get(DEFAULT_TRACKED_OBJECTIVE_ID);
-  const defaultTitle = defaultObjective === undefined ? "Objective available" : t(defaultObjective.titleKey);
+  const firstObjectiveContent = contentRegistry.objectives.get(DEFAULT_TRACKED_OBJECTIVE_ID);
+  const firstTitle = firstObjectiveContent === undefined ? "Objective available" : t(firstObjectiveContent.titleKey);
+  const isAllDone = objective === null && objectiveRewardGranted === true;
+
+  if (isAllDone) {
+    return {
+      title: "",
+      titleHint: "",
+      stateLabel: "",
+      current: 0,
+      target: 1,
+      completed: false,
+      isHint: true,
+      allDone: true,
+    };
+  }
 
   if (objective === null || objective === undefined) {
     return {
-      title: defaultTitle,
-      titleHint: `Notice Board: ${defaultTitle}`,
+      title: firstTitle,
+      titleHint: `Notice Board: ${firstTitle}`,
       stateLabel: "Hint",
       current: 0,
-      target: defaultObjective?.requiredKills ?? 1,
+      target: firstObjectiveContent?.requiredKills ?? 1,
       completed: false,
       isHint: true,
+      allDone: false,
     };
   }
 
@@ -1142,6 +1179,7 @@ function resolveObjectiveTrackerViewModel(
     target: objective.target,
     completed: objective.completed,
     isHint: false,
+    allDone: false,
   };
 }
 

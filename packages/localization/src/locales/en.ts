@@ -73,6 +73,8 @@ export const en = {
   "objective.reset_hint": "Restart this objective (progress will be lost)",
   "objective.no_more_notices": "No more notices for now.",
   "objective.clear": "Clear",
+  "objective.reset_chain": "Reset Chain",
+  "objective.reset_chain_hint": "Restart the whole Notice Board sequence (progress will be lost)",
 
   "auth.username": "Username",
   "auth.password": "Password",

@@ -216,6 +216,10 @@ export class WorldSessionScene extends Phaser.Scene {
       }
       this.feedbackView?.showNotice(message);
     }, (message: ObjectiveUpdatedServerMessage) => {
+      // Clear stale completion notice when a new (non-completed) objective arrives
+      if (!message.completed) {
+        this.lastObjectiveCompletionNotice = null;
+      }
       if (message.completed) {
         const xp = Number.isFinite(message.xpReward) ? Math.max(0, message.xpReward ?? 0) : 0;
         const copper = Number.isFinite(message.copperReward) ? Math.max(0, message.copperReward ?? 0) : 0;

@@ -75,6 +75,8 @@ export interface PlayerPresenceEntry {
     readonly target: number;
     readonly completed: boolean;
   };
+  readonly hasObjective?: boolean;
+  readonly objectiveRewardGranted?: boolean;
   readonly hasCorpse?: boolean;
   readonly corpsePosition?: PlayerPosition;
 }
@@ -352,8 +354,15 @@ function applyOptionalObjective(
   entry: PlayerPresenceEntry,
   value: Record<string, unknown>,
 ): PlayerPresenceEntry {
-  if (value.hasObjective !== true) {
-    return entry;
+  const hasObjective = value.hasObjective === true;
+  const objectiveRewardGranted = value.objectiveRewardGranted === true;
+
+  if (!hasObjective) {
+    return {
+      ...entry,
+      hasObjective: false,
+      objectiveRewardGranted,
+    };
   }
 
   const rawId = value.objectiveId;
@@ -371,11 +380,17 @@ function applyOptionalObjective(
     || !Number.isFinite(rawCurrent)
     || !Number.isFinite(rawTarget)
   ) {
-    return entry;
+    return {
+      ...entry,
+      hasObjective: true,
+      objectiveRewardGranted,
+    };
   }
 
   return {
     ...entry,
+    hasObjective: true,
+    objectiveRewardGranted,
     objective: {
       id: rawId,
       label: rawLabel,
