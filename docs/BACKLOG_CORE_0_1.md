@@ -708,6 +708,14 @@ Status: documented. `docs/ARCHITECTURE.md` and `docs/CODING_RULES.md` now state:
 
 ---
 
+### Task 241 — Reward Feedback Docs Checkpoint
+
+Document the current combat reward feedback. Documentation-only task.
+
+Status: documented. `README.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG_CORE_0_1.md`, and `docs/CODING_RULES.md` now briefly state that combat reward feedback includes: enemy defeat notice, loot/currency drop notices, rare drop feedback, and level-up notice with new level and max HP gain. XP/level remains server-owned. No stat allocation, skill points or talent tree exist yet. This checkpoint is docs + verification only: no gameplay or UI feature changes were added.
+
+---
+
 ## Anti-Scope-Creep
 
 Do not implement before Core 0.1 is complete:

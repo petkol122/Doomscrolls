@@ -413,6 +413,13 @@ Progression and equipment-derived stats:
   - equipment stat modifiers are included in that same recalculation and can change derived stats such as max HP, damage and movement speed
   - the current client debug UI shows these derived/runtime values from real synced/account state rather than inventing local values
 
+Combat reward feedback:
+  - enemy defeat notice on synced kill (e.g. "Enemy defeated.")
+  - loot drop notice when a defeated enemy spawns world loot (item or currency)
+  - rare drop feedback when loot has rarity "rare"
+  - level-up notice with new level and max HP gain (e.g. "Level Up! Now level {level}. Max HP +{gainedMaxHp}.")
+  - XP/level remains server-owned; no stat allocation, skill points or talent tree exist yet
+
 Basic attack and skills:
   - left-click basic attack remains server-authoritative and uses the existing move-first-then-act deferred-action flow
   - RMB Grave Spark is a real targeted skill sent through request_skill_slot with content-defined cooldown/cost/range/telegraph

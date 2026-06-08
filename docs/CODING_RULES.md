@@ -204,6 +204,7 @@ Client auth UI rules:
 - level-up max HP reward and all other derived-stat changes must come from server recalculation only; the client must not invent level-up outcomes locally
 - equipped item stat modifiers must feed the same server-side derived-stat recalculation used for progression/runtime joins; client UI may only display the resulting real derived/runtime values
 - current debug/account UI may show derived stats, runtime HP/flask state and equipment outcomes only from real synced room state or persisted account state
+- combat reward feedback includes: enemy defeat notice, loot/currency drop notices, rare drop feedback, and level-up notice with new level and max HP gain; XP/level remains server-owned; no stat allocation, skill points or talent tree exist yet
 - Q (healing flask) and Space (dodge) world hotkeys must share the same focus-filtering helper so they do not fire while text-entry style focus is active
 - projection preview modes must not keep click-to-move world input enabled when that would misrepresent the active world projection
 - WorldSession overlay mount points for interactive controls must stay stable across state updates

@@ -397,6 +397,13 @@ Progression and equipment-derived stats:
   equipped item stat modifiers participate in the same recalculation and can change derived stats such as maxHp, damage and movement speed
   current client account/world debug UI may show these derived/runtime values from real synced or persisted state only
 
+Combat reward feedback:
+  - enemy defeat notice on synced kill (e.g. "Enemy defeated.")
+  - loot drop notice when a defeated enemy spawns world loot (item or currency)
+  - rare drop feedback when loot has rarity "rare"
+  - level-up notice with new level and max HP gain (e.g. "Level Up! Now level {level}. Max HP +{gainedMaxHp}.")
+  - XP/level remains server-owned; no stat allocation, skill points or talent tree exist yet
+
 HUD state:
   current overlay is a temporary HUD/resource placeholder + debug shell
   final Diablo-like orb HUD is deferred
