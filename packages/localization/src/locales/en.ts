@@ -67,6 +67,13 @@ export const en = {
   "objective.break_the_brute.description":
     "The trashboar brute is the pack's backbone. Put it down and watch the rest scatter.",
 
+  "objective.complete_reward": "Objective complete! +{xpReward} XP, +{copperReward} copper",
+  "objective.complete_reward_xp_only": "Objective complete! +{xpReward} XP",
+  "objective.complete_reward_copper_only": "Objective complete! +{copperReward} copper",
+  "objective.reset_hint": "Restart this objective (progress will be lost)",
+  "objective.no_more_notices": "No more notices for now.",
+  "objective.clear": "Clear",
+
   "auth.username": "Username",
   "auth.password": "Password",
   "auth.login": "Log in",

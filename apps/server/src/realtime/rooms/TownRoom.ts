@@ -173,6 +173,7 @@ function buildObjectiveUpdatedMessage(
     objectiveCompleted: boolean;
   },
   objectiveId: string,
+  reward?: { readonly xpReward: number; readonly copperReward: number },
 ): ObjectiveUpdatedServerMessage {
   return {
     type: "objective_updated",
@@ -181,6 +182,7 @@ function buildObjectiveUpdatedMessage(
     current: player.objectiveCurrent,
     target: player.objectiveTarget,
     completed: player.objectiveCompleted,
+    ...(reward !== undefined ? { xpReward: reward.xpReward, copperReward: reward.copperReward } : {}),
   };
 }
 
@@ -274,7 +276,10 @@ async function advanceNoticeBoardObjective(
     player.objectiveCompleted = true;
   }
 
-  sendToClient("objective_updated", buildObjectiveUpdatedMessage(player, activeObjective.id));
+  const reward = player.objectiveCompleted
+    ? { xpReward: activeObjective.xpReward, copperReward: activeObjective.copperReward }
+    : undefined;
+  sendToClient("objective_updated", buildObjectiveUpdatedMessage(player, activeObjective.id, reward));
 
   if (player.objectiveCompleted) {
     player.objectiveRewardGranted = true;

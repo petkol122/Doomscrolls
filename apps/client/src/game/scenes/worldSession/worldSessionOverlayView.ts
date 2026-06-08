@@ -1095,7 +1095,8 @@ function createObjectiveTrackerCard(objective: {
     card.appendChild(progressFrame);
   }
 
-  const resetButton = createButton("Reset objective");
+  const resetButton = createButton(t("objective.clear"));
+  resetButton.title = t("objective.reset_hint");
   resetButton.style.width = "auto";
   resetButton.style.justifySelf = "start";
   resetButton.style.padding = "4px 8px";

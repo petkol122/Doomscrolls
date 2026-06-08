@@ -217,7 +217,15 @@ export class WorldSessionScene extends Phaser.Scene {
       this.feedbackView?.showNotice(message);
     }, (message: ObjectiveUpdatedServerMessage) => {
       if (message.completed) {
-        const completionText = "Objective complete";
+        const xp = Number.isFinite(message.xpReward) ? Math.max(0, message.xpReward ?? 0) : 0;
+        const copper = Number.isFinite(message.copperReward) ? Math.max(0, message.copperReward ?? 0) : 0;
+        const hasXp = xp > 0;
+        const hasCopper = copper > 0;
+        const completionText = hasXp && hasCopper
+          ? t("objective.complete_reward", { xpReward: xp, copperReward: copper })
+          : hasXp
+            ? t("objective.complete_reward_xp_only", { xpReward: xp })
+            : "Objective complete";
         if (this.lastObjectiveCompletionNotice !== completionText) {
           this.lastObjectiveCompletionNotice = completionText;
           this.feedbackView?.showNotice(completionText);
