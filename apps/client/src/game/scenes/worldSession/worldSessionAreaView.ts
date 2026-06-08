@@ -142,6 +142,7 @@ export function createWorldSessionAreaView(
   onAttackFeedback?: (message: string) => void,
   onPickupFeedback?: (message: string) => void,
   onDebugStateChange?: () => void,
+  onRareDrop?: (itemLabel: string) => void,
 ): WorldSessionAreaView {
   const graveSparkRange = 96;
   const movementHoldThrottleMs = 125;
@@ -250,6 +251,7 @@ export function createWorldSessionAreaView(
   const previousEnemyHp = new Map<string, number>();
   const previousEnemyDefeated = new Map<string, boolean>();
   const previousEnemyRespawnAtMs = new Map<string, number>();
+  const previousLootIds = new Set<string>();
   let pendingPickupWorldLootId: string | null = null;
   let heldMovementTarget: HeldMovementTargetSnapshot | null = null;
   let lastHeldMovementIntentAtMs = 0;
@@ -444,6 +446,9 @@ export function createWorldSessionAreaView(
       }
       if (lastDefeated !== true && enemy.defeated) {
         const remainingSeconds = Math.max(0, Math.ceil((enemy.respawnAtMs - Date.now()) / 1000));
+        onPickupFeedback?.(
+          t("world_area.enemy_defeated_distinct", { enemy: t(enemy.label) }),
+        );
         onAttackFeedback?.(
           t("world_area.enemy_defeated_respawn", {
             seconds: remainingSeconds,
@@ -468,6 +473,26 @@ export function createWorldSessionAreaView(
       .map((loot: TownRoomWorldLootSnapshot) => projectWorldLootToArea(loot, worldProjection))
       .filter((loot: TownRoomWorldLootSnapshot | null): loot is TownRoomWorldLootSnapshot => loot !== null);
     const newWorldLootIds = new Set(projectedWorldLoot.map((loot: TownRoomWorldLootSnapshot) => loot.id));
+
+    // Detect new loot entries and show drop feedback
+    for (const loot of projectedWorldLoot) {
+      if (!previousLootIds.has(loot.id)) {
+        const sourceLoot = currentWorldLoot.find((entry) => entry.id === loot.id);
+        if (sourceLoot !== undefined) {
+          if (sourceLoot.rarity === "rare") {
+            onRareDrop?.(t(sourceLoot.label));
+          } else if (sourceLoot.currencyCopper > 0) {
+            onPickupFeedback?.(t("world_area.currency_dropped"));
+          } else {
+            onPickupFeedback?.(t("world_area.loot_dropped"));
+          }
+        }
+      }
+    }
+    previousLootIds.clear();
+    for (const id of newWorldLootIds) {
+      previousLootIds.add(id);
+    }
 
     for (const [id, view] of lootPlaceholders.entries()) {
       if (!newWorldLootIds.has(id)) {

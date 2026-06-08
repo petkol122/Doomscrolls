@@ -201,6 +201,8 @@ export const en = {
   "world_area.xp_gained": "+{amount} XP.",
   "world_area.xp_gained_total": "+{amount} XP ({totalXp} total).",
   "world_area.level_up": "Level up!",
+  "world_area.level_up_notice": "Level Up! Now level {level}.",
+  "world_area.level_up_hp_notice": "Level Up! Now level {level}. Max HP +{gainedMaxHp}.",
 
   "world_area.dodge_sent": "Dodge sent.",
   "world_area.dodge_confirmed": "Dodge confirmed.",
@@ -230,6 +232,10 @@ export const en = {
   "world_area.corpse_interact_no_corpse": "No corpse to recover.",
   "world_area.corpse_return_hint": "Return to your corpse",
   "world_area.skill_unavailable": "Skill unavailable.",
+  "world_area.enemy_defeated_distinct": "{enemy} defeated!",
+  "world_area.loot_dropped": "Loot dropped.",
+  "world_area.currency_dropped": "Currency dropped.",
+  "world_area.rare_drop": "Rare drop: {item}!",
   "world_session.corpse_return_hint": "Return to your corpse",
 
   "inventory.title": "Inventory",

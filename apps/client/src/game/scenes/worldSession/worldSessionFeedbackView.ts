@@ -4,6 +4,7 @@ export interface WorldSessionFeedbackView {
   readonly showNotice: (message: string) => void;
   readonly showAttackFeedback: (message: string) => void;
   readonly showDamageFeedback: (message: string, options?: { readonly isDowned?: boolean }) => void;
+  readonly showRareDropNotice: (message: string) => void;
   readonly clearDamageFeedback: () => void;
   readonly destroy: () => void;
 }
@@ -44,11 +45,23 @@ export function createWorldSessionFeedbackView(scene: Phaser.Scene): WorldSessio
     padding: { left: 10, right: 10, top: 7, bottom: 7 },
   }).setOrigin(0.5, 0);
 
-  container.add([noticeText, attackText, damageText]);
+  const rareDropText = scene.add.text(0, 100, "", {
+    color: "#8fc7ff",
+    fontFamily: "Arial, sans-serif",
+    fontSize: "15px",
+    fontStyle: "bold",
+    align: "center",
+    wordWrap: { width: 420 },
+    backgroundColor: "rgba(10, 24, 48, 0.94)",
+    padding: { left: 12, right: 12, top: 7, bottom: 7 },
+  }).setOrigin(0.5, 0);
+
+  container.add([noticeText, attackText, damageText, rareDropText]);
 
   let noticeTimer: Phaser.Time.TimerEvent | null = null;
   let attackTimer: Phaser.Time.TimerEvent | null = null;
   let damageTimer: Phaser.Time.TimerEvent | null = null;
+  let rareDropTimer: Phaser.Time.TimerEvent | null = null;
 
   const clearTimer = (timer: Phaser.Time.TimerEvent | null): void => {
     if (timer !== null) {
@@ -89,11 +102,20 @@ export function createWorldSessionFeedbackView(scene: Phaser.Scene): WorldSessio
         damageTimer = null;
       });
     },
+    showRareDropNotice: (message: string) => {
+      rareDropText.setText(message);
+      clearTimer(rareDropTimer);
+      rareDropTimer = scene.time.delayedCall(4000, () => {
+        rareDropText.setText("");
+        rareDropTimer = null;
+      });
+    },
     clearDamageFeedback,
     destroy: () => {
       clearTimer(noticeTimer);
       clearTimer(attackTimer);
       clearTimer(damageTimer);
+      clearTimer(rareDropTimer);
       container.destroy(true);
     },
   };

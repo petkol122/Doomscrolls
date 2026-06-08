@@ -250,6 +250,7 @@ async function grantFlatXpReward(
     leveledUp: progression.leveledUp,
     hp: progressionUpdate.hp,
     maxHp: progressionUpdate.maxHp,
+    gainedMaxHp: progressionUpdate.gainedMaxHp,
   };
   sendToClient("xp_gained", xpGained);
 }

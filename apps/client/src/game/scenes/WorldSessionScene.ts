@@ -162,6 +162,9 @@ export class WorldSessionScene extends Phaser.Scene {
       () => {
         this.renderOverlay();
       },
+      (itemLabel: string) => {
+        this.feedbackView?.showRareDropNotice(t("world_area.rare_drop", { item: itemLabel }));
+      },
     );
 
     registerInteractResponseListener(this.room, (message: string, objectId?: string) => {
@@ -283,7 +286,7 @@ export class WorldSessionScene extends Phaser.Scene {
       void this.refreshAccountStateAfterPickup();
     });
 
-    this.room.onMessage("xp_gained", (message: { amount?: unknown; totalXp?: unknown; leveledUp?: unknown; hp?: unknown; maxHp?: unknown }) => {
+    this.room.onMessage("xp_gained", (message: { amount?: unknown; totalXp?: unknown; leveledUp?: unknown; level?: unknown; hp?: unknown; maxHp?: unknown; gainedMaxHp?: unknown }) => {
       const amount = typeof message.amount === "number" && Number.isFinite(message.amount)
         ? Math.max(0, Math.floor(message.amount))
         : 0;
@@ -294,14 +297,26 @@ export class WorldSessionScene extends Phaser.Scene {
         && typeof message === "object"
         && "leveledUp" in message
         && message.leveledUp === true;
+      const newLevel = typeof message.level === "number" && Number.isFinite(message.level)
+        ? Math.max(1, Math.floor(message.level))
+        : null;
+      const gainedMaxHp = typeof message.gainedMaxHp === "number" && Number.isFinite(message.gainedMaxHp)
+        ? Math.floor(message.gainedMaxHp)
+        : 0;
 
-      this.feedbackView?.showNotice(
-        totalXp === null
-          ? t("world_area.xp_gained", { amount })
-          : t("world_area.xp_gained_total", { amount, totalXp }),
-      );
-      if (leveledUp) {
-        this.feedbackView?.showAttackFeedback(t("world_area.level_up"));
+      if (leveledUp && newLevel !== null) {
+        // Prominent level-up notice showing new level and HP gain.
+        this.feedbackView?.showNotice(
+          gainedMaxHp > 0
+            ? t("world_area.level_up_hp_notice", { level: newLevel, gainedMaxHp })
+            : t("world_area.level_up_notice", { level: newLevel }),
+        );
+      } else {
+        this.feedbackView?.showNotice(
+          totalXp === null
+            ? t("world_area.xp_gained", { amount })
+            : t("world_area.xp_gained_total", { amount, totalXp }),
+        );
       }
       this.renderOverlay();
     });
