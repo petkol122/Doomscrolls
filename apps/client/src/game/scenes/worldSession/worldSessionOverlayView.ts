@@ -285,8 +285,14 @@ function createCharacterChip(
   level: number,
   onLeaveWorld: () => void,
 ): StatusViewRefs {
+  // Task 242 — the chip is a visible interactive panel root. We
+  // intentionally do NOT call `makePassive(panel)` here; the panel
+  // must keep `pointer-events: auto` (set by the card styles) and
+  // must stop world input from leaking to the Phaser canvas. The
+  // leave button is the only true interactive control inside, but
+  // the chip's panel background is also a visible card and must
+  // catch clicks reliably.
   const panel = createCardSection();
-  makePassive(panel);
   panel.style.display = "flex";
   panel.style.alignItems = "center";
   panel.style.justifyContent = "space-between";

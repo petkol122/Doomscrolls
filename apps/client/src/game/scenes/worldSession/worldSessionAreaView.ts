@@ -381,18 +381,34 @@ export function createWorldSessionAreaView(
 
     for (const [id, view] of enemyPlaceholders.entries()) {
       if (!currentEnemyIds.has(id)) {
+        // Defensive lifecycle rule (Task 242):
+        // An enemy view is only destroyed when the server has actually
+        // removed the enemy from authoritative state. A temporary
+        // projection miss (off-camera bounds, camera follow re-anchor,
+        // zoom change) must NOT destroy the view; the view is allowed
+        // to stay at its last known world position until the
+        // projection returns and a refresh snaps it back. This stops
+        // enemies from disappearing and reappearing elsewhere when
+        // the player moves around the zone.
         view.destroy();
         enemyPlaceholders.delete(id);
         enemyScreenPositions.delete(id);
       }
     }
 
-    for (const [id, view] of enemyPlaceholders.entries()) {
-      if (currentEnemyIds.has(id) && !projectedEnemies.some((projectedEnemy) => projectedEnemy.enemy.id === id)) {
-        view.hide();
-        enemyScreenPositions.delete(id);
-      }
-    }
+    // Defensive lifecycle rule (Task 242):
+    // If a server-authoritative enemy exists but its world position
+    // is currently outside the projected viewport (e.g. the player
+    // camera has re-anchored or zoomed), the projection helper
+    // returns null. The view must NOT be hidden, moved off-screen,
+    // or treated as despawned in that case; the server still owns
+    // the enemy and will respawn / chase / return / defeat it
+    // independently of client-side projection. We only treat the
+    // enemy as removed when it disappears from `currentEnemyIds`
+    // (the server removed it) or when its `defeated` flag is true
+    // (visual represents the corpse / defeated state). The view's
+    // last known screen position is preserved by not calling
+    // refresh() with a projection and not calling hide().
 
     for (const projectedEnemy of projectedEnemies) {
       const enemy = projectedEnemy.enemy;

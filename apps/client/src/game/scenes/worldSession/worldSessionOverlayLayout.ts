@@ -1,4 +1,4 @@
-import { makeOverlayPassive } from "./worldSessionPointerEvents";
+import { makeInteractiveAndStopWorldInput, makeOverlayPassive } from "./worldSessionPointerEvents";
 
 export function applyWorldSessionOverlayRootStyles(root: HTMLDivElement): void {
   makeOverlayPassive(root);
@@ -11,7 +11,7 @@ export function applyWorldSessionOverlayRootStyles(root: HTMLDivElement): void {
   root.style.alignItems = "start";
   // Root overlay stays passive so ground clicks still reach the Phaser canvas
   // through empty space. Interactive children opt back in via
-  // `makeInteractive()` from `worldSessionPointerEvents`.
+  // `makeInteractiveAndStopWorldInput()` from `worldSessionPointerEvents`.
   root.style.fontFamily = "Arial, sans-serif";
   root.style.padding = "12px 14px 16px";
   root.style.gap = "10px";
@@ -50,11 +50,11 @@ export function applyWorldSessionOverlayHudStyles(panel: HTMLElement): void {
 }
 
 export function applyWorldSessionOverlayPanelStyles(panel: HTMLElement): void {
-  // Card sections are visible interactive panels; do NOT make them passive.
-  // Passive leaves empty padding/gap areas transparent to pointer events,
-  // causing clicks inside a visible panel to pass through to the Phaser
-  // canvas underneath and trigger ground movement.
-  panel.style.pointerEvents = "auto";
+  // Card sections are visible interactive panels. Task 242: combine
+  // `pointer-events: auto` with capture-phase pointerdown / mousedown /
+  // click / contextmenu stoppers so the panel reliably catches input
+  // and never lets a click leak to the Phaser world canvas behind it.
+  makeInteractiveAndStopWorldInput(panel);
   panel.style.padding = "8px 10px";
   panel.style.border = "1px solid #4d3f2a";
   panel.style.borderRadius = "12px";
@@ -70,8 +70,8 @@ export function applyWorldSessionOverlayPanelStyles(panel: HTMLElement): void {
 }
 
 export function applyWorldSessionOverlayScrollablePanelStyles(panel: HTMLElement): void {
-  // Same as the non-scrollable variant — card panels must be pointer-events: auto
-  // so clicks inside visible panel areas do not reach the canvas underneath.
+  // Same as the non-scrollable variant — card panels must stop world
+  // input as well as enabling pointer events (see Task 242).
   applyWorldSessionOverlayPanelStyles(panel);
   panel.style.maxHeight = "calc(100vh - 28px)";
   panel.style.overflowY = "auto";

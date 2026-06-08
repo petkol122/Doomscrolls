@@ -59,12 +59,29 @@ export function createVendorInteractionPanel(
   const show = (): void => {
     hideExisting();
 
+    // Task 242 — vendor / town-service modal backdrop. The backdrop
+    // is a visible interactive panel root that must catch pointer
+    // input and stop it from reaching the Phaser world canvas behind
+    // it. Setting `pointer-events: auto` alone is not enough on its
+    // own — we also install capture-phase pointerdown / mousedown /
+    // click / contextmenu stoppers so any click in the modal area
+    // never leaks to the canvas as a movement intent.
     const backdrop = document.createElement("div");
     backdrop.style.cssText = `
       position: fixed; inset: 0; z-index: 20000;
       background: rgba(0,0,0,0.4);
       display: flex; align-items: center; justify-content: center;
     `;
+    const stopWorldInput = (event: Event): void => {
+      event.stopPropagation();
+      if (event.cancelable) {
+        event.preventDefault();
+      }
+    };
+    backdrop.addEventListener("pointerdown", stopWorldInput, { capture: true });
+    backdrop.addEventListener("mousedown", stopWorldInput, { capture: true });
+    backdrop.addEventListener("click", stopWorldInput, { capture: true });
+    backdrop.addEventListener("contextmenu", stopWorldInput, { capture: true });
 
     const card = document.createElement("div");
     card.style.cssText = `

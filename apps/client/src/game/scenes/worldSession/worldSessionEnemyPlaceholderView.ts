@@ -3,6 +3,20 @@ import Phaser from "phaser";
 
 import type { TownRoomEnemySnapshot } from "../../../net/townRoomEnemies";
 
+// Task 242 — Defensive enemy view lifecycle rule:
+//   * the server (TownRoom) is the only authority for spawn / chase /
+//     return / defeated / respawn transitions;
+//   * the client view is only destroyed when the server removes the
+//     enemy from authoritative state (caller stops calling refresh()
+//     and the placeholder is destroyed in the area view);
+//   * a temporary missing projected position, an off-camera enemy,
+//     a player overlap, or a single missing refresh tick must NOT
+//     hide or move the view; the view stays at its last known
+//     world/screen position until either refresh() with a valid
+//     projection or destroy() is called from the area view.
+// HIDDEN_POSITION is kept as a constant for future use by the
+// server-driven "defeated" corpse visual only — it must never be
+// applied to a live (non-defeated) enemy placeholder.
 const HIDDEN_POSITION = -9999;
 
 function isBruteEnemy(enemy: TownRoomEnemySnapshot): boolean {
