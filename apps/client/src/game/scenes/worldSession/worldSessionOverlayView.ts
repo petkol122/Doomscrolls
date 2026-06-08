@@ -1,5 +1,6 @@
 import type { Room } from "@colyseus/sdk";
 import { contentRegistry } from "@doomscrolls/content";
+import type { ObjectiveId } from "@doomscrolls/content";
 import { t } from "@doomscrolls/localization";
 import type { CharacterSummary, InventorySummaryItem, RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
 import type { StatModifier } from "@doomscrolls/shared";
@@ -64,6 +65,9 @@ interface ObjectiveTrackerViewModel {
   readonly completed: boolean;
   readonly isHint: boolean;
   readonly allDone: boolean;
+  readonly location?: string;
+  readonly xpReward?: number;
+  readonly copperReward?: number;
 }
 
 interface StatusViewRefs {
@@ -830,10 +834,13 @@ function createHudSection(
   level?: number,
   xp?: number,
   objective?: {
+    readonly id: string;
     readonly label: string;
     readonly current: number;
     readonly target: number;
     readonly completed: boolean;
+    readonly xpReward?: number;
+    readonly copperReward?: number;
   } | null,
   onResetObjective?: () => void,
   objectiveRewardGranted?: boolean,
@@ -1012,16 +1019,7 @@ function createMiniHudStat(labelText: string, valueText: string): HTMLElement {
   return card;
 }
 
-function createObjectiveTrackerCard(objective: {
-  readonly title: string;
-  readonly titleHint: string;
-  readonly stateLabel: string;
-  readonly current: number;
-  readonly target: number;
-  readonly completed: boolean;
-  readonly isHint: boolean;
-  readonly allDone: boolean;
-}, onResetObjective?: () => void): HTMLElement {
+function createObjectiveTrackerCard(objective: ObjectiveTrackerViewModel, onResetObjective?: () => void): HTMLElement {
   const card = document.createElement("div");
   card.style.display = "grid";
   card.style.gap = "4px";
@@ -1088,7 +1086,8 @@ function createObjectiveTrackerCard(objective: {
 
   if (!objective.isHint) {
     const subtitleLine = document.createElement("div");
-    subtitleLine.textContent = "Blackwire Sewer Edge";
+    // Show location if available, otherwise use fallback
+    subtitleLine.textContent = objective.location ?? "Nightmarket";
     subtitleLine.style.fontSize = "10px";
     subtitleLine.style.color = "#a88d63";
     card.appendChild(subtitleLine);
@@ -1115,34 +1114,69 @@ function createObjectiveTrackerCard(objective: {
     card.appendChild(progressFrame);
   }
 
-  // Show chain-level reset button (resets entire objective chain)
-  const resetButton = createButton(t("objective.reset_chain"));
-  resetButton.title = t("objective.reset_chain_hint");
-  resetButton.style.width = "auto";
-  resetButton.style.justifySelf = "start";
-  resetButton.style.padding = "4px 8px";
-  resetButton.style.fontSize = "11px";
-  resetButton.addEventListener("click", (event) => {
+  // Show reward info for completed objectives (only if not already granted)
+  if (objective.completed && objective.xpReward !== undefined && objective.copperReward !== undefined) {
+    const rewardLine = document.createElement("div");
+    rewardLine.textContent = t("objective.complete_reward", {
+      xpReward: objective.xpReward,
+      copperReward: objective.copperReward,
+    });
+    rewardLine.style.fontSize = "11px";
+    rewardLine.style.color = "#8fcd7a";
+    rewardLine.style.fontWeight = "bold";
+    card.appendChild(rewardLine);
+  } else if (objective.completed && objective.xpReward !== undefined) {
+    const rewardLine = document.createElement("div");
+    rewardLine.textContent = t("objective.complete_reward_xp_only", { xpReward: objective.xpReward });
+    rewardLine.style.fontSize = "11px";
+    rewardLine.style.color = "#8fcd7a";
+    rewardLine.style.fontWeight = "bold";
+    card.appendChild(rewardLine);
+  } else if (objective.completed && objective.copperReward !== undefined) {
+    const rewardLine = document.createElement("div");
+    rewardLine.textContent = t("objective.complete_reward_copper_only", { copperReward: objective.copperReward });
+    rewardLine.style.fontSize = "11px";
+    rewardLine.style.color = "#8fcd7a";
+    rewardLine.style.fontWeight = "bold";
+    card.appendChild(rewardLine);
+  }
+
+  // Clear current objective button (resets progress only)
+  const clearButton = createButton(t("objective.clear"));
+  clearButton.title = t("objective.clear_hint");
+  clearButton.style.width = "auto";
+  clearButton.style.justifySelf = "start";
+  clearButton.style.padding = "4px 8px";
+  clearButton.style.fontSize = "11px";
+  clearButton.addEventListener("click", (event) => {
     event.stopPropagation();
     onResetObjective?.();
   });
-  makeInteractive(resetButton);
-  card.appendChild(resetButton);
+  makeInteractive(clearButton);
+  card.appendChild(clearButton);
 
   return card;
 }
 
 function resolveObjectiveTrackerViewModel(
   objective: {
+    readonly id: string;
     readonly label: string;
     readonly current: number;
     readonly target: number;
     readonly completed: boolean;
+    readonly xpReward?: number;
+    readonly copperReward?: number;
   } | null | undefined,
   objectiveRewardGranted?: boolean,
 ): ObjectiveTrackerViewModel {
   const firstObjectiveContent = contentRegistry.objectives.get(DEFAULT_TRACKED_OBJECTIVE_ID);
   const firstTitle = firstObjectiveContent === undefined ? "Objective available" : t(firstObjectiveContent.titleKey);
+  const firstLocation = firstObjectiveContent?.zoneId !== undefined
+    ? (firstObjectiveContent.zoneId.startsWith("nightmarket") ? "The Nightmarket" : firstObjectiveContent.zoneId)
+    : "The Nightmarket";
+
+  // All objectives done when no active objective AND reward was granted for last one
   const isAllDone = objective === null && objectiveRewardGranted === true;
 
   if (isAllDone) {
@@ -1168,8 +1202,12 @@ function resolveObjectiveTrackerViewModel(
       completed: false,
       isHint: true,
       allDone: false,
+      location: firstLocation,
     };
   }
+
+  // Look up location from content if available
+  const objectiveContent = contentRegistry.objectives.get(objective.id as ObjectiveId);
 
   return {
     title: objective.label,
@@ -1180,6 +1218,9 @@ function resolveObjectiveTrackerViewModel(
     completed: objective.completed,
     isHint: false,
     allDone: false,
+    location: objectiveContent?.zoneId ?? firstLocation,
+    ...(objective.xpReward !== undefined && { xpReward: objective.xpReward }),
+    ...(objective.copperReward !== undefined && { copperReward: objective.copperReward }),
   };
 }
 

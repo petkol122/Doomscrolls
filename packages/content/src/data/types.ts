@@ -183,6 +183,11 @@ export interface ObjectiveContentDefinition {
   readonly requiredKills: number;
   readonly xpReward: number;
   readonly copperReward: number;
+  /**
+   * Optional zone ID where this objective's target enemies can be found.
+   * Used by the client to display location information.
+   */
+  readonly zoneId?: ZoneContentId;
 }
 
 export interface SpawnPointContentDefinition {

@@ -19,6 +19,8 @@ import type {
   PlayerPosition,
   SpawnPointId,
 } from "@doomscrolls/shared";
+import type { ObjectiveId } from "@doomscrolls/content";
+import { contentRegistry } from "@doomscrolls/content";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -74,6 +76,8 @@ export interface PlayerPresenceEntry {
     readonly current: number;
     readonly target: number;
     readonly completed: boolean;
+    readonly xpReward?: number;
+    readonly copperReward?: number;
   };
   readonly hasObjective?: boolean;
   readonly objectiveRewardGranted?: boolean;
@@ -387,6 +391,13 @@ function applyOptionalObjective(
     };
   }
 
+  // Look up content to get rewards (for completed objective display)
+  // Cast rawId to ObjectiveId for the content registry lookup
+  const objectiveId = rawId as ObjectiveId;
+  const content = contentRegistry?.objectives?.get?.(objectiveId);
+  const xpReward = content?.xpReward;
+  const copperReward = content?.copperReward;
+
   return {
     ...entry,
     hasObjective: true,
@@ -397,6 +408,8 @@ function applyOptionalObjective(
       current: Math.max(0, Math.floor(rawCurrent)),
       target: Math.max(1, Math.floor(rawTarget)),
       completed: rawCompleted,
+      ...(xpReward !== undefined && { xpReward }),
+      ...(copperReward !== undefined && { copperReward }),
     },
   };
 }

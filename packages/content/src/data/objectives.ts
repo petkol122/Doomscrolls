@@ -9,6 +9,7 @@ export const objectives: readonly ObjectiveContentDefinition[] = [
     requiredKills: 3,
     xpReward: 5,
     copperReward: 3,
+    zoneId: "nightmarket",
   },
   {
     id: "break_the_brute",
@@ -18,6 +19,7 @@ export const objectives: readonly ObjectiveContentDefinition[] = [
     requiredKills: 1,
     xpReward: 10,
     copperReward: 6,
+    zoneId: "nightmarket",
   },
 ] as const satisfies readonly ObjectiveContentDefinition[];
 
