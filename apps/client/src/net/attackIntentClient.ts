@@ -148,7 +148,8 @@ function isEnemyAttackTelegraphServerMessage(
     candidate.type === "enemy_attack_telegraph" &&
     typeof candidate.enemyId === "string" &&
     typeof candidate.targetEntityId === "string" &&
-    typeof candidate.windupMs === "number"
+    typeof candidate.windupMs === "number" &&
+    (candidate.attackKind === "normal" || candidate.attackKind === "heavy")
   );
 }
 
@@ -165,6 +166,7 @@ function isEnemyAttackResolvedServerMessage(
     && typeof candidate.enemyId === "string"
     && typeof candidate.targetEntityId === "string"
     && (candidate.outcome === "hit" || candidate.outcome === "miss")
+    && (candidate.attackKind === "normal" || candidate.attackKind === "heavy")
     && (candidate.damage === undefined || typeof candidate.damage === "number")
     && (candidate.remainingHp === undefined || typeof candidate.remainingHp === "number")
   );

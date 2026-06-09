@@ -25,7 +25,7 @@ export interface DamageAppliedServerMessage {
 }
 
 // ---------------------------------------------------------------------------
-// Enemy attack telegraph (Task 094)
+// Enemy attack telegraph (Task 094 / Task 269)
 //
 // Server-only, time-bound warning sent to the target player right before
 // an enemy attack lands. The client must not derive damage outcome from
@@ -33,13 +33,19 @@ export interface DamageAppliedServerMessage {
 // is applied. The `windupMs` value is informational and describes how
 // long the windup phase is expected to last; clients may use it for
 // transient visual warning markers only.
+//
+// Task 269: `attackKind` is now REQUIRED and is part of the explicit
+// telegraph protocol. The server must always set it to either
+// "normal" or "heavy"; clients consume it from the protocol instead
+// of guessing. The field is purely visual (heavy Brute charged
+// strike vs normal swing) — outcomes are still server-authoritative.
 // ---------------------------------------------------------------------------
 export interface EnemyAttackTelegraphServerMessage {
   readonly type: "enemy_attack_telegraph";
   readonly enemyId: string;
   readonly targetEntityId: EntityId;
   readonly windupMs: number;
-  readonly attackKind?: "normal" | "heavy";
+  readonly attackKind: "normal" | "heavy";
 }
 
 export interface EnemyAttackResolvedServerMessage {
@@ -47,7 +53,7 @@ export interface EnemyAttackResolvedServerMessage {
   readonly enemyId: string;
   readonly targetEntityId: EntityId;
   readonly outcome: "hit" | "miss";
-  readonly attackKind?: "normal" | "heavy";
+  readonly attackKind: "normal" | "heavy";
   readonly damage?: number;
   readonly remainingHp?: number;
 }

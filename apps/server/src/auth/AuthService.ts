@@ -297,7 +297,7 @@ export class AuthService {
     }
 
     // Reject unsafe control characters
-    // eslint-disable-next-line no-control-regex
+     
     if (/[\x00-\x08\x0E-\x1F\x7F]/.test(trimmed)) {
       throw new AuthError(AuthErrorCode.INVALID_DISPLAY_NAME, "Display name contains invalid characters");
     }

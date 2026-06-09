@@ -7,7 +7,7 @@ const MAX_CHARACTER_NAME_LENGTH = 24;
 const ALLOWED_CHARACTER_NAME_PATTERN = /^[\p{L}\p{N} '\-]+$/u;
 
 // Explicitly reject C0/C1 controls and DEL, including tabs/newlines.
-// eslint-disable-next-line no-control-regex
+ 
 const CONTROL_CHARACTER_PATTERN = /[\x00-\x1F\x7F-\x9F]/u;
 
 export class CharacterNameService {
