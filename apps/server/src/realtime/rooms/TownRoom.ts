@@ -439,18 +439,25 @@ async function grantEnemyDefeatXp(
  * Task 094 -- Send the `enemy_attack_telegraph` warning to the
  * target client. The client only uses this for transient visual
  * warning markers; damage outcome is decided by the server.
+ *
+ * Task 264 -- accepts an optional `attackKind` so the client can
+ * render a distinct heavy-attack telegraph (e.g. Brute charged
+ * strike) versus a normal one. The server still decides the
+ * outcome; this field is purely visual.
  */
 function sendEnemyAttackTelegraph(
   targetClient: Client,
   enemyId: string,
   targetCharacterId: string,
   windupMs: number,
+  attackKind: "normal" | "heavy" = "normal",
 ): void {
   const telegraph: EnemyAttackTelegraphServerMessage = {
     type: "enemy_attack_telegraph",
     enemyId,
     targetEntityId: targetCharacterId as unknown as EntityId,
     windupMs,
+    attackKind,
   };
   try {
     targetClient.send("enemy_attack_telegraph", telegraph);
@@ -2207,6 +2214,21 @@ export class TownRoom extends Room {
       const enemyLeashRange = toWorldUnits(enemyDefinition?.leashRange ?? 0, 180);
       const enemyAttackCooldownMs = enemyDefinition?.attackCooldownMs ?? 1200;
       const enemyAttackDamage = enemyDefinition?.damage ?? 2;
+      // Task 264 -- Brute heavy attack config. Read once per enemy tick
+      // so the heavy windup, damage, chance and cooldown come from the
+      // existing content fields, not from any hardcoded values. Heavy
+      // attack is only eligible when *all* of the fields are present
+      // and finite; otherwise the enemy is treated as a normal-only
+      // attacker (preserves the existing Runt / Skitter behaviour).
+      const heavyWindupMs = enemyDefinition?.heavyAttackWindupMs ?? 0;
+      const heavyDamage = enemyDefinition?.heavyAttackDamage ?? 0;
+      const heavyCooldownMs = enemyDefinition?.heavyAttackCooldownMs ?? 0;
+      const heavyChance = enemyDefinition?.heavyAttackChance ?? 0;
+      const heavyAttackEligible =
+        Number.isFinite(heavyWindupMs) && heavyWindupMs > 0 &&
+        Number.isFinite(heavyDamage) && heavyDamage > 0 &&
+        Number.isFinite(heavyCooldownMs) && heavyCooldownMs > 0 &&
+        Number.isFinite(heavyChance) && heavyChance > 0;
       const distanceFromSpawn = Math.hypot(enemy.x - enemy.spawnX, enemy.y - enemy.spawnY);
 
       if (enemy.defeated || enemy.hp <= 0) {
@@ -2335,21 +2357,43 @@ export class TownRoom extends Room {
           // Target moved out of range or died during the windup:
           // Target left range before windup completion, so the
           // telegraphed hit resolves to a server-authoritative miss.
+          // Task 264 -- the miss outcome respects the original attack
+          // kind: a heavy attack that misses still consumes the heavy
+          // cooldown (heavier swing, longer recovery) so the enemy
+          // cannot immediately chain another heavy swing into a
+          // re-acquired target.
+          const missedKind = enemy.attackKind === "heavy" && heavyAttackEligible
+            ? "heavy"
+            : "normal";
           enemy.attackLandingAtMs = 0;
-          enemy.nextAttackAtMs = now + enemyAttackCooldownMs;
+          enemy.nextAttackAtMs = now + (missedKind === "heavy" ? heavyCooldownMs : enemyAttackCooldownMs);
+          if (missedKind === "heavy") {
+            enemy.nextHeavyAttackAtMs = now + heavyCooldownMs;
+          }
           if (landingClient !== undefined) {
             sendEnemyAttackResolved(landingClient, {
               type: "enemy_attack_resolved",
               enemyId: enemy.id,
               targetEntityId: (landingTarget?.characterId ?? "") as unknown as EntityId,
               outcome: "miss",
+              attackKind: missedKind,
             });
           }
           return;
         }
 
         enemy.attackLandingAtMs = 0;
-        const nextHp = Math.max(0, landingTarget.hp - enemyAttackDamage);
+        // Task 264 -- resolve damage by attack kind. The telegraph kind
+        // was decided at windup start and stored on the enemy; we
+        // re-validate that the enemy is still heavy-eligible so a
+        // respawned enemy without heavy fields cannot inherit a stale
+        // "heavy" flag from a previous life.
+        const landingKind = enemy.attackKind === "heavy" && heavyAttackEligible
+          ? "heavy"
+          : "normal";
+        const landingDamage = landingKind === "heavy" ? heavyDamage : enemyAttackDamage;
+        const landingCooldownMs = landingKind === "heavy" ? heavyCooldownMs : enemyAttackCooldownMs;
+        const nextHp = Math.max(0, landingTarget.hp - landingDamage);
         landingTarget.hp = nextHp;
         if (nextHp <= 0) {
           landingTarget.lifeState = "downed";
@@ -2362,7 +2406,12 @@ export class TownRoom extends Room {
           clearPendingAction(landingTarget);
           clearEnemyTargetAndReturn(enemy);
         } else {
-          enemy.nextAttackAtMs = now + enemyAttackCooldownMs;
+          // Task 264 -- heavy hits still consume the heavy cooldown
+          // (a successful Brute smash is a long-recovery swing).
+          enemy.nextAttackAtMs = now + landingCooldownMs;
+          if (landingKind === "heavy") {
+            enemy.nextHeavyAttackAtMs = now + heavyCooldownMs;
+          }
         }
 
         if (landingClient !== undefined) {
@@ -2370,7 +2419,7 @@ export class TownRoom extends Room {
             type: "damage_applied",
             targetEntityId: landingTarget.characterId as unknown as EntityId,
             sourceEntityId: enemy.id as unknown as EntityId,
-            damage: enemyAttackDamage,
+            damage: landingDamage,
             remainingHp: nextHp,
           };
 
@@ -2384,7 +2433,8 @@ export class TownRoom extends Room {
             enemyId: enemy.id,
             targetEntityId: landingTarget.characterId as unknown as EntityId,
             outcome: "hit",
-            damage: enemyAttackDamage,
+            attackKind: landingKind,
+            damage: landingDamage,
             remainingHp: nextHp,
           });
         }
@@ -2395,10 +2445,33 @@ export class TownRoom extends Room {
         return;
       }
 
+      // Task 264 -- pick the attack kind for this telegraph. The
+      // choice is server-authoritative: normal is always allowed; a
+      // heavy attack requires all four heavy content fields to be
+      // present, the heavy cooldown to have elapsed, and a successful
+      // chance roll. If heavy is not picked, the enemy falls back to
+      // its regular normal swing using the existing windup / cooldown.
+      let attackKind: "normal" | "heavy" = "normal";
+      let chosenWindupMs = ENEMY_ATTACK_WINDUP_MS;
+      let chosenCooldownMs = enemyAttackCooldownMs;
+      if (
+        heavyAttackEligible
+        && (enemy.nextHeavyAttackAtMs === 0 || now >= enemy.nextHeavyAttackAtMs)
+        && Math.random() < heavyChance
+      ) {
+        attackKind = "heavy";
+        chosenWindupMs = heavyWindupMs;
+        chosenCooldownMs = heavyCooldownMs;
+      }
+
       // Start a new telegraph + windup. Damage will only be applied
-      // after ENEMY_ATTACK_WINDUP_MS on a future tick.
-      enemy.attackLandingAtMs = now + ENEMY_ATTACK_WINDUP_MS;
-      enemy.nextAttackAtMs = enemy.attackLandingAtMs + enemyAttackCooldownMs;
+      // after `chosenWindupMs` on a future tick.
+      enemy.attackKind = attackKind;
+      enemy.attackLandingAtMs = now + chosenWindupMs;
+      enemy.nextAttackAtMs = enemy.attackLandingAtMs + chosenCooldownMs;
+      if (attackKind === "heavy") {
+        enemy.nextHeavyAttackAtMs = now + heavyCooldownMs;
+      }
 
       const telegraphClient = this.clients.find(
         (client) => client.sessionId === targetPlayer.sessionId,
@@ -2408,7 +2481,8 @@ export class TownRoom extends Room {
           telegraphClient,
           enemy.id,
           targetPlayer.characterId,
-          ENEMY_ATTACK_WINDUP_MS,
+          chosenWindupMs,
+          attackKind,
         );
       }
     });

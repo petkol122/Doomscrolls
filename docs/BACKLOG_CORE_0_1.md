@@ -756,6 +756,24 @@ Status: documented. `docs/CORE_BUILD_0_1_SCOPE.md` acceptance checklist is now r
 - inventory grid items on reconnect — already in `CharacterSummary.inventorySummaryItems` consumed by `/me`
 - XP/level on reconnect — already in `CharacterSummary` consumed by `/me`
 
+### Task 263 — CombatRoom Foundation Without Duplicate Gameplay
+
+Add the missing CombatRoom foundation required by Core Build 0.1 without duplicating existing TownRoom/WorldSession gameplay logic.
+
+Status: implemented. `CombatRoom` is now registered as the Colyseus room name `combat`. New files:
+
+```text
+apps/server/src/realtime/rooms/combatRoomName.ts       - public COMBAT_ROOM_NAME = "combat"
+apps/server/src/realtime/rooms/combatRoomTypes.ts      - CombatRoomJoinOptions contract
+apps/server/src/realtime/rooms/CombatRoomState.ts      - minimal schema (roomKind, zoneId, playerPresence, connectedPlayerCount)
+apps/server/src/realtime/rooms/buildCombatPlayerPresence.ts - thin helper mirroring buildTownPlayerPresence shape
+apps/server/src/realtime/rooms/CombatRoom.ts           - thin Colyseus shell (lifecycle only)
+```
+
+The room sets `CombatRoomState` (no enemy list, no map, no movement, no combat, no loot, no XP, no objectives, no message handlers, no simulation tick), validates the join through the shared `RoomJoinValidationService` (re-using the same gate `TownRoom` uses), and registers/clears a placeholder `PlayerPresence` entry on join/leave. `CombatRoomJoinOptions` mirrors `TownRoomJoinOptions`. `createRealtimeServer()` now defines both `town` and `combat`. The combat helper intentionally does not resolve a combat spawn point (none exists in content yet — see Task 262); it restores a previously persisted location if it is valid for the resolved zone, and otherwise falls back to safe defaults. Future dedicated tasks (Task 264+) are expected to add a real combat spawn point to content and reuse a shared spawn resolver, not duplicate `TownRoom` gameplay. The room file stays a thin Colyseus shell — see `docs/CODING_RULES.md` "Realtime Room File-Size Guard". `pnpm --filter @doomscrolls/server typecheck`, `pnpm --filter @doomscrolls/client typecheck` and `pnpm lint` all pass.
+
+---
+
 True 0.1 blockers that remain (now ordered in the scope doc):
 
 - `pnpm lint` is `echo ... placeholder` in all 5 workspace packages — no real ESLint config

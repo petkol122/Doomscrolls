@@ -28,6 +28,12 @@ export class EnemyPresence extends Schema {
   // Task 226 — server-owned heavy-attack kind flag. Drives the
   // distinct client warning marker for Brute charged attacks.
   @type("string") attackKind!: EnemyAttackKind;
+  // Task 264 — server-owned timestamp for the earliest wall-clock
+  // time (ms) the enemy may attempt another heavy attack. 0 means
+  // "no heavy attack in progress / ready". This is independent of
+  // the regular `nextAttackAtMs` cooldown so heavy attacks can run
+  // on a separate cadence.
+  @type("number") nextHeavyAttackAtMs!: number;
 }
 
 export type WorldEnemy = Pick<
