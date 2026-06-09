@@ -38,7 +38,7 @@ export interface InventorySummaryItem extends InventoryGridItem {
 export interface InventoryGrid {
   readonly characterId: CharacterId;
   readonly config: InventoryGridConfig;
-  readonly items: readonly InventoryGridItem[];
+  readonly items: readonly InventorySummaryItem[];
 }
 
 export interface MoveInventoryItemPayload {

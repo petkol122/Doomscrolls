@@ -74,7 +74,15 @@ export class CharacterRepository {
   public findByIdForUser(characterId: string, userId: string) {
     return this.db.character.findFirst({
       where: { id: characterId, userId },
-      include: { stats: true, passives: true, inventory: true },
+      include: {
+        stats: true,
+        passives: true,
+        inventory: true,
+        items: {
+          where: { locationType: ItemLocationType.INVENTORY },
+          orderBy: [{ inventoryPage: "asc" }, { inventoryY: "asc" }, { inventoryX: "asc" }, { createdAt: "asc" }],
+        },
+      },
     });
   }
 

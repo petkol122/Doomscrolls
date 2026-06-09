@@ -135,9 +135,41 @@ export async function buildEquippedItemSummaries(
 }
 
 export function toCharacterDetailsDto(
-  character: Character & { stats: PrismaCharacterStats; passives: readonly CharacterPassive[]; inventory: Inventory },
+  character: Character & { stats: PrismaCharacterStats; passives: readonly CharacterPassive[]; inventory: Inventory; items?: readonly ItemInstance[] },
   deathState: CharacterDeathState,
 ): CharacterDetails {
+  const inventorySummaryItems: InventorySummaryItem[] = [];
+
+  if (character.items !== undefined) {
+    for (const item of character.items) {
+      if (item.inventoryPage === null || item.inventoryX === null || item.inventoryY === null) {
+        continue;
+      }
+
+      const definition = contentRegistry.items.get(item.definitionId as never);
+      if (definition === undefined) {
+        continue;
+      }
+
+      inventorySummaryItems.push({
+        itemInstanceId: item.id as never,
+        definitionId: definition.id,
+        pageIndex: item.inventoryPage,
+        x: item.inventoryX,
+        y: item.inventoryY,
+        label: t(definition.nameKey),
+        category: definition.category,
+        rarity: definition.rarity,
+        allowedEquipmentSlots: definition.allowedEquipmentSlots,
+        size: {
+          width: definition.size.width,
+          height: definition.size.height,
+        },
+        statModifiers: definition.statModifiers,
+      });
+    }
+  }
+
   return {
     ...toCharacterSummaryDto(character),
     passiveKeys: character.passives.map((passive) => passive.passiveId as PassiveKey),
@@ -149,7 +181,7 @@ export function toCharacterDetailsDto(
         gridWidth: character.inventory.gridWidth,
         gridHeight: character.inventory.gridHeight,
       },
-      items: [],
+      items: inventorySummaryItems,
     },
     deathState,
     ...(character.lastLocationZoneId !== null
