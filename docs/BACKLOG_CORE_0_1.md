@@ -838,6 +838,26 @@ Status: documented. `docs/CORE_BUILD_0_1_SMOKE_CHECKLIST.md` is now the authorit
 
 ---
 
+### Task 273 — Core Build 0.1 Candidate Validation Command
+
+Add a single local validation command for Core Build 0.1 candidate checks.
+
+Status: implemented. `package.json` now exposes `pnpm validate:0.1` which runs the currently trusted static gates in order:
+
+```text
+pnpm lint
+pnpm --filter @doomscrolls/shared typecheck
+pnpm --filter @doomscrolls/content typecheck
+pnpm --filter @doomscrolls/localization typecheck
+pnpm --filter @doomscrolls/server typecheck
+pnpm --filter @doomscrolls/client typecheck
+pnpm build
+```
+
+No browser automation, no runtime reproduction, no gameplay changes were added. Tests are deferred — all workspace `test` scripts are currently placeholders (`echo ... placeholder`, `node -e ...`, or `tsc --noEmit` which is already covered by the typecheck step). `docs/CORE_BUILD_0_1_SMOKE_CHECKLIST.md` now references `pnpm validate:0.1` as step 0 before the manual smoke steps. Task 273 is the checkpoint for Candidate Validation. No CI service was added.
+
+---
+
 ## Anti-Scope-Creep
 
 Do not implement before Core 0.1 is complete:

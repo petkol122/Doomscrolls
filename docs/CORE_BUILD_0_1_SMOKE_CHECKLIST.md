@@ -9,6 +9,9 @@ Manual smoke checklist for validating a Core Build 0.1 candidate locally. Run th
 ## Prerequisites
 
 ```bash
+# 0. Run static validation
+pnpm validate:0.1
+
 # 1. Start local infrastructure
 docker compose -f infra/compose/docker-compose.local.yml up -d
 
