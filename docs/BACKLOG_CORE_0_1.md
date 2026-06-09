@@ -734,6 +734,14 @@ Status: documented. `README.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG_CORE_0_1.
 
 ---
 
+### Task 260 — Core Build 0.1 Scope Freeze
+
+Define what is in/out for Core Build 0.1 and stop scope creep. Documentation-only task. No gameplay changes, no browser automation, no runtime reproduction.
+
+Status: documented. `docs/CORE_BUILD_0_1_SCOPE.md` is now the authoritative scope-freeze document. It lists all included systems (account/login/register, character create/select, WorldSession, Nightmarket + Blackwire Sewer Edge, movement/camera/zoom, left-click attack, RMB Grave Spark, enemy family + Brute heavy attack, loot/currency/inventory/equipment, Notice Board objective chain, death/respawn/corpse recovery placeholder, town service placeholders), all excluded systems (real vendors/stash/waypoint travel, quest persistence/log, safe-zone enforcement, auth redesign, character customization, housing/stealing/advanced currencies, pathfinding/collision, real art/animation pipeline), the Build 0.1 acceptance checklist, and a scope-freeze note. The four docs (README, ARCHITECTURE, BACKLOG, CODING_RULES) cross-reference this freeze.
+
+---
+
 ## Anti-Scope-Creep
 
 Do not implement before Core 0.1 is complete:
