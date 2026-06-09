@@ -344,6 +344,7 @@ export function createWorldSessionAreaView(
       bounds,
       projectionMode,
       cameraZoom,
+      currentFocusPosition,
     );
     const worldOffset = resolveWorldContainerOffset(layout, worldProjection, currentFocusPosition);
     worldContainer.setPosition(worldOffset.x, worldOffset.y);
@@ -1236,22 +1237,47 @@ function projectEnemyToArea(
   };
 }
 
+/**
+ * Create an area projection context centered on the given focus position.
+ *
+ * The camera bounds are centered on the focus position (typically the player)
+ * so that zooming in/out pivots around the player rather than the world
+ * top-left corner. This keeps the player as the visual anchor when zooming.
+ *
+ * When `focusPosition` is null (no player position known yet), the context
+ * falls back to the world top-left anchor to keep the projection valid.
+ */
 function createAreaProjectionContext(
   layout: WorldSessionAreaLayout,
   bounds: WorldProjectionBounds,
   projectionMode: WorldProjectionMode,
   zoom: number,
+  focusPosition: { readonly x: number; readonly y: number } | null,
 ): AreaProjectionContext {
   const clampedZoom = Math.min(Math.max(zoom, 0.75), 1.6);
   const fullWidth = bounds.maxX - bounds.minX;
   const fullHeight = bounds.maxY - bounds.minY;
   const visibleWidth = Math.min(fullWidth, fullWidth / clampedZoom);
   const visibleHeight = Math.min(fullHeight, fullHeight / clampedZoom);
+
+  let minX = bounds.minX;
+  let minY = bounds.minY;
+
+  if (focusPosition !== null) {
+    // Center the visible area on the focus position, clamped to world bounds.
+    minX = focusPosition.x - visibleWidth / 2;
+    minY = focusPosition.y - visibleHeight / 2;
+    if (minX < bounds.minX) { minX = bounds.minX; }
+    if (minY < bounds.minY) { minY = bounds.minY; }
+    if (minX + visibleWidth > bounds.maxX) { minX = bounds.maxX - visibleWidth; }
+    if (minY + visibleHeight > bounds.maxY) { minY = bounds.maxY - visibleHeight; }
+  }
+
   const cameraBounds: WorldProjectionBounds = {
-    minX: bounds.minX,
-    maxX: bounds.minX + visibleWidth,
-    minY: bounds.minY,
-    maxY: bounds.minY + visibleHeight,
+    minX,
+    maxX: minX + visibleWidth,
+    minY,
+    maxY: minY + visibleHeight,
   };
 
   return {

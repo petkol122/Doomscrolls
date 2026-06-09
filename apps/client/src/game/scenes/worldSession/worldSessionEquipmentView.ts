@@ -180,6 +180,13 @@ export function updateEquipmentPanelSection(
 
   content.replaceChildren();
 
+  // Task 277 — Equipped items are no longer in inventorySummaryItems; they
+  // live in character.equippedItems (EquippedItemSummary[]). We look up from
+  // both sources so the panel shows the real equipped item label/rarity/stats.
+  const equippedItems = getCharacter !== undefined
+    ? (getCharacter()?.equippedItems ?? [])
+    : [];
+
   for (const slot of EQUIPMENT_SLOTS) {
     const itemId = loadout[slot];
     const row = document.createElement("div");
@@ -203,7 +210,10 @@ export function updateEquipmentPanelSection(
       valueLabel.textContent = "Empty";
       valueLabel.style.color = "#5f4a2f";
     } else {
-      const equippedItem = inventoryItems.find((item) => item.itemInstanceId === itemId) ?? null;
+      // Look up from equippedItems first, then fall back to inventory items.
+      const equippedItem = equippedItems.find((item) => item.itemInstanceId === itemId)
+        ?? inventoryItems.find((item) => item.itemInstanceId === itemId)
+        ?? null;
       valueLabel.textContent = equippedItem === null
         ? "Equipped"
         : formatEquippedItemLabel(equippedItem);
@@ -250,12 +260,12 @@ export function updateEquipmentPanelSection(
   }
 }
 
-function formatEquippedItemLabel(item: InventorySummaryItem): string {
+function formatEquippedItemLabel(item: { readonly label: string; readonly rarity?: string; readonly statModifiers?: readonly StatModifier[] }): string {
   const modifierSummary = formatCompactModifierSummary(item.statModifiers);
   return modifierSummary === null ? item.label : `${item.label} (${modifierSummary})`;
 }
 
-function getItemRarityColor(rarity?: string): string {
+function getItemRarityColor(rarity?: string | undefined): string {
   if (rarity === "rare") {
     return "#8fc7ff";
   }

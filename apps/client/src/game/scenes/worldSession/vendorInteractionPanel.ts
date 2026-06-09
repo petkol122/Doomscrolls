@@ -80,7 +80,12 @@ export function createVendorInteractionPanel(
     };
     backdrop.addEventListener("pointerdown", stopWorldInput, { capture: true });
     backdrop.addEventListener("mousedown", stopWorldInput, { capture: true });
-    backdrop.addEventListener("click", stopWorldInput, { capture: true });
+    // Task 277 — Do NOT use capture-phase click/contextmenu handlers here.
+    // The Close button (and other controls inside the card) rely on
+    // bubble-phase click events. A capture-phase click handler on the
+    // backdrop stops propagation before child elements ever receive it,
+    // making Close unclickable. The backdrop click-anywhere-else dismiss
+    // below uses bubble-phase which is fine.
     backdrop.addEventListener("contextmenu", stopWorldInput, { capture: true });
 
     const card = document.createElement("div");
