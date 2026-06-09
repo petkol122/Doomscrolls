@@ -742,6 +742,32 @@ Status: documented. `docs/CORE_BUILD_0_1_SCOPE.md` is now the authoritative scop
 
 ---
 
+### Task 262 — Build 0.1 Acceptance Gap Truth
+
+Reconcile the Build 0.1 acceptance checklist with the actual codebase so we do not implement duplicate systems. Documentation-only task. No browser automation, no runtime reproduction, no gameplay changes.
+
+Status: documented. `docs/CORE_BUILD_0_1_SCOPE.md` acceptance checklist is now reconciled against the current codebase. Findings:
+
+- camera follow + zoom — already implemented in `apps/client/src/game/scenes/worldSession/worldSessionAreaView.ts` (mouse wheel + `+/-` keys, `cameraZoom` state)
+- equipment stat-modifier recalc — already implemented in `EquipmentService.recalculateEquippedCharacterStats()` and reused on level-up in `TownRoom.applyProgressionUpdate()` via `characterStatsService.calculateEquippedStats(primary, modifiers, level)`
+- Skitter/Brute spawn wiring — already implemented through `contentRegistry.spawnZones` (`sewer_edge_trashboar_skitter_zone`, `sewer_edge_trashboar_brute_zone`) consumed by `initializeTownEnemies`
+- XP/level system — already implemented as `levelProgression.ts` + `grantFlatXpReward()` + `xp_gained` server message + `applyProgressionUpdate()`
+- pickup full-inventory rejection — already implemented in `pickupWorldLootInventory.ts` as `PickupWorldLootFailureReason = "inventory_full"` and surfaced as the "Inventory full." message
+- inventory grid items on reconnect — already in `CharacterSummary.inventorySummaryItems` consumed by `/me`
+- XP/level on reconnect — already in `CharacterSummary` consumed by `/me`
+
+True 0.1 blockers that remain (now ordered in the scope doc):
+
+- `pnpm lint` is `echo ... placeholder` in all 5 workspace packages — no real ESLint config
+- Brute heavy-attack server logic — content fields exist but `applyEnemyAggroDamage` never reads them; only the global `ENEMY_ATTACK_WINDUP_MS = 350` is used
+- `/me` does not expose equipped items (no `equippedItems` field on `CharacterSummary`) — equipment persistence is on disk, only the summary is missing
+- `CombatRoom` for Blackwire Sewer Edge is not registered and has no room file
+- `CharacterDetailsDto.inventory.items` is `[]` even after a real inventory write — fine for the current grid-only panel, but the `inventory.items` summary path is also missing for clients that want flat item rendering
+
+No code changed. No `CombatRoom` was created because the codebase does not yet clearly expect it (there is no `blackwire_sewers` spawn point, no `combatEdge` transition, and no client UI flow into it). The next four tasks (263 ESLint, 264 Brute heavy attack, 265 `/me` equipped items, 266 `CombatRoom`) are defined in `docs/CORE_BUILD_0_1_SCOPE.md` "Remaining 0.1 Blockers".
+
+---
+
 ## Anti-Scope-Creep
 
 Do not implement before Core 0.1 is complete:
