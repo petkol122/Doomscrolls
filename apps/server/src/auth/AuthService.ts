@@ -230,7 +230,9 @@ export class AuthService {
     }
 
     // 7. Return safe auth response DTO
-    const characterSummaries = characters.map(toCharacterSummaryWithInventoryDto) as readonly CharacterSummary[];
+    const characterSummaries = (await Promise.all(
+      characters.map((character) => toCharacterSummaryWithInventoryDto(character)),
+    )) as readonly CharacterSummary[];
     return this.buildSafeAuthResponse(user, profile, settings, session, rawToken, characterSummaries);
   }
 
@@ -269,7 +271,9 @@ export class AuthService {
     }
 
     // 5. Return safe account state DTO
-    const characterSummaries = characters.map(toCharacterSummaryWithInventoryDto) as readonly CharacterSummary[];
+    const characterSummaries = (await Promise.all(
+      characters.map((character) => toCharacterSummaryWithInventoryDto(character)),
+    )) as readonly CharacterSummary[];
     return {
       user: toSafeUserDto(user),
       profile: toPublicProfileDto({ ...profile, user: { username: user.username } }),
