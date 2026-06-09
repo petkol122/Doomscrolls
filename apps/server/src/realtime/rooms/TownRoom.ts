@@ -2,6 +2,7 @@ import { Room, Client } from "colyseus";
 import type {
   CharacterId,
   DamageAppliedServerMessage,
+  EnemyAttackResolvedServerMessage,
   EntityId,
   RequestAttackAcceptedServerMessage,
   RequestAttackRejectedServerMessage,
@@ -22,7 +23,6 @@ import type {
   EnemyAttackTelegraphServerMessage,
   RequestDodgeAcceptedServerMessage,
   RequestDodgeRejectedServerMessage,
-  RequestDodgeClientMessage,
   ObjectiveUpdatedServerMessage,
   RequestResetObjectiveClientMessage,
   XpGainedServerMessage,
@@ -57,74 +57,152 @@ import { restoreFlaskToFull } from "./healingFlaskConfig";
 import type {
   RequestUseHealingFlaskAcceptedServerMessage,
   RequestUseHealingFlaskRejectedServerMessage,
-  RequestUseHealingFlaskClientMessage,
 } from "@doomscrolls/shared";
 import { respawnTownEnemies } from "./respawnTownEnemies";
 import { spawnWorldLootOnEnemyDefeat } from "./spawnWorldLootOnEnemyDefeat";
-import { applyWanderMovement, clearWanderState } from "./wanderEnemies";
-import { persistPickedUpWorldLootToInventory } from "./pickupWorldLootInventory";
+import { applyWanderMovement } from "./wanderEnemies";
+import { dispatchPickedUpWorldLoot } from "./pickupWorldLootDispatcher";
 import { validatePickupWorldLootIntent } from "./pickupWorldLootValidation";
 import { clearPendingAction, setPendingAction } from "./pendingActionState";
 import { resolvePlayerInitialPosition } from "./validateCharacterLocation";
-import { contentRegistry } from "@doomscrolls/content";
-import type { SpawnPointContentId } from "@doomscrolls/content";
+import { contentRegistry, NOTICE_BOARD_OBJECTIVE_SEQUENCE } from "@doomscrolls/content";
+import type { SpawnPointContentId, ObjectiveId } from "@doomscrolls/content";
 import { NIGHTMARKET_DEFAULT_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
 import { CharacterRepository } from "../../persistence/repositories";
 import { ItemRepository } from "../../persistence/repositories/ItemRepository";
 import { tryResolveLevelProgression } from "./levelProgression";
 import { CharacterStatsService } from "../../character/CharacterStatsService";
+// Task 206 -- server-owned approach stop point for deferred queues
+// (attack / pickup / interact). The server still applies the
+// resolved target through applyMovementIntent; the client never
+// decides the stop point.
+import { resolveApproachTarget } from "./resolveApproachTarget";
 
-const ENEMY_AGGRO_RANGE = 120;
-const ENEMY_LEASH_RANGE = 180;
+// Task 227 -- enemy movement speed is authored in the same
+// per-second stat space as the player's derived `moveSpeed` (see
+// resolvePlayerMovementSpeed). The runtime world-units-per-second
+// value must be scaled by this constant the same way the player
+// speed is, otherwise the enemy moves at <1 wu/sec and can never
+// catch a player running at 200+ wu/sec.
+const ENEMY_MOVEMENT_SPEED_UNITS_PER_SECOND_MULTIPLIER = 220;
+
 const ENEMY_ATTACK_RANGE = 44;
-const ENEMY_ATTACK_COOLDOWN_MS = 1200;
+// Task 207 -- server-owned engagement / pickup / interact ranges used
+// by resolveApproachTarget when queuing deferred move-closer actions.
+// BASIC_ATTACK_RANGE is the engagement radius from
+// attackIntentValidation; the approach stop sits inside that radius
+// (with a snap-to-stop buffer) so the player never overshoots into
+// the enemy center.
+const BASIC_ATTACK_RANGE = 64;
+const GRAVE_SPARK_RANGE = 96;
+// PICKUP_APPROACH_DISTANCE is a close-in radius well under the
+// WORLD_LOOT_PICKUP_RANGE (48) validator boundary, with a snap-to-stop
+// buffer so the queued pickup reliably executes once the player
+// arrives. Player stops just outside the loot pickable instead of
+// standing on top of it.
+const PICKUP_APPROACH_DISTANCE = 24;
+// INTERACT_APPROACH_DISTANCE sits inside the interact validator's
+// INTERACT_DISTANCE (50) with a snap-to-stop buffer so the queued
+// interact reliably executes once the player arrives (notice board,
+// vendor, stash keeper, etc.).
+const INTERACT_APPROACH_DISTANCE = 38;
+const GRAVE_SPARK_COOLDOWN_MS = 1500;
+const GRAVE_SPARK_DAMAGE = 3;
 // Task 094 -- server-owned enemy attack windup. The server sends
 // `enemy_attack_telegraph` to the target client when the windup starts;
 // damage is applied after this many ms only if the target is still alive
 // and in attack range.
 const ENEMY_ATTACK_WINDUP_MS = 350;
-const ENEMY_ATTACK_DAMAGE = 2;
 const ENEMY_RETURN_ARRIVAL_DISTANCE = 1;
 const ENEMY_RETURN_REACQUIRE_BUFFER = 8;
 const characterStatsService = new CharacterStatsService();
 const progressionLog = createRoomLogger(undefined);
 type ContentEnemyId = Parameters<typeof contentRegistry.enemies.get>[0];
-const NOTICE_BOARD_OBJECTIVE_ID = "cull_trashboars" as const;
-const NOTICE_BOARD_OBJECTIVE = contentRegistry.objectives.require(NOTICE_BOARD_OBJECTIVE_ID);
 
-function buildObjectiveUpdatedMessage(player: {
-  objectiveLabel: string;
-  objectiveCurrent: number;
-  objectiveTarget: number;
+/**
+ * Find the next available objective in the Notice Board sequence.
+ * Returns the content definition for the first objective whose reward has
+ * not yet been granted, or `undefined` if the player has completed the
+ * entire sequence.
+ */
+function findNextNoticeBoardObjective(player: {
+  objectiveRewardGranted: boolean;
   objectiveCompleted: boolean;
-}): ObjectiveUpdatedServerMessage {
+  objectiveId: string;
+}): { readonly objective: import("@doomscrolls/content").ObjectiveContentDefinition; readonly index: number } | undefined {
+  const currentSeqIndex = NOTICE_BOARD_OBJECTIVE_SEQUENCE.indexOf(player.objectiveId);
+  for (const candidateId of NOTICE_BOARD_OBJECTIVE_SEQUENCE) {
+    const candidate = contentRegistry.objectives.get(candidateId as ObjectiveId);
+    if (candidate === undefined) {
+      continue;
+    }
+    const candidateIndex = NOTICE_BOARD_OBJECTIVE_SEQUENCE.indexOf(candidateId);
+    // Skip objectives that come before the current one in the sequence,
+    // since they must have been completed to have advanced past them.
+    // This correctly handles the case where the player's current objectiveId
+    // is the last one and rewardGranted is true — earlier candidates are
+    // skipped so the function returns undefined (chain complete).
+    if (currentSeqIndex >= 0 && candidateIndex < currentSeqIndex) {
+      continue;
+    }
+    // If the player's current objective is this one and reward is not yet
+    // granted, it's the one they're working on — keep it.
+    if (player.objectiveId === candidateId && !player.objectiveRewardGranted) {
+      return { objective: candidate, index: candidateIndex };
+    }
+    // If the player's current objective is this one and reward IS granted,
+    // skip it (completed). Look for the next one.
+    if (player.objectiveId === candidateId && player.objectiveRewardGranted) {
+      continue;
+    }
+    // First uncompleted candidate in sequence: offer it.
+    return { objective: candidate, index: candidateIndex };
+  }
+  return undefined;
+}
+
+function buildObjectiveUpdatedMessage(
+  player: {
+    objectiveId: string;
+    objectiveLabel: string;
+    objectiveCurrent: number;
+    objectiveTarget: number;
+    objectiveCompleted: boolean;
+  },
+  objectiveId: string,
+  reward?: { readonly xpReward: number; readonly copperReward: number },
+): ObjectiveUpdatedServerMessage {
   return {
     type: "objective_updated",
-    objectiveId: NOTICE_BOARD_OBJECTIVE_ID,
+    objectiveId,
     label: player.objectiveLabel,
     current: player.objectiveCurrent,
     target: player.objectiveTarget,
     completed: player.objectiveCompleted,
+    ...(reward !== undefined ? { xpReward: reward.xpReward, copperReward: reward.copperReward } : {}),
   };
 }
 
-function startNoticeBoardObjective(player: {
-  hasObjective: boolean;
-  objectiveId: string;
-  objectiveLabel: string;
-  objectiveCurrent: number;
-  objectiveTarget: number;
-  objectiveCompleted: boolean;
-  objectiveRewardGranted: boolean;
-}): ObjectiveUpdatedServerMessage {
+function startNoticeBoardObjective(
+  player: {
+    hasObjective: boolean;
+    objectiveId: string;
+    objectiveLabel: string;
+    objectiveCurrent: number;
+    objectiveTarget: number;
+    objectiveCompleted: boolean;
+    objectiveRewardGranted: boolean;
+  },
+  objectiveDef: import("@doomscrolls/content").ObjectiveContentDefinition,
+): ObjectiveUpdatedServerMessage {
   player.hasObjective = true;
-  player.objectiveId = NOTICE_BOARD_OBJECTIVE.id;
-  player.objectiveLabel = t(NOTICE_BOARD_OBJECTIVE.titleKey);
+  player.objectiveId = objectiveDef.id;
+  player.objectiveLabel = t(objectiveDef.titleKey);
   player.objectiveCurrent = 0;
-  player.objectiveTarget = NOTICE_BOARD_OBJECTIVE.requiredKills;
+  player.objectiveTarget = objectiveDef.requiredKills;
   player.objectiveCompleted = false;
   player.objectiveRewardGranted = false;
-  return buildObjectiveUpdatedMessage(player);
+  return buildObjectiveUpdatedMessage(player, objectiveDef.id);
 }
 
 function resetNoticeBoardObjective(player: {
@@ -145,8 +223,13 @@ function resetNoticeBoardObjective(player: {
   player.objectiveRewardGranted = false;
 }
 
-function shouldCountForNoticeBoardObjective(enemyId: string): boolean {
-  return NOTICE_BOARD_OBJECTIVE.targetEnemyIds.includes(enemyId as ContentEnemyId);
+function getActiveObjectiveContent(
+  player: { objectiveId: string },
+): import("@doomscrolls/content").ObjectiveContentDefinition | undefined {
+  if (player.objectiveId.length === 0) {
+    return undefined;
+  }
+  return contentRegistry.objectives.get(player.objectiveId as ObjectiveId);
 }
 
 async function advanceNoticeBoardObjective(
@@ -164,11 +247,16 @@ async function advanceNoticeBoardObjective(
   enemyId: string,
   sendToClient: (type: string, payload: unknown) => void,
 ): Promise<void> {
-  if (
-    player.objectiveId !== NOTICE_BOARD_OBJECTIVE_ID
-    || player.objectiveRewardGranted
-    || !shouldCountForNoticeBoardObjective(enemyId)
-  ) {
+  if (player.objectiveRewardGranted || player.objectiveId.length === 0) {
+    return;
+  }
+
+  const activeObjective = getActiveObjectiveContent(player);
+  if (activeObjective === undefined) {
+    return;
+  }
+
+  if (!activeObjective.targetEnemyIds.includes(enemyId as ContentEnemyId)) {
     return;
   }
 
@@ -177,11 +265,29 @@ async function advanceNoticeBoardObjective(
     player.objectiveCompleted = true;
   }
 
-  sendToClient("objective_updated", buildObjectiveUpdatedMessage(player));
+  const reward = player.objectiveCompleted
+    ? { xpReward: activeObjective.xpReward, copperReward: activeObjective.copperReward }
+    : undefined;
+  sendToClient("objective_updated", buildObjectiveUpdatedMessage(player, activeObjective.id, reward));
 
   if (player.objectiveCompleted) {
     player.objectiveRewardGranted = true;
-    await grantFlatXpReward(player, NOTICE_BOARD_OBJECTIVE.xpReward, sendToClient);
+    await grantFlatXpReward(player, activeObjective.xpReward, sendToClient);
+
+    const copperReward = activeObjective.copperReward;
+    if (Number.isFinite(copperReward) && copperReward > 0) {
+      const rep = new CharacterRepository();
+      const total = await rep.incrementMoneyCopper(player.characterId.toString(), copperReward);
+      if (total !== null) {
+        const currencyMsg: import("@doomscrolls/shared").CurrencyPickedUpServerMessage = {
+          type: "currency_picked_up",
+          characterId: player.characterId,
+          gainedCopper: copperReward,
+          totalMoneyCopper: total,
+        };
+        sendToClient("currency_picked_up", currencyMsg);
+      }
+    }
   }
 }
 
@@ -219,6 +325,7 @@ async function grantFlatXpReward(
     leveledUp: progression.leveledUp,
     hp: progressionUpdate.hp,
     maxHp: progressionUpdate.maxHp,
+    gainedMaxHp: progressionUpdate.gainedMaxHp,
   };
   sendToClient("xp_gained", xpGained);
 }
@@ -321,21 +428,39 @@ async function grantEnemyDefeatXp(
  * Task 094 -- Send the `enemy_attack_telegraph` warning to the
  * target client. The client only uses this for transient visual
  * warning markers; damage outcome is decided by the server.
+ *
+ * Task 264 -- accepts an optional `attackKind` so the client can
+ * render a distinct heavy-attack telegraph (e.g. Brute charged
+ * strike) versus a normal one. The server still decides the
+ * outcome; this field is purely visual.
  */
 function sendEnemyAttackTelegraph(
   targetClient: Client,
   enemyId: string,
   targetCharacterId: string,
   windupMs: number,
+  attackKind: "normal" | "heavy" = "normal",
 ): void {
   const telegraph: EnemyAttackTelegraphServerMessage = {
     type: "enemy_attack_telegraph",
     enemyId,
     targetEntityId: targetCharacterId as unknown as EntityId,
     windupMs,
+    attackKind,
   };
   try {
     targetClient.send("enemy_attack_telegraph", telegraph);
+  } catch {
+    // keep room state authoritative even if send fails
+  }
+}
+
+function sendEnemyAttackResolved(
+  targetClient: Client,
+  message: EnemyAttackResolvedServerMessage,
+): void {
+  try {
+    targetClient.send("enemy_attack_resolved", message);
   } catch {
     // keep room state authoritative even if send fails
   }
@@ -373,6 +498,14 @@ function moveEnemyTowardTarget(
   const scale = distanceToTravel / distance;
   enemy.x += deltaX * scale;
   enemy.y += deltaY * scale;
+}
+
+function toWorldUnits(contentUnits: number, fallback: number): number {
+  if (!Number.isFinite(contentUnits) || contentUnits <= 0) {
+    return fallback;
+  }
+
+  return contentUnits * 24;
 }
 
 function clearEnemyTargetAndReturn(enemy: {
@@ -494,6 +627,7 @@ export class TownRoom extends Room {
   private resetObjectiveHandlerRegistered = false;
   private pickupWorldLootHandlerRegistered = false;
   private respawnHandlerRegistered = false;
+  private corpseInteractHandlerRegistered = false;
   private dodgeHandlerRegistered = false;
   private healingFlaskHandlerRegistered = false;
   private skillSlotHandlerRegistered = false;
@@ -519,6 +653,7 @@ export class TownRoom extends Room {
     this.registerAttackHandler(log);
     this.registerPickupWorldLootHandler(log);
     this.registerRespawnHandler(log);
+    this.registerCorpseInteractHandler(log);
     this.registerDodgeHandler(log);
     this.registerHealingFlaskHandler(log);
     this.registerSkillSlotHandler(log);
@@ -639,6 +774,10 @@ export class TownRoom extends Room {
     );
     const maxHp = Math.max(0, result.character.stats?.derived.maxHp ?? 0);
     const currentHp = Math.min(maxHp, Math.max(0, result.character.stats?.currentHp ?? maxHp));
+    const persistedFlaskState = await new CharacterRepository().findCurrentFlaskChargesForUser(
+      characterId,
+      resolvedUserId,
+    );
 
     // Delegate presence building (spawn point resolution + initial
     // world position copy) to a dedicated helper so this room file
@@ -652,6 +791,7 @@ export class TownRoom extends Room {
       resolvedZoneId,
       hp: currentHp,
       maxHp,
+      restoredFlaskCharges: persistedFlaskState?.currentFlaskCharges,
       movementSpeed,
       attackCooldownMs,
       restoredLocationZoneId: result.character.lastLocationZoneId ?? undefined,
@@ -699,6 +839,7 @@ export class TownRoom extends Room {
           presence.x,
           presence.y,
           Math.max(0, Math.min(presence.maxHp, presence.hp)),
+          Math.max(0, Math.min(presence.maxFlaskCharges, Math.floor(presence.flaskCharges))),
         );
       } catch (error: unknown) {
         safeLog.error?.(
@@ -949,7 +1090,13 @@ export class TownRoom extends Room {
               targetX: interactable.x,
               targetY: interactable.y,
             });
-            applyMovementIntent(state, client.sessionId, interactable.x, interactable.y);
+            // Task 206 -- walk to interact range, not on top of the object.
+            const approach = resolveApproachTarget(
+              player,
+              { x: interactable.x, y: interactable.y },
+              INTERACT_APPROACH_DISTANCE,
+            );
+            applyMovementIntent(state, client.sessionId, approach.x, approach.y);
             const queued: DeferredActionQueuedServerMessage = {
               type: "deferred_action_queued",
               actionType: "interact",
@@ -981,10 +1128,33 @@ export class TownRoom extends Room {
       // Send response message to the requesting client
       const responseMessage = getInteractableResponseMessage(message.objectId);
       if (message.objectId === "nightmarket_notice_board") {
-        const objectiveUpdate = startNoticeBoardObjective(player);
-        try {
-          client.send("objective_updated", objectiveUpdate);
-        } catch {}
+        // If the player already has an active objective that is not yet
+        // completed and not yet rewarded, re-interacting just re-sends
+        // the current state without resetting or duplicating.
+        if (player.hasObjective && player.objectiveId.length > 0 && !player.objectiveCompleted && !player.objectiveRewardGranted) {
+          const reSend = buildObjectiveUpdatedMessage(player, player.objectiveId);
+          try { client.send("objective_updated", reSend); } catch {}
+        } else {
+          // Find the next available objective in the sequence (skips
+          // already-completed ones where reward was granted).
+          const next = findNextNoticeBoardObjective(player);
+          if (next !== undefined) {
+            const objectiveUpdate = startNoticeBoardObjective(player, next.objective);
+            try { client.send("objective_updated", objectiveUpdate); } catch {}
+          } else {
+            // All objectives completed – clear hasObjective so the
+            // tracker does not show stale completed data, but keep the
+            // reward-granted state so findNextNoticeBoardObjective can
+            // properly skip all completed objectives on re-interact.
+            player.hasObjective = false;
+            const doneMessage: import("@doomscrolls/shared").InteractResponseServerMessage = {
+              type: "interact_response",
+              objectId: message.objectId,
+              message: "No more notices for now.",
+            };
+            try { client.send("interact_response", doneMessage); } catch {}
+          }
+        }
       }
 
       // Task 180 — Handle loot container interaction
@@ -1111,7 +1281,13 @@ export class TownRoom extends Room {
               targetX: enemy.x,
               targetY: enemy.y,
             });
-            applyMovementIntent(state, client.sessionId, enemy.x, enemy.y);
+            // Task 206 -- walk to engagement range, not on top of the enemy.
+            const approach = resolveApproachTarget(
+              player,
+              { x: enemy.x, y: enemy.y },
+              BASIC_ATTACK_RANGE,
+            );
+            applyMovementIntent(state, client.sessionId, approach.x, approach.y);
             const queued: DeferredActionQueuedServerMessage = {
               type: "deferred_action_queued",
               actionType: "attack",
@@ -1202,9 +1378,9 @@ export class TownRoom extends Room {
       clearPendingAction(player);
       consumeAttackCooldown(player, now);
       const damageResult = applyEnemyDamage(validation.enemy, 1);
-      const spawnedLoot = damageResult.defeated
+      const spawnedLootList = damageResult.defeated
         ? spawnWorldLootOnEnemyDefeat(state, validation.enemy, now)
-        : null;
+        : [];
       if (damageResult.defeated) {
         void advanceNoticeBoardObjective(player, validation.enemy.enemyId, (type, payload) => {
           try {
@@ -1260,8 +1436,8 @@ export class TownRoom extends Room {
           appliedDamage: damageResult.appliedDamage,
           defeated: damageResult.defeated,
           respawnAtMs: damageResult.respawnAtMs,
-          worldLootId: spawnedLoot?.id,
-          worldLootItemId: spawnedLoot?.itemId,
+          worldLootCount: spawnedLootList.length,
+          worldLootFirstId: spawnedLootList[0]?.id,
           nextAttackAt: player.nextAttackAt,
         },
         "TownRoom request_attack accepted and synced enemy defeat/placeholder loot state updated.",
@@ -1296,7 +1472,13 @@ export class TownRoom extends Room {
               targetX: worldLoot.x,
               targetY: worldLoot.y,
             });
-            applyMovementIntent(state, client.sessionId, worldLoot.x, worldLoot.y);
+            // Task 206 -- walk to a close pickup distance, not on top of the loot.
+            const approach = resolveApproachTarget(
+              player,
+              { x: worldLoot.x, y: worldLoot.y },
+              PICKUP_APPROACH_DISTANCE,
+            );
+            applyMovementIntent(state, client.sessionId, approach.x, approach.y);
             const queued: DeferredActionQueuedServerMessage = {
               type: "deferred_action_queued",
               actionType: "pickup",
@@ -1385,21 +1567,14 @@ export class TownRoom extends Room {
       }
 
       clearPendingAction(player);
-      const pickupResult = await persistPickedUpWorldLootToInventory({
+      const dispatchResult = await dispatchPickedUpWorldLoot({
         characterId: player.characterId,
-        itemDefinitionId: validation.worldLoot.itemId,
-        itemLabel: validation.worldLoot.label,
+        worldLoot: validation.worldLoot,
       });
 
-      if (!pickupResult.ok) {
-        const rejection: RequestPickupWorldLootRejectedServerMessage = {
-          type: "request_pickup_world_loot_rejected",
-          reason: pickupResult.reason === "inventory_full" ? "inventory_full" : "world_loot_not_found",
-          worldLootId: validation.worldLoot.id,
-        };
-
+      if (!dispatchResult.ok) {
         try {
-          client.send("request_pickup_world_loot_rejected", rejection);
+          client.send("request_pickup_world_loot_rejected", dispatchResult.rejected);
         } catch {
           // swallow send failures; never crash room on rejected pickup intent
         }
@@ -1411,20 +1586,24 @@ export class TownRoom extends Room {
             sessionId: client.sessionId,
             worldLootId: validation.worldLoot.id,
             worldLootItemId: validation.worldLoot.itemId,
-            reason: rejection.reason,
+            reason: dispatchResult.rejected.reason,
           },
-          "TownRoom request_pickup_world_loot rejected during inventory persistence.",
+          "TownRoom request_pickup_world_loot rejected during persistence.",
         );
         return;
       }
 
       state.worldLoot.delete(validation.worldLoot.id);
 
-      const accepted: RequestPickupWorldLootAcceptedServerMessage = {
-        type: "request_pickup_world_loot_accepted",
-        worldLootId: validation.worldLoot.id,
-        message: pickupResult.message,
-      };
+      if (dispatchResult.currencyMessage !== null) {
+        try {
+          client.send("currency_picked_up", dispatchResult.currencyMessage);
+        } catch {
+          // swallow send failures; state sync remains authoritative
+        }
+      }
+
+      const accepted: RequestPickupWorldLootAcceptedServerMessage = dispatchResult.accepted;
 
       try {
         client.send("request_pickup_world_loot_accepted", accepted);
@@ -1479,6 +1658,9 @@ export class TownRoom extends Room {
 
       player.hp = player.maxHp;
       player.lifeState = "alive";
+      // Keep the corpse marker so the player can walk back and
+      // recover it after respawn. The corpse is cleared on
+      // successful `request_corpse_interact` instead.
       player.x = respawnPosition.x;
       player.y = respawnPosition.y;
       player.targetX = respawnPosition.x;
@@ -1506,6 +1688,85 @@ export class TownRoom extends Room {
       } catch {}
 
       log.debug?.({ roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, characterId: player.characterId }, "TownRoom player respawned.");
+    });
+  }
+
+  /**
+   * Task 235 -- Register the `request_corpse_interact` message handler.
+   *
+   * Validates that the player is alive with an active corpse marker,
+   * owns the corpse (only own corpse is tracked), is within interact
+   * range (~30 world units), and on acceptance clears the corpse marker.
+   * Rejects if player is still downed. Corpse recovery must happen
+   * after respawn, not while downed.
+   */
+  private registerCorpseInteractHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.corpseInteractHandlerRegistered) {
+      return;
+    }
+    this.corpseInteractHandlerRegistered = true;
+
+    this.onMessage("request_corpse_interact", (client: Client) => {
+      const state = this.state as TownRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+      if (player === undefined) {
+        log.warn?.(
+          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+          "TownRoom request_corpse_interact rejected: player not found.",
+        );
+        return;
+      }
+
+      // Must be alive (after respawn) to interact with a corpse marker
+      if (player.lifeState !== "alive") {
+        const rejection: import("@doomscrolls/shared").CorpseInteractRejectedServerMessage = {
+          type: "corpse_interact_rejected",
+          reason: "player_downed",
+        };
+        try { client.send("corpse_interact_rejected", rejection); } catch {}
+        return;
+      }
+
+      // Must have an active corpse marker
+      if (!player.hasCorpse) {
+        const rejection: import("@doomscrolls/shared").CorpseInteractRejectedServerMessage = {
+          type: "corpse_interact_rejected",
+          reason: "no_corpse",
+        };
+        try { client.send("corpse_interact_rejected", rejection); } catch {}
+        return;
+      }
+
+      // Range check
+      const dx = player.corpseX - player.x;
+      const dy = player.corpseY - player.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance > 30) {
+        const rejection: import("@doomscrolls/shared").CorpseInteractRejectedServerMessage = {
+          type: "corpse_interact_rejected",
+          reason: "out_of_range",
+        };
+        try { client.send("corpse_interact_rejected", rejection); } catch {}
+        return;
+      }
+
+      // Accept and clear corpse
+      player.hasCorpse = false;
+      player.corpseX = 0;
+      player.corpseY = 0;
+
+      const accepted: import("@doomscrolls/shared").CorpseInteractAcceptedServerMessage = {
+        type: "corpse_interact_accepted",
+        message: "Corpse recovered.",
+      };
+      try { client.send("corpse_interact_accepted", accepted); } catch {}
+
+      log.debug?.(
+        { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, characterId: player.characterId },
+        "TownRoom corpse interact accepted. Corpse marker cleared.",
+      );
     });
   }
 
@@ -1643,10 +1904,9 @@ export class TownRoom extends Room {
           dirY: validation.dirY,
           newX: applied.newX,
           newY: applied.newY,
-          cancelledTelegraphEnemyIds: applied.cancelledTelegraphEnemyIds,
           nextDodgeAt: player.nextDodgeAt,
         },
-        "TownRoom request_dodge accepted and player position updated; telegraphs cancelled.",
+        "TownRoom request_dodge accepted and player position updated.",
       );
     });
   }
@@ -1818,29 +2078,111 @@ export class TownRoom extends Room {
         return;
       }
 
-      player.nextSkillSlotAt = now + 750;
-      const rejection: RequestUseSkillSlotRejectedServerMessage = {
-        ...rejectionBase,
-        reason: "slot_not_learned",
-      };
-      try {
-        client.send(rejection.type, rejection);
-      } catch {
-        log.warn?.(
-          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
-          "TownRoom request_use_skill_slot placeholder rejection send failed.",
-        );
+      // Task 217/219 — Grave Spark target validation.
+      const targetEnemyId = typeof message?.targetEnemyId === "string" && message.targetEnemyId.length > 0
+        ? message.targetEnemyId
+        : undefined;
+
+      if (targetEnemyId === undefined) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "skill_unavailable",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
       }
+
+      const enemy = state.enemies.get(targetEnemyId);
+      if (enemy === undefined) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "enemy_not_found",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      if (enemy.defeated || enemy.hp <= 0) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "enemy_defeated",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+      if (distance > GRAVE_SPARK_RANGE) {
+        setPendingAction(player, {
+          type: "skill_secondary",
+          targetId: enemy.id,
+          targetX: enemy.x,
+          targetY: enemy.y,
+        });
+        const approach = resolveApproachTarget(
+          player,
+          { x: enemy.x, y: enemy.y },
+          GRAVE_SPARK_RANGE,
+        );
+        applyMovementIntent(state, client.sessionId, approach.x, approach.y);
+        const queued: DeferredActionQueuedServerMessage = {
+          type: "deferred_action_queued",
+          actionType: "attack",
+          targetId: enemy.id,
+          message: "Moving closer.",
+        };
+        try { client.send("deferred_action_queued", queued); } catch {}
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            targetEnemyId: enemy.id,
+          },
+          "TownRoom request_use_skill_slot queued as deferred move-to-cast action.",
+        );
+        return;
+      }
+
+      clearPendingAction(player);
+      player.nextSkillSlotAt = now + GRAVE_SPARK_COOLDOWN_MS;
+
+      const damageResult = applyEnemyDamage(enemy, GRAVE_SPARK_DAMAGE);
+
+      if (damageResult.defeated) {
+        spawnWorldLootOnEnemyDefeat(state, enemy, now);
+        void advanceNoticeBoardObjective(player, enemy.enemyId, (type, payload) => {
+          try { client.send(type, payload); } catch {}
+        }).catch(() => {});
+        void grantEnemyDefeatXp(player, enemy.enemyId, (type, payload) => {
+          try { client.send(type, payload); } catch {}
+        }).catch(() => {});
+      }
+
+      const accepted: RequestUseSkillSlotAcceptedServerMessage = {
+        type: "request_use_skill_slot_accepted",
+        slot: "secondary",
+        targetEnemyId: enemy.id,
+        damage: GRAVE_SPARK_DAMAGE,
+        remainingHp: damageResult.remainingHp,
+        defeated: damageResult.defeated,
+        nextReadyAt: player.nextSkillSlotAt,
+      };
+      try { client.send(accepted.type, accepted); } catch {}
 
       log.debug?.(
         {
           roomId: this.roomId,
           roomName: this.roomName,
           sessionId: client.sessionId,
-          slot: message.slot,
+          targetEnemyId: enemy.id,
+          remainingHp: damageResult.remainingHp,
+          appliedDamage: damageResult.appliedDamage,
+          defeated: damageResult.defeated,
+          respawnAtMs: damageResult.respawnAtMs,
           nextSkillSlotAt: player.nextSkillSlotAt,
         },
-        "TownRoom request_use_skill_slot cooldown consumed and placeholder slot rejected as not learned.",
+        "TownRoom request_use_skill_slot accepted: Grave Spark hit target.",
       );
     });
   }
@@ -1850,7 +2192,32 @@ export class TownRoom extends Room {
 
     state.enemies.forEach((enemy) => {
       const enemyDefinition = contentRegistry.enemies.get(enemy.enemyId as ContentEnemyId);
-      const enemyMoveSpeed = enemyDefinition?.moveSpeed ?? 0;
+      // Task 227 -- enemy `moveSpeed` is authored in the same per-second
+      // stat space as the player's derived `moveSpeed` (see
+      // resolvePlayerMovementSpeed). The runtime world-units-per-second
+      // value must be scaled by ENEMY_MOVEMENT_SPEED_UNITS_PER_SECOND_MULTIPLIER
+      // the same way the player speed is, otherwise the enemy moves at
+      // <1 wu/sec and can never catch a player running at 200+ wu/sec.
+      const enemyMoveSpeed = (enemyDefinition?.moveSpeed ?? 0) * ENEMY_MOVEMENT_SPEED_UNITS_PER_SECOND_MULTIPLIER;
+      const enemyAggroRange = toWorldUnits(enemyDefinition?.aggroRange ?? 0, 120);
+      const enemyLeashRange = toWorldUnits(enemyDefinition?.leashRange ?? 0, 180);
+      const enemyAttackCooldownMs = enemyDefinition?.attackCooldownMs ?? 1200;
+      const enemyAttackDamage = enemyDefinition?.damage ?? 2;
+      // Task 264 -- Brute heavy attack config. Read once per enemy tick
+      // so the heavy windup, damage, chance and cooldown come from the
+      // existing content fields, not from any hardcoded values. Heavy
+      // attack is only eligible when *all* of the fields are present
+      // and finite; otherwise the enemy is treated as a normal-only
+      // attacker (preserves the existing Runt / Skitter behaviour).
+      const heavyWindupMs = enemyDefinition?.heavyAttackWindupMs ?? 0;
+      const heavyDamage = enemyDefinition?.heavyAttackDamage ?? 0;
+      const heavyCooldownMs = enemyDefinition?.heavyAttackCooldownMs ?? 0;
+      const heavyChance = enemyDefinition?.heavyAttackChance ?? 0;
+      const heavyAttackEligible =
+        Number.isFinite(heavyWindupMs) && heavyWindupMs > 0 &&
+        Number.isFinite(heavyDamage) && heavyDamage > 0 &&
+        Number.isFinite(heavyCooldownMs) && heavyCooldownMs > 0 &&
+        Number.isFinite(heavyChance) && heavyChance > 0;
       const distanceFromSpawn = Math.hypot(enemy.x - enemy.spawnX, enemy.y - enemy.spawnY);
 
       if (enemy.defeated || enemy.hp <= 0) {
@@ -1869,7 +2236,7 @@ export class TownRoom extends Room {
           clearEnemyTargetAndReturn(enemy);
         } else {
           const targetDistance = Math.hypot(enemy.x - currentTarget.x, enemy.y - currentTarget.y);
-          if (targetDistance > ENEMY_AGGRO_RANGE || distanceFromSpawn > ENEMY_LEASH_RANGE) {
+          if (targetDistance > enemyAggroRange || distanceFromSpawn > enemyLeashRange) {
             clearEnemyTargetAndReturn(enemy);
           }
         }
@@ -1912,7 +2279,7 @@ export class TownRoom extends Room {
           || distanceFromSpawn <= ENEMY_RETURN_REACQUIRE_BUFFER;
         if (
           closestPlayerSessionId === null
-          || closestDistance > ENEMY_AGGRO_RANGE
+          || closestDistance > enemyAggroRange
           || !canReacquireWhileReturning
         ) {
           enemy.state = "idle";
@@ -1931,7 +2298,7 @@ export class TownRoom extends Room {
       }
 
       const targetDistance = Math.hypot(enemy.x - targetPlayer.x, enemy.y - targetPlayer.y);
-      if (targetDistance > ENEMY_AGGRO_RANGE || distanceFromSpawn > ENEMY_LEASH_RANGE) {
+      if (targetDistance > enemyAggroRange || distanceFromSpawn > enemyLeashRange) {
         clearEnemyTargetAndReturn(enemy);
         return;
       }
@@ -1968,41 +2335,80 @@ export class TownRoom extends Room {
         // Windup elapsed. Validate that the target is still alive
         // and still in attack range; only then apply damage.
         const landingTarget = state.playerPresence.get(enemy.targetPlayerSessionId);
+        const landingClient = landingTarget === undefined
+          ? undefined
+          : this.clients.find((client) => client.sessionId === landingTarget.sessionId);
         if (
           landingTarget === undefined ||
           landingTarget.hp <= 0 ||
           Math.hypot(enemy.x - landingTarget.x, enemy.y - landingTarget.y) > ENEMY_ATTACK_RANGE
         ) {
           // Target moved out of range or died during the windup:
-          // cancel the telegraphed attack and re-arm the cooldown.
+          // Target left range before windup completion, so the
+          // telegraphed hit resolves to a server-authoritative miss.
+          // Task 264 -- the miss outcome respects the original attack
+          // kind: a heavy attack that misses still consumes the heavy
+          // cooldown (heavier swing, longer recovery) so the enemy
+          // cannot immediately chain another heavy swing into a
+          // re-acquired target.
+          const missedKind = enemy.attackKind === "heavy" && heavyAttackEligible
+            ? "heavy"
+            : "normal";
           enemy.attackLandingAtMs = 0;
-          enemy.nextAttackAtMs = now + ENEMY_ATTACK_COOLDOWN_MS;
+          enemy.nextAttackAtMs = now + (missedKind === "heavy" ? heavyCooldownMs : enemyAttackCooldownMs);
+          if (missedKind === "heavy") {
+            enemy.nextHeavyAttackAtMs = now + heavyCooldownMs;
+          }
+          if (landingClient !== undefined) {
+            sendEnemyAttackResolved(landingClient, {
+              type: "enemy_attack_resolved",
+              enemyId: enemy.id,
+              targetEntityId: (landingTarget?.characterId ?? "") as unknown as EntityId,
+              outcome: "miss",
+              attackKind: missedKind,
+            });
+          }
           return;
         }
 
         enemy.attackLandingAtMs = 0;
-        const nextHp = Math.max(0, landingTarget.hp - ENEMY_ATTACK_DAMAGE);
+        // Task 264 -- resolve damage by attack kind. The telegraph kind
+        // was decided at windup start and stored on the enemy; we
+        // re-validate that the enemy is still heavy-eligible so a
+        // respawned enemy without heavy fields cannot inherit a stale
+        // "heavy" flag from a previous life.
+        const landingKind = enemy.attackKind === "heavy" && heavyAttackEligible
+          ? "heavy"
+          : "normal";
+        const landingDamage = landingKind === "heavy" ? heavyDamage : enemyAttackDamage;
+        const landingCooldownMs = landingKind === "heavy" ? heavyCooldownMs : enemyAttackCooldownMs;
+        const nextHp = Math.max(0, landingTarget.hp - landingDamage);
         landingTarget.hp = nextHp;
         if (nextHp <= 0) {
           landingTarget.lifeState = "downed";
           landingTarget.hasMovementTarget = false;
           landingTarget.targetX = landingTarget.x;
           landingTarget.targetY = landingTarget.y;
+          landingTarget.hasCorpse = true;
+          landingTarget.corpseX = landingTarget.x;
+          landingTarget.corpseY = landingTarget.y;
           clearPendingAction(landingTarget);
           clearEnemyTargetAndReturn(enemy);
         } else {
-          enemy.nextAttackAtMs = now + ENEMY_ATTACK_COOLDOWN_MS;
+          // Task 264 -- heavy hits still consume the heavy cooldown
+          // (a successful Brute smash is a long-recovery swing).
+          enemy.nextAttackAtMs = now + landingCooldownMs;
+          if (landingKind === "heavy") {
+            enemy.nextHeavyAttackAtMs = now + heavyCooldownMs;
+          }
         }
 
-        const landingClient = this.clients.find(
-          (client) => client.sessionId === landingTarget.sessionId,
-        );
         if (landingClient !== undefined) {
           const damageMessage: DamageAppliedServerMessage = {
             type: "damage_applied",
             targetEntityId: landingTarget.characterId as unknown as EntityId,
             sourceEntityId: enemy.id as unknown as EntityId,
-            damage: ENEMY_ATTACK_DAMAGE,
+            damage: landingDamage,
             remainingHp: nextHp,
           };
 
@@ -2011,6 +2417,15 @@ export class TownRoom extends Room {
           } catch {
             // keep room state authoritative even if send fails
           }
+          sendEnemyAttackResolved(landingClient, {
+            type: "enemy_attack_resolved",
+            enemyId: enemy.id,
+            targetEntityId: landingTarget.characterId as unknown as EntityId,
+            outcome: "hit",
+            attackKind: landingKind,
+            damage: landingDamage,
+            remainingHp: nextHp,
+          });
         }
         return;
       }
@@ -2019,10 +2434,33 @@ export class TownRoom extends Room {
         return;
       }
 
+      // Task 264 -- pick the attack kind for this telegraph. The
+      // choice is server-authoritative: normal is always allowed; a
+      // heavy attack requires all four heavy content fields to be
+      // present, the heavy cooldown to have elapsed, and a successful
+      // chance roll. If heavy is not picked, the enemy falls back to
+      // its regular normal swing using the existing windup / cooldown.
+      let attackKind: "normal" | "heavy" = "normal";
+      let chosenWindupMs = ENEMY_ATTACK_WINDUP_MS;
+      let chosenCooldownMs = enemyAttackCooldownMs;
+      if (
+        heavyAttackEligible
+        && (enemy.nextHeavyAttackAtMs === 0 || now >= enemy.nextHeavyAttackAtMs)
+        && Math.random() < heavyChance
+      ) {
+        attackKind = "heavy";
+        chosenWindupMs = heavyWindupMs;
+        chosenCooldownMs = heavyCooldownMs;
+      }
+
       // Start a new telegraph + windup. Damage will only be applied
-      // after ENEMY_ATTACK_WINDUP_MS on a future tick.
-      enemy.attackLandingAtMs = now + ENEMY_ATTACK_WINDUP_MS;
-      enemy.nextAttackAtMs = enemy.attackLandingAtMs + ENEMY_ATTACK_COOLDOWN_MS;
+      // after `chosenWindupMs` on a future tick.
+      enemy.attackKind = attackKind;
+      enemy.attackLandingAtMs = now + chosenWindupMs;
+      enemy.nextAttackAtMs = enemy.attackLandingAtMs + chosenCooldownMs;
+      if (attackKind === "heavy") {
+        enemy.nextHeavyAttackAtMs = now + heavyCooldownMs;
+      }
 
       const telegraphClient = this.clients.find(
         (client) => client.sessionId === targetPlayer.sessionId,
@@ -2032,9 +2470,11 @@ export class TownRoom extends Room {
           telegraphClient,
           enemy.id,
           targetPlayer.characterId,
-          ENEMY_ATTACK_WINDUP_MS,
+          chosenWindupMs,
+          attackKind,
         );
       }
     });
   }
 }
+

@@ -25,7 +25,7 @@ export interface DamageAppliedServerMessage {
 }
 
 // ---------------------------------------------------------------------------
-// Enemy attack telegraph (Task 094)
+// Enemy attack telegraph (Task 094 / Task 269)
 //
 // Server-only, time-bound warning sent to the target player right before
 // an enemy attack lands. The client must not derive damage outcome from
@@ -33,12 +33,29 @@ export interface DamageAppliedServerMessage {
 // is applied. The `windupMs` value is informational and describes how
 // long the windup phase is expected to last; clients may use it for
 // transient visual warning markers only.
+//
+// Task 269: `attackKind` is now REQUIRED and is part of the explicit
+// telegraph protocol. The server must always set it to either
+// "normal" or "heavy"; clients consume it from the protocol instead
+// of guessing. The field is purely visual (heavy Brute charged
+// strike vs normal swing) — outcomes are still server-authoritative.
 // ---------------------------------------------------------------------------
 export interface EnemyAttackTelegraphServerMessage {
   readonly type: "enemy_attack_telegraph";
   readonly enemyId: string;
   readonly targetEntityId: EntityId;
   readonly windupMs: number;
+  readonly attackKind: "normal" | "heavy";
+}
+
+export interface EnemyAttackResolvedServerMessage {
+  readonly type: "enemy_attack_resolved";
+  readonly enemyId: string;
+  readonly targetEntityId: EntityId;
+  readonly outcome: "hit" | "miss";
+  readonly attackKind: "normal" | "heavy";
+  readonly damage?: number;
+  readonly remainingHp?: number;
 }
 
 export interface EntityDiedServerMessage {
@@ -55,6 +72,7 @@ export interface XpGainedServerMessage {
   readonly leveledUp?: boolean;
   readonly hp?: number;
   readonly maxHp?: number;
+  readonly gainedMaxHp?: number;
 }
 
 export interface LootDroppedServerMessage {
@@ -89,6 +107,16 @@ export interface PlayerRespawnedServerMessage {
   readonly characterId: CharacterId;
   readonly zoneId: ZoneId;
   readonly hp: number;
+}
+
+export interface CorpseInteractRejectedServerMessage {
+  readonly type: "corpse_interact_rejected";
+  readonly reason: "out_of_range" | "no_corpse" | "player_downed";
+}
+
+export interface CorpseInteractAcceptedServerMessage {
+  readonly type: "corpse_interact_accepted";
+  readonly message: string;
 }
 
 export interface CorpseRecoveredServerMessage {
@@ -212,11 +240,19 @@ export type RequestUseSkillSlotRejectedReason =
   | "player_downed"
   | "skill_on_cooldown"
   | "slot_not_learned"
-  | "skill_unavailable";
+  | "skill_unavailable"
+  | "enemy_not_found"
+  | "enemy_defeated"
+  | "out_of_range";
 
 export interface RequestUseSkillSlotAcceptedServerMessage {
   readonly type: "request_use_skill_slot_accepted";
   readonly slot: "secondary";
+  readonly targetEnemyId: string;
+  readonly damage: number;
+  readonly remainingHp: number;
+  readonly defeated: boolean;
+  readonly nextReadyAt: number;
 }
 
 export interface RequestUseSkillSlotRejectedServerMessage {
@@ -238,6 +274,21 @@ export interface RequestPickupWorldLootAcceptedServerMessage {
   readonly message: string;
   readonly itemLabel?: string;
   readonly rarity?: string;
+  /**
+   * Set when the picked-up world-loot was a currency drop. The amount
+   * is the copper gained by the character. Absent (undefined) for
+   * item pickups. The client may use this to display pickup-specific
+   * feedback; the new total is always re-read from `/me`.
+   */
+  readonly currencyCopper?: number;
+  readonly totalMoneyCopper?: number;
+  /**
+   * Server-formatted compact money text for the gained amount. Set
+   * only for currency world-loot pickups. The client MUST prefer this
+   * value when displaying pickup feedback so the same shared
+   * `formatMoneyCompact` helper is used everywhere money is shown.
+   */
+  readonly formattedMoneyText?: string;
 }
 
 export interface RequestPickupWorldLootRejectedServerMessage {
@@ -279,11 +330,29 @@ export interface InteractResponseServerMessage {
 
 export interface ObjectiveUpdatedServerMessage {
   readonly type: "objective_updated";
-  readonly objectiveId: "cull_trashboars";
+  readonly objectiveId: string;
   readonly label: string;
   readonly current: number;
   readonly target: number;
   readonly completed: boolean;
+  readonly xpReward?: number;
+  readonly copperReward?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Currency pickup feedback (Task 185)
+//
+// Sent to the originating client after a currency world-loot drop has
+// been picked up and the character's `moneyCopper` total has been
+// updated in the database. The client uses `gainedCopper` for
+// transient pickup feedback and then refreshes `/me` to read the
+// authoritative `totalMoneyCopper` for HUD / overlay rendering.
+// ---------------------------------------------------------------------------
+export interface CurrencyPickedUpServerMessage {
+  readonly type: "currency_picked_up";
+  readonly characterId: CharacterId;
+  readonly gainedCopper: number;
+  readonly totalMoneyCopper: number;
 }
 
 export type ServerRoomMessage =
@@ -291,6 +360,7 @@ export type ServerRoomMessage =
   | RoomStatePatchServerMessage
   | DamageAppliedServerMessage
   | EnemyAttackTelegraphServerMessage
+  | EnemyAttackResolvedServerMessage
   | EntityDiedServerMessage
   | XpGainedServerMessage
   | LootDroppedServerMessage
@@ -299,6 +369,8 @@ export type ServerRoomMessage =
   | CharacterUpdatedServerMessage
   | PlayerDiedServerMessage
   | PlayerRespawnedServerMessage
+  | CorpseInteractRejectedServerMessage
+  | CorpseInteractAcceptedServerMessage
   | CorpseRecoveredServerMessage
   | ChatMessageServerMessage
   | ZoneTransitionApprovedServerMessage
@@ -316,4 +388,5 @@ export type ServerRoomMessage =
   | RequestUseHealingFlaskRejectedServerMessage
   | RequestUseSkillSlotAcceptedServerMessage
   | RequestUseSkillSlotRejectedServerMessage
+  | CurrencyPickedUpServerMessage
   | ErrorServerMessage;

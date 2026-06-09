@@ -1,5 +1,6 @@
 import type { Room } from "@colyseus/sdk";
 import { contentRegistry } from "@doomscrolls/content";
+import type { ObjectiveId } from "@doomscrolls/content";
 import { t } from "@doomscrolls/localization";
 import type { CharacterSummary, InventorySummaryItem, RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
 import type { StatModifier } from "@doomscrolls/shared";
@@ -8,7 +9,7 @@ import type { EquipmentSlot } from "@doomscrolls/shared";
 import { formatTownRoomState } from "../../../net/RealtimeClient";
 import { getCurrentPlayerPresence, getTownRoomPresence } from "../../../net/townRoomPresence";
 import { createButton, createInfoLine } from "../accountShell/accountShellDom";
-import type { WorldSessionDebugState } from "./worldSessionAreaView";
+import type { WorldSessionDebugState, WorldSessionSkillTargetingState } from "./worldSessionAreaView";
 import {
   createEmptyEquipmentLoadout,
   createEquipmentPanelSection,
@@ -50,6 +51,8 @@ export interface WorldSessionOverlayView {
     character: CharacterSummary | null,
     room: Room<DoomscrollsRoomState>,
     debugState: WorldSessionDebugState,
+    skillTargeting: WorldSessionSkillTargetingState,
+    lastSkillRejectedReason: string | null,
   ) => void;
 }
 
@@ -61,6 +64,10 @@ interface ObjectiveTrackerViewModel {
   readonly target: number;
   readonly completed: boolean;
   readonly isHint: boolean;
+  readonly allDone: boolean;
+  readonly location?: string;
+  readonly xpReward?: number;
+  readonly copperReward?: number;
 }
 
 interface StatusViewRefs {
@@ -75,6 +82,15 @@ interface HudViewRefs {
   readonly root: HTMLElement;
 }
 
+function formatSkillCooldownSeconds(nextSkillSlotAt?: number): string | null {
+  const readyAt = Number.isFinite(nextSkillSlotAt) ? Number(nextSkillSlotAt) : 0;
+  const remainingMs = readyAt - Date.now();
+  if (remainingMs <= 0) {
+    return null;
+  }
+  return (remainingMs / 1000).toFixed(1);
+}
+
 interface UtilityViewRefs {
   readonly root: HTMLElement;
   readonly equipmentSection: HTMLElement;
@@ -86,6 +102,8 @@ export function createWorldSessionOverlayView(
   character: CharacterSummary | null,
   room: Room<DoomscrollsRoomState>,
   debugState: WorldSessionDebugState,
+  skillTargeting: WorldSessionSkillTargetingState,
+  lastSkillRejectedReason: string | null,
   onProjectionModeChange: (mode: WorldProjectionMode) => void,
   onRespawn: () => void,
   onResetObjective: () => void,
@@ -100,8 +118,6 @@ export function createWorldSessionOverlayView(
 ): WorldSessionOverlayView {
   let selectedInventoryItemId: InventorySummaryItem["itemInstanceId"] | null = character?.inventorySummaryItems?.[0]?.itemInstanceId ?? null;
   let currentStatusPanel: HTMLElement | null = null;
-  let currentUtilityPanel: HTMLElement;
-  let currentHudPanel: HTMLElement;
 
   const statusRefs = character !== null ? createCharacterChip(character, character.characterName, character.level, onLeaveWorld) : null;
   const utilityRefs = createStableUtilityContent(
@@ -122,135 +138,11 @@ export function createWorldSessionOverlayView(
   const hudRefs = createStableHudContent(
     character,
     room,
+    skillTargeting,
+    lastSkillRejectedReason,
     onResetObjective,
     onRespawn,
   );
-
-  const buildStatusContent = (
-    nextCharacter: CharacterSummary | null,
-    nextRoom: Room<DoomscrollsRoomState>,
-  ): HTMLElement | null => {
-    if (nextCharacter === null) {
-      return null;
-    }
-    const selfPresence = getCurrentPlayerPresence(
-      nextRoom.state as unknown as Record<string, unknown>,
-      nextRoom.sessionId,
-    );
-    const selfDisplayName = selfPresence?.displayName
-      ?? nextCharacter.characterName
-      ?? t("world_session.selected_character");
-    return createCharacterChip(
-      nextCharacter,
-      selfDisplayName,
-      selfPresence?.level ?? nextCharacter.level,
-      onLeaveWorld,
-    ).root;
-  };
-
-  const buildHudContent = (
-    nextCharacter: CharacterSummary | null,
-    nextRoom: Room<DoomscrollsRoomState>,
-  ): HTMLElement => {
-    const selfPresence = getCurrentPlayerPresence(
-      nextRoom.state as unknown as Record<string, unknown>,
-      nextRoom.sessionId,
-    );
-    const selfHpSummary = formatPlayerHpSummary(selfPresence?.hp, selfPresence?.maxHp);
-    const selfHpRatio = resolvePlayerHpRatio(selfPresence?.hp, selfPresence?.maxHp);
-
-    const panel = createCardSection();
-    panel.style.display = "grid";
-    panel.style.gap = "6px";
-    panel.style.padding = "8px 12px";
-    panel.appendChild(createHudSection(
-      selfHpSummary,
-      selfHpRatio,
-      selfPresence?.lifeState,
-      selfPresence?.flaskCharges,
-      selfPresence?.maxFlaskCharges,
-      selfPresence?.level ?? nextCharacter?.level ?? 1,
-      selfPresence?.xp ?? nextCharacter?.xp ?? 0,
-      selfPresence?.objective ?? null,
-      onResetObjective,
-    ));
-    panel.appendChild(createSkillSlotPlaceholder());
-
-    if (selfPresence?.lifeState === "downed") {
-      const downedNotice = createMutedText(t("world_session.downed_notice"));
-      downedNotice.style.color = "#e3a6a6";
-      panel.appendChild(downedNotice);
-
-      const respawnButton = createButton(t("world_session.respawn"));
-      respawnButton.style.marginTop = "4px";
-      respawnButton.style.width = "220px";
-      respawnButton.addEventListener("click", () => {
-        onRespawn();
-      });
-      makeInteractive(respawnButton);
-      panel.appendChild(respawnButton);
-    }
-
-    return panel;
-  };
-
-  const buildUtilityContent = (
-    nextCharacter: CharacterSummary | null,
-    nextRoom: Room<DoomscrollsRoomState>,
-    nextDebugState: WorldSessionDebugState,
-  ): HTMLElement => {
-    const panel = createScrollableCardSection();
-    panel.style.display = "grid";
-    panel.style.gap = "8px";
-    panel.style.alignContent = "start";
-
-    const utilityState = getUtilityState();
-
-    panel.appendChild(createControlsSection(utilityState.controls, (open) => {
-      onUtilityStateChange?.({ ...getUtilityState(), controls: open });
-    }));
-    panel.appendChild(createEquipmentPanelSection(
-      getEquipmentLoadout,
-      () => nextCharacter?.inventorySummaryItems ?? [],
-      utilityState.equipment,
-      (open) => {
-        onUtilityStateChange?.({ ...getUtilityState(), equipment: open });
-      },
-      nextCharacter?.id !== undefined && onUnequipItem !== undefined
-        ? (slot) => onUnequipItem(nextCharacter.id, slot)
-        : undefined,
-    ));
-    panel.appendChild(createDerivedStatsSection(nextCharacter));
-    panel.appendChild(createInventoryPanelSection(
-      nextCharacter,
-      {
-        getSelectedItemId: () => selectedInventoryItemId,
-        onSelectItem: (itemId) => {
-          selectedInventoryItemId = itemId;
-        },
-      },
-      getEquipmentLoadout(),
-      nextCharacter?.id ?? null,
-      onEquipItem,
-      utilityState.inventory,
-      (open) => {
-        onUtilityStateChange?.({ ...getUtilityState(), inventory: open });
-      },
-    ));
-    panel.appendChild(
-      createDebugPanel(
-        nextRoom,
-        formatTownRoomState(nextRoom.state),
-        nextDebugState,
-        onProjectionModeChange,
-        utilityState.debug,
-        (open) => {
-          onUtilityStateChange?.({ ...getUtilityState(), debug: open });
-        },
-      ),
-    );
-    return panel;
-  };
 
   const createMountedPanel = (): HTMLElement => {
     const panel = document.createElement("div");
@@ -275,21 +167,21 @@ export function createWorldSessionOverlayView(
   syncUtilityView(utilityRefs, character, room, debugState, getUtilityState, onUtilityStateChange, getEquipmentLoadout, onEquipItem, onUnequipItem, () => selectedInventoryItemId, (itemId) => {
     selectedInventoryItemId = itemId;
   }, onProjectionModeChange);
-  syncHudView(hudRefs, character, room, onResetObjective, onRespawn);
+  syncHudView(hudRefs, character, room, skillTargeting, lastSkillRejectedReason, onResetObjective, onRespawn);
   currentStatusPanel = statusPanel;
-  currentUtilityPanel = utilityPanel;
-  currentHudPanel = hudPanel;
 
   const update = (
     nextCharacter: CharacterSummary | null,
     nextRoom: Room<DoomscrollsRoomState>,
     nextDebugState: WorldSessionDebugState,
+    nextSkillTargeting: WorldSessionSkillTargetingState,
+    nextLastSkillRejectedReason: string | null,
   ): void => {
     if (statusRefs !== null && nextCharacter !== null && currentStatusPanel !== null) {
       syncStatusView(statusRefs, nextCharacter, nextRoom);
     }
 
-    syncHudView(hudRefs, nextCharacter, nextRoom, onResetObjective, onRespawn);
+    syncHudView(hudRefs, nextCharacter, nextRoom, nextSkillTargeting, nextLastSkillRejectedReason, onResetObjective, onRespawn);
     syncUtilityView(utilityRefs, nextCharacter, nextRoom, nextDebugState, getUtilityState, onUtilityStateChange, getEquipmentLoadout, onEquipItem, onUnequipItem, () => selectedInventoryItemId, (itemId) => {
       selectedInventoryItemId = itemId;
     }, onProjectionModeChange);
@@ -313,8 +205,14 @@ function createCharacterChip(
   level: number,
   onLeaveWorld: () => void,
 ): StatusViewRefs {
+  // Task 242 — the chip is a visible interactive panel root. We
+  // intentionally do NOT call `makePassive(panel)` here; the panel
+  // must keep `pointer-events: auto` (set by the card styles) and
+  // must stop world input from leaking to the Phaser canvas. The
+  // leave button is the only true interactive control inside, but
+  // the chip's panel background is also a visible card and must
+  // catch clicks reliably.
   const panel = createCardSection();
-  makePassive(panel);
   panel.style.display = "flex";
   panel.style.alignItems = "center";
   panel.style.justifyContent = "space-between";
@@ -394,12 +292,14 @@ function syncStatusView(
 function createStableHudContent(
   character: CharacterSummary | null,
   room: Room<DoomscrollsRoomState>,
+  skillTargeting: WorldSessionSkillTargetingState,
+  lastSkillRejectedReason: string | null,
   onResetObjective: () => void,
   onRespawn: () => void,
 ): HudViewRefs {
   const root = document.createElement("div");
   makePassive(root);
-  syncHudView({ root }, character, room, onResetObjective, onRespawn);
+  syncHudView({ root }, character, room, skillTargeting, lastSkillRejectedReason, onResetObjective, onRespawn);
   return { root };
 }
 
@@ -407,15 +307,27 @@ function syncHudView(
   refs: HudViewRefs,
   character: CharacterSummary | null,
   room: Room<DoomscrollsRoomState>,
+  skillTargeting: WorldSessionSkillTargetingState,
+  lastSkillRejectedReason: string | null,
   onResetObjective: () => void,
   onRespawn: () => void,
 ): void {
-  refs.root.replaceChildren(renderHudContent(character, room, onResetObjective, onRespawn));
+  // Task 229: HUD content is rebuilt on every update pass. This means
+  // the respawn button and any other interactive HUD control is destroyed
+  // and recreated each frame. To make clicks reliable we must NOT
+  // destroy children while a pointer-down is in flight. The browser
+  // already handles this for native button clicks — the click event
+  // fires on the element that received mousedown, even if it gets
+  // removed before mouseup. The real problem was pointer-events: none
+  // on parent panels blocking the click entirely (fixed in overlayLayout).
+  refs.root.replaceChildren(renderHudContent(character, room, skillTargeting, lastSkillRejectedReason, onResetObjective, onRespawn));
 }
 
 function renderHudContent(
   nextCharacter: CharacterSummary | null,
   nextRoom: Room<DoomscrollsRoomState>,
+  skillTargeting: WorldSessionSkillTargetingState,
+  lastSkillRejectedReason: string | null,
   onResetObjective: () => void,
   onRespawn: () => void,
 ): HTMLElement {
@@ -440,22 +352,34 @@ function renderHudContent(
     selfPresence?.xp ?? nextCharacter?.xp ?? 0,
     selfPresence?.objective ?? null,
     onResetObjective,
+    selfPresence?.objectiveRewardGranted,
   ));
-  panel.appendChild(createSkillSlotPlaceholder());
+  panel.appendChild(createSkillSlotPlaceholder(selfPresence?.nextSkillSlotAt, skillTargeting, lastSkillRejectedReason));
 
   if (selfPresence?.lifeState === "downed") {
     const downedNotice = createMutedText(t("world_session.downed_notice"));
     downedNotice.style.color = "#e3a6a6";
     panel.appendChild(downedNotice);
 
+    const respawnHint = createMutedText(t("world_session.downed_respawn_hint"));
+    respawnHint.style.color = "#a88d63";
+    panel.appendChild(respawnHint);
+
     const respawnButton = createButton(t("world_session.respawn"));
     respawnButton.style.marginTop = "4px";
     respawnButton.style.width = "220px";
-    respawnButton.addEventListener("click", () => {
+    respawnButton.addEventListener("click", (event) => {
+      event.stopPropagation();
       onRespawn();
     });
     makeInteractive(respawnButton);
     panel.appendChild(respawnButton);
+  }
+
+  if (selfPresence?.hasCorpse === true && selfPresence?.lifeState !== "downed") {
+    const corpseNotice = createMutedText(t("world_session.corpse_return_hint"));
+    corpseNotice.style.color = "#8f5f5f";
+    panel.appendChild(corpseNotice);
   }
 
   return panel;
@@ -494,6 +418,7 @@ function createStableUtilityContent(
     character?.id !== undefined && onUnequipItem !== undefined
       ? (slot) => onUnequipItem(character.id, slot)
       : undefined,
+    () => character,
   );
   const derivedStatsSection = createDerivedStatsSection(character);
   const inventorySection = createInventoryPanelSection(
@@ -545,6 +470,7 @@ function syncUtilityView(
     character?.id !== undefined && onUnequipItem !== undefined
       ? (slot) => onUnequipItem(character.id, slot)
       : undefined,
+    () => character,
   );
   updateInventoryPanelSection(
     refs.inventorySection,
@@ -600,6 +526,7 @@ function createControlsSection(isOpen: boolean, onOpenChange: (open: boolean) =>
   const bindings: readonly { readonly key: string; readonly action: string }[] = [
     { key: "Click", action: t("world_session.control_move") },
     { key: "Click (enemy)", action: t("world_session.control_attack") },
+    { key: "RMB (enemy)", action: t("skill.grave_spark.name") },
     { key: "Click (loot)", action: "Pickup" },
     { key: "Click (object)", action: "Interact" },
     { key: "Space", action: t("world_session.control_dodge") },
@@ -822,12 +749,16 @@ function createHudSection(
   level?: number,
   xp?: number,
   objective?: {
+    readonly id: string;
     readonly label: string;
     readonly current: number;
     readonly target: number;
     readonly completed: boolean;
+    readonly xpReward?: number;
+    readonly copperReward?: number;
   } | null,
   onResetObjective?: () => void,
+  objectiveRewardGranted?: boolean,
 ): HTMLElement {
   const wrapper = document.createElement("section");
   wrapper.style.display = "grid";
@@ -888,7 +819,7 @@ function createHudSection(
 
   wrapper.appendChild(vitalityCard);
 
-  wrapper.appendChild(createObjectiveTrackerCard(resolveObjectiveTrackerViewModel(objective), onResetObjective));
+  wrapper.appendChild(createObjectiveTrackerCard(resolveObjectiveTrackerViewModel(objective, objectiveRewardGranted), onResetObjective));
 
   wrapper.appendChild(createMiniHudStat("Resource", t("world_session.resource_placeholder")));
   wrapper.appendChild(createMiniHudStat(t("character.level"), String(level ?? 1)));
@@ -1003,19 +934,27 @@ function createMiniHudStat(labelText: string, valueText: string): HTMLElement {
   return card;
 }
 
-function createObjectiveTrackerCard(objective: {
-  readonly title: string;
-  readonly titleHint: string;
-  readonly stateLabel: string;
-  readonly current: number;
-  readonly target: number;
-  readonly completed: boolean;
-  readonly isHint: boolean;
-}, onResetObjective?: () => void): HTMLElement {
+function createObjectiveTrackerCard(objective: ObjectiveTrackerViewModel, onResetObjective?: () => void): HTMLElement {
   const card = document.createElement("div");
   card.style.display = "grid";
   card.style.gap = "4px";
   card.style.padding = "8px 10px";
+
+  if (objective.allDone) {
+    // All objectives in chain are complete — show a dim "No more notices"
+    card.style.border = "1px solid #3c3122";
+    card.style.borderRadius = "12px";
+    card.style.background = "linear-gradient(180deg, rgba(20, 18, 14, 0.9) 0%, rgba(14, 12, 10, 0.9) 100%)";
+    card.style.minWidth = "176px";
+
+    const line = document.createElement("div");
+    line.textContent = t("objective.no_more_notices");
+    line.style.fontSize = "12px";
+    line.style.color = "#b9ae95";
+    card.appendChild(line);
+    return card;
+  }
+
   card.style.border = objective.completed
     ? "1px solid #4f6b3d"
     : objective.isHint
@@ -1061,6 +1000,15 @@ function createObjectiveTrackerCard(objective: {
   card.appendChild(trackerLine);
 
   if (!objective.isHint) {
+    const subtitleLine = document.createElement("div");
+    // Show location if available, otherwise use fallback
+    subtitleLine.textContent = objective.location ?? "Nightmarket";
+    subtitleLine.style.fontSize = "10px";
+    subtitleLine.style.color = "#a88d63";
+    card.appendChild(subtitleLine);
+  }
+
+  if (!objective.isHint) {
     const progressFrame = document.createElement("div");
     progressFrame.style.width = "100%";
     progressFrame.style.height = "8px";
@@ -1081,42 +1029,100 @@ function createObjectiveTrackerCard(objective: {
     card.appendChild(progressFrame);
   }
 
-  const resetButton = createButton("Reset objective");
-  resetButton.style.width = "auto";
-  resetButton.style.justifySelf = "start";
-  resetButton.style.padding = "4px 8px";
-  resetButton.style.fontSize = "11px";
-  resetButton.addEventListener("click", () => {
+  // Show reward info for completed objectives (only if not already granted)
+  if (objective.completed && objective.xpReward !== undefined && objective.copperReward !== undefined) {
+    const rewardLine = document.createElement("div");
+    rewardLine.textContent = t("objective.complete_reward", {
+      xpReward: objective.xpReward,
+      copperReward: objective.copperReward,
+    });
+    rewardLine.style.fontSize = "11px";
+    rewardLine.style.color = "#8fcd7a";
+    rewardLine.style.fontWeight = "bold";
+    card.appendChild(rewardLine);
+  } else if (objective.completed && objective.xpReward !== undefined) {
+    const rewardLine = document.createElement("div");
+    rewardLine.textContent = t("objective.complete_reward_xp_only", { xpReward: objective.xpReward });
+    rewardLine.style.fontSize = "11px";
+    rewardLine.style.color = "#8fcd7a";
+    rewardLine.style.fontWeight = "bold";
+    card.appendChild(rewardLine);
+  } else if (objective.completed && objective.copperReward !== undefined) {
+    const rewardLine = document.createElement("div");
+    rewardLine.textContent = t("objective.complete_reward_copper_only", { copperReward: objective.copperReward });
+    rewardLine.style.fontSize = "11px";
+    rewardLine.style.color = "#8fcd7a";
+    rewardLine.style.fontWeight = "bold";
+    card.appendChild(rewardLine);
+  }
+
+  // Clear current objective button (resets progress only)
+  const clearButton = createButton(t("objective.clear"));
+  clearButton.title = t("objective.clear_hint");
+  clearButton.style.width = "auto";
+  clearButton.style.justifySelf = "start";
+  clearButton.style.padding = "4px 8px";
+  clearButton.style.fontSize = "11px";
+  clearButton.addEventListener("click", (event) => {
+    event.stopPropagation();
     onResetObjective?.();
   });
-  makeInteractive(resetButton);
-  card.appendChild(resetButton);
+  makeInteractive(clearButton);
+  card.appendChild(clearButton);
 
   return card;
 }
 
 function resolveObjectiveTrackerViewModel(
   objective: {
+    readonly id: string;
     readonly label: string;
     readonly current: number;
     readonly target: number;
     readonly completed: boolean;
+    readonly xpReward?: number;
+    readonly copperReward?: number;
   } | null | undefined,
+  objectiveRewardGranted?: boolean,
 ): ObjectiveTrackerViewModel {
-  const defaultObjective = contentRegistry.objectives.get(DEFAULT_TRACKED_OBJECTIVE_ID);
-  const defaultTitle = defaultObjective === undefined ? "Objective available" : t(defaultObjective.titleKey);
+  const firstObjectiveContent = contentRegistry.objectives.get(DEFAULT_TRACKED_OBJECTIVE_ID);
+  const firstTitle = firstObjectiveContent === undefined ? "Objective available" : t(firstObjectiveContent.titleKey);
+  const firstLocation = firstObjectiveContent?.zoneId !== undefined
+    ? (firstObjectiveContent.zoneId.startsWith("nightmarket") ? "The Nightmarket" : firstObjectiveContent.zoneId)
+    : "The Nightmarket";
+
+  // All objectives done when no active objective AND reward was granted for last one
+  const isAllDone = objective === null && objectiveRewardGranted === true;
+
+  if (isAllDone) {
+    return {
+      title: "",
+      titleHint: "",
+      stateLabel: "",
+      current: 0,
+      target: 1,
+      completed: false,
+      isHint: true,
+      allDone: true,
+    };
+  }
 
   if (objective === null || objective === undefined) {
     return {
-      title: defaultTitle,
-      titleHint: `Notice Board: ${defaultTitle}`,
+      title: firstTitle,
+      titleHint: `Notice Board: ${firstTitle}`,
       stateLabel: "Hint",
       current: 0,
-      target: defaultObjective?.requiredKills ?? 1,
+      target: firstObjectiveContent?.requiredKills ?? 1,
       completed: false,
       isHint: true,
+      allDone: false,
+      location: firstLocation,
     };
   }
+
+  // Look up location from content if available
+  const objectiveContent = contentRegistry.objectives.get(objective.id as ObjectiveId);
 
   return {
     title: objective.label,
@@ -1126,24 +1132,36 @@ function resolveObjectiveTrackerViewModel(
     target: objective.target,
     completed: objective.completed,
     isHint: false,
+    allDone: false,
+    location: objectiveContent?.zoneId ?? firstLocation,
+    ...(objective.xpReward !== undefined && { xpReward: objective.xpReward }),
+    ...(objective.copperReward !== undefined && { copperReward: objective.copperReward }),
   };
 }
 
-function createSkillSlotPlaceholder(): HTMLElement {
+function createSkillSlotPlaceholder(
+  nextSkillSlotAt: number | undefined,
+  skillTargeting: WorldSessionSkillTargetingState,
+  lastSkillRejectedReason: string | null,
+): HTMLElement {
   const card = document.createElement("div");
   card.style.display = "flex";
-  card.style.alignItems = "center";
+  card.style.alignItems = "flex-start";
   card.style.gap = "10px";
   card.style.padding = "8px 10px";
-  card.style.border = "1px solid #3c3122";
+  const remainingSeconds = formatSkillCooldownSeconds(nextSkillSlotAt);
+  const isReady = remainingSeconds === null;
+  card.style.border = isReady ? "1px solid #355a2f" : "1px solid #5a3c22";
   card.style.borderRadius = "12px";
-  card.style.background = "rgba(18, 14, 10, 0.9)";
+  card.style.background = isReady
+    ? "linear-gradient(180deg, rgba(16, 24, 14, 0.92) 0%, rgba(12, 18, 10, 0.92) 100%)"
+    : "linear-gradient(180deg, rgba(28, 20, 12, 0.92) 0%, rgba(18, 14, 10, 0.92) 100%)";
 
   const slotKey = document.createElement("div");
   slotKey.textContent = "RMB";
   slotKey.style.minWidth = "42px";
   slotKey.style.padding = "6px 0";
-  slotKey.style.border = "1px solid #6b5738";
+  slotKey.style.border = isReady ? "1px solid #6aa25e" : "1px solid #6b5738";
   slotKey.style.borderRadius = "8px";
   slotKey.style.background = "linear-gradient(180deg, rgba(42, 32, 22, 0.96) 0%, rgba(24, 18, 13, 0.96) 100%)";
   slotKey.style.color = "#e0c88a";
@@ -1158,6 +1176,7 @@ function createSkillSlotPlaceholder(): HTMLElement {
   textBlock.style.display = "grid";
   textBlock.style.gap = "2px";
   textBlock.style.minWidth = "0";
+  textBlock.style.flex = "1 1 auto";
 
   const title = document.createElement("div");
   title.textContent = t("world_session.skill_slot_secondary");
@@ -1167,17 +1186,66 @@ function createSkillSlotPlaceholder(): HTMLElement {
   textBlock.appendChild(title);
 
   const subtitle = document.createElement("div");
-  subtitle.textContent = t("world_session.skill_slot_secondary_hint");
-  subtitle.style.color = "#a88d63";
-  subtitle.style.fontSize = "10px";
+  subtitle.textContent = t("skill.grave_spark.name");
+  subtitle.style.color = "#b9d49a";
+  subtitle.style.fontSize = "11px";
+  subtitle.style.fontFamily = "monospace";
+  subtitle.style.fontWeight = "bold";
   textBlock.appendChild(subtitle);
 
-  const emptyState = document.createElement("div");
-  emptyState.textContent = t("world_session.skill_slot_secondary_empty");
-  emptyState.style.color = "#b9d49a";
-  emptyState.style.fontSize = "11px";
-  emptyState.style.fontFamily = "monospace";
-  textBlock.appendChild(emptyState);
+  const description = document.createElement("div");
+  description.textContent = t("skill.grave_spark.description");
+  description.style.color = "#a88d63";
+  description.style.fontSize = "10px";
+  textBlock.appendChild(description);
+
+  const cooldownStatus = document.createElement("div");
+  cooldownStatus.textContent = remainingSeconds === null
+    ? `${t("world_session.skill_slot_ready")} • ${t("world_session.skill_slot_ready_now")}`
+    : t("world_session.skill_slot_cooldown", { seconds: remainingSeconds });
+  cooldownStatus.style.color = remainingSeconds === null ? "#8fce74" : "#d8a86a";
+  cooldownStatus.style.fontSize = "10px";
+  cooldownStatus.style.fontFamily = "monospace";
+  cooldownStatus.style.fontWeight = "bold";
+  textBlock.appendChild(cooldownStatus);
+
+  const targetHint = document.createElement("div");
+  targetHint.style.fontSize = "10px";
+  targetHint.style.fontFamily = "monospace";
+  targetHint.style.whiteSpace = "normal";
+  targetHint.style.wordBreak = "break-word";
+
+  const targetPrefix = skillTargeting.hoveredEnemyId !== null
+    ? t("world_session.skill_target_hover")
+    : skillTargeting.selectedEnemyId !== null
+      ? t("world_session.skill_target_selected")
+      : t("world_session.skill_target_none");
+
+  if (skillTargeting.targetEnemyLabel === null) {
+    targetHint.textContent = `${targetPrefix} • ${t("world_session.skill_target_none")}`;
+    targetHint.style.color = "#a88d63";
+  } else {
+    const roundedDistance = skillTargeting.targetDistance === null
+      ? null
+      : Math.round(skillTargeting.targetDistance);
+    const rangeText = roundedDistance === null
+      ? t("world_session.skill_range_unknown")
+      : skillTargeting.isTargetInRange === true
+        ? t("world_session.skill_target_in_range", { distance: roundedDistance })
+        : t("world_session.skill_target_out_of_range", { distance: roundedDistance, range: 96 });
+    targetHint.textContent = `${targetPrefix} • ${skillTargeting.targetEnemyLabel} • ${rangeText}`;
+    targetHint.style.color = skillTargeting.isTargetInRange === false ? "#d9936b" : "#b9d49a";
+  }
+  textBlock.appendChild(targetHint);
+
+  if (lastSkillRejectedReason === "out_of_range") {
+    const unavailableHint = document.createElement("div");
+    unavailableHint.textContent = t("world_session.skill_target_move_to_cast");
+    unavailableHint.style.color = "#e0c88a";
+    unavailableHint.style.fontSize = "10px";
+    unavailableHint.style.fontWeight = "bold";
+    textBlock.appendChild(unavailableHint);
+  }
 
   card.appendChild(textBlock);
   return card;
@@ -1297,8 +1365,53 @@ function createInventoryPanelSection(
   content.style.padding = "0 8px 8px";
   makeInteractive(content);
   wrapper.appendChild(content);
-  updateInventoryPanelSection(wrapper, character, selection, equipmentLoadout, characterId, onEquipItem, isOpen);
+  // Initial render
+  fullRebuildInventoryContent(content, items, selection, equipmentLoadout, characterId, onEquipItem);
   return wrapper;
+}
+
+/** Version checksum used to skip full inventory rebuilds across overlay updates. */
+let _inventoryContentVersion = -1;
+
+function fullRebuildInventoryContent(
+  content: HTMLElement,
+  items: readonly InventorySummaryItem[],
+  selection: {
+    readonly getSelectedItemId: () => InventorySummaryItem["itemInstanceId"] | null;
+    readonly onSelectItem: (itemId: InventorySummaryItem["itemInstanceId"]) => void;
+  },
+  equipmentLoadout: EquipmentLoadout,
+  characterId: string | null,
+  onEquipItem?: (characterId: string, itemInstanceId: string, slot: string) => Promise<void>,
+): void {
+  content.replaceChildren();
+  const currentSelection = selection.getSelectedItemId();
+  const summarySection = createInventorySummarySection(items, () => selection.getSelectedItemId(), (itemId) => {
+    selection.onSelectItem(itemId);
+    fullRebuildInventoryContent(content, items, selection, equipmentLoadout, characterId, onEquipItem);
+  });
+  const selectedItem = items.find((item) => item.itemInstanceId === currentSelection) ?? null;
+  const detailSection = createInventoryDetailSection(selectedItem, items, equipmentLoadout, characterId, onEquipItem);
+  content.append(summarySection, detailSection);
+  _inventoryContentVersion = computeInventoryVersion(items, selection.getSelectedItemId());
+}
+
+function computeInventoryVersion(
+  items: readonly InventorySummaryItem[],
+  selectedItemId: string | null,
+): number {
+  let hash = items.length;
+  for (let i = 0; i < Math.min(items.length, 4); i++) {
+    const item = items[i];
+    if (item === undefined) {
+      break;
+    }
+    hash = ((hash << 5) - hash) + item.itemInstanceId.length;
+    hash |= 0;
+  }
+  hash = ((hash << 5) - hash) + (selectedItemId?.length ?? 0);
+  hash |= 0;
+  return hash;
 }
 
 function updateInventoryPanelSection(
@@ -1329,21 +1442,15 @@ function updateInventoryPanelSection(
     return;
   }
 
-  const render = (): void => {
-    content.replaceChildren();
-    const summarySection = createInventorySummarySection(items, () => selection.getSelectedItemId(), (itemId) => {
-      selection.onSelectItem(itemId);
-      render();
-    });
-    const selectedItem = items.find((item) => item.itemInstanceId === selection.getSelectedItemId()) ?? items[0] ?? null;
-    if (selectedItem !== null) {
-      selection.onSelectItem(selectedItem.itemInstanceId);
-    }
-    const detailSection = createInventoryDetailSection(selectedItem, items, equipmentLoadout, characterId, onEquipItem);
-    content.append(summarySection, detailSection);
-  };
-
-  render();
+  // Task 275 — Skip full rebuild when inventory data + selection are unchanged.
+  // Full rebuild destroys and recreates DOM, which resets scroll position,
+  // button hover states and any transient browser state. On every overlay
+  // update (e.g. player movement) this was causing the panel to visually
+  // flash/reset. Now we only rebuild when items or selected item actually change.
+  const nextVersion = computeInventoryVersion(items, selection.getSelectedItemId());
+  if (nextVersion !== _inventoryContentVersion) {
+    fullRebuildInventoryContent(content, items, selection, equipmentLoadout, characterId, onEquipItem);
+  }
 }
 
 function createDebugPanel(
@@ -1557,7 +1664,8 @@ function createInventoryDetailSection(
     equipButton.style.background = "rgba(49, 65, 38, 0.9)";
     equipButton.style.border = "1px solid #6a8a4a";
     makeInteractive(equipButton);
-    equipButton.addEventListener("click", async () => {
+    equipButton.addEventListener("click", async (event) => {
+      event.stopPropagation();
       equipButton.disabled = true;
       equipButton.textContent = "Equipping...";
       try {

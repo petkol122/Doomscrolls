@@ -6,6 +6,7 @@ export interface TownRoomWorldLootSnapshot {
   readonly itemId: string;
   readonly label: LocalizationKey;
   readonly rarity?: string;
+  readonly currencyCopper: number;
   readonly x: number;
   readonly y: number;
 }
@@ -30,6 +31,7 @@ export function getTownRoomWorldLoot(
     const itemId = entry.itemId;
     const label = entry.label;
     const rarity = entry.rarity;
+    const rawCurrencyCopper = entry.currencyCopper;
     const x = entry.x;
     const y = entry.y;
 
@@ -48,11 +50,19 @@ export function getTownRoomWorldLoot(
       return;
     }
 
+    const currencyCopper =
+      typeof rawCurrencyCopper === "number" &&
+      Number.isFinite(rawCurrencyCopper) &&
+      rawCurrencyCopper > 0
+        ? Math.floor(rawCurrencyCopper)
+        : 0;
+
     results.push({
       id,
       itemId,
       label: label as LocalizationKey,
       ...(rarity === undefined ? {} : { rarity }),
+      currencyCopper,
       x,
       y,
     });

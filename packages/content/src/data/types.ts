@@ -15,17 +15,36 @@ import type { LocalizationKey } from "@doomscrolls/localization";
 export type ContentLocalizationKey = LocalizationKey;
 
 export type SkillId = "heavy_strike";
-export type EnemyId = "trashboar_runt" | "trashboar_brute";
-export type LootTableId = "sewer_starter_loot";
+export type EnemyId = "trashboar_runt" | "trashboar_brute" | "trashboar_skitter";
+export type LootTableId = "sewer_starter_loot" | "sewer_brute_loot";
 export type LevelTableId = "level_1_to_10";
-export type ObjectiveId = "cull_trashboars";
+export type ObjectiveId = "cull_trashboars" | "break_the_brute";
 export type ZoneContentId = "nightmarket" | "blackwire_sewers";
 export type ItemRarity = "common" | "rare";
 export type SkillTargetingMode = "target";
 export type ZoneRoomType = "town" | "combat";
+export type ZoneClassification = "safe_hub" | "combat" | "test_hybrid";
 export type SpawnPointContentId = "nightmarket_spawn";
 export type EquipmentSlotCategory = "weapon" | "armor" | "accessory" | "belt" | "flask";
-export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken" | "loot_container";
+export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken" | "loot_container" | "vendor" | "town_service" | "waypoint" | "combat_edge" | "area_label" | "path_marker";
+export type VendorId = "nightmarket_suspicious_vendor";
+export type TownServiceId = "nightmarket_stash_keeper" | "nightmarket_trainer" | "nightmarket_waypoint";
+export type TownServiceKind = "vendor" | "stash" | "trainer" | "waypoint";
+
+export interface TownServiceContentDefinition {
+  readonly id: TownServiceId;
+  readonly serviceId: TownServiceId;
+  readonly serviceKind: TownServiceKind;
+  readonly labelKey: ContentLocalizationKey;
+  readonly unavailableMessageKey: ContentLocalizationKey;
+}
+
+export interface VendorStockEntryDefinition {
+  readonly id: string;
+  readonly vendorId: VendorId;
+  readonly itemId: ItemDefinitionId;
+  readonly priceCopper: number;
+}
 
 export interface SpawnZoneDefinition {
   readonly id: string;
@@ -70,18 +89,29 @@ export interface SkillContentDefinition extends LocalizedContentDefinition {
   readonly baseDamage: number;
 }
 
+export interface EnemyCurrencyDropDefinition {
+  readonly min: number;
+  readonly max: number;
+}
+
 export interface EnemyContentDefinition extends LocalizedContentDefinition {
   readonly id: EnemyId;
   readonly level: number;
   readonly maxHp: number;
   readonly damage: number;
+  readonly heavyAttackDamage?: number;
   readonly armor: number;
   readonly moveSpeed: number;
   readonly attackRange: number;
   readonly attackCooldownMs: number;
+  readonly heavyAttackWindupMs?: number;
+  readonly heavyAttackCooldownMs?: number;
+  readonly heavyAttackChance?: number;
   readonly aggroRange: number;
+  readonly leashRange: number;
   readonly xp: number;
   readonly lootTableId: LootTableId;
+  readonly currencyDrop?: EnemyCurrencyDropDefinition;
   readonly spriteKey: string;
 }
 
@@ -96,6 +126,7 @@ export interface ZoneContentDefinition extends LocalizedContentDefinition {
   readonly id: ZoneContentId;
   readonly zoneId: ZoneId;
   readonly roomType: ZoneRoomType;
+  readonly classification: ZoneClassification;
   readonly maxPlayers: number;
   readonly enemyIds: readonly EnemyId[];
   readonly transitionZoneIds: readonly ZoneContentId[];
@@ -151,6 +182,12 @@ export interface ObjectiveContentDefinition {
   readonly targetEnemyIds: readonly EnemyId[];
   readonly requiredKills: number;
   readonly xpReward: number;
+  readonly copperReward: number;
+  /**
+   * Optional zone ID where this objective's target enemies can be found.
+   * Used by the client to display location information.
+   */
+  readonly zoneId?: ZoneContentId;
 }
 
 export interface SpawnPointContentDefinition {
@@ -165,6 +202,7 @@ export interface SpawnPointContentDefinition {
 export interface EquipmentSlotContentDefinition {
   readonly id: EquipmentSlot;
   readonly nameKey: ContentLocalizationKey;
+  readonly descriptionKey?: ContentLocalizationKey;
   readonly category: EquipmentSlotCategory;
   readonly activeInCore01: boolean;
 }

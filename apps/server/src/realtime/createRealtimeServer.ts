@@ -2,7 +2,7 @@ import { Server, WebSocketTransport, matchMaker } from "colyseus";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Server as HttpServer } from "node:http";
 import type { ServerLogger } from "../config/logger";
-import { TownRoom, TOWN_ROOM_NAME } from "./rooms";
+import { TownRoom, TOWN_ROOM_NAME, CombatRoom, COMBAT_ROOM_NAME } from "./rooms";
 
 interface CreateRealtimeServerOptions {
   readonly app: FastifyInstance;
@@ -121,12 +121,18 @@ export async function createRealtimeServer({ app, httpServer, logger }: CreateRe
   // no gameplay, no client connection wiring. Future dedicated tasks are
   // expected to add the real state, validation, and client join flow.
   realtimeServer.define(TOWN_ROOM_NAME, TownRoom);
+  // Task 263: register the thin CombatRoom foundation. The room is a
+  // minimal Colyseus shell — no enemy state, no map, no movement, no
+  // combat, no loot, no client message handlers. Future dedicated
+  // tasks (Task 264+) must reuse shared helpers, not duplicate
+  // TownRoom gameplay.
+  realtimeServer.define(COMBAT_ROOM_NAME, CombatRoom);
   await matchMaker.accept();
   await registerMatchmakingRoute(app);
 
   logger.info(
-    { rooms: [TOWN_ROOM_NAME] },
-    "Colyseus realtime server initialized with empty TownRoom registered.",
+    { rooms: [TOWN_ROOM_NAME, COMBAT_ROOM_NAME] },
+    "Colyseus realtime server initialized with TownRoom and thin CombatRoom registered.",
   );
 
   return realtimeServer;

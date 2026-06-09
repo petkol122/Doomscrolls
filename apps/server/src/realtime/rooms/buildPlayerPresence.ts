@@ -15,6 +15,7 @@ export interface BuildTownPlayerPresenceInput {
   readonly resolvedZoneId: ZoneId;
   readonly hp: number;
   readonly maxHp: number;
+  readonly restoredFlaskCharges: number | undefined;
   readonly movementSpeed: number;
   readonly attackCooldownMs: number;
   readonly restoredLocationZoneId: string | undefined;
@@ -54,8 +55,16 @@ export function buildTownPlayerPresence(
     input.movementSpeed,
     input.attackCooldownMs,
   );
-  // Task 096 -- join grants a full set of basic healing flask charges.
+  // Restore persisted flask charges for reconnect/refresh while keeping
+  // room HUD state sourced from PlayerPresence and clamped to server-owned max.
   restoreFlaskToFull(presence);
+  const restoredFlaskCharges = Number.isFinite(input.restoredFlaskCharges)
+    ? Math.floor(input.restoredFlaskCharges ?? 0)
+    : presence.maxFlaskCharges;
+  presence.flaskCharges = Math.min(
+    presence.maxFlaskCharges,
+    Math.max(0, restoredFlaskCharges),
+  );
   return presence;
 }
 

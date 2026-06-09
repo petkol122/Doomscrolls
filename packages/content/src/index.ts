@@ -18,18 +18,21 @@ export { skills } from "./data/skills";
 export { enemies } from "./data/enemies";
 export { items } from "./data/items";
 export { lootTables } from "./data/lootTables";
-export { objectives } from "./data/objectives";
+export { objectives, NOTICE_BOARD_OBJECTIVE_SEQUENCE } from "./data/objectives";
 export { zones } from "./data/zones";
 export { spawnPoints } from "./data/spawnPoints";
 export { worldProps } from "./data/worldProps";
 export { spawnZones } from "./data/spawnZones";
 export { levelTables } from "./data/levelTables";
 export { equipmentSlots } from "./data/equipmentSlots";
+export { vendorStocks } from "./data/vendorStocks";
+export { townServices } from "./data/townServices";
 
 export type {
   CharacterClassContentDefinition,
   ContentLocalizationKey,
   EnemyContentDefinition,
+  EnemyCurrencyDropDefinition,
   EquipmentSlotCategory,
   EquipmentSlotContentDefinition,
   ItemContentDefinition,
@@ -47,8 +50,14 @@ export type {
   SpawnPointContentDefinition,
   SpawnPointContentId,
   SpawnZoneDefinition,
+  TownServiceContentDefinition,
+  TownServiceId,
+  TownServiceKind,
+  VendorId,
+  VendorStockEntryDefinition,
   WorldPropContentDefinition,
   WorldPropKind,
+  ZoneClassification,
   ZoneContentBounds,
   ZoneContentDefinition,
   ZoneContentId,

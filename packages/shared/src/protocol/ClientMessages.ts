@@ -113,9 +113,23 @@ export interface RequestUseHealingFlaskClientMessage {
   readonly type: "request_use_healing_flask";
 }
 
+/**
+ * Task 217 — First Real Right-Click Skill Batch.
+ *
+ * The client may identify which synced enemy it wants to target with the
+ * RMB skill slot. `targetEnemyId` is optional; when omitted the server
+ * may reject with "skill_unavailable" or use a fallback (currently none).
+ * The server validates presence, target existence, range and cooldown,
+ * then applies server-authoritative damage. No client-sent damage is accepted.
+ */
 export interface RequestUseSkillSlotClientMessage {
   readonly type: "request_use_skill_slot";
   readonly slot: "secondary";
+  readonly targetEnemyId?: string;
+}
+
+export interface RequestCorpseInteractClientMessage {
+  readonly type: "request_corpse_interact";
 }
 
 export interface RequestRespawnClientMessage {
@@ -170,6 +184,7 @@ export type ClientRoomMessage =
   | RequestMoveClientMessage
   | RequestAttackClientMessage
   | RequestPickupWorldLootClientMessage
+  | RequestCorpseInteractClientMessage
   | RequestRespawnClientMessage
   | RetrieveCorpseClientMessage
   | ForceRecoverCorpseClientMessage

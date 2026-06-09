@@ -19,6 +19,9 @@ export const en = {
   "enemy.trashboar_brute.name": "Trashboar Brute",
   "enemy.trashboar_brute.description":
     "A broader, meaner slab of tusk and scar tissue that hits the alleys like a living battering ram.",
+  "enemy.trashboar_skitter.name": "Trashboar Skitter",
+  "enemy.trashboar_skitter.description":
+    "A nervous runt cousin — all twitch and tusk, faster than it has any right to be and gone before you finish the swing.",
 
   "zone.nightmarket.name": "The Nightmarket",
   "zone.nightmarket.description":
@@ -53,10 +56,26 @@ export const en = {
   "skill.heavy_strike.name": "Heavy Strike",
   "skill.heavy_strike.description":
     "A deliberate attack that solves immediate problems through blunt force.",
+  "skill.grave_spark.name": "Grave Spark",
+  "skill.grave_spark.description":
+    "A crackling burst of grave-charged energy that sears a single target.",
 
   "objective.cull_trashboars.title": "Cull Trashboars",
   "objective.cull_trashboars.description":
-    "Thin the Nightmarket trashboar pack before it spills deeper into the alleys.",
+    "Thin the trashboar pack at Blackwire Sewer Edge before it spills deeper into the alleys.",
+  "objective.break_the_brute.title": "Break the Brute",
+  "objective.break_the_brute.description":
+    "The trashboar brute is the pack's backbone. Put it down and watch the rest scatter.",
+
+  "objective.complete_reward": "Objective complete! +{xpReward} XP, +{copperReward} copper",
+  "objective.complete_reward_xp_only": "Objective complete! +{xpReward} XP",
+  "objective.complete_reward_copper_only": "Objective complete! +{copperReward} copper",
+  "objective.reset_hint": "Restart this objective (progress will be lost)",
+  "objective.no_more_notices": "No more notices for now.",
+  "objective.clear": "Clear",
+  "objective.clear_hint": "Clear current objective progress (will need to re-interact to continue)",
+  "objective.reset_chain": "Reset Chain",
+  "objective.reset_chain_hint": "Restart the whole Notice Board sequence (all progress will be lost)",
 
   "auth.username": "Username",
   "auth.password": "Password",
@@ -87,6 +106,12 @@ export const en = {
   "character.class": "Class",
   "character.level": "Level",
   "character.create_success": "Character created.",
+
+  "money.money_label": "Money",
+  "money.money_empty": "0c",
+  "money.gold_short": "g",
+  "money.silver_short": "s",
+  "money.copper_short": "c",
 
   "world_entry.title": "Selected character",
   "world_entry.enter_world": "Enter World",
@@ -128,6 +153,8 @@ export const en = {
   "world_session.projection_click_top_down_only": "Enabled in debug top-down.",
   "world_session.projection_click_disabled_preview": "Disabled in isometric preview until safe screen-to-world mapping exists.",
   "world_session.downed_notice": "You are downed.",
+  "world_session.downed_respawn_hint": "Respawn at safe point.",
+  "world_session.corpse_marker": "Corpse remains.",
   "world_session.damage_feedback": "-{damage} HP  ({hp} remaining)",
   "world_session.downed_damage_feedback": "-{damage} HP  You are downed.",
   "world_session.respawn": "Respawn",
@@ -136,12 +163,22 @@ export const en = {
   "world_session.controls": "Controls",
   "world_session.control_move": "Click ground: move",
   "world_session.control_attack": "Click enemy: attack / approach",
-  "world_session.control_skill_secondary": "Right click: placeholder skill slot",
+  "world_session.control_skill_secondary": "Right click: Grave Spark",
   "world_session.control_dodge": "Space: dodge",
   "world_session.control_flask": "Q: healing flask",
   "world_session.skill_slot_secondary": "Right Click",
-  "world_session.skill_slot_secondary_hint": "Reserved secondary skill slot",
+  "world_session.skill_slot_secondary_hint": "Server-synced secondary skill slot",
   "world_session.skill_slot_secondary_empty": "No skill learned",
+  "world_session.skill_slot_ready": "Status: Ready",
+  "world_session.skill_slot_cooldown": "Status: Cooldown {seconds}s",
+  "world_session.skill_slot_ready_now": "Ready now",
+  "world_session.skill_target_hover": "Hover",
+  "world_session.skill_target_selected": "Target",
+  "world_session.skill_target_none": "No enemy target",
+  "world_session.skill_range_unknown": "range unknown",
+  "world_session.skill_target_in_range": "in range ({distance})",
+  "world_session.skill_target_out_of_range": "too far ({distance}/{range})",
+  "world_session.skill_target_move_to_cast": "Out of range: RMB keeps move-to-cast active.",
   "world_session.flask_charges": "Flask charges",
   "world_session.awaiting_flask": "Waiting for synced flask state...",
   // Future: Diablo-like right orb resource (mana/class resource) — placeholder until class resource system lands
@@ -158,6 +195,12 @@ export const en = {
   "world_area.attack_on_cooldown": "Attack is on cooldown.",
   "world_area.attack_unavailable": "Attack could not be used.",
   "world_area.player_damage_taken": "You take {damage} damage. HP now {hp}.",
+  "world_area.enemy_attack_hit": "Enemy attack hits for {damage}.",
+  "world_area.enemy_attack_missed": "Enemy attack missed.",
+  "world_area.skill_hit": "Grave Spark hits for {damage}.",
+  "world_area.skill_hit_label": "Spark {damage}",
+  "world_area.skill_target_missing": "Grave Spark target missing.",
+  "world_area.skill_target_dead": "Grave Spark target already dead.",
   "world_area.pickup_sent": "Pickup request sent.",
   "world_area.pickup_too_far": "Too far away to pick that up.",
   "world_area.pickup_moving_closer": "Moving closer to pick that up.",
@@ -171,13 +214,17 @@ export const en = {
   "world_area.enemy_defeated_respawn": "Enemy defeated. Respawning in {seconds}s.",
   "world_area.enemy_respawning_in": "Respawning in {seconds}s",
   "world_area.enemy_respawned": "Enemy respawned and reset.",
+  "world_area.enemy_respawned_label": "Respawned",
   "world_area.xp_gained": "+{amount} XP.",
   "world_area.xp_gained_total": "+{amount} XP ({totalXp} total).",
   "world_area.level_up": "Level up!",
+  "world_area.level_up_notice": "Level Up! Now level {level}.",
+  "world_area.level_up_hp_notice": "Level Up! Now level {level}. Max HP +{gainedMaxHp}.",
 
   "world_area.dodge_sent": "Dodge sent.",
   "world_area.dodge_confirmed": "Dodge confirmed.",
   "world_area.dodge_on_cooldown": "Dodge is on cooldown.",
+  "world_area.dodge_downed": "Cannot dodge while downed.",
   "world_area.dodge_unavailable": "Dodge unavailable.",
   "world_area.dodge_test_button": "Send test dodge (Space)",
   "world_area.dodge_test_help":
@@ -191,8 +238,23 @@ export const en = {
   "world_area.flask_on_cooldown": "Flask is on cooldown.",
   "world_area.flask_downed": "Cannot use flask while downed.",
   "world_area.flask_unavailable": "Flask unavailable.",
+  "world_area.skill_sent": "Grave Spark sent.",
+  "world_area.skill_moving_closer": "Moving closer to cast Grave Spark.",
+  "world_area.skill_too_far": "Grave Spark target too far.",
+  "world_area.skill_on_cooldown": "Grave Spark is on cooldown.",
   "world_area.skill_unlearned": "Skill slot not learned yet.",
+  "world_area.corpse_recovered": "Corpse recovered.",
+  "world_area.corpse_composure_restored": "Composure restored.",
+  "world_area.corpse_interact_out_of_range": "Moving to corpse.",
+  "world_area.corpse_interact_downed": "You are downed. Respawn first.",
+  "world_area.corpse_interact_no_corpse": "No corpse to recover.",
+  "world_area.corpse_return_hint": "Return to your corpse",
   "world_area.skill_unavailable": "Skill unavailable.",
+  "world_area.enemy_defeated_distinct": "{enemy} defeated!",
+  "world_area.loot_dropped": "Loot dropped.",
+  "world_area.currency_dropped": "Currency dropped.",
+  "world_area.rare_drop": "Rare drop: {item}!",
+  "world_session.corpse_return_hint": "Return to your corpse",
 
   "inventory.title": "Inventory",
   "equipment.title": "Equipment",
@@ -220,7 +282,20 @@ export const en = {
 
   "world_prop.loot_container.name": "Loot Container",
   "world_prop.loot_container.description": "A shared container that may hold valuable finds.",
-  "world_prop.loot_container.empty": "The container has already been looted."
+  "world_prop.loot_container.empty": "The container has already been looted.",
+
+  "town_service.vendor_panel.trading_locked": "Trading locked for Core 0.1.",
+  "town_service.stash_keeper.name": "Stash Keeper",
+  "town_service.stash_keeper.unavailable": "Stash storage is not available yet.",
+
+  "town_service.trainer.name": "Trainer",
+  "town_service.trainer.unavailable": "Training is not available yet.",
+
+  "town_service.waypoint.name": "Waypoint",
+  "town_service.waypoint.unavailable": "Waypoint activation is not available yet.",
+
+  "zone.blackwire_sewer_edge.name": "→ Blackwire Sewer Edge",
+  "zone.blackwire_sewer_edge.description": "The boundary where Nightmarket alleys give way to sewer tunnels crawling with trashboars."
 } as const satisfies LocalizationDictionary;
 
 export type LocalizationKey = keyof typeof en;

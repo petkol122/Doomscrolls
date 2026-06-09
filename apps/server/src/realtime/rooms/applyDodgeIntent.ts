@@ -20,14 +20,12 @@ import { DEFAULT_DODGE_DISTANCE } from "./dodgeCooldown";
 //   - do not implement stamina, resource cost, animation, skill
 //     system, roll collision, pathfinding or client prediction
 //
-// Telegraph cancel side-effect:
-//   - any enemy whose telegraphed attack was targeting this player
-//     and whose landing point is still in the future must be
-//     cancelled (attackLandingAtMs cleared and nextAttackAtMs
-//     re-armed) so the in-flight hit resolves to "missed" once the
-//     windup elapses. This is the explicit "clear/cancel incoming
-//     enemy telegraph if player leaves range before landing"
-//     requirement of Task 095.
+// Dodge relevance side-effect:
+//   - the player position changes immediately and remains server-owned
+//   - existing telegraphed attacks are NOT force-cancelled here;
+//     instead the later landing check must re-evaluate range against
+//     the dodged position so leaving range before impact produces a
+//     server-authoritative miss.
 // ---------------------------------------------------------------------------
 
 export interface ApplyDodgeIntentInput {
@@ -45,7 +43,6 @@ export interface ApplyDodgeIntentResult {
   readonly newY: number;
   readonly targetX: number;
   readonly targetY: number;
-  readonly cancelledTelegraphEnemyIds: readonly string[];
 }
 
 /**
@@ -94,41 +91,14 @@ export function applyDodgeIntent(input: ApplyDodgeIntentInput): ApplyDodgeIntent
   // handler is responsible for consuming the cooldown so the
   // application helper stays side-effect free w.r.t. cooldowns.
 
-  // Cancel any enemy telegraphs that were targeting this player.
-  // We only cancel telegraphs whose landing time is still in the
-  // future. The room's per-enemy landing code will then, on the
-  // next tick, observe the player is no longer in range (the
-  // dodge moved them by `distance`) and the attack will miss.
-  const cancelledTelegraphEnemyIds: string[] = [];
-  if (now > 0) {
-    state.enemies.forEach((enemy) => {
-      if (enemy.defeated || enemy.hp <= 0) {
-        return;
-      }
-      if (enemy.targetPlayerSessionId !== player.sessionId) {
-        return;
-      }
-      if (enemy.attackLandingAtMs <= 0) {
-        return;
-      }
-      if (enemy.attackLandingAtMs <= now) {
-        return;
-      }
-      enemy.attackLandingAtMs = 0;
-      // The per-enemy landing code re-arms nextAttackAtMs after
-      // a windup-cancel miss, but we set it here too so a watcher
-      // sees a clean, ready state immediately.
-      enemy.nextAttackAtMs = 0;
-      cancelledTelegraphEnemyIds.push(enemy.id);
-      void epsilon; // kept for symmetry / future tuning
-    });
-  }
+  void state;
+  void now;
+  void epsilon;
 
   return {
     newX: player.x,
     newY: player.y,
     targetX: clampedTargetX,
     targetY: clampedTargetY,
-    cancelledTelegraphEnemyIds,
   };
 }

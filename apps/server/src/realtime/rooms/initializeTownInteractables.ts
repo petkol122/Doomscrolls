@@ -9,6 +9,8 @@ import { contentRegistry } from "@doomscrolls/content";
  * Initialize static interactable objects for the room.
  * Currently hardcoded for nightmarket zone with one notice board.
  * Task 180 — Added loot container from content definitions.
+ * Task 197 — Added neutral vendor placeholder.
+ * Task 205 — Added stash keeper town-service placeholder.
  * Future: read all interactables from content definitions.
  */
 export function initializeTownInteractables(
@@ -37,6 +39,58 @@ export function initializeTownInteractables(
         false, // initially unopened
       );
       state.interactables.set(lootContainer.id, lootContainer);
+    }
+
+    // Task 197 — Neutral vendor placeholder
+    const vendorProp = contentRegistry.worldProps.get("nightmarket_vendor_01");
+    if (vendorProp !== undefined) {
+      const vendor = new Interactable(
+        vendorProp.id,
+        "vendor",
+        vendorProp.label,
+        vendorProp.x,
+        vendorProp.y,
+      );
+      state.interactables.set(vendor.id, vendor);
+    }
+
+    // Task 205 — Stash keeper town-service placeholder
+    const stashProp = contentRegistry.worldProps.get("nightmarket_stash_keeper_01");
+    if (stashProp !== undefined) {
+      const stash = new Interactable(
+        stashProp.id,
+        "town_service",
+        stashProp.label,
+        stashProp.x,
+        stashProp.y,
+      );
+      state.interactables.set(stash.id, stash);
+    }
+
+    // Task 208 — Trainer town-service placeholder
+    const trainerProp = contentRegistry.worldProps.get("nightmarket_trainer_01");
+    if (trainerProp !== undefined) {
+      const trainer = new Interactable(
+        trainerProp.id,
+        "town_service",
+        trainerProp.label,
+        trainerProp.x,
+        trainerProp.y,
+      );
+      state.interactables.set(trainer.id, trainer);
+    }
+
+    // Task 209 — Waypoint town-service placeholder
+    const waypointProp = contentRegistry.worldProps.get("nightmarket_waypoint_01");
+    if (waypointProp !== undefined) {
+      const waypoint = new Interactable(
+        waypointProp.id,
+        "town_service",
+        waypointProp.label,
+        waypointProp.x,
+        waypointProp.y,
+      );
+      state.interactables.set(waypoint.id, waypoint);
     }
   }
   // Future: add more zones and objects

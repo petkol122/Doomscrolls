@@ -38,6 +38,8 @@ nightvision
 gravewalker
 heavy_strike
 trashboar_runt
+trashboar_skitter
+trashboar_brute
 nightmarket
 blackwire_sewers
 starter_pipe
@@ -241,6 +243,8 @@ Implement server-authoritative click-to-move.
 
 Status: partially implemented as the current movement-step foundation. `request_move` is a real shared/network contract, the server validates the intent, `applyMovementIntent()` stores `targetX` / `targetY` on the authoritative player presence entry, and `TownRoom` runs a 50 ms simulation interval that calls `stepTownRoomMovement()` to move synced `x` / `y` gradually toward the stored target. `TownRoom` resolves a runtime movement speed from the joined character's derived stats and stores that value in `PlayerPresence.movementSpeed`; the movement tick uses each player's stored speed, with a fallback constant kept only as a server safety guard for invalid runtime state. A newer click replaces the previous target. The client renders synced x/y only, may show synced speed in debug text, and may show the last click target as debug intent text only. Collision, pathfinding, interpolation/smoothing, combat coupling and persistence remain deferred.
 
+Checkpoint note: tap left click keeps the existing behavior. A planned Diablo-like follow-up may let holding left mouse on empty ground keep updating the move target through throttled `request_move` intents while the server remains authoritative. This checkpoint does not add hold-to-auto-attack or hold-to-auto-pickup.
+
 ### Task 048 — Movement Speed Docs + Small Client Display
 
 Document the current movement-speed flow and, if already synchronized, show speed in the debug presence list only.
@@ -277,13 +281,29 @@ Status: partially implemented as the current basic attack intent foundation batc
 
 Task 062 milestone cleanup note: the current click-enemy UX now explicitly communicates dispatch (`Attack sent.`), out-of-range rejection (`Too far away.`), and acceptance (`Attack confirmed. Enemy HP updates from synced room state.`). Enemy HP remains visibly updated only through synced room-state changes. Damage remains fixed at 1 and server-owned.
 
-Task 164 status note: the current temporary Notice Board objective is documented as a narrow session-only slice. Objective definitions now live in content, the Notice Board reads `cull_trashboars` from content, completion grants XP once per session objective, and there is still no objective persistence, quest log, dialogue system, or multiple-objective support.
+Task 164 status note: the current session-only Notice Board objective sequence is documented as a narrow slice. Objective definitions live in `packages/content`, the Notice Board offers `Cull Trashboars` first and `Break the Brute` second, one active objective at a time, rewards are XP + copper with per-objective duplicate reward guard. There is still no objective persistence, quest log, dialogue system, selection UI, map markers, or multiple-objective support.
 
 Task 078 milestone note: synced placeholder world loot can now be clicked for server-authoritative pickup. The client sends only `worldLootId`, `TownRoom` validates player presence + loot existence + distance <= 48, and on success removes the synced loot from room state before the client view disappears via Colyseus sync. There is still no inventory write, item stacking, equipment, currency, XP, persistence or client-side pickup authority.
 
 Task 063 status note: the same synced placeholder-enemy slice now includes a minimal defeated state. When enemy HP reaches 0, the server marks that synced enemy as defeated, keeps it in room state, clamps HP at 0, and safely rejects further attacks against it. The client renders defeated enemies differently and may show `Enemy defeated.` as safe feedback.
 
 Task 071 status note: the placeholder Trashboar now supports a basic server-owned dev respawn loop. After defeat it remains visibly defeated for a short delay, then the same synced enemy resets to full HP, clears `defeated`, and becomes attackable again at the same static position. This remains a narrow debug loop only: no loot, XP, enemy AI, enemy attacks, player damage, corpse system or persistence was added.
+
+### Task 251 — Enemy Variant Docs Checkpoint
+
+Document the current Trashboar-family enemy variants. This is a documentation-only task and must not change code, add features, or run browser automation.
+
+Status: documented. `README.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG_CORE_0_1.md` and `docs/CODING_RULES.md` now briefly state:
+
+```text
+Trashboar Runt = baseline content variant
+Trashboar Skitter = lower HP, faster move speed, lower XP
+Trashboar Brute = tougher / deeper, with a heavy attack window
+all three variants share the existing AI / loot / XP / render pipeline
+all three variants are content-only and use placeholder visuals
+```
+
+The three variants are defined in `packages/content/src/data/enemies.ts` and are consumed by the existing spawn-zone / AI / loot / XP / render pipeline without any new states, sprites, abilities or rarity tiers. The Runt is the default Nightmarket spawn; the Skitter and Brute entries are content-only placeholders for now and are not yet wired to spawn zones.
 
 ### Task 019 — Corpse and Respawn
 
@@ -608,6 +628,235 @@ Required checks for this checkpoint:
 pnpm lint
 pnpm test
 ```
+
+### Task 192 — Fix Inventory Selection + Loot Pickup Priority + Drop Scatter
+
+Fix current loot/inventory interaction bugs and make drops feel more Diablo-like.
+
+Changes:
+
+- inventory item selection in the overlay panel no longer auto-reselects the first item on every render, which caused an infinite re-render loop that prevented reliable row clicks
+- defeated enemies no longer block loot clicks: `findClickedEnemy()` skips enemies whose `defeated` flag is true, so loot entries underneath are reachable
+- input/target priority: alive enemy > world loot > interactable > ground movement; defeated enemies are transparent to clicks
+- enemy drops scatter around the defeated enemy corpse using server-owned seeded RNG (mulberry32) with 8px range, clamped inside zone bounds
+- both item loot and currency loot are server-authoritative WorldLoot entries and can drop simultaneously from the same defeat, each at its own scattered position
+- server returns `WorldLoot[]` (array) from `spawnWorldLootOnEnemyDefeat` to support multiple simultaneous drops; `TownRoom` updated accordingly
+
+### Task 231 — Core Interaction Stability Docs
+
+Document recent fixes for enemy movement, overlay clicks, and loot hit testing. No features, browser automation, or runtime reproduction.
+
+Changes documented:
+
+- enemy content `moveSpeed` is scaled to world units/sec in server movement: `ENEMY_MOVEMENT_SPEED_UNITS_PER_SECOND_MULTIPLIER = 220` applies the same scaling factor as `TOWN_MOVEMENT_SPEED_UNITS_PER_SECOND_MULTIPLIER` so enemy `moveSpeed: 1.0` yields 220 world-units/sec, matching player speed conventions
+- overlay visible panels capture clicks via `event.stopPropagation()` on respawn/reset/equip/unequip controls; passive empty overlay regions use `pointerEvents: "none"` so canvas clicks pass through
+- respawn/inventory/equip controls must stop click-through: `worldSessionOverlayView.ts` calls `event.stopPropagation()` on all interactive control clicks; `worldSessionPointerEvents.ts` exports `makeInteractive`/`makePassive` helpers
+- loot hit testing uses the same deterministic visual scatter as rendering: both `worldSessionLootPlaceholderView.ts` (render) and `worldSessionAreaView.ts` (hit test) call `getScatterOffset(loot.id)` with `SCATTER_RANGE = 12`; the client-side visual scatter range (12px) is independent of the server drop scatter (8px) — they serve different purposes (readability vs drop placement)
+
+### Task 195 — Ground Loot Rules Docs Checkpoint
+
+Document current ground-loot readability and pickup rules. This is a documentation-only task and must not add features, browser automation, or runtime reproduction.
+
+Status: documented. `docs/CODING_RULES.md` now records that item/currency loot both render as ground loot visuals, the client visual-only scatter (`SCATTER_RANGE = 12`) is separate from server-owned loot positions (`SCATTER_RANGE = 8`), pickup hit radius must stay aligned with visible loot body, and currency loot remains visually distinct from item loot (ellipse vs rectangle, gold vs rarity palette).
+
+Required checks for this checkpoint:
+
+```text
+pnpm --filter @doomscrolls/client typecheck
+pnpm lint
+```
+
+### Task 182 — Shared Loot Container Docs Checkpoint
+Document the shared room loot container foundation across `README.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG_CORE_0_1.md` and `docs/CODING_RULES.md`. This is a documentation-only task and must not add features, browser automation, or runtime reproduction.
+
+Status: documented. The docs now state that one shared Nightmarket crate exists, the crate opens once per room instance, the server rolls loot and spawns world loot near the crate, the opened state syncs to clients, it is not persisted yet, and there are no stealing/crime/locks/respawn timers yet.
+
+Required checks for this checkpoint:
+
+```text
+pnpm --filter @doomscrolls/content typecheck
+pnpm --filter @doomscrolls/server typecheck
+pnpm --filter @doomscrolls/client typecheck
+pnpm lint
+```
+
+### Vendor Placeholder Panel (Core 0.1)
+
+The Suspicious Vendor placeholder lives in Nightmarket at (380, 600). It is a non-hostile town service NPC with `kind: "vendor"` in world props. On interact, the server sends an `interact_response` with `objectId: "nightmarket_vendor_01"` and the client now shows a compact dismissible DOM panel instead of a plain text notice:
+- Vendor name ("Suspicious Vendor")
+- "Trading is not available yet." placeholder message
+- current money snapshot from `/me` character (formatted via `formatMoneyCompact`)
+- Close button + click-anywhere backdrop dismiss
+- No shop UI, prices, vendor stock, spending, selling or reputation
+- Panel implementation: `apps/client/src/game/scenes/worldSession/vendorInteractionPanel.ts`
+
+Nightmarket classification notes:
+- `classification: "test_hybrid"` — has enemies despite being a town room
+- Long-term towns/villages should be `safe_hub` with no enemy spawns
+- Neutral ambient creatures (rats, pigs, chickens) are allowed in towns/hubs
+- Nightmarket has placeholder town services: Vendor, Stash Keeper, Trainer, Waypoint
+- Services are interactable/content-driven with open placeholder panels/messages
+- No real trading, stash storage, skill training, teleport, waypoint persistence or money spending
+- Nightmarket remains test_hybrid, not a true safe_hub yet
+
+### Task 222 — Combat Gameplay Docs Checkpoint
+
+Document the current combat gameplay slice after Grave Spark, move-to-cast, dodge relevance and enemy pressure tuning. This is a documentation-only task and must not add features.
+
+Status: documented. `docs/ARCHITECTURE.md`, `docs/BACKLOG_CORE_0_1.md`, `docs/CODING_RULES.md` and `README.md` now briefly state that left-click basic attack remains server-authoritative, RMB Grave Spark is a real targeted skill with move-to-cast on out-of-range, enemy telegraphs can miss if the player dodges or leaves range, enemy pressure values are content-driven, and that no mana/resource/skill tree/pathfinding/collision/animations exist yet.
+
+Required checks:
+
+```text
+pnpm --filter @doomscrolls/content typecheck
+pnpm --filter @doomscrolls/server typecheck
+pnpm --filter @doomscrolls/client typecheck
+pnpm lint
+```
+
+### Copper Currency Foundation (Core 0.1)
+
+Core 0.1 ships a copper currency foundation. `Character.moneyCopper` exists via Prisma migration (default 0). Copper drops from defeated enemies use the world loot system: `rollCurrencyLoot()` rolls the enemy's `currencyDrop` range, `spawnWorldLootOnEnemyDefeat()` creates a `WorldLoot` entry with `currencyCopper > 0` and `itemId = ""`, and pickup calls `CharacterRepository.incrementMoneyCopper()` to atomically persist the total server-side. Vendors, shops, trading, NPC buying/selling, regional currency, honor, reputation, and crypto are not implemented.
+
+### Task 236 — Death/Corpse Loop Docs Checkpoint
+
+Document the current death/respawn/corpse placeholder loop. Documentation-only task.
+
+Status: documented. `docs/ARCHITECTURE.md` and `docs/CODING_RULES.md` now state: at 0 HP the player becomes downed and a corpse marker is placed at the death location; after respawn the corpse marker persists so the player can walk back and recover it via `request_corpse_interact`; server validates lifeState/hasCorpse/range before accepting; rejections are `player_downed`/`no_corpse`/`out_of_range`; own corpse uses distinct teal visual on the client; corpse recovery is visual/placeholder only with no gear/durability/XP loss, no corpse inventory, no hardcore mode, no persistence.
+
+---
+
+### Task 241 — Reward Feedback Docs Checkpoint
+
+Document the current combat reward feedback. Documentation-only task.
+
+Status: documented. `README.md`, `docs/ARCHITECTURE.md`, `docs/BACKLOG_CORE_0_1.md`, and `docs/CODING_RULES.md` now briefly state that combat reward feedback includes: enemy defeat notice, loot/currency drop notices, rare drop feedback, and level-up notice with new level and max HP gain. XP/level remains server-owned. No stat allocation, skill points or talent tree exist yet. This checkpoint is docs + verification only: no gameplay or UI feature changes were added.
+
+---
+
+### Task 260 — Core Build 0.1 Scope Freeze
+
+Define what is in/out for Core Build 0.1 and stop scope creep. Documentation-only task. No gameplay changes, no browser automation, no runtime reproduction.
+
+Status: documented. `docs/CORE_BUILD_0_1_SCOPE.md` is now the authoritative scope-freeze document. It lists all included systems (account/login/register, character create/select, WorldSession, Nightmarket + Blackwire Sewer Edge, movement/camera/zoom, left-click attack, RMB Grave Spark, enemy family + Brute heavy attack, loot/currency/inventory/equipment, Notice Board objective chain, death/respawn/corpse recovery placeholder, town service placeholders), all excluded systems (real vendors/stash/waypoint travel, quest persistence/log, safe-zone enforcement, auth redesign, character customization, housing/stealing/advanced currencies, pathfinding/collision, real art/animation pipeline), the Build 0.1 acceptance checklist, and a scope-freeze note. The four docs (README, ARCHITECTURE, BACKLOG, CODING_RULES) cross-reference this freeze.
+
+---
+
+### Task 262 — Build 0.1 Acceptance Gap Truth
+
+Reconcile the Build 0.1 acceptance checklist with the actual codebase so we do not implement duplicate systems. Documentation-only task. No browser automation, no runtime reproduction, no gameplay changes.
+
+Status: documented. `docs/CORE_BUILD_0_1_SCOPE.md` acceptance checklist is now reconciled against the current codebase. Findings:
+
+- camera follow + zoom — already implemented in `apps/client/src/game/scenes/worldSession/worldSessionAreaView.ts` (mouse wheel + `+/-` keys, `cameraZoom` state)
+- equipment stat-modifier recalc — already implemented in `EquipmentService.recalculateEquippedCharacterStats()` and reused on level-up in `TownRoom.applyProgressionUpdate()` via `characterStatsService.calculateEquippedStats(primary, modifiers, level)`
+- Skitter/Brute spawn wiring — already implemented through `contentRegistry.spawnZones` (`sewer_edge_trashboar_skitter_zone`, `sewer_edge_trashboar_brute_zone`) consumed by `initializeTownEnemies`
+- XP/level system — already implemented as `levelProgression.ts` + `grantFlatXpReward()` + `xp_gained` server message + `applyProgressionUpdate()`
+- pickup full-inventory rejection — already implemented in `pickupWorldLootInventory.ts` as `PickupWorldLootFailureReason = "inventory_full"` and surfaced as the "Inventory full." message
+- inventory grid items on reconnect — already in `CharacterSummary.inventorySummaryItems` consumed by `/me`
+- XP/level on reconnect — already in `CharacterSummary` consumed by `/me`
+
+### Task 263 — CombatRoom Foundation Without Duplicate Gameplay
+
+Add the missing CombatRoom foundation required by Core Build 0.1 without duplicating existing TownRoom/WorldSession gameplay logic.
+
+Status: implemented. `CombatRoom` is now registered as the Colyseus room name `combat`. New files:
+
+```text
+apps/server/src/realtime/rooms/combatRoomName.ts       - public COMBAT_ROOM_NAME = "combat"
+apps/server/src/realtime/rooms/combatRoomTypes.ts      - CombatRoomJoinOptions contract
+apps/server/src/realtime/rooms/CombatRoomState.ts      - minimal schema (roomKind, zoneId, playerPresence, connectedPlayerCount)
+apps/server/src/realtime/rooms/buildCombatPlayerPresence.ts - thin helper mirroring buildTownPlayerPresence shape
+apps/server/src/realtime/rooms/CombatRoom.ts           - thin Colyseus shell (lifecycle only)
+```
+
+The room sets `CombatRoomState` (no enemy list, no map, no movement, no combat, no loot, no XP, no objectives, no message handlers, no simulation tick), validates the join through the shared `RoomJoinValidationService` (re-using the same gate `TownRoom` uses), and registers/clears a placeholder `PlayerPresence` entry on join/leave. `CombatRoomJoinOptions` mirrors `TownRoomJoinOptions`. `createRealtimeServer()` now defines both `town` and `combat`. The combat helper intentionally does not resolve a combat spawn point (none exists in content yet — see Task 262); it restores a previously persisted location if it is valid for the resolved zone, and otherwise falls back to safe defaults. Future dedicated tasks (Task 264+) are expected to add a real combat spawn point to content and reuse a shared spawn resolver, not duplicate `TownRoom` gameplay. The room file stays a thin Colyseus shell — see `docs/CODING_RULES.md` "Realtime Room File-Size Guard". `pnpm --filter @doomscrolls/server typecheck`, `pnpm --filter @doomscrolls/client typecheck` and `pnpm lint` all pass.
+
+---
+
+True 0.1 blockers that remain (now ordered in the scope doc):
+
+- `pnpm lint` is `echo ... placeholder` in all 5 workspace packages — no real ESLint config
+- Brute heavy-attack server logic — content fields exist but `applyEnemyAggroDamage` never reads them; only the global `ENEMY_ATTACK_WINDUP_MS = 350` is used
+- `/me` does not expose equipped items (no `equippedItems` field on `CharacterSummary`) — equipment persistence is on disk, only the summary is missing
+- `CombatRoom` for Blackwire Sewer Edge is not registered and has no room file
+- `CharacterDetailsDto.inventory.items` is `[]` even after a real inventory write — fine for the current grid-only panel, but the `inventory.items` summary path is also missing for clients that want flat item rendering
+
+No code changed. No `CombatRoom` was created because the codebase does not yet clearly expect it (there is no `blackwire_sewers` spawn point, no `combatEdge` transition, and no client UI flow into it). The next four tasks (263 ESLint, 264 Brute heavy attack, 265 `/me` equipped items, 266 `CombatRoom`) are defined in `docs/CORE_BUILD_0_1_SCOPE.md` "Remaining 0.1 Blockers".
+
+---
+
+### Task 264 — Brute Heavy-Attack Server Logic
+
+Wire the Brute-specific heavy attack window through the existing `TownRoom.applyEnemyAggroDamage` path. Documentation-only checkpoint summarising the implementation.
+
+Status: implemented. `TownRoom.applyEnemyAggroDamage` now reads `heavyAttackWindupMs` / `heavyAttackCooldownMs` / `heavyAttackChance` / `heavyAttackDamage` from the enemy content definition. On the chosen heavy-attack tick, `enemy.attackKind = "heavy"`, the windup is taken from content (not the global `ENEMY_ATTACK_WINDUP_MS = 350`), the cooldown is taken from content, and `heavyAttackDamage` is applied on landing. The path exposes `missedKind` / `landingKind` for the message surface. Non-Brute enemies never enter the heavy branch. The `enemy_attack_telegraph` server message still needs the explicit `attackKind: "heavy" | "normal"` field for the client to render a distinct Brute telegraph — see Task 269.
+
+### Task 265 — `/me` Equipped-Items Exposure
+
+Expose equipped items on `CharacterSummary` so the equipped-slot UI can render from `/me` alone. Documentation-only checkpoint summarising the implementation.
+
+Status: implemented. `packages/shared/src/character/CharacterTypes.ts` now declares `CharacterSummary.equippedItems?: readonly EquippedItemSummary[]`. `apps/server/src/persistence/mappers/characterMapper.ts` builds one entry per actually equipped item through `buildEquippedItemSummaries(character.id, itemRepository)` and includes the result in the safe DTO returned by `toCharacterSummaryWithInventoryDto`. The field is absent when the character has nothing equipped. Ownership scope is preserved (it is read from the same character ownership path the rest of the summary uses). `passwordHash` and `tokenHash` are still never returned.
+
+### Task 266 — Real ESLint Config / `pnpm lint`
+
+Replace the 5 `echo ... lint placeholder` scripts with a real flat-config ESLint setup and wire `pnpm lint` to run all of them. Documentation-only checkpoint summarising the implementation.
+
+Status: implemented. Root `eslint.config.mjs` (flat config, `typescript-eslint`) is the single source of truth. All 5 workspace packages now have a real `lint: eslint .` script. `pnpm lint` runs all five and exits 0 on the current tree (0 errors, 4 non-blocking warnings from existing source — unused eslint-disable directives, one useless escape, one non-null assertion). CI can enforce the full gate.
+
+---
+
+### Task 267 — Core Build 0.1 Blocker Re-Audit
+
+Re-check the Core Build 0.1 acceptance checklist after the four Task 262 blockers were closed. Documentation-only task. No browser automation, no runtime reproduction, no gameplay changes.
+
+Status: documented. `docs/CORE_BUILD_0_1_SCOPE.md` acceptance checklist + "Remaining 0.1 Blockers" section were updated. Findings:
+
+- **CombatRoom foundation** — `apps/server/src/realtime/rooms/CombatRoom.ts` is registered as the Colyseus room name `combat` in `createRealtimeServer` and validates joins through the shared `RoomJoinValidationService`. It is a thin Colyseus shell (lifecycle only, `CombatRoomState` mirrors `TownRoomState`, presence set on `onJoin` / cleared on `onLeave`, no enemy list, no map, no movement, no combat, no loot, no XP, no objectives, no message handlers, no simulation tick). CombatRoom gameplay is **not** implemented.
+- **Brute heavy-attack server logic** — wired in `TownRoom.applyEnemyAggroDamage` (content-sourced windup/cooldown/chance/damage, `attackKind = "heavy"`, `missedKind` / `landingKind` exposed). The `enemy_attack_telegraph` server message still needs the explicit `attackKind: "heavy" | "normal"` field for the client to render a distinct Brute telegraph.
+- **`/me` equipped-items exposure** — `CharacterSummary.equippedItems: EquippedItemSummary[]` is produced by `characterMapper.toCharacterSummaryWithInventoryDto` and exposed by the `/me` path. The field is absent when the character has nothing equipped.
+- **Real lint gate** — root `eslint.config.mjs` (flat config, `typescript-eslint`) plus `eslint .` scripts in all 5 workspace packages. `pnpm lint` runs all five and exits 0 on the current tree.
+
+Verification (Task 267):
+
+```text
+pnpm lint                                               -> 0 errors, 4 non-blocking warnings
+pnpm --filter @doomscrolls/shared typecheck             -> ok
+pnpm --filter @doomscrolls/content typecheck            -> ok
+pnpm --filter @doomscrolls/localization typecheck       -> ok
+pnpm --filter @doomscrolls/server typecheck             -> ok
+pnpm --filter @doomscrolls/client typecheck             -> ok
+```
+
+The four Task 262 blockers are now closed. The next true 0.1 blockers are listed in `docs/CORE_BUILD_0_1_SCOPE.md` "Remaining 0.1 Blockers (Task 267 audit)" as Task 268 (`CombatRoom` real combat wiring), Task 269 (Brute heavy-attack telegraph message field), and Task 270 (flat `CharacterDetailsDto.inventory.items` summary).
+
+### Task 272 — Core Build 0.1 Candidate Smoke Checklist
+
+Add a manual smoke checklist for validating a Core Build 0.1 candidate locally. Documentation-only task. No browser automation, no runtime reproduction, no gameplay changes.
+
+Status: documented. `docs/CORE_BUILD_0_1_SMOKE_CHECKLIST.md` is now the authoritative manual smoke checklist. It covers the full ordered flow from install/env/migrate/start → register/login → create/select character → enter Nightmarket → camera/movement/hold-move/zoom → Notice Board → fight Runt/Skitter/Brute → Brute heavy telegraph → attack/Grave Spark/dodge/flask → loot → inventory/equip/unequip → objective chain → XP/level/copper → death/respawn/corpse → reconnect → town service placeholders. Each step has Pass/Fail/Notes columns. A "Known Deferred (Not a Failure)" section documents all explicitly deferred items (real vendors, stash, waypoint travel, quest log, character customization, CombatRoom client routing, real art/animation pipeline, drag/drop, item comparison/stacking, gear durability/XP loss on death, multiple origins/classes, bosses/friends/guilds/PvP/dungeons).
+
+---
+
+### Task 273 — Core Build 0.1 Candidate Validation Command
+
+Add a single local validation command for Core Build 0.1 candidate checks.
+
+Status: implemented. `package.json` now exposes `pnpm validate:0.1` which runs the currently trusted static gates in order:
+
+```text
+pnpm lint
+pnpm --filter @doomscrolls/shared typecheck
+pnpm --filter @doomscrolls/content typecheck
+pnpm --filter @doomscrolls/localization typecheck
+pnpm --filter @doomscrolls/server typecheck
+pnpm --filter @doomscrolls/client typecheck
+pnpm build
+```
+
+No browser automation, no runtime reproduction, no gameplay changes were added. Tests are deferred — all workspace `test` scripts are currently placeholders (`echo ... placeholder`, `node -e ...`, or `tsc --noEmit` which is already covered by the typecheck step). `docs/CORE_BUILD_0_1_SMOKE_CHECKLIST.md` now references `pnpm validate:0.1` as step 0 before the manual smoke steps. Task 273 is the checkpoint for Candidate Validation. No CI service was added.
+
+---
 
 ## Anti-Scope-Creep
 

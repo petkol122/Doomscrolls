@@ -15,7 +15,7 @@ import { CharacterRepository } from "../persistence/repositories/CharacterReposi
 import { toSafeUserDto } from "../persistence/mappers/userMapper";
 import { toPublicProfileDto } from "../persistence/mappers/profileMapper";
 import { toUserSettingsDto } from "../persistence/mappers/settingsMapper";
-import { toCharacterSummaryDto, toCharacterSummaryWithInventoryDto } from "../persistence/mappers/characterMapper";
+import { toCharacterSummaryWithInventoryDto } from "../persistence/mappers/characterMapper";
 import { toIsoDateTimeString } from "../persistence/mappers/dateMapper";
 import { AuthErrorCode, AuthError } from "./AuthErrors";
 import { UsernameService } from "./UsernameService";
@@ -230,7 +230,9 @@ export class AuthService {
     }
 
     // 7. Return safe auth response DTO
-    const characterSummaries = characters.map(toCharacterSummaryWithInventoryDto) as readonly CharacterSummary[];
+    const characterSummaries = (await Promise.all(
+      characters.map((character) => toCharacterSummaryWithInventoryDto(character)),
+    )) as readonly CharacterSummary[];
     return this.buildSafeAuthResponse(user, profile, settings, session, rawToken, characterSummaries);
   }
 
@@ -269,7 +271,9 @@ export class AuthService {
     }
 
     // 5. Return safe account state DTO
-    const characterSummaries = characters.map(toCharacterSummaryWithInventoryDto) as readonly CharacterSummary[];
+    const characterSummaries = (await Promise.all(
+      characters.map((character) => toCharacterSummaryWithInventoryDto(character)),
+    )) as readonly CharacterSummary[];
     return {
       user: toSafeUserDto(user),
       profile: toPublicProfileDto({ ...profile, user: { username: user.username } }),
@@ -293,7 +297,7 @@ export class AuthService {
     }
 
     // Reject unsafe control characters
-    // eslint-disable-next-line no-control-regex
+     
     if (/[\x00-\x08\x0E-\x1F\x7F]/.test(trimmed)) {
       throw new AuthError(AuthErrorCode.INVALID_DISPLAY_NAME, "Display name contains invalid characters");
     }

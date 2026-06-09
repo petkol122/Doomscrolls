@@ -71,6 +71,9 @@ export class PlayerPresence extends Schema {
   @type("number") public objectiveTarget: number;
   @type("boolean") public objectiveCompleted: boolean;
   @type("boolean") public objectiveRewardGranted: boolean;
+  @type("boolean") public hasCorpse: boolean;
+  @type("number") public corpseX: number;
+  @type("number") public corpseY: number;
 
   constructor(
     sessionId: string,
@@ -126,5 +129,8 @@ export class PlayerPresence extends Schema {
     this.objectiveTarget = 0;
     this.objectiveCompleted = false;
     this.objectiveRewardGranted = false;
+    this.hasCorpse = false;
+    this.corpseX = 0;
+    this.corpseY = 0;
   }
 }

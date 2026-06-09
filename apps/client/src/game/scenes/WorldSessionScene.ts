@@ -7,8 +7,10 @@ import type {
   PlayerRespawnedServerMessage,
   RoomState as DoomscrollsRoomState,
 } from "@doomscrolls/shared";
+import { formatMoneyCompact } from "@doomscrolls/shared";
 import { t } from "@doomscrolls/localization";
 import Phaser from "phaser";
+import { contentRegistry } from "@doomscrolls/content";
 
 import type { AccountState } from "../../net/ApiClient";
 import { ApiClient } from "../../net/ApiClient";
@@ -21,14 +23,25 @@ import { registerRespawnListeners, sendRespawnRequest } from "../../net/respawnC
 import { registerSkillSlotResponseListeners } from "../../net/skillSlotIntentClient";
 import { createWorldSessionFeedbackView, type WorldSessionFeedbackView } from "./worldSession/worldSessionFeedbackView";
 import { createWorldSessionOverlayView } from "./worldSession/worldSessionOverlayView";
-import { createWorldSessionAreaView, type WorldSessionAreaView } from "./worldSession/worldSessionAreaView";
+import {
+  createVendorInteractionPanel,
+  type VendorInteractionPanel,
+} from "./worldSession/vendorInteractionPanel";
+import {
+  createTownServiceInteractionPanel,
+  type TownServiceInteractionPanel,
+} from "./worldSession/townServiceInteractionPanel";
+import {
+  createWorldSessionAreaView,
+  type WorldSessionAreaView,
+  type WorldSessionSkillTargetingState,
+} from "./worldSession/worldSessionAreaView";
 import { attachWorldSessionDodgeInput, type WorldSessionDodgeInput } from "./worldSession/worldSessionDodgeInput";
 import {
   attachWorldSessionHealingFlaskInput,
   type WorldSessionHealingFlaskInput,
 } from "./worldSession/worldSessionHealingFlaskInput";
 import {
-  applyWorldSessionOverlayPanelStyles,
   applyWorldSessionOverlayRootStyles,
   applyWorldSessionOverlayHudStyles,
   applyWorldSessionOverlayStatusStyles,
@@ -50,8 +63,24 @@ function formatItemRarityLabel(rarity?: string): string | null {
   return rarity.charAt(0).toUpperCase() + rarity.slice(1);
 }
 
-function formatPickupAcceptedNotice(message: { readonly message: string; readonly itemLabel?: string; readonly rarity?: string }): string {
-  if (message.itemLabel === undefined || message.itemLabel.length === 0) {
+function formatPickupAcceptedNotice(
+  message: {
+    readonly message: string;
+    readonly itemLabel?: string;
+    readonly rarity?: string;
+    readonly formattedMoneyText?: string;
+  },
+): string {
+  if (
+    message.itemLabel === undefined ||
+    message.itemLabel.length === 0
+  ) {
+    if (
+      typeof message.formattedMoneyText === "string" &&
+      message.formattedMoneyText.length > 0
+    ) {
+      return `Picked up ${message.formattedMoneyText}.`;
+    }
     return message.message;
   }
 
@@ -81,12 +110,15 @@ export class WorldSessionScene extends Phaser.Scene {
   private healingFlaskInput: WorldSessionHealingFlaskInput | null = null;
   private equipmentLoadout: EquipmentLoadout = createEmptyEquipmentLoadout();
   private lastObjectiveCompletionNotice: string | null = null;
+  private vendorPanel: VendorInteractionPanel | null = null;
+  private townServicePanel: TownServiceInteractionPanel | null = null;
   private utilityPanelOpenState: WorldSessionUtilityPanelOpenState = {
     controls: false,
     equipment: false,
     inventory: false,
     debug: false,
   };
+  private latestSkillRejectedReason: string | null = null;
 
   public constructor() {
     super("WorldSessionScene");
@@ -129,13 +161,74 @@ export class WorldSessionScene extends Phaser.Scene {
       () => {
         this.renderOverlay();
       },
+      (itemLabel: string) => {
+        this.feedbackView?.showRareDropNotice(t("world_area.rare_drop", { item: itemLabel }));
+      },
     );
 
-    registerInteractResponseListener(this.room, (message: string) => {
+    registerInteractResponseListener(this.room, (message: string, objectId?: string) => {
+      if (objectId === "nightmarket_vendor_01") {
+        const character = this.account !== null && this.characterId !== null
+          ? this.account.characters.find((c) => c.id === this.characterId) ?? null
+          : null;
+        const moneyCopper = character?.moneyCopper ?? 0;
+        // Task 204 — basic sell-disabled vendor stock preview.
+        const stockEntries = contentRegistry.vendorStocks.all.filter(
+          (entry) => entry.vendorId === "nightmarket_suspicious_vendor",
+        );
+        this.vendorPanel?.destroy();
+        this.vendorPanel = createVendorInteractionPanel("Suspicious Vendor", moneyCopper, {
+          stockEntries,
+        });
+        this.vendorPanel.show();
+        return;
+      }
+      // Task 205 — Stash keeper / future town-service placeholder panel.
+      if (objectId === "nightmarket_stash_keeper_01") {
+        const service = contentRegistry.townServices.get("nightmarket_stash_keeper");
+        if (service !== undefined) {
+          this.townServicePanel?.destroy();
+          this.townServicePanel = createTownServiceInteractionPanel(service);
+          this.townServicePanel.show();
+          return;
+        }
+      }
+      // Task 208 — Trainer town-service placeholder panel.
+      if (objectId === "nightmarket_trainer_01") {
+        const service = contentRegistry.townServices.get("nightmarket_trainer");
+        if (service !== undefined) {
+          this.townServicePanel?.destroy();
+          this.townServicePanel = createTownServiceInteractionPanel(service);
+          this.townServicePanel.show();
+          return;
+        }
+      }
+      // Task 209 — Waypoint town-service placeholder panel.
+      if (objectId === "nightmarket_waypoint_01") {
+        const service = contentRegistry.townServices.get("nightmarket_waypoint");
+        if (service !== undefined) {
+          this.townServicePanel?.destroy();
+          this.townServicePanel = createTownServiceInteractionPanel(service);
+          this.townServicePanel.show();
+          return;
+        }
+      }
       this.feedbackView?.showNotice(message);
     }, (message: ObjectiveUpdatedServerMessage) => {
+      // Clear stale completion notice when a new (non-completed) objective arrives
+      if (!message.completed) {
+        this.lastObjectiveCompletionNotice = null;
+      }
       if (message.completed) {
-        const completionText = "Objective complete";
+        const xp = Number.isFinite(message.xpReward) ? Math.max(0, message.xpReward ?? 0) : 0;
+        const copper = Number.isFinite(message.copperReward) ? Math.max(0, message.copperReward ?? 0) : 0;
+        const hasXp = xp > 0;
+        const hasCopper = copper > 0;
+        const completionText = hasXp && hasCopper
+          ? t("objective.complete_reward", { xpReward: xp, copperReward: copper })
+          : hasXp
+            ? t("objective.complete_reward_xp_only", { xpReward: xp })
+            : "Objective complete";
         if (this.lastObjectiveCompletionNotice !== completionText) {
           this.lastObjectiveCompletionNotice = completionText;
           this.feedbackView?.showNotice(completionText);
@@ -178,11 +271,33 @@ export class WorldSessionScene extends Phaser.Scene {
         }
       },
       onEnemyAttackTelegraph: (message) => {
-        this.worldAreaView?.showEnemyTelegraph(message.enemyId);
+        this.worldAreaView?.showEnemyTelegraph(message.enemyId, message.attackKind);
+        if (message.attackKind === "heavy") {
+          this.feedbackView?.showNotice("Heavy attack!");
+        }
+      },
+      onEnemyAttackResolved: (message) => {
+        this.worldAreaView?.resolveEnemyAttackOutcome(message.enemyId, message.outcome);
+        if (message.outcome === "miss") {
+          this.feedbackView?.showNotice(t("world_area.enemy_attack_missed"));
+        } else {
+          this.feedbackView?.showNotice(
+            t("world_area.enemy_attack_hit", { damage: message.damage ?? 0 }),
+          );
+        }
       },
     });
 
-    this.room.onMessage("xp_gained", (message: { amount?: unknown; totalXp?: unknown; leveledUp?: unknown; hp?: unknown; maxHp?: unknown }) => {
+    this.room.onMessage("currency_picked_up", (message: { gainedCopper?: unknown; totalMoneyCopper?: unknown }) => {
+      const gained = typeof message.gainedCopper === "number" && Number.isFinite(message.gainedCopper) && message.gainedCopper > 0
+        ? Math.floor(message.gainedCopper)
+        : 0;
+      const formatted = formatMoneyCompact(gained);
+      this.feedbackView?.showNotice(`Picked up ${formatted}.`);
+      void this.refreshAccountStateAfterPickup();
+    });
+
+    this.room.onMessage("xp_gained", (message: { amount?: unknown; totalXp?: unknown; leveledUp?: unknown; level?: unknown; hp?: unknown; maxHp?: unknown; gainedMaxHp?: unknown }) => {
       const amount = typeof message.amount === "number" && Number.isFinite(message.amount)
         ? Math.max(0, Math.floor(message.amount))
         : 0;
@@ -193,14 +308,26 @@ export class WorldSessionScene extends Phaser.Scene {
         && typeof message === "object"
         && "leveledUp" in message
         && message.leveledUp === true;
+      const newLevel = typeof message.level === "number" && Number.isFinite(message.level)
+        ? Math.max(1, Math.floor(message.level))
+        : null;
+      const gainedMaxHp = typeof message.gainedMaxHp === "number" && Number.isFinite(message.gainedMaxHp)
+        ? Math.floor(message.gainedMaxHp)
+        : 0;
 
-      this.feedbackView?.showNotice(
-        totalXp === null
-          ? t("world_area.xp_gained", { amount })
-          : t("world_area.xp_gained_total", { amount, totalXp }),
-      );
-      if (leveledUp) {
-        this.feedbackView?.showAttackFeedback(t("world_area.level_up"));
+      if (leveledUp && newLevel !== null) {
+        // Prominent level-up notice showing new level and HP gain.
+        this.feedbackView?.showNotice(
+          gainedMaxHp > 0
+            ? t("world_area.level_up_hp_notice", { level: newLevel, gainedMaxHp })
+            : t("world_area.level_up_notice", { level: newLevel }),
+        );
+      } else {
+        this.feedbackView?.showNotice(
+          totalXp === null
+            ? t("world_area.xp_gained", { amount })
+            : t("world_area.xp_gained_total", { amount, totalXp }),
+        );
       }
       this.renderOverlay();
     });
@@ -212,11 +339,32 @@ export class WorldSessionScene extends Phaser.Scene {
       },
     });
 
+    // Task 236 -- corpse interact rejection feedback
+    this.room.onMessage("corpse_interact_rejected", (message: { reason?: unknown }) => {
+      const reason = typeof message?.reason === "string" ? message.reason : "";
+      if (reason === "player_downed") {
+        this.feedbackView?.showNotice(t("world_area.corpse_interact_downed"));
+      } else if (reason === "no_corpse") {
+        this.feedbackView?.showNotice(t("world_area.corpse_interact_no_corpse"));
+      } else if (reason === "out_of_range") {
+        this.feedbackView?.showNotice(t("world_area.corpse_interact_out_of_range"));
+      }
+    });
+
+    // Task 238 -- corpse interact accepted feedback
+    this.room.onMessage("corpse_interact_accepted", () => {
+      this.feedbackView?.showNotice(t("world_area.corpse_composure_restored"));
+    });
+
     this.dodgeInput?.destroy();
     this.dodgeInput = null;
     this.healingFlaskInput?.destroy();
     this.healingFlaskInput = null;
 
+    // Task 246 -- wire each typed reason to its own feedback state so
+    // cooldown, downed, no-direction and generic rejection are distinct
+    // in the UI. Server rejection reasons stay authoritative; the scene
+    // does not interpret intent validity.
     this.dodgeInput = attachWorldSessionDodgeInput(
       this,
       this.room,
@@ -225,10 +373,12 @@ export class WorldSessionScene extends Phaser.Scene {
         getSelfPosition: () => this.worldAreaView?.getSelfWorldPosition() ?? null,
       },
       {
-        onDodgeSentFeedback: (message) => { this.feedbackView?.showNotice(message); },
-        onDodgeConfirmedFeedback: (message) => { this.feedbackView?.showNotice(message); },
-        onDodgeRejectedFeedback: (message) => { this.feedbackView?.showNotice(message); },
-        onDodgeNoDirectionFeedback: (message) => { this.feedbackView?.showNotice(message); },
+        onDodgeSentFeedback: (message) => { this.feedbackView?.showDodgeFeedback("sent", message); },
+        onDodgeConfirmedFeedback: (message) => { this.feedbackView?.showDodgeFeedback("accepted", message); },
+        onDodgeCooldownFeedback: (message) => { this.feedbackView?.showDodgeFeedback("cooldown", message); },
+        onDodgeDownedFeedback: (message) => { this.feedbackView?.showDodgeFeedback("downed", message); },
+        onDodgeNoDirectionFeedback: (message) => { this.feedbackView?.showDodgeFeedback("no_direction", message); },
+        onDodgeRejectedFeedback: (message) => { this.feedbackView?.showDodgeFeedback("rejected", message); },
       },
     );
 
@@ -237,7 +387,7 @@ export class WorldSessionScene extends Phaser.Scene {
         this.feedbackView?.showNotice(message);
       },
       onFlaskAcceptedFeedback: (message) => {
-        this.feedbackView?.showNotice(
+        this.feedbackView?.showHealFeedback(
           t("world_area.flask_healed", { healed: message.healedAmount, hp: message.remainingHp }),
         );
       },
@@ -272,15 +422,44 @@ export class WorldSessionScene extends Phaser.Scene {
     });
 
     registerSkillSlotResponseListeners(this.room, {
-      onAccepted: () => {
-        this.feedbackView?.showNotice(t("world_area.skill_unlearned"));
+      onAccepted: (message) => {
+        this.latestSkillRejectedReason = null;
+        this.feedbackView?.showNotice(t("world_area.skill_hit", { damage: message.damage }));
+        this.worldAreaView?.showEnemyFloatingDamage(
+          message.targetEnemyId,
+          t("world_area.skill_hit_label", { damage: message.damage }),
+        );
+        this.renderOverlay();
       },
       onRejected: (message) => {
+        this.latestSkillRejectedReason = message.reason;
         if (message.reason === "slot_not_learned") {
           this.feedbackView?.showNotice(t("world_area.skill_unlearned"));
+          this.renderOverlay();
+          return;
+        }
+        if (message.reason === "out_of_range") {
+          this.feedbackView?.showNotice(t("world_area.skill_too_far"));
+          this.renderOverlay();
+          return;
+        }
+        if (message.reason === "skill_on_cooldown") {
+          this.feedbackView?.showNotice(t("world_area.skill_on_cooldown"));
+          this.renderOverlay();
+          return;
+        }
+        if (message.reason === "enemy_defeated") {
+          this.feedbackView?.showNotice(t("world_area.skill_target_dead"));
+          this.renderOverlay();
+          return;
+        }
+        if (message.reason === "enemy_not_found") {
+          this.feedbackView?.showNotice(t("world_area.skill_target_missing"));
+          this.renderOverlay();
           return;
         }
         this.feedbackView?.showNotice(t("world_area.skill_unavailable"));
+        this.renderOverlay();
       },
     });
 
@@ -308,8 +487,6 @@ export class WorldSessionScene extends Phaser.Scene {
       return;
     }
 
-    // `account` is the persisted `/me` snapshot; live HP/objective/room data
-    // must continue to come from the joined room state rendered inside the view.
     const character = this.account.characters.find((nextCharacter) => nextCharacter.id === this.characterId) ?? null;
     const debugState = this.worldAreaView?.getDebugState() ?? {
       lastClickTarget: null,
@@ -317,21 +494,29 @@ export class WorldSessionScene extends Phaser.Scene {
       isMovementInputEnabled: true,
       zoom: 1,
     };
+    const skillTargeting = this.worldAreaView?.getSkillTargetingState() ?? {
+      hoveredEnemyId: null,
+      selectedEnemyId: null,
+      targetEnemyLabel: null,
+      targetDistance: null,
+      isTargetInRange: null,
+    } satisfies WorldSessionSkillTargetingState;
 
     if (this.overlay === null || this.overlayView === null) {
-      const overlay = this.createOverlay(character, this.room, debugState);
+      const overlay = this.createOverlay(character, this.room, debugState, skillTargeting);
       this.overlay = overlay.root;
       this.overlayView = overlay.view;
       return;
     }
 
-    this.overlayView.update(character, this.room, debugState);
+    this.overlayView.update(character, this.room, debugState, skillTargeting, this.latestSkillRejectedReason);
   }
 
   private createOverlay(
     character: CharacterSummary | null,
     room: Room<DoomscrollsRoomState>,
     debugState: ReturnType<WorldSessionAreaView["getDebugState"]>,
+    skillTargeting: WorldSessionSkillTargetingState,
   ): { readonly root: HTMLDivElement; readonly view: ReturnType<typeof createWorldSessionOverlayView> } {
     const root = document.createElement("div");
     applyWorldSessionOverlayRootStyles(root);
@@ -352,6 +537,8 @@ export class WorldSessionScene extends Phaser.Scene {
       character,
       room,
       debugState,
+      skillTargeting,
+      this.latestSkillRejectedReason,
       (mode) => {
         this.handleProjectionModeChange(mode);
       },
@@ -394,19 +581,11 @@ export class WorldSessionScene extends Phaser.Scene {
   private async handleLeaveWorld(): Promise<void> {
     const room = this.room;
     const account = this.account;
-
     this.room = null;
-
     if (room !== null) {
-      try {
-        room.leave();
-      } catch {
-        // Ignore leave errors.
-      }
+      try { room.leave(); } catch { /* ignore */ }
     }
-
     this.destroyOverlay();
-
     if (account !== null) {
       this.scene.start("AccountShellScene", { account });
     }
@@ -437,6 +616,10 @@ export class WorldSessionScene extends Phaser.Scene {
     this.healingFlaskInput = null;
     this.feedbackView?.destroy();
     this.feedbackView = null;
+    this.vendorPanel?.destroy();
+    this.vendorPanel = null;
+    this.townServicePanel?.destroy();
+    this.townServicePanel = null;
     this.worldAreaView?.destroy();
     this.worldAreaView = null;
     this.destroyOverlay();
@@ -450,40 +633,19 @@ export class WorldSessionScene extends Phaser.Scene {
     }
   }
 
-  private async handleEquipItem(
-    characterId: string,
-    itemInstanceId: string,
-    slot: string,
-  ): Promise<void> {
-    if (this.apiClient === null) {
-      throw new Error("API client not available");
-    }
-
+  private async handleEquipItem(characterId: string, itemInstanceId: string, slot: string): Promise<void> {
+    if (this.apiClient === null) throw new Error("API client not available");
     const sessionToken = window.localStorage.getItem("doomscrolls.sessionToken");
-    if (typeof sessionToken !== "string" || sessionToken.length === 0) {
-      throw new Error("Not authenticated");
-    }
-
+    if (typeof sessionToken !== "string" || sessionToken.length === 0) throw new Error("Not authenticated");
     await this.apiClient.equipItem(sessionToken, characterId, itemInstanceId, slot);
-
     await this.refreshAccountStateFromMe();
   }
 
-  private async handleUnequipItem(
-    characterId: string,
-    slot: string,
-  ): Promise<void> {
-    if (this.apiClient === null) {
-      throw new Error("API client not available");
-    }
-
+  private async handleUnequipItem(characterId: string, slot: string): Promise<void> {
+    if (this.apiClient === null) throw new Error("API client not available");
     const sessionToken = window.localStorage.getItem("doomscrolls.sessionToken");
-    if (typeof sessionToken !== "string" || sessionToken.length === 0) {
-      throw new Error("Not authenticated");
-    }
-
+    if (typeof sessionToken !== "string" || sessionToken.length === 0) throw new Error("Not authenticated");
     await this.apiClient.unequipItem(sessionToken, characterId, slot);
-
     await this.refreshAccountStateFromMe();
   }
 
@@ -492,21 +654,12 @@ export class WorldSessionScene extends Phaser.Scene {
   }
 
   private async refreshAccountStateFromMe(): Promise<void> {
-    if (this.apiClient === null) {
-      return;
-    }
-
+    if (this.apiClient === null) return;
     const sessionToken = window.localStorage.getItem("doomscrolls.sessionToken");
-    if (typeof sessionToken !== "string" || sessionToken.length === 0) {
-      return;
-    }
-
+    if (typeof sessionToken !== "string" || sessionToken.length === 0) return;
     try {
       this.account = await this.apiClient.getMe(sessionToken);
       this.renderOverlay();
-    } catch {
-      // Ignore best-effort /me refresh failures; live room state still drives HP/XP/combat HUD.
-    }
+    } catch { /* ignore */ }
   }
-
 }

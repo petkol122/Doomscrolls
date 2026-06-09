@@ -5,7 +5,11 @@ import type {
   CharacterId,
   CharacterSummary,
   CharacterStats,
+  EquipmentSlot,
+  EquippedItemSummary,
   InventorySummaryItem,
+  ItemDefinitionId,
+  ItemInstanceId,
   OriginKey,
   PassiveKey,
   UserId,
@@ -14,6 +18,8 @@ import type {
 import { t } from "@doomscrolls/localization";
 import { contentRegistry } from "@doomscrolls/content";
 import type { Character, CharacterPassive, CharacterStats as PrismaCharacterStats, Inventory, ItemInstance } from "@prisma/client";
+import { ItemRepository } from "../repositories/ItemRepository";
+import { prisma as defaultPrisma } from "../prisma";
 import { toIsoDateTimeString } from "./dateMapper";
 
 export function toCharacterStatsDto(character: Pick<Character, "currentHp">, stats: PrismaCharacterStats): CharacterStats {
@@ -45,14 +51,16 @@ export function toCharacterSummaryDto(character: Character): CharacterSummary {
     level: character.level,
     xp: character.xp,
     currentZoneId: character.currentZoneId as ZoneId,
+    moneyCopper: character.moneyCopper,
     createdAt: toIsoDateTimeString(character.createdAt),
     updatedAt: toIsoDateTimeString(character.updatedAt),
   };
 }
 
-export function toCharacterSummaryWithInventoryDto(
+export async function toCharacterSummaryWithInventoryDto(
   character: Character & { stats: PrismaCharacterStats | null; inventory: Inventory | null; items: readonly ItemInstance[] },
-): CharacterSummary {
+  itemRepository: ItemRepository = new ItemRepository(defaultPrisma),
+): Promise<CharacterSummary> {
   const inventorySummaryItems: InventorySummaryItem[] = [];
 
   if (character.inventory !== null) {
@@ -85,17 +93,83 @@ export function toCharacterSummaryWithInventoryDto(
     }
   }
 
+  const equippedItems = await buildEquippedItemSummaries(character.id, itemRepository);
+
   return {
     ...toCharacterSummaryDto(character),
     ...(character.stats !== null ? { stats: toCharacterStatsDto(character, character.stats) } : {}),
     inventorySummaryItems,
+    equippedItems,
   };
 }
 
+export async function buildEquippedItemSummaries(
+  characterId: string,
+  itemRepository: ItemRepository = new ItemRepository(defaultPrisma),
+): Promise<readonly EquippedItemSummary[]> {
+  const equippedRows = await itemRepository.listEquippedItems(characterId);
+  const summaries: EquippedItemSummary[] = [];
+
+  for (const item of equippedRows) {
+    if (item.equipmentSlot === null) {
+      continue;
+    }
+
+    const definition = contentRegistry.items.get(item.definitionId as never);
+    if (definition === undefined) {
+      continue;
+    }
+
+    summaries.push({
+      itemInstanceId: item.id as ItemInstanceId,
+      definitionId: definition.id as ItemDefinitionId,
+      slot: item.equipmentSlot as EquipmentSlot,
+      label: t(definition.nameKey),
+      category: definition.category,
+      rarity: definition.rarity,
+      statModifiers: definition.statModifiers,
+    });
+  }
+
+  return summaries;
+}
+
 export function toCharacterDetailsDto(
-  character: Character & { stats: PrismaCharacterStats; passives: readonly CharacterPassive[]; inventory: Inventory },
+  character: Character & { stats: PrismaCharacterStats; passives: readonly CharacterPassive[]; inventory: Inventory; items?: readonly ItemInstance[] },
   deathState: CharacterDeathState,
 ): CharacterDetails {
+  const inventorySummaryItems: InventorySummaryItem[] = [];
+
+  if (character.items !== undefined) {
+    for (const item of character.items) {
+      if (item.inventoryPage === null || item.inventoryX === null || item.inventoryY === null) {
+        continue;
+      }
+
+      const definition = contentRegistry.items.get(item.definitionId as never);
+      if (definition === undefined) {
+        continue;
+      }
+
+      inventorySummaryItems.push({
+        itemInstanceId: item.id as never,
+        definitionId: definition.id,
+        pageIndex: item.inventoryPage,
+        x: item.inventoryX,
+        y: item.inventoryY,
+        label: t(definition.nameKey),
+        category: definition.category,
+        rarity: definition.rarity,
+        allowedEquipmentSlots: definition.allowedEquipmentSlots,
+        size: {
+          width: definition.size.width,
+          height: definition.size.height,
+        },
+        statModifiers: definition.statModifiers,
+      });
+    }
+  }
+
   return {
     ...toCharacterSummaryDto(character),
     passiveKeys: character.passives.map((passive) => passive.passiveId as PassiveKey),
@@ -107,7 +181,7 @@ export function toCharacterDetailsDto(
         gridWidth: character.inventory.gridWidth,
         gridHeight: character.inventory.gridHeight,
       },
-      items: [],
+      items: inventorySummaryItems,
     },
     deathState,
     ...(character.lastLocationZoneId !== null

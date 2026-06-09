@@ -62,14 +62,21 @@ future visual language: depth sorting, shadows, layered objects, pre-rendered / 
 
 ---
 
+## Zone Classification
+
+Zones have a classification field: `safe_hub` / `combat` / `test_hybrid`. The Nightmarket is `test_hybrid` for Core 0.1 because it has enemies despite being a town room. Long-term towns/villages should be `safe_hub` with no enemy spawns. Town services are interactable placeholders only — no real trading, stash storage, skill training, teleport, waypoint persistence or money spending exists yet.
+
+---
+
 ## Core 0.1 Locked Content
 
 - First Origin: **Sewer Dweller**
 - First Passive: **Nightvision**
 - First Class: **Gravewalker**
-- First Hub: **The Nightmarket**
+- First Hub: **The Nightmarket** (test_hybrid zone)
 - First Combat Zone: **Blackwire Sewers**
-- First Enemy: **Trashboar Runt**
+- First Enemy: **Trashboar Runt** (baseline) — content-driven variants exist as `trashboar_skitter` (lower HP, faster, lower XP) and `trashboar_brute` (tougher, deeper, heavy attack). All variants share the existing AI / loot / XP / render pipeline; visuals are placeholder-only.
+- First Vendor Placeholder: **Suspicious Vendor** (non-hostile town service NPC; interact opens a compact dismissible panel showing vendor name + "Trading is not available yet." + current money snapshot; no shop UI/prices/stock/spending/selling/reputation)
 
 ---
 
@@ -230,7 +237,7 @@ If the real `characters` array is empty, the shell shows `No characters yet.`
 
 The current basic attack slice now includes a minimal synced enemy death state. When fixed server-owned damage reduces a synced placeholder enemy to 0 HP, the server clamps HP at 0, marks the enemy as defeated, and keeps that enemy in the room state instead of removing it. Further attacks against a defeated enemy are safely rejected. On the client, defeated enemies render in a muted/disabled style and show safe feedback (`Enemy defeated.`) only. There is still no loot, XP, corpse system, respawn, enemy AI, player damage, death animation or persistence in this slice.
 
-The current temporary Notice Board objective is intentionally narrow: objective definitions now live in content, and the Notice Board reads the `cull_trashboars` objective from content when interaction starts a session-temporary `Cull Trashboars 0/3` objective. Completing that objective grants XP once for that session objective only. There is still no quest log, persistence, dialogue system, multiple-objective support or other quest flow yet.
+The current session-only Notice Board objective sequence is content-driven and sequenced: objective definitions live in `packages/content`, the Notice Board offers `Cull Trashboars` first and `Break the Brute` second, one active objective at a time. Completing an objective grants XP + copper once per objective using a per-objective duplicate reward guard. There is still no quest persistence, quest log, dialogue system, selection UI, map markers or other quest flow yet.
 
 A dedicated client helper (`apps/client/src/net/townRoomPresence.ts`) now extracts player presence data from the Colyseus `TownRoomState` schema at runtime. It returns `connectedPlayerCount` plus an array of `{ sessionId, characterId, displayName, spawnPointId?, position? }` entries. When the server-side `PlayerPresence` entry carries a `spawnPointId` (currently the resolved `nightmarket_spawn` for TownRoom joins), the helper passes it through so `worldEntryView.ts` can show it next to the player's display name. Presence rendering logic is kept out of `AccountShellScene` — the scene only calls `getTownRoomPresence()` via the view module.
 
@@ -380,7 +387,7 @@ Server-authoritative movement:
   - TownRoom stores the authoritative movement target and advances synced x/y on its simulation tick
   - newer clicks replace older movement targets; the client never teleports or predicts arrival locally
 
-Enemy AI (Trashboar Runt placeholder):
+Enemy AI (Trashboar-family placeholder variants: Runt baseline, Skitter, Brute):
   - content-driven spawn zones define enemy type, count and bounding rectangle per zone
   - Nightmarket currently spawns 3 Trashboar Runt placeholders from one spawn zone
   - deterministic server RNG (seeded mulberry32) chooses initial spawn positions inside the spawn zone
@@ -406,11 +413,27 @@ Progression and equipment-derived stats:
   - equipment stat modifiers are included in that same recalculation and can change derived stats such as max HP, damage and movement speed
   - the current client debug UI shows these derived/runtime values from real synced/account state rather than inventing local values
 
+Combat reward feedback:
+  - enemy defeat notice on synced kill (e.g. "Enemy defeated.")
+  - loot drop notice when a defeated enemy spawns world loot (item or currency)
+  - rare drop feedback when loot has rarity "rare"
+  - level-up notice with new level and max HP gain (e.g. "Level Up! Now level {level}. Max HP +{gainedMaxHp}.")
+  - XP/level remains server-owned; no stat allocation, skill points or talent tree exist yet
+
+Basic attack and skills:
+  - left-click basic attack remains server-authoritative and uses the existing move-first-then-act deferred-action flow
+  - RMB Grave Spark is a real targeted skill sent through request_skill_slot with content-defined cooldown/cost/range/telegraph
+  - out-of-range Grave Spark queues a server-owned move-to-cast: the server stores the skill intent alongside the movement target and executes the skill once the player is in range
+
+Enemy telegraph and dodge:
+  - enemy telegraphs can miss if the player dodges or leaves attack range before the telegraph lands
+  - enemy pressure values (aggro range, leash range, attack cooldown, damage, telegraph duration) are content-driven
+
 Dodge and healing flask:
   - dodge is a server-authoritative short displacement with direction validation and a fixed cooldown; it can also cancel an in-flight enemy telegraph if the player leaves range in time
   - the starter healing flask is server-authoritative, uses fixed charges/cooldown, heals only living players, and is restored on join/respawn
   - Q (flask) and Space (dodge) input helpers share focus filtering so gameplay hotkeys do not fire while text-entry style UI focus is active
-  - there is still no stamina system, no mana/resource system, no vendor refill flow and no advanced consumable system
+  - there is still no mana/resource system, no skill tree, no pathfinding, no collision, no combat animations
 
 Camera / world input projection rules:
   - world rendering uses the live world-container offset derived from synced player position
@@ -418,14 +441,15 @@ Camera / world input projection rules:
   - actionable targets resolve before fallback ground movement when hit candidates overlap
   - top-down click-to-move input is allowed only in the current debug projection; projection preview modes must not fake gameplay input
 
- Loot drops, pickup, inventory persistence, inventory summary/detail, equipment checkpoint:
-  - Loot dropped by defeated enemies exists as a synced world-loot entry in room state (id, itemId, label, x, y)
-  - The client sends only a worldLootId pickup intent; the server validates ownership, distance and that the loot still exists
-   - On success the server removes the synced room-state loot and persists the picked-up item as a real inventory item through the persistence layer
-   - the current client slice exposes real inventory summary data plus a read-only inventory detail view from persisted account state rather than fake client-only loot
-   - equip moves a real item from inventory into the selected equipment slot
-   - unequip moves that real equipped item back into the first free inventory slot
-   - drag/drop, stat recalculation, item comparison, currency, XP, salvage, vendor/stash and full inventory UI polish are still deferred
+  Loot drops, pickup, inventory persistence, inventory summary/detail, equipment checkpoint:
+   - Loot dropped by defeated enemies exists as a synced world-loot entry in room state (id, itemId, label, x, y)
+   - The client sends only a worldLootId pickup intent; the server validates ownership, distance and that the loot still exists
+    - On success the server removes the synced room-state loot and persists the picked-up item as a real inventory item through the persistence layer
+    - Copper currency also drops via world loot: `rollCurrencyLoot()` rolls the enemy's `currencyDrop` range, server spawns a `WorldLoot` with `currencyCopper > 0` and `itemId = ""`, pickup increments `Character.moneyCopper` atomically via `CharacterRepository.incrementMoneyCopper()`, and a `currency_picked_up` message is sent back to the client
+    - the current client slice exposes real inventory summary data plus a read-only inventory detail view from persisted account state rather than fake client-only loot
+    - equip moves a real item from inventory into the selected equipment slot
+    - unequip moves that real equipped item back into the first free inventory slot
+    - drag/drop, stat recalculation, item comparison, XP, salvage, full inventory UI polish and vendor/shop/trading systems are still deferred
 
 HUD (temporary debug vs. future default):
   - The current connected-room overlay is a temporary server-synced HUD/resource placeholder and debug shell only
@@ -445,6 +469,19 @@ refresh preserved PersistTwo
 logout cleared selected character storage
 login restored valid selected character
 Enter World button only enabled for selected character
+```
+
+### Shared Loot Container Foundation (Core 0.1)
+
+The Core 0.1 shared loot container foundation is in place but intentionally limited to data flow and room-instance lifecycle, not persistence:
+
+```text
+one shared Nightmarket crate exists
+crate opens once per room instance
+server rolls loot and spawns world loot near crate
+opened state syncs to clients
+not persisted yet
+no stealing/crime/locks/respawn timers yet
 ```
 
 Run the Node.js server foundation during local development:
@@ -573,6 +610,8 @@ Apply committed migrations in staging/production:
 pnpm --filter @doomscrolls/server prisma:migrate:deploy
 ```
 
+This command loads `DATABASE_URL` from the root `.env.development` file (ignored by Git). Do not commit `.env.development`.
+
 The Core 0.1 Prisma schema now lives at `apps/server/prisma/schema.prisma` and defines the database foundation for users, sessions, profiles, functional settings, characters, stats, passives, inventory, item instances and corpses. `apps/server/src/persistence/prisma.ts` provides a minimal Prisma Client bootstrap, and `apps/server/src/persistence/repositories` contains the first typed Prisma repository layer for future auth/profile/settings/character/inventory/item/corpse services.
 
 Repository methods wrap Prisma Client access only. They do not implement auth endpoints, `/auth/register`, `/auth/login`, `/me`, password hashing, gameplay rooms, combat, loot rolling, inventory placement, equipment rules or corpse recovery logic. Public DTO mappers live in `apps/server/src/persistence/mappers`; they must not expose sensitive fields such as `passwordHash` and must not invent gameplay data.
@@ -677,7 +716,7 @@ The package currently defines the locked foundation content for:
 - Sewer Dweller origin and Nightvision passive
 - Gravewalker class and Heavy Strike skill definition
 - The Nightmarket and Blackwire Sewers zones
-- Trashboar Runt enemy definition
+- Trashboar Runt, Skitter and Brute enemy definitions (content variants on the same AI / loot / XP / render pipeline; placeholder visuals)
 - starter pipe, sewer jacket, starter blood flask and blackwire scrap items
 - Core 0.1 equipment slots, starter sewer loot table and level 1-10 XP table
 

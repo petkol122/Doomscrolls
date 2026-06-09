@@ -1,4 +1,4 @@
-import { ItemLocationType, type Character, type CharacterPassive, type CharacterStats, type Inventory, type Prisma, type PrismaClient } from "@prisma/client";
+import { ItemLocationType, type Prisma, type PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "../prisma";
 
 type CharacterRepositoryClient = PrismaClient | Prisma.TransactionClient;
@@ -63,6 +63,7 @@ export interface CharacterProgressionContext {
   readonly id: string;
   readonly level: number;
   readonly currentHp: number;
+  readonly currentFlaskCharges: number;
   readonly originId: string;
   readonly classId: string;
 }
@@ -73,7 +74,22 @@ export class CharacterRepository {
   public findByIdForUser(characterId: string, userId: string) {
     return this.db.character.findFirst({
       where: { id: characterId, userId },
-      include: { stats: true, passives: true, inventory: true },
+      include: {
+        stats: true,
+        passives: true,
+        inventory: true,
+        items: {
+          where: { locationType: ItemLocationType.INVENTORY },
+          orderBy: [{ inventoryPage: "asc" }, { inventoryY: "asc" }, { inventoryX: "asc" }, { createdAt: "asc" }],
+        },
+      },
+    });
+  }
+
+  public findCurrentFlaskChargesForUser(characterId: string, userId: string) {
+    return this.db.character.findFirst({
+      where: { id: characterId, userId },
+      select: { currentFlaskCharges: true },
     });
   }
 
@@ -168,6 +184,7 @@ export class CharacterRepository {
         id: true,
         level: true,
         currentHp: true,
+        currentFlaskCharges: true,
         originId: true,
         classId: true,
       },
@@ -212,6 +229,7 @@ export class CharacterRepository {
     lastLocationX: number,
     lastLocationY: number,
     currentHp?: number,
+    currentFlaskCharges?: number,
   ) {
     return this.db.character.update({
       where: { id: characterId },
@@ -220,7 +238,60 @@ export class CharacterRepository {
         lastLocationX,
         lastLocationY,
         ...(currentHp !== undefined ? { currentHp } : {}),
+        ...(currentFlaskCharges !== undefined ? { currentFlaskCharges } : {}),
       },
     });
+  }
+
+  /**
+   * Atomically add `delta` copper to a character's `moneyCopper` total.
+   *
+   * Returns the new `moneyCopper` total on success, or `null` when the
+   * character could not be found. The transaction makes the read-then-
+   * increment safe against concurrent pickup attempts.
+   */
+  public async incrementMoneyCopper(characterId: string, delta: number): Promise<number | null> {
+    if (!Number.isFinite(delta) || delta <= 0) {
+      return 0;
+    }
+    const safeDelta = Math.max(0, Math.floor(delta));
+
+    if ("$transaction" in this.db) {
+      return this.db.$transaction(async (tx: Prisma.TransactionClient) => {
+        const current = await tx.character.findUnique({
+          where: { id: characterId },
+          select: { moneyCopper: true },
+        });
+        if (current === null) {
+          return null;
+        }
+        const safeCurrent = Number.isFinite(current.moneyCopper)
+          ? Math.max(0, current.moneyCopper)
+          : 0;
+        const next = safeCurrent + safeDelta;
+        const updated = await tx.character.update({
+          where: { id: characterId },
+          data: { moneyCopper: next },
+          select: { moneyCopper: true },
+        });
+        return updated.moneyCopper;
+      });
+    }
+
+    const current = await this.db.character.findUnique({
+      where: { id: characterId },
+      select: { moneyCopper: true },
+    });
+    if (current === null) {
+      return null;
+    }
+    const safeCurrent = Number.isFinite(current.moneyCopper) ? Math.max(0, current.moneyCopper) : 0;
+    const next = safeCurrent + safeDelta;
+    const updated = await this.db.character.update({
+      where: { id: characterId },
+      data: { moneyCopper: next },
+      select: { moneyCopper: true },
+    });
+    return updated.moneyCopper;
   }
 }

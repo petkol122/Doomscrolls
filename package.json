@@ -13,12 +13,14 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "validate:0.1": "pnpm lint && pnpm --filter @doomscrolls/shared typecheck && pnpm --filter @doomscrolls/content typecheck && pnpm --filter @doomscrolls/localization typecheck && pnpm --filter @doomscrolls/server typecheck && pnpm --filter @doomscrolls/client typecheck && pnpm build"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
-    "typescript": "^5.6.0",
     "eslint": "^9.0.0",
-    "prettier": "^3.3.0"
+    "prettier": "^3.3.0",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.61.0"
   }
 }

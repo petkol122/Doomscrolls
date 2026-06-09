@@ -1,6 +1,8 @@
 import type {
   InteractResponseServerMessage,
   RequestAttackAcceptedServerMessage,
+  RequestUseSkillSlotAcceptedServerMessage,
+  RequestUseSkillSlotRejectedServerMessage,
   RequestPickupWorldLootAcceptedServerMessage,
   XpGainedServerMessage,
 } from "@doomscrolls/shared";
@@ -16,7 +18,7 @@ import { applyEnemyDamage } from "./applyEnemyDamage";
 import { getInteractableResponseMessage, validateInteractIntent } from "./interactValidation";
 import type { PlayerPresence } from "./PlayerPresence";
 import { clearPendingAction } from "./pendingActionState";
-import { persistPickedUpWorldLootToInventory } from "./pickupWorldLootInventory";
+import { dispatchPickedUpWorldLoot } from "./pickupWorldLootDispatcher";
 import { validatePickupWorldLootIntent } from "./pickupWorldLootValidation";
 import { spawnWorldLootOnEnemyDefeat } from "./spawnWorldLootOnEnemyDefeat";
 import type { TownRoomState } from "./TownRoomState";
@@ -29,6 +31,10 @@ export interface DeferredActionExecutionContext {
   readonly now: number;
   readonly sendToClient: (type: string, payload: unknown) => void;
 }
+
+const GRAVE_SPARK_RANGE = 96;
+const GRAVE_SPARK_DAMAGE = 3;
+const GRAVE_SPARK_COOLDOWN_MS = 1500;
 
 const characterStatsService = new CharacterStatsService();
 const log = createRoomLogger(undefined);
@@ -200,6 +206,30 @@ export async function tryExecutePendingAction(context: DeferredActionExecutionCo
     }
   }
 
+  if (actionType === "skill_secondary") {
+    const enemy = state.enemies.get(targetId);
+    if (enemy === undefined) {
+      clearPendingAction(player);
+      const rejection: RequestUseSkillSlotRejectedServerMessage = {
+        type: "request_use_skill_slot_rejected",
+        slot: "secondary",
+        reason: "enemy_not_found",
+      };
+      sendToClient(rejection.type, rejection);
+      return;
+    }
+    if (enemy.defeated || enemy.hp <= 0) {
+      clearPendingAction(player);
+      const rejection: RequestUseSkillSlotRejectedServerMessage = {
+        type: "request_use_skill_slot_rejected",
+        slot: "secondary",
+        reason: "enemy_defeated",
+      };
+      sendToClient(rejection.type, rejection);
+      return;
+    }
+  }
+
   if (actionType === "attack") {
     const validation = validateAttackIntent(state, player, targetId, now);
     if (!validation.ok) {
@@ -254,21 +284,16 @@ export async function tryExecutePendingAction(context: DeferredActionExecutionCo
     }
 
     clearPendingAction(player);
-    const pickupResult = await persistPickedUpWorldLootToInventory({
+    const dispatchResult = await dispatchPickedUpWorldLoot({
       characterId: player.characterId,
-      itemDefinitionId: validation.worldLoot.itemId,
-      itemLabel: validation.worldLoot.label,
+      worldLoot: validation.worldLoot,
     });
 
-    if (!pickupResult.ok) {
-      const message = pickupResult.reason === "inventory_full"
+    if (!dispatchResult.ok) {
+      const message = dispatchResult.rejected.reason === "inventory_full"
         ? "Inventory full."
         : "Pickup unavailable.";
-      sendToClient("request_pickup_world_loot_rejected", {
-        type: "request_pickup_world_loot_rejected",
-        reason: pickupResult.reason === "inventory_full" ? "inventory_full" : "world_loot_not_found",
-        worldLootId: validation.worldLoot.id,
-      });
+      sendToClient("request_pickup_world_loot_rejected", dispatchResult.rejected);
       sendToClient("interact_response", {
         type: "interact_response",
         objectId: validation.worldLoot.id,
@@ -278,14 +303,63 @@ export async function tryExecutePendingAction(context: DeferredActionExecutionCo
     }
 
     state.worldLoot.delete(validation.worldLoot.id);
-    const accepted: RequestPickupWorldLootAcceptedServerMessage = {
-      type: "request_pickup_world_loot_accepted",
-      worldLootId: validation.worldLoot.id,
-      message: pickupResult.message,
-      itemLabel: validation.worldLoot.label,
-      ...(validation.worldLoot.rarity === undefined ? {} : { rarity: validation.worldLoot.rarity }),
-    };
+    if (dispatchResult.currencyMessage !== null) {
+      sendToClient("currency_picked_up", dispatchResult.currencyMessage);
+    }
+    const accepted: RequestPickupWorldLootAcceptedServerMessage = dispatchResult.accepted;
     sendToClient("request_pickup_world_loot_accepted", accepted);
+    return;
+  }
+
+  if (actionType === "skill_secondary") {
+    const enemy = state.enemies.get(targetId);
+    if (enemy === undefined) {
+      clearPendingAction(player);
+      const rejection: RequestUseSkillSlotRejectedServerMessage = {
+        type: "request_use_skill_slot_rejected",
+        slot: "secondary",
+        reason: "enemy_not_found",
+      };
+      sendToClient(rejection.type, rejection);
+      return;
+    }
+    if (player.lifeState !== "alive" || player.hp <= 0) {
+      clearPendingAction(player);
+      const rejection: RequestUseSkillSlotRejectedServerMessage = {
+        type: "request_use_skill_slot_rejected",
+        slot: "secondary",
+        reason: "player_downed",
+      };
+      sendToClient(rejection.type, rejection);
+      return;
+    }
+    const nextSkillSlotAt = Number.isFinite(player.nextSkillSlotAt) ? player.nextSkillSlotAt : 0;
+    if (now < nextSkillSlotAt) {
+      return;
+    }
+    const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+    if (distance > GRAVE_SPARK_RANGE) {
+      return;
+    }
+
+    player.nextSkillSlotAt = now + GRAVE_SPARK_COOLDOWN_MS;
+    const damageResult = applyEnemyDamage(enemy, GRAVE_SPARK_DAMAGE);
+    if (damageResult.defeated) {
+      spawnWorldLootOnEnemyDefeat(state, enemy, now);
+      await grantEnemyDefeatXp(player, enemy.enemyId, sendToClient);
+    }
+
+    const accepted: RequestUseSkillSlotAcceptedServerMessage = {
+      type: "request_use_skill_slot_accepted",
+      slot: "secondary",
+      targetEnemyId: enemy.id,
+      damage: GRAVE_SPARK_DAMAGE,
+      remainingHp: damageResult.remainingHp,
+      defeated: damageResult.defeated,
+      nextReadyAt: player.nextSkillSlotAt,
+    };
+    sendToClient(accepted.type, accepted);
+    clearPendingAction(player);
     return;
   }
 

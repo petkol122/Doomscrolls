@@ -1,4 +1,4 @@
-import type { AuthResult, AuthSession, CharacterSummary, RegisterPayload } from "@doomscrolls/shared";
+import type { AuthResult, AuthSession, CharacterSummary } from "@doomscrolls/shared";
 
 /**
  * Input type for the register method.

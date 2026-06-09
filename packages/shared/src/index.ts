@@ -18,6 +18,8 @@ export * from "./inventory/EquipmentTypes";
 
 export * from "./content/ContentTypes";
 
+export * from "./economy/MoneyFormatting";
+
 export * from "./room/EntityTypes";
 export * from "./room/RoomStateTypes";
 export * from "./room/SpawnPointTypes";

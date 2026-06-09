@@ -2,6 +2,7 @@ import type { Room } from "@colyseus/sdk";
 import { t } from "@doomscrolls/localization";
 import type { LocalizationKey } from "@doomscrolls/localization";
 import type {
+  CharacterSummary,
   EquipmentLoadout,
   EquipmentSlot,
   InventorySummaryItem,
@@ -9,8 +10,10 @@ import type {
 } from "@doomscrolls/shared";
 import type { StatModifier } from "@doomscrolls/shared";
 import type { EquipmentUpdatedServerMessage } from "@doomscrolls/shared";
-import { createMutedText } from "./worldSessionOverlayView";
 import { makeInteractive } from "./worldSessionPointerEvents";
+// Money formatting lives in @doomscrolls/shared (server-owned / shared contract).
+// The client must not reimplement gold/silver/copper breakdown ad hoc.
+import { formatMoneyCompact } from "@doomscrolls/shared";
 
 const COMMON_ITEM_COLOR = "#d8c6a3";
 
@@ -75,6 +78,7 @@ export function createEquipmentPanelSection(
   isOpen = false,
   onOpenChange?: (isOpen: boolean) => void,
   onUnequipItem?: (slot: EquipmentSlot) => Promise<void>,
+  getCharacter?: () => CharacterSummary | null,
 ): HTMLElement {
   const wrapper = document.createElement("details");
   wrapper.open = isOpen;
@@ -98,15 +102,44 @@ export function createEquipmentPanelSection(
   makeInteractive(summary);
   wrapper.appendChild(summary);
 
+  if (getCharacter !== undefined) {
+    const money = document.createElement("div");
+    money.dataset.worldSessionMoneyLine = "true";
+    money.style.padding = "0 8px 6px";
+    money.style.fontSize = "12px";
+    money.style.fontFamily = "monospace";
+    money.style.color = "#e0c88a";
+    money.textContent = `${t("money.money_label")}: ${formatMoneyCompact(getCharacter()?.moneyCopper ?? 0)}`;
+    wrapper.appendChild(money);
+  }
+
   const content = document.createElement("div");
   content.dataset.worldSessionEquipmentContent = "true";
   content.style.padding = "0 8px 8px";
   content.style.display = "grid";
   content.style.gap = "4px";
   wrapper.appendChild(content);
-  updateEquipmentPanelSection(wrapper, getLoadout, getInventoryItems, isOpen, onUnequipItem);
+  updateEquipmentPanelSection(wrapper, getLoadout, getInventoryItems, isOpen, onUnequipItem, getCharacter);
 
   return wrapper;
+}
+
+/** Version checksum for equipment panel content to skip full rebuilds. */
+let _equipmentContentVersion = -1;
+
+function computeEquipmentVersion(
+  loadout: EquipmentLoadout,
+  inventoryItems: readonly InventorySummaryItem[],
+): number {
+  let hash = 0;
+  for (const slot of EQUIPMENT_SLOTS) {
+    const itemId = loadout[slot];
+    hash = ((hash << 5) - hash) + (itemId?.length ?? 0);
+    hash |= 0;
+  }
+  hash = ((hash << 5) - hash) + inventoryItems.length;
+  hash |= 0;
+  return hash;
 }
 
 export function updateEquipmentPanelSection(
@@ -115,6 +148,7 @@ export function updateEquipmentPanelSection(
   getInventoryItems: () => readonly InventorySummaryItem[],
   isOpen = false,
   onUnequipItem?: (slot: EquipmentSlot) => Promise<void>,
+  getCharacter?: () => CharacterSummary | null,
 ): void {
   if (!(wrapper instanceof HTMLDetailsElement)) {
     return;
@@ -122,14 +156,36 @@ export function updateEquipmentPanelSection(
 
   wrapper.open = isOpen;
 
+  if (getCharacter !== undefined) {
+    const money = wrapper.querySelector("[data-world-session-money-line]");
+    if (money instanceof HTMLElement) {
+      money.textContent = `${t("money.money_label")}: ${formatMoneyCompact(getCharacter()?.moneyCopper ?? 0)}`;
+    }
+  }
+
   const content = wrapper.querySelector("[data-world-session-equipment-content]");
   if (!(content instanceof HTMLElement)) {
     return;
   }
 
-  content.replaceChildren();
+  // Task 275 — Skip full rebuild when equipment loadout + inventory are unchanged.
+  // Avoids resetting the equipment panel on every overlay update while the player moves.
   const loadout = getLoadout();
   const inventoryItems = getInventoryItems();
+  const nextVersion = computeEquipmentVersion(loadout, inventoryItems);
+  if (nextVersion === _equipmentContentVersion) {
+    return;
+  }
+  _equipmentContentVersion = nextVersion;
+
+  content.replaceChildren();
+
+  // Task 277 — Equipped items are no longer in inventorySummaryItems; they
+  // live in character.equippedItems (EquippedItemSummary[]). We look up from
+  // both sources so the panel shows the real equipped item label/rarity/stats.
+  const equippedItems = getCharacter !== undefined
+    ? (getCharacter()?.equippedItems ?? [])
+    : [];
 
   for (const slot of EQUIPMENT_SLOTS) {
     const itemId = loadout[slot];
@@ -154,7 +210,10 @@ export function updateEquipmentPanelSection(
       valueLabel.textContent = "Empty";
       valueLabel.style.color = "#5f4a2f";
     } else {
-      const equippedItem = inventoryItems.find((item) => item.itemInstanceId === itemId) ?? null;
+      // Look up from equippedItems first, then fall back to inventory items.
+      const equippedItem = equippedItems.find((item) => item.itemInstanceId === itemId)
+        ?? inventoryItems.find((item) => item.itemInstanceId === itemId)
+        ?? null;
       valueLabel.textContent = equippedItem === null
         ? "Equipped"
         : formatEquippedItemLabel(equippedItem);
@@ -201,12 +260,12 @@ export function updateEquipmentPanelSection(
   }
 }
 
-function formatEquippedItemLabel(item: InventorySummaryItem): string {
+function formatEquippedItemLabel(item: { readonly label: string; readonly rarity?: string; readonly statModifiers?: readonly StatModifier[] }): string {
   const modifierSummary = formatCompactModifierSummary(item.statModifiers);
   return modifierSummary === null ? item.label : `${item.label} (${modifierSummary})`;
 }
 
-function getItemRarityColor(rarity?: string): string {
+function getItemRarityColor(rarity?: string | undefined): string {
   if (rarity === "rare") {
     return "#8fc7ff";
   }

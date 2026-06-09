@@ -1,12 +1,16 @@
 // Colyseus room registrations
 export { TownRoom } from "./TownRoom";
+export { CombatRoom } from "./CombatRoom";
 
 // Public Colyseus room name constants
 export { TOWN_ROOM_NAME } from "./townRoomName";
+export { COMBAT_ROOM_NAME } from "./combatRoomName";
 
 // Room-related shared type contracts
 export type { TownRoomJoinOptions } from "./townRoomTypes";
+export type { CombatRoomJoinOptions } from "./combatRoomTypes";
 export { TownRoomState } from "./TownRoomState";
+export { CombatRoomState } from "./CombatRoomState";
 
 // Spawn point resolution helper (Task 023.2).
 export {

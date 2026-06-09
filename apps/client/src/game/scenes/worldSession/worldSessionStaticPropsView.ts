@@ -117,9 +117,12 @@ function buildPropContainer(
   const propContainer = scene.add.container(prop.screenX, prop.screenY);
   const shadow = scene.add.ellipse(0, 12, 42, 16, 0x000000, 0.18);
   const isAmbientCreature = prop.kind === "ambient_rat" || prop.kind === "ambient_pig" || prop.kind === "ambient_chicken";
+  const isAreaLabel = prop.kind === "area_label";
+  const isCombatEdge = prop.kind === "combat_edge";
+  const labelColor = isAreaLabel ? "#8a7f6e" : isCombatEdge ? "#cc6666" : isAmbientCreature ? "#f2d96b" : "#c8b08d";
   const label = scene.add
     .text(0, 18, prop.label, {
-      color: isAmbientCreature ? "#f2d96b" : "#c8b08d",
+      color: labelColor,
       fontFamily: "Arial, sans-serif",
       fontSize: "11px",
       stroke: "#120e0a",
@@ -209,11 +212,47 @@ function buildPropContainer(
       propContainer.add([body, head, beak, comb, legLeft, legRight]);
       break;
     }
+    case "combat_edge": {
+      const edgeGraphic = scene.add.graphics();
+      edgeGraphic.lineStyle(2, 0xcc4444, 0.6);
+      edgeGraphic.strokeCircle(0, 0, 16);
+      edgeGraphic.fillStyle(0xcc4444, 0.2);
+      edgeGraphic.fillCircle(0, 0, 16);
+      const dangerLine = scene.add.graphics();
+      dangerLine.lineStyle(2, 0xcc4444, 0.8);
+      dangerLine.lineBetween(-10, -10, 10, 10);
+      dangerLine.lineBetween(-10, 10, 10, -1);
+      propContainer.add([edgeGraphic, dangerLine]);
+      break;
+    }
+    case "path_marker": {
+      const dotA = scene.add.circle(-6, 4, 3, 0x5c4f3e, 0.6);
+      dotA.setStrokeStyle(1, 0x7a6b55, 0.4);
+      const dotB = scene.add.circle(6, -2, 2.5, 0x4f4334, 0.5);
+      dotB.setStrokeStyle(1, 0x6e5f4b, 0.35);
+      const dotC = scene.add.circle(2, 8, 2, 0x554839, 0.45);
+      propContainer.add([dotA, dotB, dotC]);
+      break;
+    }
+    case "area_label": {
+      const bg = scene.add.rectangle(0, 0, 4, 2, 0x8a7f6e, 0.2);
+      const deco = scene.add.text(0, -8, `— ${prop.label} —`, {
+        color: "#8a7f6e",
+        fontFamily: "Arial, sans-serif",
+        fontSize: "13px",
+        stroke: "#0f0c09",
+        strokeThickness: 4,
+      }).setOrigin(0.5);
+      propContainer.add([bg, deco]);
+      break;
+    }
   }
 
   if (stateLabel !== null) {
     propContainer.add(stateLabel);
   }
-  propContainer.add(label);
+  if (!isAreaLabel) {
+    propContainer.add(label);
+  }
   return propContainer;
 }

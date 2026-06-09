@@ -11,7 +11,7 @@
     "dev": "echo shared dev placeholder",
     "build": "tsc -b",
     "typecheck": "tsc --noEmit",
-    "lint": "echo shared lint placeholder",
+    "lint": "eslint .",
     "test": "echo shared test placeholder"
   },
   "dependencies": {

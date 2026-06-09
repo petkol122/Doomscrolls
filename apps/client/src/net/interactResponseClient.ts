@@ -14,7 +14,7 @@ import type {
  */
 export function registerInteractResponseListener(
   room: Room<RoomState>,
-  onResponse: (message: string) => void,
+  onResponse: (message: string, objectId?: string) => void,
   onObjectiveUpdated?: (message: ObjectiveUpdatedServerMessage) => void,
 ): void {
   room.onMessage("interact_response", (raw: unknown) => {
@@ -22,7 +22,7 @@ export function registerInteractResponseListener(
     if (!msg || typeof msg.message !== "string") {
       return;
     }
-    onResponse(msg.message);
+    onResponse(msg.message, msg.objectId);
   });
 
   room.onMessage("deferred_action_queued", (raw: unknown) => {
