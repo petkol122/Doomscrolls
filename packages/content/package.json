@@ -11,7 +11,7 @@
     "dev": "echo content dev placeholder",
     "build": "tsc -b",
     "typecheck": "tsc --noEmit",
-    "lint": "echo content lint placeholder",
+    "lint": "eslint .",
     "test": "tsc --noEmit"
   },
   "dependencies": {

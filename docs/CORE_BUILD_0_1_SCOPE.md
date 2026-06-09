@@ -86,20 +86,20 @@ admin panel
 
 ## Build 0.1 Acceptance Checklist
 
-| # | Item | Status (Task 262 audit) |
+| # | Item | Status (Task 267 audit) |
 |---|------|-------------------------|
 | 1 | Account: register, login, logout, session handling | implemented |
 | 2 | Character: create, select, derived stats | implemented |
-| 3 | WorldSession: enter town, enter combat, leave room | partial — town ✅, CombatRoom missing, leave covers town only |
+| 3 | WorldSession: enter town, enter combat, leave room | partial — town ✅ + thin `CombatRoom` foundation registered (`combat` in `createRealtimeServer`) + leave covers both; `CombatRoom` is still a thin Colyseus shell (lifecycle only, no enemy list, no map, no movement, no combat, no message handlers, no simulation tick) — not yet real combat gameplay |
 | 4 | Movement: click-to-move, speed-based, camera follow, zoom | implemented — click-to-move + speed-from-stats + zoom (mouse wheel + `+/-` keys in `worldSessionAreaView.ts`) ✅; `startFollow` style camera anchor is intentionally a debug top-down view, not real Diablo-style follow |
-| 5 | Combat: attack, Grave Spark, dodge, enemy AI | partial — basic attack + Grave Spark + dodge + damage ✅; Skitter/Brute spawn zones wired in `packages/content/src/data/spawnZones.ts` ✅; Brute-specific heavy-attack window server logic missing (`heavyAttackWindupMs` / `heavyAttackCooldownMs` / `heavyAttackChance` / `heavyAttackDamage` are defined in content but never read by `applyEnemyAggroDamage` — only the global `ENEMY_ATTACK_WINDUP_MS = 350` is used) |
+| 5 | Combat: attack, Grave Spark, dodge, enemy AI | partial — basic attack + Grave Spark + dodge + damage ✅; Skitter/Brute spawn zones wired in `packages/content/src/data/spawnZones.ts` ✅; Brute heavy-attack server logic wired in `TownRoom.applyEnemyAggroDamage` (reads `heavyAttackWindupMs` / `heavyAttackCooldownMs` / `heavyAttackChance` / `heavyAttackDamage` from content, sets `enemy.attackKind = "heavy"`, and exposes `missedKind` / `landingKind` for the message surface); `enemy_attack_telegraph` message surface still needs the explicit `attackKind: "heavy" \| "normal"` field for the client to render a distinct Brute telegraph |
 | 6 | Inventory: grid, equip/unequip, Flask healing | partial — grid 10×6 + equip/unequip + flask charges/cooldown + stat-modifier recalc ✅ (`EquipmentService.recalculateEquippedCharacterStats()` + `TownRoom.applyProgressionUpdate()` use `calculateEquippedStats(modifiers, level)`); drag/drop + item comparison still missing |
 | 7 | Loot: drop on defeat, pickup into inventory | partial — server-authored drops + pickup intent + persistence + full-inventory rejection (`PickupWorldLootFailureReason = "inventory_full"`) ✅; stacking still missing |
 | 8 | Currency: copper drops, accumulation | implemented |
 | 9 | Objectives: Notice Board chain, rewards | partial — board + 2 objectives + XP+copper rewards + duplicate guard + end-to-end XP via `xp_gained` message ✅; session-only, no persistence |
 | 10 | Death/respawn: downed state, respawn, corpse | partial — downed + respawn + corpse marker + recovery intent ✅; recovery is visual/placeholder only (no gear/durability/XP loss) |
-| 11 | Reconnect: restore character state after refresh | partial — session token + `/me` + persisted HP/location/flask + inventory grid items (`inventorySummaryItems` on `CharacterSummary`) + XP/level ✅; equipped items are NOT included in `CharacterSummary` (no `equippedItems` field), so equipped-slot UI cannot render from `/me` alone — equipment persistence is on disk, only the summary is missing |
-| 12 | Validation checks: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` | partial — `pnpm typecheck` + `pnpm test` (tsc --noEmit) + `pnpm build` work; `pnpm lint` is `echo ... placeholder` in all 5 workspace packages, ESLint is installed but not configured — full lint gate not actually enforced |
+| 11 | Reconnect: restore character state after refresh | partial — session token + `/me` + persisted HP/location/flask + inventory grid items (`inventorySummaryItems` on `CharacterSummary`) + equipped items (`equippedItems: EquippedItemSummary[]` on `CharacterSummary` produced by `characterMapper.toCharacterSummaryWithInventoryDto`) + XP/level ✅ |
+| 12 | Validation checks: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` | partial — real flat-config `eslint.config.mjs` (`typescript-eslint`) at repo root with `eslint .` scripts in all 5 workspace packages ✅; `pnpm lint` exits 0 on the current tree (0 errors, 4 non-blocking warnings); `pnpm typecheck` + `pnpm test` (tsc --noEmit) + `pnpm build` work; lint placeholder is gone, full lint gate is now actually enforced |
 
 Legend: `implemented` = meets acceptance; `partial` = real flow exists but acceptance item is incomplete; `missing` = not implemented; `unstable/risky` = cannot be verified or depends on a placeholder.
 
@@ -113,36 +113,24 @@ The Task 261 audit flagged several items as missing that are in fact already imp
 - XP/level system — implemented as `levelProgression.ts` + `grantFlatXpReward()` + `xp_gained` message + `applyProgressionUpdate()` that re-runs the full equipped-stats recalc on level-up
 - pickup full-inventory rejection — implemented in `pickupWorldLootInventory.ts` as `PickupWorldLootFailureReason = "inventory_full"` and surfaced as the "Inventory full." message
 
-The only true 0.1 blockers that remain are: `CombatRoom`, Brute heavy-attack window server logic, equipment exposure in the `/me` summary, and a real ESLint config / non-placeholder `pnpm lint`. See "Remaining 0.1 Blockers" below.
+The only true 0.1 blockers that remain are: the `CombatRoom` actually wiring real combat / enemy / movement / loot / XP / objectives / message-handler state (it is still a thin Colyseus shell, not real combat gameplay), the explicit `attackKind: "heavy" | "normal"` field on the `enemy_attack_telegraph` message surface so the client can render a distinct Brute telegraph, and the flat `CharacterDetailsDto.inventory.items` summary path. See "Remaining 0.1 Blockers" below.
 
 ---
 
-## Remaining 0.1 Blockers (Task 262 audit)
+## Remaining 0.1 Blockers (Task 267 audit)
 
-Ordered by implementation dependency. Each block ships with tests + docs.
+The four Task 262 blockers (real `pnpm lint`, Brute heavy-attack server logic, `/me` equipped-items exposure, `CombatRoom` foundation) are now closed. The thin `CombatRoom` shell is registered but is **not** real combat gameplay yet. Ordered by implementation dependency. Each block ships with tests + docs.
 
-1. **Real ESLint config / `pnpm lint`** (Task 263)
-   - Replace the 5 `echo ... lint placeholder` scripts with a real flat-config ESLint setup at the repo root plus a small per-workspace ignore pattern.
-   - Wire `pnpm lint` to run all of them.
-   - Add `eslint-config-prettier` and `eslint-plugin-@typescript-eslint` minimal rules.
-   - Outcome: `pnpm lint` exits non-zero on real code issues; CI can enforce the full gate.
+1. **`CombatRoom` real combat wiring** (Task 268)
+   - Extend the current `CombatRoom` thin shell with enemy list, map, movement, combat, loot, XP, objectives and message handlers by reusing the existing shared helpers (no duplication of `TownRoom` gameplay).
+   - Add a real `blackwire_sewers` combat spawn point to content and reuse a shared spawn resolver instead of `buildCombatPlayerPresence` falling back to `0,0` or the restored last location.
+   - Tests: valid join + invalid ownership paths; presence/leave; one synced enemy interaction end-to-end; reuse of `applyMovementIntent` / `applyEnemyDamage` / `levelProgression` / pickup / flask / dodge / interact handlers.
 
-2. **Brute heavy-attack server logic** (Task 264)
-   - Read `heavyAttackWindupMs` / `heavyAttackCooldownMs` / `heavyAttackChance` / `heavyAttackDamage` from the enemy content definition in `applyEnemyAggroDamage`.
-   - On the chosen heavy-attack tick, set `enemy.attackKind = "heavy"`, set the windup from content (not the global constant), and apply `heavyAttackDamage` instead of `damage` on landing.
-   - Make the `enemy_attack_telegraph` message include `attackKind: "heavy" | "normal"` so the client can render a distinct Brute telegraph.
-   - Tests: deterministic RNG roll selects heavy attack within the configured chance; heavy-attack windup/cooldown values are sourced from content; non-Brute enemies never enter the heavy branch.
+2. **Brute heavy-attack telegraph message field** (Task 269)
+   - The `TownRoom.applyEnemyAggroDamage` path now sources `heavyAttackWindupMs` / `heavyAttackCooldownMs` / `heavyAttackChance` / `heavyAttackDamage` from content and exposes `missedKind` / `landingKind` locally.
+   - The `enemy_attack_telegraph` server message must carry the explicit `attackKind: "heavy" | "normal"` field so the client can render a distinct Brute telegraph.
+   - Tests: deterministic RNG roll selects heavy attack within the configured chance; heavy-attack windup/cooldown values are sourced from content; non-Brute enemies never enter the heavy branch; the message envelope is type-checked.
 
-3. **`/me` equipped-items exposure** (Task 265)
-   - Extend `CharacterSummary` (or add a new `equippedItems` field on `CharacterDetails` consumed by `/me`) to expose one entry per equipped item: `itemInstanceId`, `definitionId`, `slot`, `label`, `category`, `rarity`, `statModifiers`.
-   - Have `toCharacterSummaryWithInventoryDto` (or the `/me` path) include both inventory grid items and equipped items in a single safe DTO.
-   - Update `apps/client/src/net/...` consumers to render the equipped-slot UI from the new field.
-   - Tests: summary returns one entry per actually equipped item; ownership scope is preserved; the field is absent when the character has nothing equipped.
-
-4. **`CombatRoom` for Blackwire Sewer Edge** (Task 266 — the final 0.1 blocker)
-   - Mirror `TownRoom` shape: `CombatRoomState` with `roomKind: "combat"`, `zoneId: "blackwire_sewers"`, `playerPresence: MapSchema<PlayerPresence>`.
-   - Register as `combat` in `createRealtimeServer`.
-   - Reuse existing `validateMovementIntent` / `applyMovementIntent` / `validateAttackIntent` / `applyEnemyDamage` / `levelProgression` / pickup / flask / dodge / interact handlers.
-   - Add a `combatEdge` transition prop content entry if needed so a joined player can move from Nightmarket into the combat room zone.
-   - Reuse `RoomJoinValidationService.validateJoin({ roomKind: "combat", ... })` (already accepts `combat`).
-   - Tests: valid join + invalid `roomKind` / `zoneId` / character ownership paths; presence/leave; one synced enemy interaction end-to-end.
+3. **Flat `CharacterDetailsDto.inventory.items` summary** (Task 270)
+   - `CharacterDetailsDto.inventory.items` is `[]` even after a real inventory write — fine for the current grid-only panel, but the `inventory.items` flat summary path is missing for clients that want flat item rendering.
+   - Tests: one entry per actually persisted inventory item; ownership scope preserved; `equippedItems` and `inventorySummaryItems` are not duplicated.

@@ -1,4 +1,3 @@
-import { AuthErrorCode, AuthError } from "./AuthErrors";
 import type { UsernameValidationResult } from "./AuthTypes";
 
 /**

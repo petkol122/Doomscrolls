@@ -10,7 +10,6 @@ import type {
 } from "@doomscrolls/shared";
 import type { StatModifier } from "@doomscrolls/shared";
 import type { EquipmentUpdatedServerMessage } from "@doomscrolls/shared";
-import { createMutedText } from "./worldSessionOverlayView";
 import { makeInteractive } from "./worldSessionPointerEvents";
 // Money formatting lives in @doomscrolls/shared (server-owned / shared contract).
 // The client must not reimplement gold/silver/copper breakdown ad hoc.

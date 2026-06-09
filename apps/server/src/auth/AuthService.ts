@@ -15,7 +15,7 @@ import { CharacterRepository } from "../persistence/repositories/CharacterReposi
 import { toSafeUserDto } from "../persistence/mappers/userMapper";
 import { toPublicProfileDto } from "../persistence/mappers/profileMapper";
 import { toUserSettingsDto } from "../persistence/mappers/settingsMapper";
-import { toCharacterSummaryDto, toCharacterSummaryWithInventoryDto } from "../persistence/mappers/characterMapper";
+import { toCharacterSummaryWithInventoryDto } from "../persistence/mappers/characterMapper";
 import { toIsoDateTimeString } from "../persistence/mappers/dateMapper";
 import { AuthErrorCode, AuthError } from "./AuthErrors";
 import { UsernameService } from "./UsernameService";

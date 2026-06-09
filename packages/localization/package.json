@@ -11,7 +11,7 @@
     "dev": "echo localization dev placeholder",
     "build": "tsc -b",
     "typecheck": "tsc --noEmit",
-    "lint": "echo localization lint placeholder",
+    "lint": "eslint .",
     "test": "node -e \"console.log('localization test placeholder: validation runs during typecheck/build')\""
   },
   "dependencies": {},

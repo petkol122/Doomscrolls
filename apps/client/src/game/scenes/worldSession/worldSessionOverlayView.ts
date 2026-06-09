@@ -118,8 +118,6 @@ export function createWorldSessionOverlayView(
 ): WorldSessionOverlayView {
   let selectedInventoryItemId: InventorySummaryItem["itemInstanceId"] | null = character?.inventorySummaryItems?.[0]?.itemInstanceId ?? null;
   let currentStatusPanel: HTMLElement | null = null;
-  let currentUtilityPanel: HTMLElement;
-  let currentHudPanel: HTMLElement;
 
   const statusRefs = character !== null ? createCharacterChip(character, character.characterName, character.level, onLeaveWorld) : null;
   const utilityRefs = createStableUtilityContent(
@@ -146,87 +144,6 @@ export function createWorldSessionOverlayView(
     onRespawn,
   );
 
-  const buildStatusContent = (
-    nextCharacter: CharacterSummary | null,
-    nextRoom: Room<DoomscrollsRoomState>,
-  ): HTMLElement | null => {
-    if (nextCharacter === null) {
-      return null;
-    }
-    const selfPresence = getCurrentPlayerPresence(
-      nextRoom.state as unknown as Record<string, unknown>,
-      nextRoom.sessionId,
-    );
-    const selfDisplayName = selfPresence?.displayName
-      ?? nextCharacter.characterName
-      ?? t("world_session.selected_character");
-    return createCharacterChip(
-      nextCharacter,
-      selfDisplayName,
-      selfPresence?.level ?? nextCharacter.level,
-      onLeaveWorld,
-    ).root;
-  };
-
-  const buildUtilityContent = (
-    nextCharacter: CharacterSummary | null,
-    nextRoom: Room<DoomscrollsRoomState>,
-    nextDebugState: WorldSessionDebugState,
-  ): HTMLElement => {
-    const panel = createScrollableCardSection();
-    panel.style.display = "grid";
-    panel.style.gap = "8px";
-    panel.style.alignContent = "start";
-
-    const utilityState = getUtilityState();
-
-    panel.appendChild(createControlsSection(utilityState.controls, (open) => {
-      onUtilityStateChange?.({ ...getUtilityState(), controls: open });
-    }));
-    panel.appendChild(createEquipmentPanelSection(
-      getEquipmentLoadout,
-      () => nextCharacter?.inventorySummaryItems ?? [],
-      utilityState.equipment,
-      (open) => {
-        onUtilityStateChange?.({ ...getUtilityState(), equipment: open });
-      },
-      nextCharacter?.id !== undefined && onUnequipItem !== undefined
-        ? (slot) => onUnequipItem(nextCharacter.id, slot)
-        : undefined,
-      () => nextCharacter,
-    ));
-    panel.appendChild(createDerivedStatsSection(nextCharacter));
-    panel.appendChild(createInventoryPanelSection(
-      nextCharacter,
-      {
-        getSelectedItemId: () => selectedInventoryItemId,
-        onSelectItem: (itemId) => {
-          selectedInventoryItemId = itemId;
-        },
-      },
-      getEquipmentLoadout(),
-      nextCharacter?.id ?? null,
-      onEquipItem,
-      utilityState.inventory,
-      (open) => {
-        onUtilityStateChange?.({ ...getUtilityState(), inventory: open });
-      },
-    ));
-    panel.appendChild(
-      createDebugPanel(
-        nextRoom,
-        formatTownRoomState(nextRoom.state),
-        nextDebugState,
-        onProjectionModeChange,
-        utilityState.debug,
-        (open) => {
-          onUtilityStateChange?.({ ...getUtilityState(), debug: open });
-        },
-      ),
-    );
-    return panel;
-  };
-
   const createMountedPanel = (): HTMLElement => {
     const panel = document.createElement("div");
     // Keep these panel roots mounted across overlay refreshes so interactive
@@ -252,8 +169,6 @@ export function createWorldSessionOverlayView(
   }, onProjectionModeChange);
   syncHudView(hudRefs, character, room, skillTargeting, lastSkillRejectedReason, onResetObjective, onRespawn);
   currentStatusPanel = statusPanel;
-  currentUtilityPanel = utilityPanel;
-  currentHudPanel = hudPanel;
 
   const update = (
     nextCharacter: CharacterSummary | null,

@@ -786,6 +786,52 @@ No code changed. No `CombatRoom` was created because the codebase does not yet c
 
 ---
 
+### Task 264 — Brute Heavy-Attack Server Logic
+
+Wire the Brute-specific heavy attack window through the existing `TownRoom.applyEnemyAggroDamage` path. Documentation-only checkpoint summarising the implementation.
+
+Status: implemented. `TownRoom.applyEnemyAggroDamage` now reads `heavyAttackWindupMs` / `heavyAttackCooldownMs` / `heavyAttackChance` / `heavyAttackDamage` from the enemy content definition. On the chosen heavy-attack tick, `enemy.attackKind = "heavy"`, the windup is taken from content (not the global `ENEMY_ATTACK_WINDUP_MS = 350`), the cooldown is taken from content, and `heavyAttackDamage` is applied on landing. The path exposes `missedKind` / `landingKind` for the message surface. Non-Brute enemies never enter the heavy branch. The `enemy_attack_telegraph` server message still needs the explicit `attackKind: "heavy" | "normal"` field for the client to render a distinct Brute telegraph — see Task 269.
+
+### Task 265 — `/me` Equipped-Items Exposure
+
+Expose equipped items on `CharacterSummary` so the equipped-slot UI can render from `/me` alone. Documentation-only checkpoint summarising the implementation.
+
+Status: implemented. `packages/shared/src/character/CharacterTypes.ts` now declares `CharacterSummary.equippedItems?: readonly EquippedItemSummary[]`. `apps/server/src/persistence/mappers/characterMapper.ts` builds one entry per actually equipped item through `buildEquippedItemSummaries(character.id, itemRepository)` and includes the result in the safe DTO returned by `toCharacterSummaryWithInventoryDto`. The field is absent when the character has nothing equipped. Ownership scope is preserved (it is read from the same character ownership path the rest of the summary uses). `passwordHash` and `tokenHash` are still never returned.
+
+### Task 266 — Real ESLint Config / `pnpm lint`
+
+Replace the 5 `echo ... lint placeholder` scripts with a real flat-config ESLint setup and wire `pnpm lint` to run all of them. Documentation-only checkpoint summarising the implementation.
+
+Status: implemented. Root `eslint.config.mjs` (flat config, `typescript-eslint`) is the single source of truth. All 5 workspace packages now have a real `lint: eslint .` script. `pnpm lint` runs all five and exits 0 on the current tree (0 errors, 4 non-blocking warnings from existing source — unused eslint-disable directives, one useless escape, one non-null assertion). CI can enforce the full gate.
+
+---
+
+### Task 267 — Core Build 0.1 Blocker Re-Audit
+
+Re-check the Core Build 0.1 acceptance checklist after the four Task 262 blockers were closed. Documentation-only task. No browser automation, no runtime reproduction, no gameplay changes.
+
+Status: documented. `docs/CORE_BUILD_0_1_SCOPE.md` acceptance checklist + "Remaining 0.1 Blockers" section were updated. Findings:
+
+- **CombatRoom foundation** — `apps/server/src/realtime/rooms/CombatRoom.ts` is registered as the Colyseus room name `combat` in `createRealtimeServer` and validates joins through the shared `RoomJoinValidationService`. It is a thin Colyseus shell (lifecycle only, `CombatRoomState` mirrors `TownRoomState`, presence set on `onJoin` / cleared on `onLeave`, no enemy list, no map, no movement, no combat, no loot, no XP, no objectives, no message handlers, no simulation tick). CombatRoom gameplay is **not** implemented.
+- **Brute heavy-attack server logic** — wired in `TownRoom.applyEnemyAggroDamage` (content-sourced windup/cooldown/chance/damage, `attackKind = "heavy"`, `missedKind` / `landingKind` exposed). The `enemy_attack_telegraph` server message still needs the explicit `attackKind: "heavy" | "normal"` field for the client to render a distinct Brute telegraph.
+- **`/me` equipped-items exposure** — `CharacterSummary.equippedItems: EquippedItemSummary[]` is produced by `characterMapper.toCharacterSummaryWithInventoryDto` and exposed by the `/me` path. The field is absent when the character has nothing equipped.
+- **Real lint gate** — root `eslint.config.mjs` (flat config, `typescript-eslint`) plus `eslint .` scripts in all 5 workspace packages. `pnpm lint` runs all five and exits 0 on the current tree.
+
+Verification (Task 267):
+
+```text
+pnpm lint                                               -> 0 errors, 4 non-blocking warnings
+pnpm --filter @doomscrolls/shared typecheck             -> ok
+pnpm --filter @doomscrolls/content typecheck            -> ok
+pnpm --filter @doomscrolls/localization typecheck       -> ok
+pnpm --filter @doomscrolls/server typecheck             -> ok
+pnpm --filter @doomscrolls/client typecheck             -> ok
+```
+
+The four Task 262 blockers are now closed. The next true 0.1 blockers are listed in `docs/CORE_BUILD_0_1_SCOPE.md` "Remaining 0.1 Blockers (Task 267 audit)" as Task 268 (`CombatRoom` real combat wiring), Task 269 (Brute heavy-attack telegraph message field), and Task 270 (flat `CharacterDetailsDto.inventory.items` summary).
+
+---
+
 ## Anti-Scope-Creep
 
 Do not implement before Core 0.1 is complete:

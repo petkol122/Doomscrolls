@@ -94,13 +94,6 @@ interface WorldRectScreenBounds {
   readonly bottom: number;
 }
 
-interface CameraFollowPadding {
-  readonly left: number;
-  readonly right: number;
-  readonly top: number;
-  readonly bottom: number;
-}
-
 interface WorldContainerOffset {
   readonly x: number;
   readonly y: number;
@@ -157,7 +150,7 @@ export function createWorldSessionAreaView(
   const interactablesView = createWorldSessionInteractablesView(scene, layout, (objectId: string) => {
     pointerHandledByTarget = true;
     sendInteractIntent(room, objectId);
-    const roomState = room.state as any;
+    const roomState = room.state as unknown as { interactables?: Map<string, { x: number; y: number }> };
     if (roomState?.interactables) {
       const targetInteractable = roomState.interactables.get(objectId);
       if (targetInteractable) {
@@ -257,7 +250,6 @@ export function createWorldSessionAreaView(
   let lastHeldMovementIntentAtMs = 0;
   let hoveredEnemyId: string | null = null;
   let selectedSkillTargetEnemyId: string | null = null;
-  const CORPSE_INTERACT_RANGE = 30;
   let selfSessionId: string | null = null;
 
   const isPointerInsideViewport = (pointerX: number, pointerY: number): boolean => {

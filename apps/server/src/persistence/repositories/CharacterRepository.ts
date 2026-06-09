@@ -1,4 +1,4 @@
-import { ItemLocationType, type Character, type CharacterPassive, type CharacterStats, type Inventory, type Prisma, type PrismaClient } from "@prisma/client";
+import { ItemLocationType, type Prisma, type PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "../prisma";
 
 type CharacterRepositoryClient = PrismaClient | Prisma.TransactionClient;

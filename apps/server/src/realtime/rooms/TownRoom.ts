@@ -23,12 +23,10 @@ import type {
   EnemyAttackTelegraphServerMessage,
   RequestDodgeAcceptedServerMessage,
   RequestDodgeRejectedServerMessage,
-  RequestDodgeClientMessage,
   ObjectiveUpdatedServerMessage,
   RequestResetObjectiveClientMessage,
   XpGainedServerMessage,
 } from "@doomscrolls/shared";
-import { formatMoneyCompact } from "@doomscrolls/shared";
 import { t } from "@doomscrolls/localization";
 import { RoomJoinValidationService } from "../RoomJoinValidationService";
 import { CharacterService } from "../../character/CharacterService";
@@ -59,11 +57,10 @@ import { restoreFlaskToFull } from "./healingFlaskConfig";
 import type {
   RequestUseHealingFlaskAcceptedServerMessage,
   RequestUseHealingFlaskRejectedServerMessage,
-  RequestUseHealingFlaskClientMessage,
 } from "@doomscrolls/shared";
 import { respawnTownEnemies } from "./respawnTownEnemies";
 import { spawnWorldLootOnEnemyDefeat } from "./spawnWorldLootOnEnemyDefeat";
-import { applyWanderMovement, clearWanderState } from "./wanderEnemies";
+import { applyWanderMovement } from "./wanderEnemies";
 import { dispatchPickedUpWorldLoot } from "./pickupWorldLootDispatcher";
 import { validatePickupWorldLootIntent } from "./pickupWorldLootValidation";
 import { clearPendingAction, setPendingAction } from "./pendingActionState";
@@ -233,14 +230,6 @@ function getActiveObjectiveContent(
     return undefined;
   }
   return contentRegistry.objectives.get(player.objectiveId as ObjectiveId);
-}
-
-function shouldCountForNoticeBoardObjective(player: { objectiveId: string }, enemyId: string): boolean {
-  const activeObjective = getActiveObjectiveContent(player);
-  if (activeObjective === undefined) {
-    return false;
-  }
-  return activeObjective.targetEnemyIds.includes(enemyId as ContentEnemyId);
 }
 
 async function advanceNoticeBoardObjective(

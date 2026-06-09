@@ -42,7 +42,6 @@ import {
   type WorldSessionHealingFlaskInput,
 } from "./worldSession/worldSessionHealingFlaskInput";
 import {
-  applyWorldSessionOverlayPanelStyles,
   applyWorldSessionOverlayRootStyles,
   applyWorldSessionOverlayHudStyles,
   applyWorldSessionOverlayStatusStyles,
