@@ -51,7 +51,7 @@ export function getTownRoomEnemies(
       typeof label !== "string" ||
       typeof x !== "number" ||
       typeof y !== "number" ||
-      (state !== "idle" && state !== "chasing" && state !== "defeated") ||
+      (state !== "idle" && state !== "chasing" && state !== "returning" && state !== "defeated") ||
       typeof targetPlayerSessionId !== "string" ||
       typeof hp !== "number" ||
       typeof maxHp !== "number" ||
