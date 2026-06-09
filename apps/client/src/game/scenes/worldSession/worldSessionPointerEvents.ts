@@ -16,20 +16,14 @@ export function makeOverlayPassive<T extends HTMLElement>(element: T): T {
 export const makeInteractive = makeOverlayInteractive;
 export const makePassive = makeOverlayPassive;
 
-// Task 242 — Shared helper for visible interactive panel roots.
-// Using pointer-events: auto alone is not enough to keep click-through
-// reliable across browser / Phaser input edge cases. The helper also
-// installs pointerdown / mousedown / click capture-phase stoppers so
-// that any pointer-down inside a visible panel is consumed before it
-// can reach the Phaser world canvas / canvas-level pointer event
-// listener. `pointer-events: auto` is still applied so the panel
-// actually receives the events in the first place.
+// Task 275 — Fixed capture-phase click/contextmenu handlers that were preventing
+// child elements (Leave button, inventory item buttons, unequip buttons) from
+// ever receiving their click events. The fix removes capture-phase click and
+// contextmenu handlers and replaces them with bubble-phase equivalents.
+// pointerdown and mousedown are still stopped in capture phase so the Phaser
+// world canvas never receives pointer events from panel elements.
 export function makeInteractiveAndStopWorldInput<T extends HTMLElement>(element: T): T {
   element.style.pointerEvents = "auto";
-
-  const stop = (event: Event): void => {
-    event.stopPropagation();
-  };
 
   const stopAndPrevent = (event: Event): void => {
     event.stopPropagation();
@@ -38,10 +32,22 @@ export function makeInteractiveAndStopWorldInput<T extends HTMLElement>(element:
     }
   };
 
+  const stop = (event: Event): void => {
+    event.stopPropagation();
+  };
+
+  // Capture-phase handlers: stop pointerdown/mousedown before they reach the
+  // world canvas input system. This prevents world movement/attack from
+  // triggering when the user clicks on a panel.
   element.addEventListener("pointerdown", stopAndPrevent, { capture: true });
   element.addEventListener("mousedown", stopAndPrevent, { capture: true });
-  element.addEventListener("click", stop, { capture: true });
-  element.addEventListener("contextmenu", stop, { capture: true });
+
+  // Bubble-phase handlers: prevent click/contextmenu from propagating past
+  // the panel, but only AFTER child elements have received their own click
+  // event. Without this fix, capture-phase click stopPropagation was killing
+  // clicks on all child buttons (Leave, inventory items, unequip, etc.).
+  element.addEventListener("click", stop);
+  element.addEventListener("contextmenu", stop);
 
   return element;
 }

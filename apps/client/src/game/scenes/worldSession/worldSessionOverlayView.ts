@@ -1365,8 +1365,53 @@ function createInventoryPanelSection(
   content.style.padding = "0 8px 8px";
   makeInteractive(content);
   wrapper.appendChild(content);
-  updateInventoryPanelSection(wrapper, character, selection, equipmentLoadout, characterId, onEquipItem, isOpen);
+  // Initial render
+  fullRebuildInventoryContent(content, items, selection, equipmentLoadout, characterId, onEquipItem);
   return wrapper;
+}
+
+/** Version checksum used to skip full inventory rebuilds across overlay updates. */
+let _inventoryContentVersion = -1;
+
+function fullRebuildInventoryContent(
+  content: HTMLElement,
+  items: readonly InventorySummaryItem[],
+  selection: {
+    readonly getSelectedItemId: () => InventorySummaryItem["itemInstanceId"] | null;
+    readonly onSelectItem: (itemId: InventorySummaryItem["itemInstanceId"]) => void;
+  },
+  equipmentLoadout: EquipmentLoadout,
+  characterId: string | null,
+  onEquipItem?: (characterId: string, itemInstanceId: string, slot: string) => Promise<void>,
+): void {
+  content.replaceChildren();
+  const currentSelection = selection.getSelectedItemId();
+  const summarySection = createInventorySummarySection(items, () => selection.getSelectedItemId(), (itemId) => {
+    selection.onSelectItem(itemId);
+    fullRebuildInventoryContent(content, items, selection, equipmentLoadout, characterId, onEquipItem);
+  });
+  const selectedItem = items.find((item) => item.itemInstanceId === currentSelection) ?? null;
+  const detailSection = createInventoryDetailSection(selectedItem, items, equipmentLoadout, characterId, onEquipItem);
+  content.append(summarySection, detailSection);
+  _inventoryContentVersion = computeInventoryVersion(items, selection.getSelectedItemId());
+}
+
+function computeInventoryVersion(
+  items: readonly InventorySummaryItem[],
+  selectedItemId: string | null,
+): number {
+  let hash = items.length;
+  for (let i = 0; i < Math.min(items.length, 4); i++) {
+    const item = items[i];
+    if (item === undefined) {
+      break;
+    }
+    hash = ((hash << 5) - hash) + item.itemInstanceId.length;
+    hash |= 0;
+  }
+  hash = ((hash << 5) - hash) + (selectedItemId?.length ?? 0);
+  hash |= 0;
+  return hash;
 }
 
 function updateInventoryPanelSection(
@@ -1397,19 +1442,15 @@ function updateInventoryPanelSection(
     return;
   }
 
-  const render = (): void => {
-    content.replaceChildren();
-    const currentSelection = selection.getSelectedItemId();
-    const summarySection = createInventorySummarySection(items, () => selection.getSelectedItemId(), (itemId) => {
-      selection.onSelectItem(itemId);
-      render();
-    });
-    const selectedItem = items.find((item) => item.itemInstanceId === currentSelection) ?? null;
-    const detailSection = createInventoryDetailSection(selectedItem, items, equipmentLoadout, characterId, onEquipItem);
-    content.append(summarySection, detailSection);
-  };
-
-  render();
+  // Task 275 — Skip full rebuild when inventory data + selection are unchanged.
+  // Full rebuild destroys and recreates DOM, which resets scroll position,
+  // button hover states and any transient browser state. On every overlay
+  // update (e.g. player movement) this was causing the panel to visually
+  // flash/reset. Now we only rebuild when items or selected item actually change.
+  const nextVersion = computeInventoryVersion(items, selection.getSelectedItemId());
+  if (nextVersion !== _inventoryContentVersion) {
+    fullRebuildInventoryContent(content, items, selection, equipmentLoadout, characterId, onEquipItem);
+  }
 }
 
 function createDebugPanel(

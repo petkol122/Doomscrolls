@@ -124,6 +124,24 @@ export function createEquipmentPanelSection(
   return wrapper;
 }
 
+/** Version checksum for equipment panel content to skip full rebuilds. */
+let _equipmentContentVersion = -1;
+
+function computeEquipmentVersion(
+  loadout: EquipmentLoadout,
+  inventoryItems: readonly InventorySummaryItem[],
+): number {
+  let hash = 0;
+  for (const slot of EQUIPMENT_SLOTS) {
+    const itemId = loadout[slot];
+    hash = ((hash << 5) - hash) + (itemId?.length ?? 0);
+    hash |= 0;
+  }
+  hash = ((hash << 5) - hash) + inventoryItems.length;
+  hash |= 0;
+  return hash;
+}
+
 export function updateEquipmentPanelSection(
   wrapper: HTMLElement,
   getLoadout: () => EquipmentLoadout,
@@ -150,9 +168,17 @@ export function updateEquipmentPanelSection(
     return;
   }
 
-  content.replaceChildren();
+  // Task 275 — Skip full rebuild when equipment loadout + inventory are unchanged.
+  // Avoids resetting the equipment panel on every overlay update while the player moves.
   const loadout = getLoadout();
   const inventoryItems = getInventoryItems();
+  const nextVersion = computeEquipmentVersion(loadout, inventoryItems);
+  if (nextVersion === _equipmentContentVersion) {
+    return;
+  }
+  _equipmentContentVersion = nextVersion;
+
+  content.replaceChildren();
 
   for (const slot of EQUIPMENT_SLOTS) {
     const itemId = loadout[slot];
