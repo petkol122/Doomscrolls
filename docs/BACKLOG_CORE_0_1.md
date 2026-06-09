@@ -830,6 +830,12 @@ pnpm --filter @doomscrolls/client typecheck             -> ok
 
 The four Task 262 blockers are now closed. The next true 0.1 blockers are listed in `docs/CORE_BUILD_0_1_SCOPE.md` "Remaining 0.1 Blockers (Task 267 audit)" as Task 268 (`CombatRoom` real combat wiring), Task 269 (Brute heavy-attack telegraph message field), and Task 270 (flat `CharacterDetailsDto.inventory.items` summary).
 
+### Task 272 — Core Build 0.1 Candidate Smoke Checklist
+
+Add a manual smoke checklist for validating a Core Build 0.1 candidate locally. Documentation-only task. No browser automation, no runtime reproduction, no gameplay changes.
+
+Status: documented. `docs/CORE_BUILD_0_1_SMOKE_CHECKLIST.md` is now the authoritative manual smoke checklist. It covers the full ordered flow from install/env/migrate/start → register/login → create/select character → enter Nightmarket → camera/movement/hold-move/zoom → Notice Board → fight Runt/Skitter/Brute → Brute heavy telegraph → attack/Grave Spark/dodge/flask → loot → inventory/equip/unequip → objective chain → XP/level/copper → death/respawn/corpse → reconnect → town service placeholders. Each step has Pass/Fail/Notes columns. A "Known Deferred (Not a Failure)" section documents all explicitly deferred items (real vendors, stash, waypoint travel, quest log, character customization, CombatRoom client routing, real art/animation pipeline, drag/drop, item comparison/stacking, gear durability/XP loss on death, multiple origins/classes, bosses/friends/guilds/PvP/dungeons).
+
 ---
 
 ## Anti-Scope-Creep
