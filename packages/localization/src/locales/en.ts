@@ -52,6 +52,9 @@ export const en = {
   "item.rustbound_ring.name": "Rustbound Ring",
   "item.rustbound_ring.description":
     "A grimy ring scavenged from the sewer depths, stubborn enough to keep a little life in you.",
+  "item.tarnished_coin.name": "Tarnished Coin",
+  "item.tarnished_coin.description":
+    "A corroded coin stamped with a face nobody remembers. Still clinks when dropped.",
 
   "skill.heavy_strike.name": "Heavy Strike",
   "skill.heavy_strike.description":
