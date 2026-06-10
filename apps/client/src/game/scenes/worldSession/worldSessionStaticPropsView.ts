@@ -63,7 +63,7 @@ export function createWorldSessionStaticPropsView(
     refresh,
     destroy: () => {
       destroyAll();
-      container.destroy(true);
+      container.destroy();
     },
   };
 }
@@ -119,7 +119,8 @@ function buildPropContainer(
   const isAmbientCreature = prop.kind === "ambient_rat" || prop.kind === "ambient_pig" || prop.kind === "ambient_chicken";
   const isAreaLabel = prop.kind === "area_label";
   const isCombatEdge = prop.kind === "combat_edge";
-  const labelColor = isAreaLabel ? "#8a7f6e" : isCombatEdge ? "#cc6666" : isAmbientCreature ? "#f2d96b" : "#c8b08d";
+  const isBoundaryMarker = prop.kind === "boundary_marker";
+  const labelColor = isAreaLabel ? "#8a7f6e" : (isCombatEdge || isBoundaryMarker) ? "#cc6666" : isAmbientCreature ? "#f2d96b" : "#c8b08d";
   const label = scene.add
     .text(0, 18, prop.label, {
       color: labelColor,
@@ -225,6 +226,14 @@ function buildPropContainer(
       propContainer.add([edgeGraphic, dangerLine]);
       break;
     }
+    case "boundary_marker": {
+      const wallBase = scene.add.rectangle(0, 0, 36, 10, 0x3d3024, 0.92);
+      wallBase.setStrokeStyle(2, 0x6b5a42, 0.8);
+      const wallTop = scene.add.rectangle(0, -6, 28, 6, 0x4a3d2e, 0.88);
+      wallTop.setStrokeStyle(1, 0x5c4c36, 0.7);
+      propContainer.add([wallBase, wallTop]);
+      break;
+    }
     case "path_marker": {
       const dotA = scene.add.circle(-6, 4, 3, 0x5c4f3e, 0.6);
       dotA.setStrokeStyle(1, 0x7a6b55, 0.4);
@@ -251,7 +260,7 @@ function buildPropContainer(
   if (stateLabel !== null) {
     propContainer.add(stateLabel);
   }
-  if (!isAreaLabel) {
+  if (!isAreaLabel && !isBoundaryMarker) {
     propContainer.add(label);
   }
   return propContainer;

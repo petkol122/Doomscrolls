@@ -291,7 +291,7 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
   const VALID_WORLD_PROP_KINDS = [
     "crate", "lamp", "debris", "junk", "ambient_rat", "ambient_pig",
     "ambient_chicken", "loot_container", "vendor", "town_service",
-    "waypoint", "combat_edge", "area_label", "path_marker"
+    "waypoint", "combat_edge", "area_label", "path_marker", "boundary_marker"
   ] as const;
 
   for (const prop of registry.worldProps.all) {

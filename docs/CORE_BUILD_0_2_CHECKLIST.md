@@ -54,6 +54,7 @@ The following issues were fixed during Core Build 0.1 and are **not active block
 | 291 | 6 | Replace hardcoded `"nightmarket"` fallback in TownRoom zone selection with content-registry resolver | ✅ | — | ⬜ | ✅ |
 | 292 | 6 | Remove client town room display fallback hardcoding (`formatTownRoomState`) | ✅ | — | ⬜ | ✅ |
 | 293 | 6 | Add first small 0.2 content slice (ambient rat props + `tarnished_coin` item + loot table entries) | ✅ | — | ✅ | ✅ |
+| 294 | 5 | Add basic world boundary readability pass (data-driven boundary markers along zone edges) | ✅ | — | ✅ | ✅ |
 
 ---
 
