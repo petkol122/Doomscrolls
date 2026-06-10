@@ -14,8 +14,8 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
-    "validate:0.1": "pnpm lint && pnpm --filter @doomscrolls/shared typecheck && pnpm --filter @doomscrolls/content typecheck && pnpm --filter @doomscrolls/localization typecheck && pnpm --filter @doomscrolls/server typecheck && pnpm --filter @doomscrolls/client typecheck && pnpm build",
-    "validate:0.2": "pnpm lint && pnpm --filter @doomscrolls/shared typecheck && pnpm --filter @doomscrolls/content typecheck && pnpm --filter @doomscrolls/localization typecheck && pnpm --filter @doomscrolls/server typecheck && pnpm --filter @doomscrolls/client typecheck && pnpm build"
+    "validate:0.1": "pnpm lint && pnpm --filter @doomscrolls/shared typecheck && pnpm --filter @doomscrolls/localization build && pnpm --filter @doomscrolls/content typecheck && pnpm --filter @doomscrolls/localization typecheck && pnpm --filter @doomscrolls/server typecheck && pnpm --filter @doomscrolls/client typecheck && pnpm build",
+    "validate:0.2": "pnpm lint && pnpm --filter @doomscrolls/shared typecheck && pnpm --filter @doomscrolls/localization build && pnpm --filter @doomscrolls/content typecheck && pnpm --filter @doomscrolls/localization typecheck && pnpm --filter @doomscrolls/server typecheck && pnpm --filter @doomscrolls/client typecheck && pnpm build"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

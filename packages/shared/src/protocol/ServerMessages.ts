@@ -355,6 +355,20 @@ export interface CurrencyPickedUpServerMessage {
   readonly totalMoneyCopper: number;
 }
 
+// ---------------------------------------------------------------------------
+// Task 299 — Town Rest Refill Foundation.
+//
+// Sent to the joining client after the server has restored HP and healing
+// flask charges to their maximum values on entering a valid town zone.
+// The client must not derive the refill values from this message; the
+// synced Colyseus schema state is the source of truth for display.
+// ---------------------------------------------------------------------------
+export interface TownRestRefillServerMessage {
+  readonly type: "town_rest_refill";
+  readonly restoredHp: number;
+  readonly restoredFlaskCharges: number;
+}
+
 export type ServerRoomMessage =
   | RoomStateSnapshotServerMessage
   | RoomStatePatchServerMessage
@@ -389,4 +403,5 @@ export type ServerRoomMessage =
   | RequestUseSkillSlotAcceptedServerMessage
   | RequestUseSkillSlotRejectedServerMessage
   | CurrencyPickedUpServerMessage
+  | TownRestRefillServerMessage
   | ErrorServerMessage;

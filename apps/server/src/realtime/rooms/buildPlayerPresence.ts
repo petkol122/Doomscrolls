@@ -55,8 +55,12 @@ export function buildTownPlayerPresence(
     input.movementSpeed,
     input.attackCooldownMs,
   );
-  // Restore persisted flask charges for reconnect/refresh while keeping
-  // room HUD state sourced from PlayerPresence and clamped to server-owned max.
+  // Restore the flask baseline before applying persisted state.
+  // `restoreFlaskToFull` intentionally sets `maxFlaskCharges` (3) and
+  // `nextFlaskAt` (0) as a side-effect, even though `flaskCharges` is
+  // then overridden by the persisted value below. This ensures the
+  // Colyseus schema always has a valid max-flask-cap baseline for HUD
+  // rendering, regardless of whether persisted state exists.
   restoreFlaskToFull(presence);
   const restoredFlaskCharges = Number.isFinite(input.restoredFlaskCharges)
     ? Math.floor(input.restoredFlaskCharges ?? 0)

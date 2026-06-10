@@ -10,7 +10,9 @@ import type { StartingCharacterStats } from "./CharacterTypes";
  * - damage = 1 + power
  * - armor = 0
  * - moveSpeed = 1 + speed * 0.02
- * - attackCooldownMs = max(500, 1100 - speed * 25)
+ * - attackCooldownMs = max(500, 1000 - speed * 25)
+ *   (Task 306: reduced base from 1100 to 1000 for snappier
+ *    starting attack cadence — ~925 ms at speed 3 vs 1025 ms)
  */
 export class CharacterStatsService {
   private static readonly MAX_HP_PER_LEVEL = 3;
@@ -66,7 +68,10 @@ export class CharacterStatsService {
       damage: 1 + primary.power,
       armor: 0,
       moveSpeed: 1 + primary.speed * 0.02,
-      attackCooldownMs: Math.max(500, 1100 - primary.speed * 25),
+      // Task 306: base 1000 (was 1100) gives ~925 ms at speed 3
+      // instead of 1025 ms — a modest feel improvement while
+      // keeping the 500 ms hard floor for high-speed builds.
+      attackCooldownMs: Math.max(500, 1000 - primary.speed * 25),
     };
   }
 

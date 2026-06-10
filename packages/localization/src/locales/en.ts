@@ -300,7 +300,45 @@ export const en = {
   "town_service.waypoint.unavailable": "Waypoint activation is not available yet.",
 
   "zone.blackwire_sewer_edge.name": "→ Blackwire Sewer Edge",
-  "zone.blackwire_sewer_edge.description": "The boundary where Nightmarket alleys give way to sewer tunnels crawling with trashboars."
+  "zone.blackwire_sewer_edge.description": "The boundary where Nightmarket alleys give way to sewer tunnels crawling with trashboars.",
+
+  // ── World prop labels ──
+  "world_prop.safe_area.label": "Safe Area",
+  "world_prop.area.nightmarket_services.label": "Nightmarket Services",
+  "world_prop.area.sewer_approach.label": "Sewer Approach",
+  "world_prop.area.skitter_warren.label": "Skitter Warren",
+  "world_prop.area.blackwire_sewer_edge.label": "Blackwire Sewer Edge",
+  "world_prop.area.deep_sewer_edge.label": "Deep Sewer Edge",
+  "world_prop.notice_board.label": "Notice Board",
+  "world_prop.suspicious_vendor.label": "Suspicious Vendor",
+  "world_prop.stash_keeper.label": "Stash Keeper",
+  "world_prop.trainer.label": "Trainer",
+  "world_prop.waypoint.label": "Waypoint",
+  "world_prop.market_crates.label": "Market Crates",
+  "world_prop.rest_area.label": "Rest Area",
+  "world_prop.crate.label": "Crate",
+  "world_prop.market_junk.label": "Market Junk",
+  "world_prop.lamp.label": "Lamp",
+  "world_prop.pig_neutral.label": "Pig [Neutral]",
+  "world_prop.roadside_crates.label": "Roadside Crates",
+  "world_prop.abandoned_cart.label": "Abandoned Cart",
+  "world_prop.sewer_rat_neutral.label": "Sewer Rat [Neutral]",
+  "world_prop.edge_skitter.label": "→ Skitter Warren",
+  "world_prop.sewer_rubble.label": "Sewer Rubble",
+  "world_prop.skitter_refuse.label": "Skitter Refuse",
+  "world_prop.edge_blackwire_sewer.label": "→ Blackwire Sewer Edge",
+  "world_prop.sewer_edge_debris.label": "Sewer Edge Debris",
+  "world_prop.scrap_pile.label": "Scrap Pile",
+  "world_prop.edge_blackwire_deep.label": "→ Blackwire Deep Edge",
+  "world_prop.deep_rubble.label": "Deep Rubble",
+  "world_prop.abandoned_crates.label": "Abandoned Crates",
+  "world_prop.crates.label": "Crates",
+  "world_prop.chicken_neutral.label": "Chicken [Neutral]",
+  "world_prop.junk.label": "Junk",
+
+  "world_session.town_rest_refill": "Restored in town. HP and flask charges replenished.",
+  "world_session.rest_area_entered": "Rest Area — Replenishing",
+  "world_session.rest_area_exited": "Left Rest Area"
 } as const satisfies LocalizationDictionary;
 
 export type LocalizationKey = keyof typeof en;

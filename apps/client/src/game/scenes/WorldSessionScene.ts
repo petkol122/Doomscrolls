@@ -21,6 +21,7 @@ import { registerPickupWorldLootResponseListeners } from "../../net/pickupWorldL
 import { sendResetObjectiveIntent } from "../../net/resetObjectiveClient";
 import { registerRespawnListeners, sendRespawnRequest } from "../../net/respawnClient";
 import { registerSkillSlotResponseListeners } from "../../net/skillSlotIntentClient";
+import { createWorldSessionAreaBannerView, type WorldSessionAreaBannerView } from "./worldSession/worldSessionAreaBannerView";
 import { createWorldSessionFeedbackView, type WorldSessionFeedbackView } from "./worldSession/worldSessionFeedbackView";
 import { createWorldSessionOverlayView } from "./worldSession/worldSessionOverlayView";
 import {
@@ -118,6 +119,7 @@ export class WorldSessionScene extends Phaser.Scene {
     inventory: false,
     debug: false,
   };
+  private areaBanner: WorldSessionAreaBannerView | null = null;
   private latestSkillRejectedReason: string | null = null;
 
   public constructor() {
@@ -339,6 +341,14 @@ export class WorldSessionScene extends Phaser.Scene {
       },
     });
 
+    // Task 299 -- Town rest refill feedback: show a localized notice when
+    // the server restores HP and flask charges on entering a valid town zone.
+    // The synced Colyseus schema state is the source of truth for display;
+    // this just provides user-facing notification text.
+    this.room.onMessage("town_rest_refill", () => {
+      this.feedbackView?.showNotice(t("world_session.town_rest_refill"));
+    });
+
     // Task 236 -- corpse interact rejection feedback
     this.room.onMessage("corpse_interact_rejected", (message: { reason?: unknown }) => {
       const reason = typeof message?.reason === "string" ? message.reason : "";
@@ -462,6 +472,9 @@ export class WorldSessionScene extends Phaser.Scene {
         this.renderOverlay();
       },
     });
+
+    // Task 298 — Show area name banner on zone entry.
+    this.showAreaBanner();
 
     this.renderOverlay();
     this.bootMarker?.destroy();
@@ -606,6 +619,18 @@ export class WorldSessionScene extends Phaser.Scene {
     this.renderOverlay();
   }
 
+  private showAreaBanner(): void {
+    if (this.room === null) return;
+    const state = this.room.state as unknown as Record<string, unknown>;
+    const zoneId = typeof state.zoneId === "string" && state.zoneId.length > 0
+      ? state.zoneId
+      : null;
+    if (zoneId === null || zoneId.length === 0) return;
+    this.areaBanner?.destroy();
+    this.areaBanner = createWorldSessionAreaBannerView();
+    this.areaBanner.show(zoneId);
+  }
+
   private handleSceneTeardown(): void {
     this.apiClient = null;
     this.bootMarker?.destroy();
@@ -620,6 +645,8 @@ export class WorldSessionScene extends Phaser.Scene {
     this.vendorPanel = null;
     this.townServicePanel?.destroy();
     this.townServicePanel = null;
+    this.areaBanner?.destroy();
+    this.areaBanner = null;
     this.worldAreaView?.destroy();
     this.worldAreaView = null;
     this.destroyOverlay();

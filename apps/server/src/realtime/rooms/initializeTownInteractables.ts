@@ -1,8 +1,9 @@
 import { Interactable } from "./Interactable";
 import type { TownRoomState } from "./TownRoomState";
 import type { ZoneId } from "@doomscrolls/shared";
-import { contentRegistry } from "@doomscrolls/content";
+import { contentRegistry, type WorldPropContentDefinition } from "@doomscrolls/content";
 import type { WorldPropKind } from "@doomscrolls/content";
+import { en } from "@doomscrolls/localization";
 
 /**
  * Task 057 — Interactable Object Foundation Batch (initial)
@@ -36,11 +37,18 @@ export function initializeTownInteractables(
     const interactable = new Interactable(
       prop.id,
       prop.kind,
-      prop.label,
+      resolvePropLabel(prop),
       prop.x,
       prop.y,
       isLootContainer ? false : undefined,
     );
     state.interactables.set(interactable.id, interactable);
   }
+}
+
+function resolvePropLabel(prop: WorldPropContentDefinition): string {
+  if (prop.labelKey !== undefined && en[prop.labelKey] !== undefined) {
+    return en[prop.labelKey];
+  }
+  return prop.label;
 }

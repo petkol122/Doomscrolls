@@ -7,6 +7,11 @@ const COMMON_LOOT_COLOR = "#ffe7a8";
 const COMMON_LOOT_STROKE = "#221606";
 const CURRENCY_LOOT_COLOR = "#f0c674";
 const CURRENCY_LOOT_STROKE = "#1d1206";
+const LOOT_FONT_SIZE = "14px";
+const LOOT_LABEL_BG_COLOR = 0x0a0a0a;
+const LOOT_LABEL_BG_ALPHA = 0.88;
+const LOOT_LABEL_BG_PADDING = 10;
+const LOOT_LABEL_BG_HEIGHT = 19;
 const CURRENCY_LOOT_BODY_FILL = 0xd4a25a;
 const CURRENCY_LOOT_BODY_STROKE = 0xffd58a;
 const CURRENCY_LOOT_GLOW = 0xf0c674;
@@ -132,9 +137,10 @@ export function createWorldSessionLootPlaceholderView(
   const initialPalette = getLootPlaceholderPalette(loot);
   const scatter = getScatterOffset(loot.id);
   const container = scene.add.container(loot.x + scatter.x, loot.y + scatter.y);
+  container.setDepth(300 + loot.y);
   parentContainer?.add(container);
-  const glow = scene.add.ellipse(0, 10, 26, 12, initialPalette.glow, 0.26);
-  const ping = scene.add.ellipse(0, 9, 34, 14, initialPalette.ping, 0.12);
+  const glow = scene.add.ellipse(0, 10, 28, 13, initialPalette.glow, 0.32);
+  const ping = scene.add.ellipse(0, 9, 36, 15, initialPalette.ping, 0.15);
   ping.setStrokeStyle(2, initialPalette.pingStroke, 0.3);
   const body: Phaser.GameObjects.Rectangle | Phaser.GameObjects.Ellipse = isCurrencyLoot(loot)
     ? scene.add.ellipse(0, 0, 20, 20, initialPalette.body, 0.98)
@@ -143,13 +149,13 @@ export function createWorldSessionLootPlaceholderView(
   body.setInteractive({ useHandCursor: true });
   const targetRing = scene.add.ellipse(0, 0, 32, 32);
   targetRing.setStrokeStyle(2, 0xfbf2a2, 0);
-  const labelBg = scene.add.rectangle(0, 17, 0, 16, 0x0a0a0a, 0.82);
-  labelBg.setStrokeStyle(1, 0x4a4a4a, 0.6);
+  const labelBg = scene.add.rectangle(0, 18, 0, LOOT_LABEL_BG_HEIGHT, LOOT_LABEL_BG_COLOR, LOOT_LABEL_BG_ALPHA);
+  labelBg.setStrokeStyle(1, 0x5a5a5a, 0.7);
   const labelText = scene.add
-    .text(0, 16, getLootLabelText(loot), {
+    .text(0, 17, getLootLabelText(loot), {
       color: getLootLabelColor(loot),
       fontFamily: "Arial, sans-serif",
-      fontSize: "13px",
+      fontSize: LOOT_FONT_SIZE,
       stroke: getLootLabelStrokeColor(loot),
       strokeThickness: 3,
     })
@@ -157,7 +163,7 @@ export function createWorldSessionLootPlaceholderView(
 
   // Size label background to fit text
   const labelBounds = labelText.getBounds();
-  labelBg.setSize(labelBounds.width + 8, 18);
+  labelBg.setSize(labelBounds.width + LOOT_LABEL_BG_PADDING, LOOT_LABEL_BG_HEIGHT);
 
   body.on(Phaser.Input.Events.POINTER_DOWN, () => {
     onClick?.(loot.id);
@@ -182,12 +188,13 @@ export function createWorldSessionLootPlaceholderView(
   return {
     refresh: (nextLoot: TownRoomWorldLootSnapshot, isPendingTarget = false) => {
       const nextScatter = getScatterOffset(nextLoot.id);
-      container.setPosition(nextLoot.x + nextScatter.x, nextLoot.y + nextScatter.y);
+    container.setPosition(nextLoot.x + nextScatter.x, nextLoot.y + nextScatter.y);
+    container.setDepth(300 + nextLoot.y);
       labelText.setText(getLootLabelText(nextLoot));
       labelText.setColor(getLootLabelColor(nextLoot));
       labelText.setStroke(getLootLabelStrokeColor(nextLoot), 3);
       const nextLabelBounds = labelText.getBounds();
-      labelBg.setSize(nextLabelBounds.width + 8, 18);
+      labelBg.setSize(nextLabelBounds.width + LOOT_LABEL_BG_PADDING, LOOT_LABEL_BG_HEIGHT);
       const palette = getLootPlaceholderPalette(nextLoot);
       glow.setFillStyle(palette.glow, 0.26);
       ping.setFillStyle(palette.ping, 0.12);

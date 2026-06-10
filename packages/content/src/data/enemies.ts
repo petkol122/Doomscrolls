@@ -11,7 +11,8 @@ export const enemies = [
     armor: 0,
     moveSpeed: 0.84,
     attackRange: 1.1,
-    attackCooldownMs: 1180,
+    // Task 306: reduced from 1180 ms to 1050 ms for snappier pressure
+    attackCooldownMs: 1050,
     aggroRange: 6.5,
     leashRange: 9,
     xp: 5,
@@ -30,7 +31,9 @@ export const enemies = [
     armor: 0,
     moveSpeed: 0.9,
     attackRange: 1.1,
-    attackCooldownMs: 980,
+    // Task 306: reduced from 980 ms to 850 ms — Brute already hits
+    // harder so a faster cadence makes it feel more threatening
+    attackCooldownMs: 850,
     heavyAttackWindupMs: 1500,
     heavyAttackCooldownMs: 2400,
     heavyAttackChance: 0.34,
@@ -55,7 +58,9 @@ export const enemies = [
     armor: 0,
     moveSpeed: 1.25,
     attackRange: 1.1,
-    attackCooldownMs: 1100,
+    // Task 306: reduced from 1100 ms to 980 ms for a faster-on-its-feet
+    // runt variant — reinforces the Skitter's "faster cousin" identity
+    attackCooldownMs: 980,
     aggroRange: 7.0,
     leashRange: 9.5,
     xp: 3,

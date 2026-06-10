@@ -26,7 +26,7 @@ export type ZoneRoomType = "town" | "combat";
 export type ZoneClassification = "safe_hub" | "combat" | "test_hybrid";
 export type SpawnPointContentId = "nightmarket_spawn";
 export type EquipmentSlotCategory = "weapon" | "armor" | "accessory" | "belt" | "flask";
-export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken" | "loot_container" | "vendor" | "town_service" | "waypoint" | "combat_edge" | "area_label" | "path_marker" | "boundary_marker";
+export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken" | "loot_container" | "vendor" | "town_service" | "waypoint" | "combat_edge" | "area_label" | "path_marker" | "boundary_marker" | "safe_area_marker" | "rest_area_marker";
 export type VendorId = "nightmarket_suspicious_vendor";
 export type TownServiceId = "nightmarket_stash_keeper" | "nightmarket_trainer" | "nightmarket_waypoint";
 export type TownServiceKind = "vendor" | "stash" | "trainer" | "waypoint";
@@ -122,6 +122,13 @@ export interface ZoneContentBounds {
   readonly maxY: number;
 }
 
+export interface ZoneContentRestAreaBounds {
+  readonly minX: number;
+  readonly maxX: number;
+  readonly minY: number;
+  readonly maxY: number;
+}
+
 export interface ZoneContentDefinition extends LocalizedContentDefinition {
   readonly id: ZoneContentId;
   readonly zoneId: ZoneId;
@@ -132,6 +139,13 @@ export interface ZoneContentDefinition extends LocalizedContentDefinition {
   readonly transitionZoneIds: readonly ZoneContentId[];
   readonly mapKey: string;
   readonly bounds: ZoneContentBounds;
+  /**
+   * Optional rectangular boundary for a physical town rest/replenish area.
+   * When set and the player is inside these bounds, the server triggers
+   * `applyTownRestRefill` (HP + healing flask charges) on a periodic tick.
+   * Absent = no physical rest area in this zone.
+   */
+  readonly restAreaBounds?: ZoneContentRestAreaBounds;
 }
 
 export interface ItemUseEffectDefinition {
@@ -212,6 +226,7 @@ export interface WorldPropContentDefinition {
   readonly zoneId: ZoneContentId;
   readonly kind: WorldPropKind;
   readonly label: string;
+  readonly labelKey?: ContentLocalizationKey;
   readonly x: number;
   readonly y: number;
 }
