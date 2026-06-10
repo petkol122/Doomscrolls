@@ -2,96 +2,45 @@ import { Interactable } from "./Interactable";
 import type { TownRoomState } from "./TownRoomState";
 import type { ZoneId } from "@doomscrolls/shared";
 import { contentRegistry } from "@doomscrolls/content";
+import type { WorldPropKind } from "@doomscrolls/content";
 
 /**
- * Task 057 — Interactable Object Foundation Batch
+ * Task 057 — Interactable Object Foundation Batch (initial)
+ * Task 290 — Data-driven zone-based interactable setup.
  *
- * Initialize static interactable objects for the room.
- * Currently hardcoded for nightmarket zone with one notice board.
- * Task 180 — Added loot container from content definitions.
- * Task 197 — Added neutral vendor placeholder.
- * Task 205 — Added stash keeper town-service placeholder.
- * Future: read all interactables from content definitions.
+ * Filter the content registry's worldProps by zoneId and interactable-relevant
+ * kind values. This replaces the earlier hardcoded `zoneId === "nightmarket"`
+ * branch so that any zone with matching world prop definitions automatically
+ * gets its interactables populated.
  */
+const INTERACTABLE_PROP_KINDS: ReadonlySet<WorldPropKind> = new Set<WorldPropKind>([
+  "town_service",
+  "vendor",
+  "waypoint",
+  "loot_container",
+]);
+
 export function initializeTownInteractables(
   state: TownRoomState,
   zoneId: ZoneId,
 ): void {
-  if (zoneId === "nightmarket") {
-    const noticeBoard = new Interactable(
-      "nightmarket_notice_board",
-      "notice_board",
-      "Notice Board",
-      120, // x: near spawn point
-      140, // y: near spawn point
+  for (const prop of contentRegistry.worldProps.all) {
+    if (prop.zoneId !== zoneId) {
+      continue;
+    }
+    if (!INTERACTABLE_PROP_KINDS.has(prop.kind)) {
+      continue;
+    }
+
+    const isLootContainer = prop.kind === "loot_container";
+    const interactable = new Interactable(
+      prop.id,
+      prop.kind,
+      prop.label,
+      prop.x,
+      prop.y,
+      isLootContainer ? false : undefined,
     );
-    state.interactables.set(noticeBoard.id, noticeBoard);
-
-    // Task 180 — Shared loot container from worldProps content
-    const lootContainerProp = contentRegistry.worldProps.get("nightmarket_loot_container_01");
-    if (lootContainerProp !== undefined) {
-      const lootContainer = new Interactable(
-        lootContainerProp.id,
-        "loot_container",
-        lootContainerProp.label,
-        lootContainerProp.x,
-        lootContainerProp.y,
-        false, // initially unopened
-      );
-      state.interactables.set(lootContainer.id, lootContainer);
-    }
-
-    // Task 197 — Neutral vendor placeholder
-    const vendorProp = contentRegistry.worldProps.get("nightmarket_vendor_01");
-    if (vendorProp !== undefined) {
-      const vendor = new Interactable(
-        vendorProp.id,
-        "vendor",
-        vendorProp.label,
-        vendorProp.x,
-        vendorProp.y,
-      );
-      state.interactables.set(vendor.id, vendor);
-    }
-
-    // Task 205 — Stash keeper town-service placeholder
-    const stashProp = contentRegistry.worldProps.get("nightmarket_stash_keeper_01");
-    if (stashProp !== undefined) {
-      const stash = new Interactable(
-        stashProp.id,
-        "town_service",
-        stashProp.label,
-        stashProp.x,
-        stashProp.y,
-      );
-      state.interactables.set(stash.id, stash);
-    }
-
-    // Task 208 — Trainer town-service placeholder
-    const trainerProp = contentRegistry.worldProps.get("nightmarket_trainer_01");
-    if (trainerProp !== undefined) {
-      const trainer = new Interactable(
-        trainerProp.id,
-        "town_service",
-        trainerProp.label,
-        trainerProp.x,
-        trainerProp.y,
-      );
-      state.interactables.set(trainer.id, trainer);
-    }
-
-    // Task 209 — Waypoint town-service placeholder
-    const waypointProp = contentRegistry.worldProps.get("nightmarket_waypoint_01");
-    if (waypointProp !== undefined) {
-      const waypoint = new Interactable(
-        waypointProp.id,
-        "town_service",
-        waypointProp.label,
-        waypointProp.x,
-        waypointProp.y,
-      );
-      state.interactables.set(waypoint.id, waypoint);
-    }
+    state.interactables.set(interactable.id, interactable);
   }
-  // Future: add more zones and objects
 }

@@ -2,7 +2,7 @@ import { en } from "@doomscrolls/localization";
 import type { EquipmentSlot, StatModifierTarget } from "@doomscrolls/shared";
 import { ContentValidationError } from "./ContentErrors";
 import type { ContentRegistry } from "./ContentRegistry";
-import type { ContentLocalizationKey } from "./data/types";
+import type { ContentLocalizationKey, ZoneContentId } from "./data/types";
 
 export const SUPPORTED_CORE_0_1_EQUIPMENT_SLOTS = [
   "weapon",
@@ -81,6 +81,12 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
   validateUniqueIds("zone", registry.zones.all, errors);
   validateUniqueIds("levelTable", registry.levelTables.all, errors);
   validateUniqueIds("equipmentSlot", registry.equipmentSlots.all, errors);
+  validateUniqueIds("spawnZone", registry.spawnZones, errors);
+  validateUniqueIds("spawnPoint", registry.spawnPoints.all, errors);
+  validateUniqueIds("worldProp", registry.worldProps.all, errors);
+  validateUniqueIds("objective", registry.objectives.all, errors);
+  validateUniqueIds("townService", registry.townServices.all, errors);
+  validateUniqueIds("vendorStock", registry.vendorStocks.all, errors);
 
   for (const origin of registry.origins.all) {
     validateLocalizedDefinition("origin", origin, errors);
@@ -236,6 +242,130 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
   for (const supportedSlot of SUPPORTED_CORE_0_1_EQUIPMENT_SLOTS) {
     if (!activeSlotIds.includes(supportedSlot)) {
       errors.push({ category: "equipmentSlot", id: supportedSlot, message: "Missing active Core 0.1 equipment slot." });
+    }
+  }
+
+  // ── Spawn zone validation ──
+  for (const spawnZone of registry.spawnZones) {
+    if (!registry.zones.has(spawnZone.zoneId as ZoneContentId)) {
+      errors.push({ category: "spawnZone", id: spawnZone.id, message: `Unknown zone id: ${spawnZone.zoneId}` });
+    }
+
+    if (!registry.enemies.has(spawnZone.enemyId)) {
+      errors.push({ category: "spawnZone", id: spawnZone.id, message: `Unknown enemy id: ${spawnZone.enemyId}` });
+    }
+
+    if (spawnZone.count < 1) {
+      errors.push({ category: "spawnZone", id: spawnZone.id, message: "Spawn count must be at least 1." });
+    }
+
+    if (spawnZone.minX >= spawnZone.maxX) {
+      errors.push({ category: "spawnZone", id: spawnZone.id, message: `minX (${spawnZone.minX}) must be less than maxX (${spawnZone.maxX}).` });
+    }
+
+    if (spawnZone.minY >= spawnZone.maxY) {
+      errors.push({ category: "spawnZone", id: spawnZone.id, message: `minY (${spawnZone.minY}) must be less than maxY (${spawnZone.maxY}).` });
+    }
+
+    if (!Number.isFinite(spawnZone.minX) || !Number.isFinite(spawnZone.maxX) || !Number.isFinite(spawnZone.minY) || !Number.isFinite(spawnZone.maxY)) {
+      errors.push({ category: "spawnZone", id: spawnZone.id, message: "Bounds values must be finite numbers." });
+    }
+  }
+
+  // ── Spawn point validation ──
+  for (const spawnPoint of registry.spawnPoints.all) {
+    if (!registry.zones.has(spawnPoint.zoneId)) {
+      errors.push({ category: "spawnPoint", id: spawnPoint.id, message: `Unknown zone id: ${spawnPoint.zoneId}` });
+    }
+
+    if (!Number.isFinite(spawnPoint.x) || !Number.isFinite(spawnPoint.y)) {
+      errors.push({ category: "spawnPoint", id: spawnPoint.id, message: "Coordinates must be finite numbers." });
+    }
+
+    if (spawnPoint.labelKey !== undefined && en[spawnPoint.labelKey] === undefined) {
+      errors.push({ category: "spawnPoint", id: spawnPoint.id, message: `Missing English localization key: ${spawnPoint.labelKey}` });
+    }
+  }
+
+  // ── World prop validation ──
+  const VALID_WORLD_PROP_KINDS = [
+    "crate", "lamp", "debris", "junk", "ambient_rat", "ambient_pig",
+    "ambient_chicken", "loot_container", "vendor", "town_service",
+    "waypoint", "combat_edge", "area_label", "path_marker"
+  ] as const;
+
+  for (const prop of registry.worldProps.all) {
+    if (!registry.zones.has(prop.zoneId)) {
+      errors.push({ category: "worldProp", id: prop.id, message: `Unknown zone id: ${prop.zoneId}` });
+    }
+
+    if (!(VALID_WORLD_PROP_KINDS as readonly string[]).includes(prop.kind)) {
+      errors.push({ category: "worldProp", id: prop.id, message: `Unknown world prop kind: ${prop.kind}` });
+    }
+
+    if (!Number.isFinite(prop.x) || !Number.isFinite(prop.y)) {
+      errors.push({ category: "worldProp", id: prop.id, message: "Coordinates must be finite numbers." });
+    }
+  }
+
+  // ── Objective validation ──
+  for (const objective of registry.objectives.all) {
+    if (en[objective.titleKey] === undefined) {
+      errors.push({ category: "objective", id: objective.id, message: `Missing English localization key: ${objective.titleKey}` });
+    }
+
+    if (en[objective.descriptionKey] === undefined) {
+      errors.push({ category: "objective", id: objective.id, message: `Missing English localization key: ${objective.descriptionKey}` });
+    }
+
+    for (const enemyId of objective.targetEnemyIds) {
+      if (!registry.enemies.has(enemyId)) {
+        errors.push({ category: "objective", id: objective.id, message: `Unknown target enemy id: ${enemyId}` });
+      }
+    }
+
+    if (objective.requiredKills < 1) {
+      errors.push({ category: "objective", id: objective.id, message: "requiredKills must be at least 1." });
+    }
+
+    if (objective.xpReward < 0) {
+      errors.push({ category: "objective", id: objective.id, message: "xpReward must be non-negative." });
+    }
+
+    if (objective.copperReward < 0) {
+      errors.push({ category: "objective", id: objective.id, message: "copperReward must be non-negative." });
+    }
+
+    if (objective.zoneId !== undefined && !registry.zones.has(objective.zoneId)) {
+      errors.push({ category: "objective", id: objective.id, message: `Unknown zone id: ${objective.zoneId}` });
+    }
+  }
+
+  // ── Town service validation ──
+  const VALID_TOWN_SERVICE_KINDS = ["vendor", "stash", "trainer", "waypoint"] as const;
+
+  for (const service of registry.townServices.all) {
+    if (en[service.labelKey] === undefined) {
+      errors.push({ category: "townService", id: service.id, message: `Missing English localization key: ${service.labelKey}` });
+    }
+
+    if (en[service.unavailableMessageKey] === undefined) {
+      errors.push({ category: "townService", id: service.id, message: `Missing English localization key: ${service.unavailableMessageKey}` });
+    }
+
+    if (!(VALID_TOWN_SERVICE_KINDS as readonly string[]).includes(service.serviceKind)) {
+      errors.push({ category: "townService", id: service.id, message: `Unknown town service kind: ${service.serviceKind}` });
+    }
+  }
+
+  // ── Vendor stock validation ──
+  for (const stock of registry.vendorStocks.all) {
+    if (!registry.items.has(stock.itemId)) {
+      errors.push({ category: "vendorStock", id: stock.id, message: `Unknown item id: ${stock.itemId}` });
+    }
+
+    if (stock.priceCopper <= 0) {
+      errors.push({ category: "vendorStock", id: stock.id, message: "priceCopper must be positive." });
     }
   }
 

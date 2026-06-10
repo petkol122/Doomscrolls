@@ -137,6 +137,7 @@ export const REQUIRED_LOCALIZATION_KEYS = [
   "world_area.no_position",
   "world_area.server_position_updated",
   "world_area.attack_sent",
+  "world_area.attack_moving_closer",
   "world_area.attack_confirmed",
   "world_area.attack_too_far",
   "world_area.attack_unavailable",
