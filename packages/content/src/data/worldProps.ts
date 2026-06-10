@@ -72,4 +72,34 @@ export const worldProps = [
   { id: "nightmarket_crates_02",  zoneId: "nightmarket", kind: "crate",           label: "Crates",             x: 3700, y: 2900 },
   { id: "nightmarket_chicken_01", zoneId: "nightmarket", kind: "ambient_chicken", label: "Chicken [Neutral]",  x: 3400, y: 2600 },
   { id: "nightmarket_junk_04",    zoneId: "nightmarket", kind: "junk",            label: "Junk",               x: 4000, y: 3100 },
+
+  // ── World boundary markers (north edge, y ≈ 0) ──
+  { id: "nightmarket_boundary_nw_01",  zoneId: "nightmarket", kind: "boundary_marker", label: "", x: 400,  y: 60 },
+  { id: "nightmarket_boundary_nw_02",  zoneId: "nightmarket", kind: "boundary_marker", label: "", x: 900,  y: 60 },
+  { id: "nightmarket_boundary_n_01",   zoneId: "nightmarket", kind: "boundary_marker", label: "", x: 1600, y: 60 },
+  { id: "nightmarket_boundary_n_02",   zoneId: "nightmarket", kind: "boundary_marker", label: "", x: 2400, y: 60 },
+  { id: "nightmarket_boundary_n_03",   zoneId: "nightmarket", kind: "boundary_marker", label: "", x: 3200, y: 60 },
+  { id: "nightmarket_boundary_n_04",   zoneId: "nightmarket", kind: "boundary_marker", label: "", x: 4000, y: 60 },
+  { id: "nightmarket_boundary_n_05",   zoneId: "nightmarket", kind: "boundary_marker", label: "", x: 4600, y: 60 },
+
+  // ── World boundary markers (east edge, x ≈ 5000) ──
+  { id: "nightmarket_boundary_e_01",   zoneId: "nightmarket", kind: "boundary_marker", label: "", x: 4900, y: 500 },
+  { id: "nightmarket_boundary_e_02",   zoneId: "nightmarket", kind: "boundary_marker", label: "", x: 4900, y: 1100 },
+  { id: "nightmarket_boundary_e_03",   zoneId: "nightmarket", kind: "boundary_marker", label: "", x: 4900, y: 1700 },
+  { id: "nightmarket_boundary_e_04",   zoneId: "nightmarket", kind: "boundary_marker", label: "", x: 4900, y: 2300 },
+  { id: "nightmarket_boundary_e_05",   zoneId: "nightmarket", kind: "boundary_marker", label: "", x: 4900, y: 2900 },
+
+  // ── World boundary markers (south edge, y ≈ 3600) ──
+  { id: "nightmarket_boundary_se_01",  zoneId: "nightmarket", kind: "boundary_marker", label: "", x: 600,  y: 3500 },
+  { id: "nightmarket_boundary_se_02",  zoneId: "nightmarket", kind: "boundary_marker", label: "", x: 1400, y: 3500 },
+  { id: "nightmarket_boundary_s_01",   zoneId: "nightmarket", kind: "boundary_marker", label: "", x: 2200, y: 3500 },
+  { id: "nightmarket_boundary_s_02",   zoneId: "nightmarket", kind: "boundary_marker", label: "", x: 3000, y: 3500 },
+  { id: "nightmarket_boundary_s_03",   zoneId: "nightmarket", kind: "boundary_marker", label: "", x: 3800, y: 3500 },
+  { id: "nightmarket_boundary_s_04",   zoneId: "nightmarket", kind: "boundary_marker", label: "", x: 4600, y: 3500 },
+
+  // ── World boundary markers (west edge, x ≈ 0) ──
+  { id: "nightmarket_boundary_w_01",   zoneId: "nightmarket", kind: "boundary_marker", label: "", x: 60,   y: 800 },
+  { id: "nightmarket_boundary_w_02",   zoneId: "nightmarket", kind: "boundary_marker", label: "", x: 60,   y: 1600 },
+  { id: "nightmarket_boundary_w_03",   zoneId: "nightmarket", kind: "boundary_marker", label: "", x: 60,   y: 2400 },
+  { id: "nightmarket_boundary_w_04",   zoneId: "nightmarket", kind: "boundary_marker", label: "", x: 60,   y: 3200 },
 ] as const satisfies readonly WorldPropContentDefinition[];

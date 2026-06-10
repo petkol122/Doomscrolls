@@ -63,6 +63,39 @@ First content-driven gameplay/world addition using the hardened content pipeline
 - **No schema/database changes**: no Prisma migration required
 - **Validation**: `pnpm validate:0.1` and `pnpm validate:0.2` both pass (0 errors, same 2 pre-existing warnings)
 
+### Task 294 — Add Basic World Boundary Readability Pass
+
+Added data-driven boundary marker props to clarify world edges and the Nightmarket (0,0)→(5000,3600) playable area. No collision, pathfinding, combat, or system changes.
+
+- **New world prop kind** (`packages/content/src/data/types.ts`):
+  - `"boundary_marker"` added to `WorldPropKind`
+  - Renders as a simple wall/high-barrier placeholder (brown/grey rectangles) with no label text
+  - No localization keys needed — boundary markers are label-free visual cues
+
+- **Validation support** (`packages/content/src/ContentValidation.ts`):
+  - `"boundary_marker"` added to `VALID_WORLD_PROP_KINDS` for content validation
+
+- **World props data** (`packages/content/src/data/worldProps.ts`):
+  - 22 boundary marker props added along all four edges:
+    - 7 north edge markers (y≈60, from x=400 to x=4600)
+    - 5 east edge markers (x≈4900, from y=500 to y=2900)
+    - 6 south edge markers (y≈3500, from x=600 to x=4600)
+    - 4 west edge markers (x≈60, from y=800 to y=3200)
+  - Service cluster area (x≈150-420, y≈180-380) remains free of boundary markers
+  - Combat zones (y≈1050-2700) remain unaffected
+  - All markers use empty label strings — no localization keys required
+
+- **Client rendering** (`apps/client/src/game/scenes/worldSession/worldSessionStaticPropsView.ts`):
+  - `boundary_marker` case added to prop renderer
+  - Renders as a simple1 barricade shape (dark brown rectangles with stroke, no label)
+  - Boundary markers do not add a label text element (label-free by design)
+  - No z-ordering changes; boundary markers sort by y with other props
+
+- **No schema/database changes**: no Prisma migration required
+- **No collision/pathfinding**: boundary markers are visual only; no enforcement
+- **No new hostile enemies in tow/service cluster**: existing spawn zones unchanged
+- **Validation**: `pnpm validate:0.1` and `pnpm validate:0.2` both pass
+
 ---
 
 ## Validation Status
