@@ -1,12 +1,9 @@
-# Task 279 — Map Spacing and Aggro Feel Tuning
+# Task 290: Remove Nightmarket-Specific Town Interactable Hardcoding
 
-- [ ] Inspect current layout content ✅
-- [ ] Increase nightmarket zone bounds
-- [ ] Spread service cluster slightly while keeping readable near spawn
-- [ ] Move combat pockets farther from services (push ~700 units deeper)
-- [ ] Separate Skitter/Runt/Brute pockets more clearly
-- [ ] Extend path markers to new combat locations
-- [ ] Update world props (labels, markers, lamps, debris) to match new positions
-- [ ] Tune enemy aggroRange/leashRange moderately upward
-- [ ] Verify no regression on enemy visibility/leash from Task 278
-- [ ] Run all checks (typecheck, lint, test, build)
+- [x] Analyze current hardcoded pattern in `initializeTownInteractables.ts`
+- [x] Examine world props content definitions and types
+- [x] Examine content registry for data-driven lookup capabilities
+- [ ] Rewrite `initializeTownInteractables.ts` with data-driven zone-based filtering
+- [ ] Update `docs/TECH_DEBT.md` to mark the hardcoded Nightmarket interactable item as resolved
+- [ ] Update `docs/CORE_BUILD_0_2_RELEASE_NOTES.md` with the change
+- [ ] Verify with `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`

@@ -7,8 +7,24 @@ import { sendMovementIntent } from "../../../net/movementIntentClient";
 import { sendInteractIntent } from "../../../net/interactIntentClient";
 import { sendAttackIntent } from "../../../net/attackIntentClient";
 import { sendPickupWorldLootIntent } from "../../../net/pickupWorldLootClient";
-import { sendSkillSlotIntent } from "../../../net/skillSlotIntentClient";
-import { sendCorpseInteractIntent } from "../../../net/corpseInteractClient";
+import type { WorldInteractionPointerContext } from "./WorldInteractionIntent";
+import {
+  BASIC_ATTACK_RANGE,
+  checkPendingAttack,
+  type PendingAttackState,
+} from "./pendingAttackTracker";
+import {
+  WORLD_LOOT_PICKUP_RANGE,
+  checkPendingLootPickup,
+  type PendingLootPickupState,
+} from "./pendingLootPickupTracker";
+import {
+  INTERACT_RANGE,
+  checkPendingInteract,
+  type PendingInteractState,
+} from "./pendingInteractTracker";
+import { resolveWorldInteraction } from "./resolveWorldInteraction";
+import { dispatchWorldInteraction } from "./dispatchWorldInteraction";
 import { getTownRoomPresence } from "../../../net/townRoomPresence";
 import {
   defaultWorldProjection,
@@ -246,6 +262,9 @@ export function createWorldSessionAreaView(
   const previousEnemyRespawnAtMs = new Map<string, number>();
   const previousLootIds = new Set<string>();
   let pendingPickupWorldLootId: string | null = null;
+  let pendingAttackTarget: PendingAttackState | null = null;
+  let pendingLootPickup: PendingLootPickupState | null = null;
+  let pendingInteractTarget: PendingInteractState | null = null;
   let heldMovementTarget: HeldMovementTargetSnapshot | null = null;
   let lastHeldMovementIntentAtMs = 0;
   let hoveredEnemyId: string | null = null;
@@ -260,6 +279,25 @@ export function createWorldSessionAreaView(
 
   const clearHeldMovementTarget = (): void => {
     heldMovementTarget = null;
+  };
+
+  const clearPendingAttack = (): void => {
+    pendingAttackTarget = null;
+  };
+
+  const clearPendingLootPickup = (): void => {
+    pendingLootPickup = null;
+  };
+
+  const clearPendingInteract = (): void => {
+    pendingInteractTarget = null;
+  };
+
+  const clearAllTargeting = (): void => {
+    clearHeldMovementTarget();
+    clearPendingAttack();
+    clearPendingLootPickup();
+    clearPendingInteract();
   };
 
   const resolveWorldTargetFromPointer = (
@@ -619,141 +657,237 @@ export function createWorldSessionAreaView(
       }
     }
 
+    // Task 285 — Route all world pointer input through the interaction
+    // intent system. resolveWorldInteraction() decides WHAT the player
+    // wants to do (pure function, no side effects), dispatchWorldInteraction()
+    // sends the network message, and this handler manages visual state
+    // (feedback messages, debug markers, held movement tracking).
+    //
+    // Priority chain (left-click): enemy > loot > corpse > interactable > ground.
+    // Right-click: skill on enemy only, everything else ignored.
+    // Child sprite click handlers (enemy/loot/interactable) fire first via
+    // Phaser and set pointerHandledByTarget, which short-circuits this handler.
     inputZone.removeAllListeners();
     inputZone.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
-      if (pointer.rightButtonDown()) {
-        const localX = pointer.x - layout.originX;
-        const localY = pointer.y - layout.originY;
-        if (localX < 0 || localY < 0 || localX > layout.width || localY > layout.height) {
-          return;
-        }
-        // Task 217 — RMB on enemy sends Grave Spark skill intent.
-        const clickedEnemy = findClickedEnemy(enemyScreenPositions, pointer.x, pointer.y);
-        if (clickedEnemy !== null) {
-          pointerHandledByTarget = true;
-          selectedSkillTargetEnemyId = clickedEnemy.id;
-          hoveredEnemyId = clickedEnemy.id;
-          const result = sendSkillSlotIntent(nextRoom, clickedEnemy.id);
-          const selfPosition = selfWorldPosition;
-          const skillDistance = selfPosition === null
-            ? null
-            : Math.hypot(clickedEnemy.worldX - selfPosition.x, clickedEnemy.worldY - selfPosition.y);
-          if (result.dispatched) {
-            onAttackFeedback?.(
-              skillDistance !== null && skillDistance > graveSparkRange
-                ? t("world_area.skill_moving_closer" as never)
-                : t("world_area.skill_sent"),
-            );
-          } else if (result.reason === "no_target") {
-            onPickupFeedback?.(t("world_area.skill_unavailable"));
-          } else {
-            onPickupFeedback?.(t("world_area.skill_unavailable"));
-          }
-          const targetEnemy = getTownRoomEnemies(nextRoom.state).find((e) => e.id === clickedEnemy.id);
-          if (targetEnemy) {
-            lastClickTarget = { x: targetEnemy.x, y: targetEnemy.y };
-            onDebugStateChange?.();
-          }
-          return;
-        }
-        // RMB on empty ground: no skill target
+      // Viewport bounds check — ignore clicks outside the world area.
+      const localX = pointer.x - layout.originX;
+      const localY = pointer.y - layout.originY;
+      if (localX < 0 || localY < 0 || localX > layout.width || localY > layout.height) {
         return;
       }
 
-      // Enemy / loot / interactable click handlers fire before this one
-      // (they sit on top of inputZone in the container). If one of them
-      // already handled the click we must not also send a movement intent.
+      // If a child element (enemy sprite, loot sprite, interactable sprite)
+      // already handled this click via Phaser's input system, skip
+      // ground-level intent resolution.
       if (pointerHandledByTarget) {
         pointerHandledByTarget = false;
         return;
       }
 
-      const clickedEnemy = findClickedEnemy(enemyScreenPositions, pointer.x, pointer.y);
-      if (clickedEnemy !== null) {
-        pointerHandledByTarget = true;
-        const result = sendAttackIntent(nextRoom, clickedEnemy.id);
-        if (result.dispatched) {
-          onAttackFeedback?.(t("world_area.attack_sent"));
-        }
-        lastClickTarget = {
-          x: Math.round(clickedEnemy.worldX),
-          y: Math.round(clickedEnemy.worldY),
-        };
-        onDebugStateChange?.();
-        pointerHandledByTarget = false;
-        return;
-      }
-
-      const clickedLoot = findClickedWorldLoot(lootScreenPositions, pointer.x, pointer.y);
-      if (clickedLoot !== null) {
-        pointerHandledByTarget = true;
-        const result = sendPickupWorldLootIntent(nextRoom, clickedLoot.id);
-        if (result.dispatched) {
-          pendingPickupWorldLootId = clickedLoot.id;
-          const targetLoot = getTownRoomWorldLoot(nextRoom.state).find((entry) => entry.id === clickedLoot.id);
-          if (targetLoot !== undefined) {
-            onPickupFeedback?.(`${t("world_area.pickup_sent")} ${formatPickupFeedbackLabel(targetLoot)}`);
-          }
-        }
-        lastClickTarget = {
-          x: Math.round(clickedLoot.worldX),
-          y: Math.round(clickedLoot.worldY),
-        };
-        onDebugStateChange?.();
-        pointerHandledByTarget = false;
-        return;
-      }
-
-      // Click on own corpse marker to recover (Task 234)
-      const clickedOwnCorpse = findClickedOwnCorpse(
-        corpseMarkers,
-        pointer.x,
-        pointer.y,
-        worldOffset,
-        selfSessionId,
-        selfWorldPosition,
+      // --- Task 285: Build pointer context from hit-test results ---
+      const hitEnemy = findClickedEnemy(enemyScreenPositions, pointer.x, pointer.y);
+      const hitLoot = findClickedWorldLoot(lootScreenPositions, pointer.x, pointer.y);
+      const hitCorpse = findClickedOwnCorpse(
+        corpseMarkers, pointer.x, pointer.y, worldOffset, selfSessionId, selfWorldPosition,
       );
-      if (clickedOwnCorpse !== null) {
-        pointerHandledByTarget = true;
-        clearHeldMovementTarget();
-        if (clickedOwnCorpse.inRange) {
-          sendCorpseInteractIntent(nextRoom);
-          onAttackFeedback?.(t("world_area.corpse_recovered"));
-        } else {
-          // Move to corpse first
-          dispatchMovementIntent(nextRoom, { x: clickedOwnCorpse.worldX, y: clickedOwnCorpse.worldY });
-          onAttackFeedback?.(t("world_area.corpse_interact_out_of_range"));
+      const hitInteractable = interactablesView.findClickedInteractable(pointer.x, pointer.y);
+
+      let groundTarget: { targetX: number; targetY: number } | null = null;
+      if (projectionMode === "debug_top_down") {
+        const projected = resolveWorldTargetFromPointer(pointer, worldOffset, worldProjection);
+        if (projected !== null) {
+          groundTarget = { targetX: projected.x, targetY: projected.y };
         }
-        pointerHandledByTarget = false;
+      }
+
+      const ctx: WorldInteractionPointerContext = {
+        isRightButton: pointer.rightButtonDown(),
+        enemy: hitEnemy !== null
+          ? { id: hitEnemy.id, worldX: hitEnemy.worldX, worldY: hitEnemy.worldY }
+          : null,
+        loot: hitLoot !== null
+          ? { id: hitLoot.id, worldX: hitLoot.worldX, worldY: hitLoot.worldY }
+          : null,
+        corpse: hitCorpse !== null
+          ? { worldX: hitCorpse.worldX, worldY: hitCorpse.worldY, inRange: hitCorpse.inRange }
+          : null,
+        interactable: hitInteractable !== null
+          ? { objectId: hitInteractable.objectId, worldX: hitInteractable.worldX, worldY: hitInteractable.worldY }
+          : null,
+        groundTarget,
+      };
+
+      // --- Resolve intent (pure function, no side effects) ---
+      const intent = resolveWorldInteraction(ctx);
+      if (intent === null) {
         return;
       }
 
-      const clickedInteractable = interactablesView.findClickedInteractable(pointer.x, pointer.y);
-      if (clickedInteractable !== null) {
-        pointerHandledByTarget = true;
-        clearHeldMovementTarget();
-        sendInteractIntent(nextRoom, clickedInteractable.objectId);
-        lastClickTarget = {
-          x: Math.round(clickedInteractable.worldX),
-          y: Math.round(clickedInteractable.worldY),
-        };
-        onDebugStateChange?.();
-        pointerHandledByTarget = false;
-        return;
+      // --- Pre-dispatch visual state ---
+      switch (intent.kind) {
+        case "skill_enemy": {
+          selectedSkillTargetEnemyId = intent.enemyId;
+          hoveredEnemyId = intent.enemyId;
+          break;
+        }
+        case "move": {
+          heldMovementTarget = { x: intent.targetX, y: intent.targetY, pointerId: pointer.id };
+          lastHeldMovementIntentAtMs = scene.time.now;
+          // Any new ground movement cancels pending actions
+          clearPendingAttack();
+          clearPendingLootPickup();
+          clearPendingInteract();
+          break;
+        }
+        default: {
+          clearAllTargeting();
+          break;
+        }
       }
 
-      if (projectionMode !== "debug_top_down") {
-        return;
-      }
+      // --- Dispatch intent to network layer ---
+      const dispatchResult = dispatchWorldInteraction(nextRoom, intent);
 
-      const target = resolveWorldTargetFromPointer(pointer, worldOffset, worldProjection);
-      if (target === null) {
-        return;
-      }
+      // --- Post-dispatch visual feedback ---
+      switch (intent.kind) {
+        case "skill_enemy": {
+          if (dispatchResult.dispatched) {
+            const selfPosition = selfWorldPosition;
+            const skillDistance = selfPosition === null || hitEnemy === null
+              ? null
+              : Math.hypot(
+                  hitEnemy.worldX - selfPosition.x,
+                  hitEnemy.worldY - selfPosition.y,
+                );
+            onAttackFeedback?.(
+              skillDistance !== null && skillDistance > graveSparkRange
+                ? t("world_area.skill_moving_closer" as never)
+                : t("world_area.skill_sent"),
+            );
+          } else {
+            onPickupFeedback?.(t("world_area.skill_unavailable"));
+          }
+          const targetEnemy = getTownRoomEnemies(nextRoom.state).find(
+            (e) => e.id === intent.enemyId,
+          );
+          if (targetEnemy) {
+            lastClickTarget = { x: targetEnemy.x, y: targetEnemy.y };
+          }
+          break;
+        }
+        case "attack_enemy": {
+          if (dispatchResult.dispatched) {
+            // Task 286 — Move-then-attack: if the enemy is out of range,
+            // send a movement intent toward the enemy position and track
+            // the pending attack. The update loop will re-check range
+            // each tick and fire the attack once close enough.
+            const selfPos = selfWorldPosition;
+            const isInRange = selfPos !== null && hitEnemy !== null &&
+              Math.hypot(hitEnemy.worldX - selfPos.x, hitEnemy.worldY - selfPos.y) <= BASIC_ATTACK_RANGE;
 
-      heldMovementTarget = { ...target, pointerId: pointer.id };
-      lastHeldMovementIntentAtMs = scene.time.now;
-      dispatchMovementIntent(nextRoom, target);
+            if (isInRange) {
+              // Already in range — immediate attack (sent via dispatch above)
+              onAttackFeedback?.(t("world_area.attack_sent"));
+            } else if (hitEnemy !== null) {
+              // Out of range: move toward the enemy position, then track
+              // the pending attack so the update loop fires it once close enough.
+              sendMovementIntent(nextRoom, hitEnemy.worldX, hitEnemy.worldY);
+              pendingAttackTarget = {
+                enemyId: intent.enemyId,
+                targetWorldX: hitEnemy.worldX,
+                targetWorldY: hitEnemy.worldY,
+              };
+              onAttackFeedback?.(t("world_area.attack_moving_closer"));
+            } else {
+              onAttackFeedback?.(t("world_area.attack_sent"));
+            }
+          }
+          clearAllTargeting();
+          if (hitEnemy !== null) {
+            lastClickTarget = { x: hitEnemy.worldX, y: hitEnemy.worldY };
+          }
+          break;
+        }
+        case "pickup_loot": {
+          if (dispatchResult.dispatched) {
+            // Task 287 — Move-then-pickup: if the loot is out of range,
+            // send a movement intent toward the loot position and track
+            // the pending pickup. The update loop will re-check range
+            // each tick and fire the pickup once close enough.
+            const selfPos = selfWorldPosition;
+            const isInRange = selfPos !== null && hitLoot !== null &&
+              Math.hypot(hitLoot.worldX - selfPos.x, hitLoot.worldY - selfPos.y) <= WORLD_LOOT_PICKUP_RANGE;
+
+            if (isInRange) {
+              // Already in range — immediate pickup (sent via dispatch above)
+              pendingPickupWorldLootId = dispatchResult.pendingPickupLootId;
+              const targetLoot = getTownRoomWorldLoot(nextRoom.state).find(
+                (entry) => entry.id === intent.worldLootId,
+              );
+              if (targetLoot !== undefined) {
+                onPickupFeedback?.(`${t("world_area.pickup_sent")} ${formatPickupFeedbackLabel(targetLoot)}`);
+              }
+            } else if (hitLoot !== null) {
+              // Out of range: move toward the loot position, then track
+              // the pending pickup so the update loop fires it once close enough.
+              sendMovementIntent(nextRoom, hitLoot.worldX, hitLoot.worldY);
+              pendingLootPickup = {
+                worldLootId: intent.worldLootId,
+                targetWorldX: hitLoot.worldX,
+                targetWorldY: hitLoot.worldY,
+              };
+              onPickupFeedback?.(t("world_area.pickup_moving_closer"));
+            } else {
+              pendingPickupWorldLootId = dispatchResult.pendingPickupLootId;
+            }
+          }
+          if (hitLoot !== null) {
+            lastClickTarget = { x: hitLoot.worldX, y: hitLoot.worldY };
+          }
+          break;
+        }
+        case "corpse_recover": {
+          if (intent.inRange) {
+            onAttackFeedback?.(t("world_area.corpse_recovered"));
+          } else {
+            onAttackFeedback?.(t("world_area.corpse_interact_out_of_range"));
+          }
+          break;
+        }
+        case "interact_object": {
+          // Task 288 — Move-then-interact: if the interactable is out of range,
+          // send a movement intent toward the object position and track
+          // the pending interact. The update loop will re-check range
+          // each tick and fire the interact once close enough.
+          const selfPos = selfWorldPosition;
+          const isInRange = selfPos !== null && hitInteractable !== null &&
+            Math.hypot(hitInteractable.worldX - selfPos.x, hitInteractable.worldY - selfPos.y) <= INTERACT_RANGE;
+
+          if (isInRange) {
+            // Already in range — immediate interact (already sent via dispatch above)
+            if (hitInteractable !== null) {
+              lastClickTarget = { x: hitInteractable.worldX, y: hitInteractable.worldY };
+            }
+          } else if (hitInteractable !== null) {
+            // Out of range: move toward the interactable position, then track
+            // the pending interact so the update loop fires it once close enough.
+            sendMovementIntent(nextRoom, hitInteractable.worldX, hitInteractable.worldY);
+            pendingInteractTarget = {
+              objectId: intent.objectId,
+              targetWorldX: hitInteractable.worldX,
+              targetWorldY: hitInteractable.worldY,
+            };
+            onPickupFeedback?.(t("world_area.interact_moving_closer"));
+            lastClickTarget = { x: hitInteractable.worldX, y: hitInteractable.worldY };
+          }
+          break;
+        }
+        case "move": {
+          lastClickTarget = { x: intent.targetX, y: intent.targetY };
+          break;
+        }
+      }
+      onDebugStateChange?.();
     });
 
     inputZone.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
@@ -863,6 +997,7 @@ export function createWorldSessionAreaView(
   };
 
   const handleSceneUpdate = (): void => {
+    // --- Held movement (hold-to-move via mouse) ---
     if (heldMovementTarget !== null) {
       if (!scene.input.activePointer.leftButtonDown() || !isPointerInsideViewport(scene.input.activePointer.x, scene.input.activePointer.y)) {
         clearHeldMovementTarget();
@@ -874,6 +1009,35 @@ export function createWorldSessionAreaView(
         });
       }
     }
+
+    // --- Pending attack: check range each tick ---
+    if (pendingAttackTarget !== null && selfWorldPosition !== null) {
+      const result = checkPendingAttack(room, pendingAttackTarget, selfWorldPosition.x, selfWorldPosition.y);
+      if (result.attackSent) {
+        clearPendingAttack();
+        onAttackFeedback?.(t("world_area.attack_sent"));
+      }
+    }
+
+    // --- Pending loot pickup: check range each tick ---
+    if (pendingLootPickup !== null && selfWorldPosition !== null) {
+      const result = checkPendingLootPickup(room, pendingLootPickup, selfWorldPosition.x, selfWorldPosition.y);
+      if (result.pickupSent) {
+        pendingPickupWorldLootId = pendingLootPickup.worldLootId;
+        clearPendingLootPickup();
+        onPickupFeedback?.(t("world_area.pickup_sent"));
+      }
+    }
+
+    // --- Pending interact: check range each tick ---
+    if (pendingInteractTarget !== null && selfWorldPosition !== null) {
+      const result = checkPendingInteract(room, pendingInteractTarget, selfWorldPosition.x, selfWorldPosition.y);
+      if (result.interactSent) {
+        clearPendingInteract();
+        onPickupFeedback?.(t("world_area.interact_moving_closer"));
+      }
+    }
+
     refreshFromRoomState(room);
   };
 

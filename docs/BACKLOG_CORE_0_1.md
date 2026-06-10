@@ -858,6 +858,30 @@ No browser automation, no runtime reproduction, no gameplay changes were added. 
 
 ---
 
+### Task 281 — Core Build 0.1 Candidate Release Notes
+
+Prepare Core Build 0.1 candidate release notes after the passing manual smoke re-test. Documentation-only task. No gameplay changes, no browser automation, no runtime reproduction.
+
+Status: documented. `docs/CORE_BUILD_0_1_RELEASE_NOTES.md` now exists and summarizes the full Core Build 0.1 scope: account/login/register, character/create select, Nightmarket + Blackwire Sewer Edge, movement/camera/zoom, combat (dodge, flask, Grave Spark, Trashboar family + Brute heavy attack), loot/copper/inventory/equipment, Notice Board objective chain, XP/level/copper feedback, death/respawn/corpse recovery placeholder, and town service placeholders. Validation status shows `pnpm validate:0.1` passes (0 errors, 2 warnings) and manual smoke re-test passes. Known deferred items are documented. This is the checkpoint for the Core Build 0.1 candidate release.
+
+---
+
+---
+
+## Post-Core-0.1 Roadmap Checkpoint
+
+The next development phases are defined in `docs/POST_CORE_0_1_ROADMAP.md`. In summary:
+
+- **Phase 0** — 0.1 RC bugfix only (no new features).
+- **Phase 0.2** — Town systems: vendor buy/sell, stash, waypoints, content authoring, localization cleanup.
+- **Phase 0.3** — Quest / content expansion: Notice Board persistence, quest log, more zones/enemies/loot.
+- **Phase 0.4** — Character / skill progression: skill tree, talents, higher level range, gear scaling.
+- **Later** — App-shell migration and visual character creation (only after 0.1 is stable and scoped as its own phase).
+
+Core 0.1 scope remains frozen. No backlog item below this line may be reopened under the 0.1 label.
+
+---
+
 ## Anti-Scope-Creep
 
 Do not implement before Core 0.1 is complete:

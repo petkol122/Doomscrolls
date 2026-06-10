@@ -1127,7 +1127,7 @@ export class TownRoom extends Room {
 
       // Send response message to the requesting client
       const responseMessage = getInteractableResponseMessage(message.objectId);
-      if (message.objectId === "nightmarket_notice_board") {
+      if (message.objectId === "nightmarket_notice_board_01") {
         // If the player already has an active objective that is not yet
         // completed and not yet rewarded, re-interacting just re-sends
         // the current state without resetting or duplicating.
