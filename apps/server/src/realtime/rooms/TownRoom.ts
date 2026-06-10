@@ -68,6 +68,7 @@ import { resolvePlayerInitialPosition } from "./validateCharacterLocation";
 import { contentRegistry, NOTICE_BOARD_OBJECTIVE_SEQUENCE } from "@doomscrolls/content";
 import type { SpawnPointContentId, ObjectiveId } from "@doomscrolls/content";
 import { NIGHTMARKET_DEFAULT_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
+import { resolveTownZoneId } from "./resolveTownZoneId";
 import { CharacterRepository } from "../../persistence/repositories";
 import { ItemRepository } from "../../persistence/repositories/ItemRepository";
 import { tryResolveLevelProgression } from "./levelProgression";
@@ -637,7 +638,7 @@ export class TownRoom extends Room {
       (this as unknown as { logger?: unknown }).logger,
     );
 
-    const zoneId: ZoneId = options.requestedZoneId ?? ("nightmarket" as ZoneId);
+    const zoneId = resolveTownZoneId(options.requestedZoneId);
 
     this.setState(new TownRoomState(zoneId));
 
