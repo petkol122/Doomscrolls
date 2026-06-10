@@ -45,6 +45,10 @@ export const worldProps = [
   { id: "nightmarket_path_08", zoneId: "nightmarket", kind: "path_marker", label: "", x: 2600, y: 2050 },
   { id: "nightmarket_path_09", zoneId: "nightmarket", kind: "path_marker", label: "", x: 2800, y: 2200 },
 
+  // ── Ambient rats between service cluster and skitter pocket ──
+  { id: "nightmarket_rat_01", zoneId: "nightmarket", kind: "ambient_rat", label: "Sewer Rat [Neutral]", x: 1350, y: 1050 },
+  { id: "nightmarket_rat_02", zoneId: "nightmarket", kind: "ambient_rat", label: "Sewer Rat [Neutral]", x: 1420, y: 1120 },
+
   // ── Region 3: Skitter pocket ──
   { id: "nightmarket_sewer_edge_marker_00", zoneId: "nightmarket", kind: "combat_edge", label: "→ Skitter Warren", x: 1500, y: 1100 },
   { id: "nightmarket_sewer_debris_00",      zoneId: "nightmarket", kind: "debris",      label: "Sewer Rubble",     x: 1540, y: 1150 },

@@ -41,6 +41,28 @@
   - Invalid/missing display data now degrades predictably without pretending a specific zone
 - `docs/TECH_DEBT.md`: Marked the client-side `formatTownRoomState()` hardcoded fallback as resolved
 
+### Task 293 — Add First Small 0.2 Content Slice
+
+First content-driven gameplay/world addition using the hardened content pipeline, proving the data-first approach works in practice.
+
+- **New world props** (`packages/content/src/data/worldProps.ts`):
+  - Added 2 ambient sewer rat props (`nightmarket_rat_01`, `nightmarket_rat_02`) between the service cluster and Skitter Warren, filling a gap in the path where no props existed
+  - Uses the existing `ambient_rat` world prop kind — no new kinds or types added
+- **New item** (`packages/content/src/data/items.ts`):
+  - `tarnished_coin` — a new common stackable material (1×1, max stack 99)
+  - Drop flavor: "A corroded coin stamped with a face nobody remembers. Still clinks when dropped."
+  - Uses existing `material` category, `common` rarity, no stat modifiers
+- **Loot table updates** (`packages/content/src/data/lootTables.ts`):
+  - `sewer_starter_loot`: `tarnished_coin` added with weight 8 (of 100), giving it an ~8% drop chance from sewer runts/skitters
+  - `sewer_brute_loot`: `tarnished_coin` added with weight 8 (of 100), same drop chance from brutes
+  - Runt/skitter `blackwire_scrap` weight reduced from 68→60 to make room while keeping total at 100
+- **Localization** (`packages/localization`):
+  - `item.tarnished_coin.name` and `item.tarnished_coin.description` added to English locale
+  - Added to `REQUIRED_LOCALIZATION_KEYS` in `LocaleTypes.ts`
+- **No gameplay system changes**: existing enemy drops, combat, inventory, and equipment behavior remain unchanged; the tarnished_coin is simply another material that rolls through the existing loot system
+- **No schema/database changes**: no Prisma migration required
+- **Validation**: `pnpm validate:0.1` and `pnpm validate:0.2` both pass (0 errors, same 2 pre-existing warnings)
+
 ---
 
 ## Validation Status

@@ -91,5 +91,22 @@ export const items = [
     ],
     durabilityMax: 20,
     iconKey: "item_rustbound_ring_placeholder"
+  },
+  {
+    // Tarnished Coin — a small stackable material that drops from sewer
+    // enemies. Intentionally low loot weight so it feels like a minor bonus
+    // rather than a primary drop. First item added as part of the 0.2
+    // content pipeline proof-of-concept.
+    id: itemId("tarnished_coin"),
+    nameKey: "item.tarnished_coin.name" as ContentLocalizationKey,
+    descriptionKey: "item.tarnished_coin.description" as ContentLocalizationKey,
+    category: "material",
+    rarity: "common",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: [],
+    stackable: true,
+    maxStackSize: 99,
+    statModifiers: [],
+    iconKey: "item_tarnished_coin_placeholder"
   }
 ] as const satisfies readonly ItemContentDefinition[];

@@ -7,11 +7,12 @@ export const lootTables = [
   {
     id: "sewer_starter_loot",
     entries: [
-      { itemId: itemId("blackwire_scrap"), rarity: "common", weight: 68 },
+      { itemId: itemId("blackwire_scrap"), rarity: "common", weight: 60 },
       { itemId: itemId("scrap_cloth"), rarity: "common", weight: 14 },
       { itemId: itemId("starter_pipe"), rarity: "common", weight: 10 },
       { itemId: itemId("sewer_jacket"), rarity: "common", weight: 7 },
-      { itemId: itemId("rustbound_ring"), rarity: "rare", weight: 1 }
+      { itemId: itemId("rustbound_ring"), rarity: "rare", weight: 1 },
+      { itemId: itemId("tarnished_coin"), rarity: "common", weight: 8 }
     ]
   },
   {
@@ -20,11 +21,12 @@ export const lootTables = [
     // rewarding. Rare items stay controlled (weight 2 of 100).
     id: "sewer_brute_loot",
     entries: [
-      { itemId: itemId("blackwire_scrap"), rarity: "common", weight: 68 },
+      { itemId: itemId("blackwire_scrap"), rarity: "common", weight: 60 },
       { itemId: itemId("scrap_cloth"), rarity: "common", weight: 14 },
       { itemId: itemId("starter_pipe"), rarity: "common", weight: 10 },
       { itemId: itemId("sewer_jacket"), rarity: "common", weight: 6 },
-      { itemId: itemId("rustbound_ring"), rarity: "rare", weight: 2 }
+      { itemId: itemId("rustbound_ring"), rarity: "rare", weight: 2 },
+      { itemId: itemId("tarnished_coin"), rarity: "common", weight: 8 }
     ]
   }
 ] as const satisfies readonly LootTableDefinition[];

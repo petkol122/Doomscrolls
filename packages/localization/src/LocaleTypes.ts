@@ -40,6 +40,8 @@ export const REQUIRED_LOCALIZATION_KEYS = [
   "item.blackwire_scrap.description",
   "item.rustbound_ring.name",
   "item.rustbound_ring.description",
+  "item.tarnished_coin.name",
+  "item.tarnished_coin.description",
   "skill.heavy_strike.name",
   "skill.heavy_strike.description",
   "objective.cull_trashboars.title",
