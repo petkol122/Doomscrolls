@@ -33,6 +33,14 @@
   - This is data-driven: adding a new town zone to `zones.ts` automatically surfaces through the resolver
 - `apps/server/src/realtime/rooms/TownRoom.ts`: Replaced `options.requestedZoneId ?? ("nightmarket" as ZoneId)` with `resolveTownZoneId(options.requestedZoneId)` 
 
+### Task 292 — Remove Client Town Room Display Fallback Hardcoding
+
+- `apps/client/src/net/RealtimeClient.ts`: Replaced hardcoded `"nightmarket"` fallback in `formatTownRoomState()` with neutral `"unknown"` fallback
+  - `zoneId` is now derived from `state.zoneId` (from `RoomState`) with a safe `"unknown"` default for missing/empty values
+  - Nightmarket display remains unchanged when the server provides a valid `zoneId`
+  - Invalid/missing display data now degrades predictably without pretending a specific zone
+- `docs/TECH_DEBT.md`: Marked the client-side `formatTownRoomState()` hardcoded fallback as resolved
+
 ---
 
 ## Validation Status

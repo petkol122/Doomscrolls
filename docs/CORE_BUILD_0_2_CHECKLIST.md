@@ -52,6 +52,7 @@ The following issues were fixed during Core Build 0.1 and are **not active block
 | 284 | — | Open Core Build 0.2 development baseline | ✅ | — | ✅ | ✅ |
 | 290 | 6 | Remove Nightmarket-specific town interactable hardcoding (data-driven zone-based filtering) | ✅ | — | ⬜ | ✅ |
 | 291 | 6 | Replace hardcoded `"nightmarket"` fallback in TownRoom zone selection with content-registry resolver | ✅ | — | ⬜ | ✅ |
+| 292 | 6 | Remove client town room display fallback hardcoding (`formatTownRoomState`) | ✅ | — | ⬜ | ✅ |
 
 ---
 

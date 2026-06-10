@@ -47,7 +47,7 @@ export function formatTownRoomState(state: RoomState): {
 
   return {
     roomKind: roomState.roomKind ?? state.kind ?? "town",
-    zoneId: typeof state.zoneId === "string" && state.zoneId.length > 0 ? state.zoneId : "nightmarket",
+    zoneId: typeof state.zoneId === "string" && state.zoneId.length > 0 ? state.zoneId : "unknown",
     playerCount: typeof state.connectedPlayerCount === "number" ? state.connectedPlayerCount : 0,
   };
 }

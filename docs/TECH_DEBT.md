@@ -14,7 +14,7 @@ These are literals that should eventually be data-driven rather than hardcoded i
 
 ### Client
 
-- **`apps/client/src/net/RealtimeClient.ts`** — `formatTownRoomState()` has a hardcoded `"nightmarket"` fallback for `zoneId` display fallback; this is cosmetic/display-only and should be resolved from room state once `zoneId` is always present (Task 291 resolved the server side)
+- **`apps/client/src/net/RealtimeClient.ts`** — _(resolved in Task 292)_ replaced hardcoded `"nightmarket"` fallback with neutral `"unknown"` fallback in `formatTownRoomState()`
 - World prop `label` fields in `worldProps.ts` are hardcoded English strings (e.g. `"Nightmarket Services"`, `"Notice Board"`, `"Lamp"`). These should be localization keys.
 - `"trashboar_runt"` / `"trashboar_brute"` / `"trashboar_skitter"` spriteKey values in `enemies.ts` currently all point to the same placeholder key — this is acceptable for placeholder phase but must become content-driven per enemy.
 - Client room/combat scene code may reference specific zone IDs as string literals.
