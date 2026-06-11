@@ -40,7 +40,8 @@ import { CharacterService } from "../../character/CharacterService";
 // same way the player speed is, otherwise the enemy moves at
 // <1 wu/sec and can never catch a player running at 200+ wu/sec.
 const ENEMY_MOVEMENT_SPEED_UNITS_PER_SECOND_MULTIPLIER = 220;
-const ENEMY_ATTACK_WINDUP_MS = 350;
+// Task 306: reduced from 350 ms to 300 ms to match TownRoom tuning
+const ENEMY_ATTACK_WINDUP_MS = 300;
 
 type ContentEnemyId = Parameters<typeof contentRegistry.enemies.get>[0];
 

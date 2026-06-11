@@ -49,6 +49,7 @@ import {
   type TownRoomWorldLootSnapshot,
 } from "../../../net/townRoomWorldLoot";
 import type { WorldSessionEnemyPlaceholderView } from "./worldSessionEnemyPlaceholderView";
+import type { WorldSessionInteractablesView } from "./worldSessionInteractablesView";
 import {
   createWorldSessionLootPlaceholderView,
   getScatterOffset,
@@ -58,6 +59,15 @@ import {
   createFloatingDamageNumberView,
   type FloatingDamageNumberView,
 } from "./floatingDamageNumberView";
+import { shouldIgnoreWorldSessionCombatHotkey } from "./worldSessionCombatHotkeyFocus";
+import {
+  checkPlayerInRestArea,
+} from "./townRestAreaDetection";
+import {
+  createWorldSessionCursorFeedback,
+  type HoverTargetInfo,
+  type WorldSessionCursorFeedback,
+} from "./worldSessionCursorFeedback";
 
 interface PositionSnapshot {
   readonly x: number;
@@ -138,11 +148,71 @@ export interface WorldSessionAreaView {
   readonly showPlayerFloatingDamage: (text: string) => void;
   readonly showEnemyTelegraph: (enemyId: string, attackKind?: "normal" | "heavy") => void;
   readonly resolveEnemyAttackOutcome: (enemyId: string, outcome: "hit" | "miss") => void;
+  // Task 310 — brief white-flash on the enemy body when a hit lands.
+  readonly showEnemyHitFlash: (enemyId: string) => void;
+  // Task 311 — brief red-flash on the player body when server-confirmed
+  // damage lands. Purely visual; no gameplay state mutation.
+  readonly showPlayerHitFlash: () => void;
   readonly getSelfWorldPosition: () => { readonly x: number; readonly y: number } | null;
   readonly getLastClickTarget: () => ClickTargetSnapshot | null;
   readonly getSkillTargetingState: () => WorldSessionSkillTargetingState;
   readonly setPendingPickupTarget: (worldLootId: string | null) => void;
   readonly destroy: () => void;
+}
+
+/**
+ * Resolve what the pointer is hovering over, matching click priority.
+ * Returns null when the pointer is outside the viewport or over nothing
+ * actionable (ground only when in debug_top_down mode).
+ */
+function resolveHoverTarget(
+  pointerX: number,
+  pointerY: number,
+  enemyScreenPositions: ReadonlyMap<string, EnemyScreenPositionSnapshot>,
+  lootScreenPositions: ReadonlyMap<string, WorldLootScreenPositionSnapshot>,
+  corpseMarkers: ReadonlyMap<string, Phaser.GameObjects.Container>,
+  worldOffset: WorldContainerOffset,
+  selfSessionId: string | null,
+  selfWorldPosition: { readonly x: number; readonly y: number } | null,
+  interactablesView: WorldSessionInteractablesView,
+  projectionMode: WorldProjectionMode,
+): HoverTargetInfo | null {
+  // Priority 1: Enemy (living)
+  const hitEnemy = findClickedEnemy(enemyScreenPositions, pointerX, pointerY);
+  if (hitEnemy !== null) {
+    const pos = enemyScreenPositions.get(hitEnemy.id);
+    const label = pos?.label;
+    if (label !== undefined) {
+      return { type: "enemy", label };
+    }
+    return { type: "enemy" };
+  }
+
+  // Priority 2: Loot
+  const hitLoot = findClickedWorldLoot(lootScreenPositions, pointerX, pointerY);
+  if (hitLoot !== null) {
+    return { type: "loot" };
+  }
+
+  // Priority 3: Own corpse
+  if (findClickedOwnCorpseInteractive(
+    corpseMarkers, pointerX, pointerY, worldOffset, selfSessionId, selfWorldPosition,
+  )) {
+    return { type: "own_corpse" };
+  }
+
+  // Priority 4: Interactable object
+  const hitInteractable = interactablesView.findClickedInteractable(pointerX, pointerY);
+  if (hitInteractable !== null) {
+    return { type: "interactable" };
+  }
+
+  // Priority 5: Ground (only in debug_top_down mode)
+  if (projectionMode === "debug_top_down") {
+    return { type: "ground" };
+  }
+
+  return null;
 }
 
 export function createWorldSessionAreaView(
@@ -182,6 +252,7 @@ export function createWorldSessionAreaView(
   const enemyScreenPositions = new Map<string, EnemyScreenPositionSnapshot>();
   const lootScreenPositions = new Map<string, WorldLootScreenPositionSnapshot>();
   const corpseMarkers = new Map<string, Phaser.GameObjects.Container>();
+  const corpseGlowTweens = new Map<string, Phaser.Tweens.Tween>();
 
   const targetMarker = scene.add.circle(-9999, -9999, 7, 0xff4a4a, 0.8);
   const targetLabel = scene.add.text(layout.originX + 10, layout.originY + layout.height - 20, "", {
@@ -249,6 +320,9 @@ export function createWorldSessionAreaView(
   // those handlers and the inputZone handler short-circuits when it is set.
   let pointerHandledByTarget = false;
 
+  // Task 314 — cursor feedback (hover label + highlight rings).
+  const cursorFeedback: WorldSessionCursorFeedback = createWorldSessionCursorFeedback(scene, container);
+
   let previousPosition: PositionSnapshot | null = null;
   let lastClickTarget: ClickTargetSnapshot | null = null;
   let projectionMode: WorldProjectionMode = defaultWorldProjection;
@@ -270,6 +344,48 @@ export function createWorldSessionAreaView(
   let hoveredEnemyId: string | null = null;
   let selectedSkillTargetEnemyId: string | null = null;
   let selfSessionId: string | null = null;
+  let wasInRestArea = false;
+  const restAreaIndicator = scene.add.text(0, 0, "", {
+    color: "#7ad8c0",
+    fontFamily: "Arial, sans-serif",
+    fontSize: "10px",
+    fontStyle: "bold",
+    stroke: "#0a1a18",
+    strokeThickness: 3,
+  }).setOrigin(0.5);
+  worldContainer.add(restAreaIndicator);
+
+  // Task 314 — track previous hover target to clear highlights when leaving.
+  let previousHoverTargetId: string | null = null;
+
+  // --- Module-scope projection values ---
+  // Input handlers are registered ONCE during setup (not per-frame) and read
+  // these module-scope variables. refreshFromRoomState() updates them on
+  // Colyseus state changes so the next input event sees the latest camera.
+  let currentWorldProjection: AreaProjectionContext = {
+    bounds: { minX: 0, maxX: 1, minY: 0, maxY: 1 },
+    viewport: { originX: layout.originX, originY: layout.originY, width: layout.width, height: layout.height },
+    projectionMode,
+  };
+  let currentWorldOffset: WorldContainerOffset = { x: 0, y: 0 };
+
+  // --- roomStateDirty ---
+  // This flag gates the EXPENSIVE refresh path inside refreshFromRoomState().
+  // When true, the next refreshFromRoomState() call will:
+  //   - redraw viewport frame and grid/boundary graphics
+  //   - destroy and recreate all static prop Phaser objects
+  //   - destroy and recreate all interactable Phaser objects
+  //
+  // The flag is set to true when:
+  //   - Colyseus room state changes (enemy spawn, loot drop, etc.)
+  //   - camera zoom changes (setZoom)
+  //   - projection mode changes (setProjectionMode)
+  //   - pending pickup target changes (setPendingPickupTarget)
+  //
+  // The flag is reset to false after the expensive section completes.
+  // The per-frame UPDATE loop (handleSceneUpdate) does NOT read this flag;
+  // it never performs expensive work regardless of this flag's value.
+  let roomStateDirty = true;
 
   const isPointerInsideViewport = (pointerX: number, pointerY: number): boolean => {
     const localX = pointerX - layout.originX;
@@ -339,7 +455,7 @@ export function createWorldSessionAreaView(
       return;
     }
     cameraZoom = nextZoom;
-    refreshFromRoomState(room);
+    roomStateDirty = true;
     onDebugStateChange?.();
   };
 
@@ -359,13 +475,323 @@ export function createWorldSessionAreaView(
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.NUMPAD_SUBTRACT),
     ];
     for (const key of zoomInKeys) {
-      key.on("down", () => setZoom(cameraZoom + 0.1));
+      key.on("down", () => {
+        if (shouldIgnoreWorldSessionCombatHotkey()) return;
+        setZoom(cameraZoom + 0.1);
+      });
     }
     for (const key of zoomOutKeys) {
-      key.on("down", () => setZoom(cameraZoom - 0.1));
+      key.on("down", () => {
+        if (shouldIgnoreWorldSessionCombatHotkey()) return;
+        setZoom(cameraZoom - 0.1);
+      });
     }
   }
 
+  // --- Input handler registration (ONE-TIME setup) ---
+  // These handlers are registered ONCE during scene setup. They read
+  // currentWorldProjection / currentWorldOffset from module scope, which
+  // refreshFromRoomState() keeps up to date on Colyseus state changes.
+  //
+  // GUARD: These must NOT be registered inside refreshFromRoomState() or
+  // the UPDATE loop. Re-registering at ~60fps caused the primary lag
+  // issue fixed in Task 307. Future changes must preserve this one-time
+  // registration pattern.
+  inputZone.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
+    const localX = pointer.x - layout.originX;
+    const localY = pointer.y - layout.originY;
+    if (localX < 0 || localY < 0 || localX > layout.width || localY > layout.height) {
+      return;
+    }
+
+    if (pointerHandledByTarget) {
+      pointerHandledByTarget = false;
+      return;
+    }
+
+    const worldOffset = currentWorldOffset;
+    const worldProjection = currentWorldProjection;
+
+    const hitEnemy = findClickedEnemy(enemyScreenPositions, pointer.x, pointer.y);
+    const hitLoot = findClickedWorldLoot(lootScreenPositions, pointer.x, pointer.y);
+    const hitCorpse = findClickedOwnCorpse(
+      corpseMarkers, pointer.x, pointer.y, worldOffset, selfSessionId, selfWorldPosition,
+    );
+    const hitInteractable = interactablesView.findClickedInteractable(pointer.x, pointer.y);
+
+    let groundTarget: { targetX: number; targetY: number } | null = null;
+    if (projectionMode === "debug_top_down") {
+      const projected = resolveWorldTargetFromPointer(pointer, worldOffset, worldProjection);
+      if (projected !== null) {
+        groundTarget = { targetX: projected.x, targetY: projected.y };
+      }
+    }
+
+    const ctx: WorldInteractionPointerContext = {
+      isRightButton: pointer.rightButtonDown(),
+      enemy: hitEnemy !== null
+        ? { id: hitEnemy.id, worldX: hitEnemy.worldX, worldY: hitEnemy.worldY }
+        : null,
+      loot: hitLoot !== null
+        ? { id: hitLoot.id, worldX: hitLoot.worldX, worldY: hitLoot.worldY }
+        : null,
+      corpse: hitCorpse !== null
+        ? { worldX: hitCorpse.worldX, worldY: hitCorpse.worldY, inRange: hitCorpse.inRange }
+        : null,
+      interactable: hitInteractable !== null
+        ? { objectId: hitInteractable.objectId, worldX: hitInteractable.worldX, worldY: hitInteractable.worldY }
+        : null,
+      groundTarget,
+    };
+
+    const intent = resolveWorldInteraction(ctx);
+    if (intent === null) {
+      return;
+    }
+
+    switch (intent.kind) {
+      case "skill_enemy": {
+        selectedSkillTargetEnemyId = intent.enemyId;
+        hoveredEnemyId = intent.enemyId;
+        break;
+      }
+      case "move": {
+        heldMovementTarget = { x: intent.targetX, y: intent.targetY, pointerId: pointer.id };
+        lastHeldMovementIntentAtMs = scene.time.now;
+        clearPendingAttack();
+        clearPendingLootPickup();
+        clearPendingInteract();
+        break;
+      }
+      default: {
+        clearAllTargeting();
+        break;
+      }
+    }
+
+    const dispatchResult = dispatchWorldInteraction(room, intent);
+
+    switch (intent.kind) {
+      case "skill_enemy": {
+        if (dispatchResult.dispatched) {
+          const selfPosition = selfWorldPosition;
+          const skillDistance = selfPosition === null || hitEnemy === null
+            ? null
+            : Math.hypot(
+                hitEnemy.worldX - selfPosition.x,
+                hitEnemy.worldY - selfPosition.y,
+              );
+          onAttackFeedback?.(
+            skillDistance !== null && skillDistance > graveSparkRange
+              ? t("world_area.skill_moving_closer" as never)
+              : t("world_area.skill_sent"),
+          );
+        } else {
+          onPickupFeedback?.(t("world_area.skill_unavailable"));
+        }
+        const targetEnemy = getTownRoomEnemies(room.state).find(
+          (e) => e.id === intent.enemyId,
+        );
+        if (targetEnemy) {
+          lastClickTarget = { x: targetEnemy.x, y: targetEnemy.y };
+        }
+        break;
+      }
+      case "attack_enemy": {
+        if (dispatchResult.dispatched) {
+          const selfPos = selfWorldPosition;
+          const isInRange = selfPos !== null && hitEnemy !== null &&
+            Math.hypot(hitEnemy.worldX - selfPos.x, hitEnemy.worldY - selfPos.y) <= BASIC_ATTACK_RANGE;
+
+          if (isInRange) {
+            onAttackFeedback?.(t("world_area.attack_sent"));
+          } else if (hitEnemy !== null) {
+            sendMovementIntent(room, hitEnemy.worldX, hitEnemy.worldY);
+            pendingAttackTarget = {
+              enemyId: intent.enemyId,
+              targetWorldX: hitEnemy.worldX,
+              targetWorldY: hitEnemy.worldY,
+            };
+            onAttackFeedback?.(t("world_area.attack_moving_closer"));
+          } else {
+            onAttackFeedback?.(t("world_area.attack_sent"));
+          }
+        }
+        clearAllTargeting();
+        if (hitEnemy !== null) {
+          lastClickTarget = { x: hitEnemy.worldX, y: hitEnemy.worldY };
+        }
+        break;
+      }
+      case "pickup_loot": {
+        if (dispatchResult.dispatched) {
+          const selfPos = selfWorldPosition;
+          const isInRange = selfPos !== null && hitLoot !== null &&
+            Math.hypot(hitLoot.worldX - selfPos.x, hitLoot.worldY - selfPos.y) <= WORLD_LOOT_PICKUP_RANGE;
+
+          if (isInRange) {
+            pendingPickupWorldLootId = dispatchResult.pendingPickupLootId;
+            const targetLoot = getTownRoomWorldLoot(room.state).find(
+              (entry) => entry.id === intent.worldLootId,
+            );
+            if (targetLoot !== undefined) {
+              onPickupFeedback?.(`${t("world_area.pickup_sent")} ${formatPickupFeedbackLabel(targetLoot)}`);
+            }
+          } else if (hitLoot !== null) {
+            sendMovementIntent(room, hitLoot.worldX, hitLoot.worldY);
+            pendingLootPickup = {
+              worldLootId: intent.worldLootId,
+              targetWorldX: hitLoot.worldX,
+              targetWorldY: hitLoot.worldY,
+            };
+            onPickupFeedback?.(t("world_area.pickup_moving_closer"));
+          } else {
+            pendingPickupWorldLootId = dispatchResult.pendingPickupLootId;
+          }
+        }
+        if (hitLoot !== null) {
+          lastClickTarget = { x: hitLoot.worldX, y: hitLoot.worldY };
+        }
+        break;
+      }
+      case "corpse_recover": {
+        if (intent.inRange) {
+          onAttackFeedback?.(t("world_area.corpse_recovered"));
+        } else {
+          onAttackFeedback?.(t("world_area.corpse_interact_out_of_range"));
+        }
+        break;
+      }
+      case "interact_object": {
+        const selfPos = selfWorldPosition;
+        const isInRange = selfPos !== null && hitInteractable !== null &&
+          Math.hypot(hitInteractable.worldX - selfPos.x, hitInteractable.worldY - selfPos.y) <= INTERACT_RANGE;
+
+        if (isInRange) {
+          if (hitInteractable !== null) {
+            lastClickTarget = { x: hitInteractable.worldX, y: hitInteractable.worldY };
+          }
+        } else if (hitInteractable !== null) {
+          sendMovementIntent(room, hitInteractable.worldX, hitInteractable.worldY);
+          pendingInteractTarget = {
+            objectId: intent.objectId,
+            targetWorldX: hitInteractable.worldX,
+            targetWorldY: hitInteractable.worldY,
+          };
+          onPickupFeedback?.(t("world_area.interact_moving_closer"));
+          lastClickTarget = { x: hitInteractable.worldX, y: hitInteractable.worldY };
+        }
+        break;
+      }
+      case "move": {
+        lastClickTarget = { x: intent.targetX, y: intent.targetY };
+        break;
+      }
+    }
+    onDebugStateChange?.();
+  });
+
+  // Task 314 — Enhanced POINTER_MOVE handler. Updates hover cursor feedback
+  // (label + highlight rings) for all world target types. Uses the same hit
+  // logic as the click handlers so hover feedback matches click priority.
+  // No per-frame objects created — only text/setStyle calls and visibility
+  // toggles on existing Phaser objects.
+  inputZone.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
+    const worldOffset = currentWorldOffset;
+
+    // Update enemy hover tracking (existing logic for skill targeting)
+    const hoveredEnemy = findClickedEnemy(enemyScreenPositions, pointer.x, pointer.y);
+    const nextHoveredEnemyId = hoveredEnemy?.id ?? null;
+    if (nextHoveredEnemyId !== hoveredEnemyId) {
+      // Clear previous enemy hover highlight
+      if (hoveredEnemyId !== null) {
+        const prevEnemyView = enemyPlaceholders.get(hoveredEnemyId);
+        prevEnemyView?.setHovered(false);
+      }
+      hoveredEnemyId = nextHoveredEnemyId;
+      // Apply new enemy hover highlight
+      if (hoveredEnemyId !== null) {
+        const nextEnemyView = enemyPlaceholders.get(hoveredEnemyId);
+        nextEnemyView?.setHovered(true);
+      }
+      onDebugStateChange?.();
+    }
+
+    // Resolve world cursor target for hover label (matches click priority)
+    const inViewport = isPointerInsideViewport(pointer.x, pointer.y);
+    if (inViewport) {
+      const hoverTarget = resolveHoverTarget(
+        pointer.x,
+        pointer.y,
+        enemyScreenPositions,
+        lootScreenPositions,
+        corpseMarkers,
+        worldOffset,
+        selfSessionId,
+        selfWorldPosition,
+        interactablesView,
+        projectionMode,
+      );
+
+      if (hoverTarget !== null) {
+        cursorFeedback.setPosition(pointer.x, pointer.y);
+        cursorFeedback.updateHover(hoverTarget);
+        cursorFeedback.setVisible(true);
+      } else {
+        cursorFeedback.updateHover(null);
+        cursorFeedback.setVisible(false);
+      }
+    } else {
+      cursorFeedback.updateHover(null);
+      cursorFeedback.setVisible(false);
+    }
+
+    // Handle held movement
+    if (!pointer.leftButtonDown()) {
+      clearHeldMovementTarget();
+      return;
+    }
+
+    if (heldMovementTarget === null || heldMovementTarget.pointerId !== pointer.id) {
+      return;
+    }
+
+    const target = resolveWorldTargetFromPointer(pointer, currentWorldOffset, currentWorldProjection);
+    if (target === null) {
+      clearHeldMovementTarget();
+      return;
+    }
+
+    heldMovementTarget = { ...target, pointerId: pointer.id };
+  });
+
+  inputZone.on(Phaser.Input.Events.POINTER_UP, (pointer: Phaser.Input.Pointer) => {
+    if (heldMovementTarget?.pointerId === pointer.id) {
+      clearHeldMovementTarget();
+    }
+  });
+
+  if (!container.exists(inputZone)) {
+    container.add(inputZone);
+  }
+
+  // --- refreshFromRoomState (EXPENSIVE — called on state changes only) ---
+  // This function is the ONLY place where expensive Phaser object
+  // creation/destruction happens. It is called:
+  //   1. On Colyseus room.onStateChange (via WorldSessionScene)
+  //   2. During initial scene setup
+  //   3. When setPendingPickupTarget() is called (sets roomStateDirty first)
+  //
+  // It must NEVER be called from the per-frame UPDATE loop (handleSceneUpdate).
+  //
+  // Internal structure:
+  //   [A] Projection + container offset — always runs (lightweight math)
+  //   [B] roomStateDirty section — EXPENSIVE: redraws graphics, rebuilds
+  //       static props and interactables (destroy/recreate Phaser objects)
+  //   [C] Enemy/loot/corpse processing — runs on every call for entity
+  //       tracking, but only destroys/creates individual entities (not all)
+  //   [D] Player position + rest area — lightweight: moves existing objects,
+  //       updates text labels
   const refreshFromRoomState = (nextRoom: Room<DoomscrollsRoomState>): void => {
     const zoneId = typeof nextRoom.state?.zoneId === "string" && nextRoom.state.zoneId.length > 0
       ? nextRoom.state.zoneId
@@ -385,25 +811,45 @@ export function createWorldSessionAreaView(
       currentFocusPosition,
     );
     const worldOffset = resolveWorldContainerOffset(layout, worldProjection, currentFocusPosition);
+
+    // [A] Update module-scope projection values for input handlers.
+    //     Lightweight — no Phaser object creation or destruction.
+    currentWorldProjection = worldProjection;
+    currentWorldOffset = worldOffset;
+
     worldContainer.setPosition(worldOffset.x, worldOffset.y);
     worldFrame.setPosition(worldOffset.x, worldOffset.y);
     interactablesView.setScreenOffset(worldOffset.x, worldOffset.y);
 
-    drawViewportFrame(frame, layout);
-    drawBounds(worldFrame, layout, bounds, worldProjection);
-    boundsLabel.setText(
-      `zone=${zoneId} bounds: x=${bounds.minX}..${bounds.maxX}, y=${bounds.minY}..${bounds.maxY}`,
-    );
+    // [B] EXPENSIVE: Only when roomStateDirty. Destroys and recreates
+    //     static props, interactables, and redraws graphics. This is the
+    //     main cost guard — when dirty is false this block is skipped
+    //     entirely and no Phaser objects are touched.
+    if (roomStateDirty) {
+      drawViewportFrame(frame, layout);
+      drawBounds(worldFrame, layout, bounds, worldProjection);
+      boundsLabel.setText(
+        `zone=${zoneId} bounds: x=${bounds.minX}..${bounds.maxX}, y=${bounds.minY}..${bounds.maxY}`,
+      );
 
-    staticPropsView.refresh({
-      zoneId,
-      bounds: worldProjection.bounds,
-      viewport: worldProjection.viewport,
-      projectionMode: worldProjection.projectionMode,
-    });
+      staticPropsView.refresh({
+        zoneId,
+        bounds: worldProjection.bounds,
+        viewport: worldProjection.viewport,
+        projectionMode: worldProjection.projectionMode,
+      });
 
-    interactablesView.refresh(nextRoom, worldProjection);
+      interactablesView.refresh(nextRoom, worldProjection);
+      roomStateDirty = false;
+    }
 
+    // [C] Entity processing — runs on every refreshFromRoomState call for
+    //     state tracking (HP changes, defeats, respawns, loot spawn/despawn,
+    //     corpse markers). Individual entities are created/destroyed as they
+    //     appear/disappear, but this is NOT a full rebuild — only changed
+    //     entities are touched.
+    //
+    // --- Enemy snapshot processing ---
     const currentEnemies = getTownRoomEnemies(nextRoom.state);
     const projectedEnemies = currentEnemies
       .map((enemy: TownRoomEnemySnapshot) => projectEnemyToArea(enemy, worldProjection))
@@ -412,34 +858,11 @@ export function createWorldSessionAreaView(
 
     for (const [id, view] of enemyPlaceholders.entries()) {
       if (!currentEnemyIds.has(id)) {
-        // Defensive lifecycle rule (Task 242):
-        // An enemy view is only destroyed when the server has actually
-        // removed the enemy from authoritative state. A temporary
-        // projection miss (off-camera bounds, camera follow re-anchor,
-        // zoom change) must NOT destroy the view; the view is allowed
-        // to stay at its last known world position until the
-        // projection returns and a refresh snaps it back. This stops
-        // enemies from disappearing and reappearing elsewhere when
-        // the player moves around the zone.
         view.destroy();
         enemyPlaceholders.delete(id);
         enemyScreenPositions.delete(id);
       }
     }
-
-    // Defensive lifecycle rule (Task 242):
-    // If a server-authoritative enemy exists but its world position
-    // is currently outside the projected viewport (e.g. the player
-    // camera has re-anchored or zoomed), the projection helper
-    // returns null. The view must NOT be hidden, moved off-screen,
-    // or treated as despawned in that case; the server still owns
-    // the enemy and will respawn / chase / return / defeat it
-    // independently of client-side projection. We only treat the
-    // enemy as removed when it disappears from `currentEnemyIds`
-    // (the server removed it) or when its `defeated` flag is true
-    // (visual represents the corpse / defeated state). The view's
-    // last known screen position is preserved by not calling
-    // refresh() with a projection and not calling hide().
 
     for (const projectedEnemy of projectedEnemies) {
       const enemy = projectedEnemy.enemy;
@@ -515,13 +938,13 @@ export function createWorldSessionAreaView(
       previousEnemyRespawnAtMs.set(enemy.id, enemy.respawnAtMs);
     }
 
+    // --- World loot processing (continues [C]) ---
     const currentWorldLoot = getTownRoomWorldLoot(nextRoom.state);
     const projectedWorldLoot = currentWorldLoot
       .map((loot: TownRoomWorldLootSnapshot) => projectWorldLootToArea(loot, worldProjection))
       .filter((loot: TownRoomWorldLootSnapshot | null): loot is TownRoomWorldLootSnapshot => loot !== null);
     const newWorldLootIds = new Set(projectedWorldLoot.map((loot: TownRoomWorldLootSnapshot) => loot.id));
 
-    // Detect new loot entries and show drop feedback
     for (const loot of projectedWorldLoot) {
       if (!previousLootIds.has(loot.id)) {
         const sourceLoot = currentWorldLoot.find((entry) => entry.id === loot.id);
@@ -555,8 +978,6 @@ export function createWorldSessionAreaView(
     for (const loot of projectedWorldLoot) {
       const sourceLoot = currentWorldLoot.find((entry) => entry.id === loot.id);
       if (sourceLoot !== undefined) {
-        // Hit-test position must match the rendered position in
-        // worldSessionLootPlaceholderView (world x/y + scatter offset + worldOffset).
         const scatter = getScatterOffset(loot.id);
         const scatterLootX = loot.x + scatter.x + worldOffset.x;
         const scatterLootY = loot.y + scatter.y + worldOffset.y;
@@ -592,7 +1013,7 @@ export function createWorldSessionAreaView(
       }
     }
 
-    // Sync corpse markers from presence data
+    // --- Corpse marker processing (continues [C]) ---
     const currentCorpsePlayerIds = new Set<string>();
     if (presence !== null) {
       for (const player of presence.players) {
@@ -610,22 +1031,49 @@ export function createWorldSessionAreaView(
           const isOwnCorpse = player.sessionId === selfSessionId;
           if (marker === undefined) {
             marker = scene.add.container(screenPos.x, screenPos.y);
+            marker.setDepth(350 + corpsePos.y);
             if (isOwnCorpse) {
-              // Own corpse marker: teal glow, cross icon, larger, more distinct
+              // Task 311 — own corpse marker: larger, brighter, with a
+              // pulsing glow tween and a "Click to recover" prompt so
+              // the player can immediately distinguish their corpse
+              // from defeated enemies and other players' corpses.
+              const markerGlow = scene.add.ellipse(0, 0, 36, 36, 0x20aaaa, 0.18);
               const markerBg = scene.add.ellipse(0, 12, 28, 16, 0x003333, 0.5);
-              const markerBody = scene.add.rectangle(0, 0, 16, 24, 0x2a5c5c, 0.9);
-              markerBody.setStrokeStyle(2, 0x4ab0b0, 0.95);
+              const markerBody = scene.add.rectangle(0, 0, 18, 26, 0x2a6060, 0.92);
+              markerBody.setStrokeStyle(2, 0x5ad0d0, 0.95);
               const markerCross = scene.add.circle(0, -14, 6, 0x206060, 0.9);
-              markerCross.setStrokeStyle(2, 0x4ab0b0, 0.95);
+              markerCross.setStrokeStyle(2, 0x5ad0d0, 0.95);
               const markerLabel = scene.add.text(0, -30, "☠ " + player.displayName, {
-                color: "#4ad8d8",
+                color: "#5aeaea",
                 fontFamily: "Arial, sans-serif",
                 fontSize: "10px",
                 fontStyle: "bold",
                 stroke: "#0a2020",
                 strokeThickness: 3,
               }).setOrigin(0.5);
-              marker.add([markerBg, markerBody, markerCross, markerLabel]);
+              const recoverLabel = scene.add.text(0, 26, "Click to recover", {
+                color: "#a0f0f0",
+                fontFamily: "Arial, sans-serif",
+                fontSize: "9px",
+                fontStyle: "bold",
+                stroke: "#0a2020",
+                strokeThickness: 3,
+                backgroundColor: "rgba(10, 40, 40, 0.85)",
+                padding: { left: 4, right: 4, top: 2, bottom: 2 },
+              }).setOrigin(0.5);
+              marker.add([markerGlow, markerBg, markerBody, markerCross, markerLabel, recoverLabel]);
+              // Subtle pulsing glow so own corpse draws attention.
+              const pulseTween = scene.tweens.add({
+                targets: markerGlow,
+                alpha: { from: 0.18, to: 0.45 },
+                scaleX: { from: 1, to: 1.3 },
+                scaleY: { from: 1, to: 1.3 },
+                duration: 900,
+                yoyo: true,
+                repeat: -1,
+                ease: "Sine.easeInOut",
+              });
+              corpseGlowTweens.set(player.sessionId, pulseTween);
             } else {
               const markerBg = scene.add.ellipse(0, 12, 24, 12, 0x330000, 0.3);
               const markerBody = scene.add.rectangle(0, 0, 14, 20, 0x5c2a2a, 0.85);
@@ -646,286 +1094,28 @@ export function createWorldSessionAreaView(
             corpseMarkers.set(player.sessionId, marker);
           } else {
             marker.setPosition(screenPos.x, screenPos.y);
+            marker.setDepth(350 + corpsePos.y);
           }
         }
       }
     }
     for (const [sessionId, marker] of corpseMarkers.entries()) {
       if (!currentCorpsePlayerIds.has(sessionId)) {
+        const pt = corpseGlowTweens.get(sessionId);
+        if (pt !== undefined) {
+          pt.stop();
+          corpseGlowTweens.delete(sessionId);
+        }
         marker.destroy(true);
         corpseMarkers.delete(sessionId);
       }
     }
 
-    // Task 285 — Route all world pointer input through the interaction
-    // intent system. resolveWorldInteraction() decides WHAT the player
-    // wants to do (pure function, no side effects), dispatchWorldInteraction()
-    // sends the network message, and this handler manages visual state
-    // (feedback messages, debug markers, held movement tracking).
-    //
-    // Priority chain (left-click): enemy > loot > corpse > interactable > ground.
-    // Right-click: skill on enemy only, everything else ignored.
-    // Child sprite click handlers (enemy/loot/interactable) fire first via
-    // Phaser and set pointerHandledByTarget, which short-circuits this handler.
-    inputZone.removeAllListeners();
-    inputZone.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
-      // Viewport bounds check — ignore clicks outside the world area.
-      const localX = pointer.x - layout.originX;
-      const localY = pointer.y - layout.originY;
-      if (localX < 0 || localY < 0 || localX > layout.width || localY > layout.height) {
-        return;
-      }
-
-      // If a child element (enemy sprite, loot sprite, interactable sprite)
-      // already handled this click via Phaser's input system, skip
-      // ground-level intent resolution.
-      if (pointerHandledByTarget) {
-        pointerHandledByTarget = false;
-        return;
-      }
-
-      // --- Task 285: Build pointer context from hit-test results ---
-      const hitEnemy = findClickedEnemy(enemyScreenPositions, pointer.x, pointer.y);
-      const hitLoot = findClickedWorldLoot(lootScreenPositions, pointer.x, pointer.y);
-      const hitCorpse = findClickedOwnCorpse(
-        corpseMarkers, pointer.x, pointer.y, worldOffset, selfSessionId, selfWorldPosition,
-      );
-      const hitInteractable = interactablesView.findClickedInteractable(pointer.x, pointer.y);
-
-      let groundTarget: { targetX: number; targetY: number } | null = null;
-      if (projectionMode === "debug_top_down") {
-        const projected = resolveWorldTargetFromPointer(pointer, worldOffset, worldProjection);
-        if (projected !== null) {
-          groundTarget = { targetX: projected.x, targetY: projected.y };
-        }
-      }
-
-      const ctx: WorldInteractionPointerContext = {
-        isRightButton: pointer.rightButtonDown(),
-        enemy: hitEnemy !== null
-          ? { id: hitEnemy.id, worldX: hitEnemy.worldX, worldY: hitEnemy.worldY }
-          : null,
-        loot: hitLoot !== null
-          ? { id: hitLoot.id, worldX: hitLoot.worldX, worldY: hitLoot.worldY }
-          : null,
-        corpse: hitCorpse !== null
-          ? { worldX: hitCorpse.worldX, worldY: hitCorpse.worldY, inRange: hitCorpse.inRange }
-          : null,
-        interactable: hitInteractable !== null
-          ? { objectId: hitInteractable.objectId, worldX: hitInteractable.worldX, worldY: hitInteractable.worldY }
-          : null,
-        groundTarget,
-      };
-
-      // --- Resolve intent (pure function, no side effects) ---
-      const intent = resolveWorldInteraction(ctx);
-      if (intent === null) {
-        return;
-      }
-
-      // --- Pre-dispatch visual state ---
-      switch (intent.kind) {
-        case "skill_enemy": {
-          selectedSkillTargetEnemyId = intent.enemyId;
-          hoveredEnemyId = intent.enemyId;
-          break;
-        }
-        case "move": {
-          heldMovementTarget = { x: intent.targetX, y: intent.targetY, pointerId: pointer.id };
-          lastHeldMovementIntentAtMs = scene.time.now;
-          // Any new ground movement cancels pending actions
-          clearPendingAttack();
-          clearPendingLootPickup();
-          clearPendingInteract();
-          break;
-        }
-        default: {
-          clearAllTargeting();
-          break;
-        }
-      }
-
-      // --- Dispatch intent to network layer ---
-      const dispatchResult = dispatchWorldInteraction(nextRoom, intent);
-
-      // --- Post-dispatch visual feedback ---
-      switch (intent.kind) {
-        case "skill_enemy": {
-          if (dispatchResult.dispatched) {
-            const selfPosition = selfWorldPosition;
-            const skillDistance = selfPosition === null || hitEnemy === null
-              ? null
-              : Math.hypot(
-                  hitEnemy.worldX - selfPosition.x,
-                  hitEnemy.worldY - selfPosition.y,
-                );
-            onAttackFeedback?.(
-              skillDistance !== null && skillDistance > graveSparkRange
-                ? t("world_area.skill_moving_closer" as never)
-                : t("world_area.skill_sent"),
-            );
-          } else {
-            onPickupFeedback?.(t("world_area.skill_unavailable"));
-          }
-          const targetEnemy = getTownRoomEnemies(nextRoom.state).find(
-            (e) => e.id === intent.enemyId,
-          );
-          if (targetEnemy) {
-            lastClickTarget = { x: targetEnemy.x, y: targetEnemy.y };
-          }
-          break;
-        }
-        case "attack_enemy": {
-          if (dispatchResult.dispatched) {
-            // Task 286 — Move-then-attack: if the enemy is out of range,
-            // send a movement intent toward the enemy position and track
-            // the pending attack. The update loop will re-check range
-            // each tick and fire the attack once close enough.
-            const selfPos = selfWorldPosition;
-            const isInRange = selfPos !== null && hitEnemy !== null &&
-              Math.hypot(hitEnemy.worldX - selfPos.x, hitEnemy.worldY - selfPos.y) <= BASIC_ATTACK_RANGE;
-
-            if (isInRange) {
-              // Already in range — immediate attack (sent via dispatch above)
-              onAttackFeedback?.(t("world_area.attack_sent"));
-            } else if (hitEnemy !== null) {
-              // Out of range: move toward the enemy position, then track
-              // the pending attack so the update loop fires it once close enough.
-              sendMovementIntent(nextRoom, hitEnemy.worldX, hitEnemy.worldY);
-              pendingAttackTarget = {
-                enemyId: intent.enemyId,
-                targetWorldX: hitEnemy.worldX,
-                targetWorldY: hitEnemy.worldY,
-              };
-              onAttackFeedback?.(t("world_area.attack_moving_closer"));
-            } else {
-              onAttackFeedback?.(t("world_area.attack_sent"));
-            }
-          }
-          clearAllTargeting();
-          if (hitEnemy !== null) {
-            lastClickTarget = { x: hitEnemy.worldX, y: hitEnemy.worldY };
-          }
-          break;
-        }
-        case "pickup_loot": {
-          if (dispatchResult.dispatched) {
-            // Task 287 — Move-then-pickup: if the loot is out of range,
-            // send a movement intent toward the loot position and track
-            // the pending pickup. The update loop will re-check range
-            // each tick and fire the pickup once close enough.
-            const selfPos = selfWorldPosition;
-            const isInRange = selfPos !== null && hitLoot !== null &&
-              Math.hypot(hitLoot.worldX - selfPos.x, hitLoot.worldY - selfPos.y) <= WORLD_LOOT_PICKUP_RANGE;
-
-            if (isInRange) {
-              // Already in range — immediate pickup (sent via dispatch above)
-              pendingPickupWorldLootId = dispatchResult.pendingPickupLootId;
-              const targetLoot = getTownRoomWorldLoot(nextRoom.state).find(
-                (entry) => entry.id === intent.worldLootId,
-              );
-              if (targetLoot !== undefined) {
-                onPickupFeedback?.(`${t("world_area.pickup_sent")} ${formatPickupFeedbackLabel(targetLoot)}`);
-              }
-            } else if (hitLoot !== null) {
-              // Out of range: move toward the loot position, then track
-              // the pending pickup so the update loop fires it once close enough.
-              sendMovementIntent(nextRoom, hitLoot.worldX, hitLoot.worldY);
-              pendingLootPickup = {
-                worldLootId: intent.worldLootId,
-                targetWorldX: hitLoot.worldX,
-                targetWorldY: hitLoot.worldY,
-              };
-              onPickupFeedback?.(t("world_area.pickup_moving_closer"));
-            } else {
-              pendingPickupWorldLootId = dispatchResult.pendingPickupLootId;
-            }
-          }
-          if (hitLoot !== null) {
-            lastClickTarget = { x: hitLoot.worldX, y: hitLoot.worldY };
-          }
-          break;
-        }
-        case "corpse_recover": {
-          if (intent.inRange) {
-            onAttackFeedback?.(t("world_area.corpse_recovered"));
-          } else {
-            onAttackFeedback?.(t("world_area.corpse_interact_out_of_range"));
-          }
-          break;
-        }
-        case "interact_object": {
-          // Task 288 — Move-then-interact: if the interactable is out of range,
-          // send a movement intent toward the object position and track
-          // the pending interact. The update loop will re-check range
-          // each tick and fire the interact once close enough.
-          const selfPos = selfWorldPosition;
-          const isInRange = selfPos !== null && hitInteractable !== null &&
-            Math.hypot(hitInteractable.worldX - selfPos.x, hitInteractable.worldY - selfPos.y) <= INTERACT_RANGE;
-
-          if (isInRange) {
-            // Already in range — immediate interact (already sent via dispatch above)
-            if (hitInteractable !== null) {
-              lastClickTarget = { x: hitInteractable.worldX, y: hitInteractable.worldY };
-            }
-          } else if (hitInteractable !== null) {
-            // Out of range: move toward the interactable position, then track
-            // the pending interact so the update loop fires it once close enough.
-            sendMovementIntent(nextRoom, hitInteractable.worldX, hitInteractable.worldY);
-            pendingInteractTarget = {
-              objectId: intent.objectId,
-              targetWorldX: hitInteractable.worldX,
-              targetWorldY: hitInteractable.worldY,
-            };
-            onPickupFeedback?.(t("world_area.interact_moving_closer"));
-            lastClickTarget = { x: hitInteractable.worldX, y: hitInteractable.worldY };
-          }
-          break;
-        }
-        case "move": {
-          lastClickTarget = { x: intent.targetX, y: intent.targetY };
-          break;
-        }
-      }
-      onDebugStateChange?.();
-    });
-
-    inputZone.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
-      const hoveredEnemy = findClickedEnemy(enemyScreenPositions, pointer.x, pointer.y);
-      const nextHoveredEnemyId = hoveredEnemy?.id ?? null;
-      if (nextHoveredEnemyId !== hoveredEnemyId) {
-        hoveredEnemyId = nextHoveredEnemyId;
-        onDebugStateChange?.();
-      }
-
-      if (!pointer.leftButtonDown()) {
-        clearHeldMovementTarget();
-        return;
-      }
-
-      if (heldMovementTarget === null || heldMovementTarget.pointerId !== pointer.id) {
-        return;
-      }
-
-      const target = resolveWorldTargetFromPointer(pointer, worldOffset, worldProjection);
-      if (target === null) {
-        clearHeldMovementTarget();
-        return;
-      }
-
-      heldMovementTarget = { ...target, pointerId: pointer.id };
-    });
-
-    inputZone.on(Phaser.Input.Events.POINTER_UP, (pointer: Phaser.Input.Pointer) => {
-      if (heldMovementTarget?.pointerId === pointer.id) {
-        clearHeldMovementTarget();
-      }
-    });
-
-    if (!container.exists(inputZone)) {
-      container.add(inputZone);
-    }
-
+    // [D] Player position + rest area — lightweight. Moves existing
+    //     Phaser objects (playerPlaceholder, targetMarker, restAreaIndicator),
+    //     updates text labels and line graphic. No object creation or
+    //     destruction.
+    // --- Player position and rest area ---
     if (self?.position === undefined) {
       hoveredEnemyId = null;
       playerPlaceholder.hide();
@@ -941,7 +1131,6 @@ export function createWorldSessionAreaView(
 
     const { x, y } = self.position;
     selfWorldPosition = { x, y };
-    // Render and click-space must share the same active projection math.
     const playerScreenPosition = worldToScreenActiveProjection(
       x,
       y,
@@ -955,10 +1144,6 @@ export function createWorldSessionAreaView(
 
     playerPlaceholder.setPosition(playerScreenPosition.x, playerScreenPosition.y);
     playerPlaceholder.setInfo(self.displayName, self.hp, self.maxHp);
-    // Task 207 -- show a transient "Moving to loot / interact / attack"
-    // label above the player placeholder while the server-owned
-    // pendingActionType is active. Purely visual; the server still
-    // owns the action outcome.
     playerPlaceholder.setApproachLabel(self.pendingActionType ?? null);
 
     if (lastClickTarget) {
@@ -988,6 +1173,21 @@ export function createWorldSessionAreaView(
     }
 
     positionLabel.setText(`x=${Math.round(x)}, y=${Math.round(y)}`);
+
+    const isInRestArea = checkPlayerInRestArea(zoneId, x, y);
+    if (isInRestArea && !wasInRestArea) {
+      wasInRestArea = true;
+      onPickupFeedback?.(t("world_session.rest_area_entered"));
+    } else if (!isInRestArea && wasInRestArea) {
+      wasInRestArea = false;
+      onPickupFeedback?.(t("world_session.rest_area_exited"));
+    }
+    restAreaIndicator.setText(isInRestArea ? "Rest Area" : "");
+    restAreaIndicator.setPosition(
+      playerScreenPosition.x,
+      playerScreenPosition.y - 36,
+    );
+
     statusLabel.setText(
       previousPosition !== null && (previousPosition.x !== x || previousPosition.y !== y)
         ? t("world_area.server_position_updated")
@@ -996,8 +1196,24 @@ export function createWorldSessionAreaView(
     previousPosition = { x, y };
   };
 
+  // --- Per-frame UPDATE handler (LIGHTWEIGHT — ~60fps) ---
+  // This runs every frame via Phaser's UPDATE event. It MUST remain
+  // lightweight: no Phaser object creation/destruction, no graphics
+  // redraw, no full prop/interactable rebuild, no input listener
+  // registration.
+  //
+  // Current responsibilities:
+  //   - Held movement throttle (dispatches movement intent at intervals)
+  //   - Pending attack range check (fires when player reaches target)
+  //   - Pending loot pickup range check (fires when player reaches loot)
+  //   - Pending interact range check (fires when player reaches object)
+  //
+  // GUARD: Do not add refreshFromRoomState(), staticPropsView.refresh(),
+  // interactablesView.refresh(), drawViewportFrame(), drawBounds(), or
+  // any inputZone.on() calls here. The expensive refresh path lives
+  // exclusively in refreshFromRoomState(), triggered by Colyseus state
+  // changes.
   const handleSceneUpdate = (): void => {
-    // --- Held movement (hold-to-move via mouse) ---
     if (heldMovementTarget !== null) {
       if (!scene.input.activePointer.leftButtonDown() || !isPointerInsideViewport(scene.input.activePointer.x, scene.input.activePointer.y)) {
         clearHeldMovementTarget();
@@ -1010,7 +1226,6 @@ export function createWorldSessionAreaView(
       }
     }
 
-    // --- Pending attack: check range each tick ---
     if (pendingAttackTarget !== null && selfWorldPosition !== null) {
       const result = checkPendingAttack(room, pendingAttackTarget, selfWorldPosition.x, selfWorldPosition.y);
       if (result.attackSent) {
@@ -1019,7 +1234,6 @@ export function createWorldSessionAreaView(
       }
     }
 
-    // --- Pending loot pickup: check range each tick ---
     if (pendingLootPickup !== null && selfWorldPosition !== null) {
       const result = checkPendingLootPickup(room, pendingLootPickup, selfWorldPosition.x, selfWorldPosition.y);
       if (result.pickupSent) {
@@ -1029,7 +1243,6 @@ export function createWorldSessionAreaView(
       }
     }
 
-    // --- Pending interact: check range each tick ---
     if (pendingInteractTarget !== null && selfWorldPosition !== null) {
       const result = checkPendingInteract(room, pendingInteractTarget, selfWorldPosition.x, selfWorldPosition.y);
       if (result.interactSent) {
@@ -1037,8 +1250,6 @@ export function createWorldSessionAreaView(
         onPickupFeedback?.(t("world_area.interact_moving_closer"));
       }
     }
-
-    refreshFromRoomState(room);
   };
 
   scene.events.on(Phaser.Scenes.Events.UPDATE, handleSceneUpdate);
@@ -1064,7 +1275,7 @@ export function createWorldSessionAreaView(
     }
 
     projectionMode = mode;
-    refreshFromRoomState(room);
+    roomStateDirty = true;
     onDebugStateChange?.();
   };
 
@@ -1081,6 +1292,21 @@ export function createWorldSessionAreaView(
       return;
     }
     floatingDamageView.show(selfScreenPosition.x, selfScreenPosition.y - 18, text);
+  };
+
+  // Task 310 — brief enemy body flash on server-confirmed hit.
+  const showEnemyHitFlash = (enemyId: string): void => {
+    const view = enemyPlaceholders.get(enemyId);
+    if (view !== undefined) {
+      view.flashHit();
+    }
+  };
+
+  // Task 311 — brief red flash on the player body when server-confirmed
+  // damage lands. Delegates to the player placeholder's flashDamage()
+  // which tweens a red overlay without modifying base torso state.
+  const showPlayerHitFlash = (): void => {
+    playerPlaceholder.flashDamage();
   };
 
   const showEnemyTelegraph = (enemyId: string, attackKind: "normal" | "heavy" = "normal"): void => {
@@ -1116,6 +1342,8 @@ export function createWorldSessionAreaView(
     setProjectionMode,
     showEnemyFloatingDamage,
     showPlayerFloatingDamage,
+    showEnemyHitFlash,
+    showPlayerHitFlash,
     showEnemyTelegraph,
     resolveEnemyAttackOutcome,
     getSelfWorldPosition: () => selfWorldPosition,
@@ -1154,12 +1382,15 @@ export function createWorldSessionAreaView(
     },
     setPendingPickupTarget: (worldLootId: string | null) => {
       pendingPickupWorldLootId = worldLootId;
+      roomStateDirty = true;
       refreshFromRoomState(room);
     },
     destroy: () => {
       canvasElement.removeEventListener("contextmenu", handleContextMenu);
       scene.events.off(Phaser.Scenes.Events.UPDATE, handleSceneUpdate);
       scene.input.off(Phaser.Input.Events.POINTER_WHEEL);
+      // Task 307 — Remove input zone listeners registered once in setup.
+      inputZone.removeAllListeners();
       staticPropsView.destroy();
       playerPlaceholder.destroy();
       interactablesView.destroy();
@@ -1177,7 +1408,13 @@ export function createWorldSessionAreaView(
         marker.destroy(true);
       }
       corpseMarkers.clear();
+      for (const pt of corpseGlowTweens.values()) {
+        pt.stop();
+      }
+      corpseGlowTweens.clear();
       floatingDamageView.destroy();
+      cursorFeedback.destroy();
+      restAreaIndicator.setText("");
       selfScreenPosition = null;
       container.destroy(true);
     },
@@ -1192,7 +1429,6 @@ function findClickedOwnCorpse(
   selfSessionId: string | null,
   selfWorldPosition: { readonly x: number; readonly y: number } | null,
 ): { readonly worldX: number; readonly worldY: number; readonly inRange: boolean } | null {
-  // Only the player's own corpse is interactable; others' corpses are visual-only.
   if (selfSessionId === null || selfWorldPosition === null) {
     return null;
   }
@@ -1201,11 +1437,9 @@ function findClickedOwnCorpse(
     return null;
   }
 
-  // World position of the corpse
   const corpseWorldX = marker.x;
   const corpseWorldY = marker.y;
 
-  // Hit-test on screen position
   const markerScreenX = corpseWorldX + worldOffset.x;
   const markerScreenY = corpseWorldY + worldOffset.y;
   const dx = pointerX - markerScreenX;
@@ -1216,11 +1450,9 @@ function findClickedOwnCorpse(
     return null;
   }
 
-  // Check range: distance from player world position to corpse world position
   const worldDx = corpseWorldX - selfWorldPosition.x;
   const worldDy = corpseWorldY - selfWorldPosition.y;
   const worldDist = Math.sqrt(worldDx * worldDx + worldDy * worldDy);
-  // CORPSE_INTERACT_RANGE constant from closure (30 world units)
   const inRange = worldDist <= 30;
 
   return {
@@ -1228,6 +1460,39 @@ function findClickedOwnCorpse(
     worldY: corpseWorldY,
     inRange,
   };
+}
+
+/**
+ * Task 314 — Non-interactive variant of findClickedOwnCorpse used for
+ * hover detection only. Returns a simple boolean when the pointer is
+ * over the player's own corpse, without distance/range info.
+ */
+function findClickedOwnCorpseInteractive(
+  corpseMarkers: ReadonlyMap<string, Phaser.GameObjects.Container>,
+  pointerX: number,
+  pointerY: number,
+  worldOffset: WorldContainerOffset,
+  selfSessionId: string | null,
+  selfWorldPosition: { readonly x: number; readonly y: number } | null,
+): boolean {
+  if (selfSessionId === null || selfWorldPosition === null) {
+    return false;
+  }
+  const marker = corpseMarkers.get(selfSessionId);
+  if (marker === undefined) {
+    return false;
+  }
+
+  const corpseWorldX = marker.x;
+  const corpseWorldY = marker.y;
+
+  const markerScreenX = corpseWorldX + worldOffset.x;
+  const markerScreenY = corpseWorldY + worldOffset.y;
+  const dx = pointerX - markerScreenX;
+  const dy = pointerY - markerScreenY;
+  const hitRadiusPx = 24;
+  const distanceSquared = dx * dx + dy * dy;
+  return distanceSquared <= hitRadiusPx * hitRadiusPx;
 }
 
 function findClickedEnemy(
@@ -1240,7 +1505,6 @@ function findClickedEnemy(
   let closestHit: { readonly id: string; readonly worldX: number; readonly worldY: number; readonly distanceSquared: number } | null = null;
 
   for (const [id, position] of enemyScreenPositions.entries()) {
-    // Skip defeated enemies so loot/interactable clicks underneath are not blocked
     if (position.defeated) {
       continue;
     }
@@ -1428,7 +1692,6 @@ function createAreaProjectionContext(
   let minY = bounds.minY;
 
   if (focusPosition !== null) {
-    // Center the visible area on the focus position, clamped to world bounds.
     minX = focusPosition.x - visibleWidth / 2;
     minY = focusPosition.y - visibleHeight / 2;
     if (minX < bounds.minX) { minX = bounds.minX; }

@@ -54,6 +54,8 @@ import { consumeDodgeCooldown, isDodgeReady } from "./dodgeCooldown";
 import { validateHealingFlaskIntent } from "./healingFlaskValidation";
 import { applyHealingFlaskIntent } from "./applyHealingFlaskIntent";
 import { restoreFlaskToFull } from "./healingFlaskConfig";
+import { applyTownRestRefill } from "./townRestRefill";
+import { applyTownRestAreaRefillForAll } from "./townRestAreaTrigger";
 import type {
   RequestUseHealingFlaskAcceptedServerMessage,
   RequestUseHealingFlaskRejectedServerMessage,
@@ -113,7 +115,9 @@ const GRAVE_SPARK_DAMAGE = 3;
 // `enemy_attack_telegraph` to the target client when the windup starts;
 // damage is applied after this many ms only if the target is still alive
 // and in attack range.
-const ENEMY_ATTACK_WINDUP_MS = 350;
+// Task 306: reduced from 350 ms to 300 ms for snappier enemy
+// telegraph → damage cadence
+const ENEMY_ATTACK_WINDUP_MS = 300;
 const ENEMY_RETURN_ARRIVAL_DISTANCE = 1;
 const ENEMY_RETURN_REACQUIRE_BUFFER = 8;
 const characterStatsService = new CharacterStatsService();
@@ -659,7 +663,8 @@ export class TownRoom extends Room {
     this.registerHealingFlaskHandler(log);
     this.registerSkillSlotHandler(log);
     this.setSimulationInterval((deltaMs: number) => {
-      stepTownRoomMovement(this.state as TownRoomState, deltaMs, {
+      const state = this.state as TownRoomState;
+      stepTownRoomMovement(state, deltaMs, {
         now: Date.now(),
         onPendingActionReady: (sessionId, payload) => {
           const targetClient = this.clients.find((client) => client.sessionId === sessionId);
@@ -674,7 +679,33 @@ export class TownRoom extends Room {
         },
       });
       this.applyEnemyAggroDamage(Date.now(), deltaMs);
-      respawnTownEnemies(this.state as TownRoomState, zoneId, Date.now());
+      respawnTownEnemies(state, zoneId, Date.now());
+
+      // Task 303 — Physical town rest area refill trigger. Runs on
+      // each tick and sends the localized notification only when
+      // the player's values actually changed (avoiding spam while
+      // standing in the area already full).
+      const restAreaResults = applyTownRestAreaRefillForAll(
+        zoneId,
+        state.playerPresence,
+      );
+      if (restAreaResults.size > 0) {
+        restAreaResults.forEach((_changed, sessionId) => {
+          const targetClient = this.clients.find((client) => client.sessionId === sessionId);
+          if (targetClient === undefined) {
+            return;
+          }
+          try {
+            targetClient.send("town_rest_refill", {
+              type: "town_rest_refill",
+              restoredHp: state.playerPresence.get(sessionId)?.hp ?? 0,
+              restoredFlaskCharges: Math.floor(state.playerPresence.get(sessionId)?.flaskCharges ?? 0),
+            });
+          } catch {
+            // swallow client send failures; room state remains authoritative
+          }
+        });
+      }
     }, TOWN_MOVEMENT_TICK_RATE_MS);
 
     log.info(
@@ -800,8 +831,31 @@ export class TownRoom extends Room {
       restoredLocationY: result.character.lastLocationY ?? undefined,
     });
 
+    // Task 299 — Town Rest Refill: restore HP and flask charges to
+    // full on entering a valid town zone. This must happen after the
+    // presence is created (which may load persisted partial values)
+    // and before the message is sent so the Colyseus schema state
+    // already reflects the restored values when the client receives
+    // the feedback message.
+    const refillResult = applyTownRestRefill(presence);
+
     state.playerPresence.set(sessionId, presence);
     state.connectedPlayerCount = state.playerPresence.size;
+
+    // Send a town rest refill feedback message to the joining client.
+    // The synced schema state is the source of truth for display; this
+    // message provides a localized notification only.
+    if (refillResult.changed) {
+      try {
+        _client.send("town_rest_refill", {
+          type: "town_rest_refill",
+          restoredHp: refillResult.restoredHp,
+          restoredFlaskCharges: refillResult.restoredFlaskCharges,
+        });
+      } catch {
+        // swallow send failures; room state remains authoritative
+      }
+    }
 
     safeLog.info?.(
       {
@@ -858,6 +912,14 @@ export class TownRoom extends Room {
 
     state.playerPresence.delete(_client.sessionId);
     state.connectedPlayerCount = state.playerPresence.size;
+
+    // Clear any enemy that was targeting this player so a stale
+    // target is not re-acquired after the player leaves.
+    state.enemies.forEach((enemy) => {
+      if (enemy.targetPlayerSessionId === _client.sessionId) {
+        clearEnemyTargetAndReturn(enemy);
+      }
+    });
   }
 
   /**

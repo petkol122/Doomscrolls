@@ -5,20 +5,22 @@ export interface FloatingDamageNumberView {
   readonly destroy: () => void;
 }
 
-const LIFETIME_MS = 600;
+// Task 310 — float-up duration and travel distance for damage numbers.
+const LIFETIME_MS = 700;
+const FLOAT_UP_Y = -22;
 
 export function createFloatingDamageNumberView(
   scene: Phaser.Scene,
   parentContainer?: Phaser.GameObjects.Container,
 ): FloatingDamageNumberView {
   const active = new Set<Phaser.GameObjects.Text>();
-  const timers = new WeakMap<Phaser.GameObjects.Text, Phaser.Time.TimerEvent>();
+  const tweens = new WeakMap<Phaser.GameObjects.Text, Phaser.Tweens.Tween>();
 
   const destroyText = (text: Phaser.GameObjects.Text): void => {
-    const timer = timers.get(text);
-    if (timer !== undefined) {
-      timer.remove(false);
-      timers.delete(text);
+    const tw = tweens.get(text);
+    if (tw !== undefined) {
+      tw.stop();
+      tweens.delete(text);
     }
     active.delete(text);
     text.destroy();
@@ -38,10 +40,21 @@ export function createFloatingDamageNumberView(
       node.setDepth(950);
       parentContainer?.add(node);
       active.add(node);
-      const timer = scene.time.delayedCall(LIFETIME_MS, () => {
-        destroyText(node);
+
+      // Task 310 — float-up + fade so damage numbers read as hits.
+      const tw = scene.tweens.add({
+        targets: node,
+        y: y + FLOAT_UP_Y,
+        alpha: { from: 1, to: 0 },
+        duration: LIFETIME_MS,
+        ease: "Cubic.easeOut",
+        onComplete: () => {
+          tweens.delete(node);
+          active.delete(node);
+          node.destroy();
+        },
       });
-      timers.set(node, timer);
+      tweens.set(node, tw);
     },
     destroy: () => {
       for (const text of Array.from(active)) {

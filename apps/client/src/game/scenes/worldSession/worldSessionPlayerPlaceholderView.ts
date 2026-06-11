@@ -28,6 +28,9 @@ export interface WorldSessionPlayerPlaceholderView {
   // walking toward a queued deferred-action target. Pass `null` to
   // clear the label.
   readonly setApproachLabel: (label: ApproachActionLabel) => void;
+  // Task 311 — brief red flash on the player body when server-confirmed
+  // damage lands. Purely visual; preserves the original fill after tween.
+  readonly flashDamage: () => void;
   readonly hide: () => void;
   readonly destroy: () => void;
 }
@@ -79,6 +82,12 @@ export function createWorldSessionPlayerPlaceholderView(
     .setOrigin(0.5)
     .setVisible(false);
 
+  // Task 311 — brief red tint overlay for damage flash. Added on top of
+  // the torso so flashDamage() can tween it without touching the base
+  // torso fill/stroke state used by normal visual refresh.
+  const damageFlashOverlay = scene.add.ellipse(0, -1, 24, 28, 0xff2222, 0);
+  damageFlashOverlay.setDepth(1);
+
   const core = scene.add.circle(0, -2, 4, 0xffffff, 0.45);
   const infoText = scene.add
     .text(0, -34, "", {
@@ -93,7 +102,7 @@ export function createWorldSessionPlayerPlaceholderView(
     .setOrigin(0.5)
     .setVisible(false);
 
-  container.add([shadow, ring, legs, torso, shoulders, marker, head, core, infoText, approachLabelText]);
+  container.add([shadow, ring, legs, torso, shoulders, marker, head, damageFlashOverlay, core, infoText, approachLabelText]);
 
   const setInfo = (displayName?: string, hp?: number, maxHp?: number): void => {
     const safeName = typeof displayName === "string" ? displayName.trim() : "";
@@ -121,6 +130,28 @@ export function createWorldSessionPlayerPlaceholderView(
     container.setPosition(HIDDEN_POSITION, HIDDEN_POSITION);
   };
 
+  // Task 311 — brief red flash on the player body when server-confirmed
+  // damage lands. Tweens a red overlay alpha up then back to zero so
+  // the base torso fill/stroke are never modified (preserves the
+  // chasing/returning/idle visual state pattern used by enemies).
+  let damageFlashTween: Phaser.Tweens.Tween | null = null;
+  const flashDamage = (): void => {
+    damageFlashOverlay.setAlpha(0.65);
+    if (damageFlashTween !== null) {
+      damageFlashTween.stop();
+    }
+    damageFlashTween = scene.tweens.add({
+      targets: damageFlashOverlay,
+      alpha: { from: 0.65, to: 0 },
+      duration: 220,
+      ease: "Cubic.easeOut",
+      onComplete: () => {
+        damageFlashOverlay.setAlpha(0);
+        damageFlashTween = null;
+      },
+    });
+  };
+
   return {
     setPosition: (x: number, y: number) => {
       container.setPosition(x, y);
@@ -135,8 +166,13 @@ export function createWorldSessionPlayerPlaceholderView(
       approachLabelText.setText(nextText);
       approachLabelText.setVisible(nextText.length > 0);
     },
+    flashDamage,
     hide,
     destroy: () => {
+      if (damageFlashTween !== null) {
+        damageFlashTween.stop();
+        damageFlashTween = null;
+      }
       container.destroy(true);
     },
   };

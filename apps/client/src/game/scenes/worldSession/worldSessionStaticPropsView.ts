@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { en } from "@doomscrolls/localization";
 import { contentRegistry, type WorldPropContentDefinition } from "@doomscrolls/content";
 
 import {
@@ -110,6 +111,13 @@ function projectProp(
   };
 }
 
+function resolvePropLabel(prop: StaticPropScreenSnapshot): string {
+  if (prop.labelKey !== undefined && en[prop.labelKey] !== undefined) {
+    return en[prop.labelKey];
+  }
+  return prop.label;
+}
+
 function buildPropContainer(
   scene: Phaser.Scene,
   prop: StaticPropScreenSnapshot,
@@ -120,9 +128,12 @@ function buildPropContainer(
   const isAreaLabel = prop.kind === "area_label";
   const isCombatEdge = prop.kind === "combat_edge";
   const isBoundaryMarker = prop.kind === "boundary_marker";
-  const labelColor = isAreaLabel ? "#8a7f6e" : (isCombatEdge || isBoundaryMarker) ? "#cc6666" : isAmbientCreature ? "#f2d96b" : "#c8b08d";
+  const isSafeArea = prop.kind === "safe_area_marker";
+  const isRestArea = prop.kind === "rest_area_marker";
+  const labelColor = isSafeArea ? "#7ab87a" : isRestArea ? "#7ad8c0" : isAreaLabel ? "#8a7f6e" : (isCombatEdge || isBoundaryMarker) ? "#cc6666" : isAmbientCreature ? "#f2d96b" : "#c8b08d";
+  const displayLabel = resolvePropLabel(prop);
   const label = scene.add
-    .text(0, 18, prop.label, {
+    .text(0, 18, displayLabel, {
       color: labelColor,
       fontFamily: "Arial, sans-serif",
       fontSize: "11px",
@@ -234,6 +245,29 @@ function buildPropContainer(
       propContainer.add([wallBase, wallTop]);
       break;
     }
+    case "safe_area_marker": {
+      const ring = scene.add.graphics();
+      ring.lineStyle(2, 0x5a9e5a, 0.45);
+      ring.strokeCircle(0, 0, 14);
+      ring.fillStyle(0x5a9e5a, 0.08);
+      ring.fillCircle(0, 0, 14);
+      const innerDot = scene.add.circle(0, 0, 3, 0x7ab87a, 0.5);
+      propContainer.add([ring, innerDot]);
+      break;
+    }
+    case "rest_area_marker": {
+      const ring = scene.add.graphics();
+      ring.lineStyle(2, 0x4ab8a0, 0.50);
+      ring.strokeCircle(0, 0, 16);
+      ring.fillStyle(0x4ab8a0, 0.10);
+      ring.fillCircle(0, 0, 16);
+      const innerRing = scene.add.graphics();
+      innerRing.lineStyle(1, 0x7ad8c0, 0.35);
+      innerRing.strokeCircle(0, 0, 10);
+      const innerDot = scene.add.circle(0, 0, 3, 0x7ad8c0, 0.6);
+      propContainer.add([ring, innerRing, innerDot]);
+      break;
+    }
     case "path_marker": {
       const dotA = scene.add.circle(-6, 4, 3, 0x5c4f3e, 0.6);
       dotA.setStrokeStyle(1, 0x7a6b55, 0.4);
@@ -245,7 +279,7 @@ function buildPropContainer(
     }
     case "area_label": {
       const bg = scene.add.rectangle(0, 0, 4, 2, 0x8a7f6e, 0.2);
-      const deco = scene.add.text(0, -8, `— ${prop.label} —`, {
+      const deco = scene.add.text(0, -8, `— ${resolvePropLabel(prop)} —`, {
         color: "#8a7f6e",
         fontFamily: "Arial, sans-serif",
         fontSize: "13px",

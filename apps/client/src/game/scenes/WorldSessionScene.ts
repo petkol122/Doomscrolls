@@ -21,6 +21,7 @@ import { registerPickupWorldLootResponseListeners } from "../../net/pickupWorldL
 import { sendResetObjectiveIntent } from "../../net/resetObjectiveClient";
 import { registerRespawnListeners, sendRespawnRequest } from "../../net/respawnClient";
 import { registerSkillSlotResponseListeners } from "../../net/skillSlotIntentClient";
+import { createWorldSessionAreaBannerView, type WorldSessionAreaBannerView } from "./worldSession/worldSessionAreaBannerView";
 import { createWorldSessionFeedbackView, type WorldSessionFeedbackView } from "./worldSession/worldSessionFeedbackView";
 import { createWorldSessionOverlayView } from "./worldSession/worldSessionOverlayView";
 import {
@@ -118,6 +119,7 @@ export class WorldSessionScene extends Phaser.Scene {
     inventory: false,
     debug: false,
   };
+  private areaBanner: WorldSessionAreaBannerView | null = null;
   private latestSkillRejectedReason: string | null = null;
 
   public constructor() {
@@ -240,8 +242,10 @@ export class WorldSessionScene extends Phaser.Scene {
 
     registerAttackResponseListeners(this.room, {
       onAccepted: (message) => {
-        this.showAttackFeedback(t("world_area.attack_confirmed"));
-        this.worldAreaView?.showEnemyFloatingDamage(message.targetEnemyId, "-1");
+        // Task 310 — flash the hit enemy and show a brief "Hit!" indicator.
+        // Actual damage number is shown by the damage_applied handler.
+        this.worldAreaView?.showEnemyHitFlash(message.targetEnemyId);
+        this.worldAreaView?.showEnemyFloatingDamage(message.targetEnemyId, "Hit!");
       },
       onRejected: (message) => {
         this.showAttackFeedback(
@@ -256,7 +260,20 @@ export class WorldSessionScene extends Phaser.Scene {
       },
       onDamageApplied: (message) => {
         const isDowned = message.remainingHp <= 0;
-        this.worldAreaView?.showPlayerFloatingDamage(`-${message.damage}`);
+        // Task 310 — route damage_applied to enemy or player visual.
+        const isEnemyTarget = this.isEnemyEntityId(message.targetEntityId);
+        if (isEnemyTarget) {
+          this.worldAreaView?.showEnemyFloatingDamage(message.targetEntityId, `-${message.damage}`);
+          this.worldAreaView?.showEnemyHitFlash(message.targetEntityId);
+        } else {
+          // Task 311 — player took server-confirmed damage: red flash +
+          // floating damage number. Camera shake on downed for emphasis.
+          this.worldAreaView?.showPlayerFloatingDamage(`-${message.damage}`);
+          this.worldAreaView?.showPlayerHitFlash();
+          if (isDowned) {
+            this.cameras.main.shake(180, 0.008);
+          }
+        }
         this.feedbackView?.showDamageFeedback(
           isDowned
             ? t("world_session.downed_damage_feedback", { damage: message.damage })
@@ -337,6 +354,14 @@ export class WorldSessionScene extends Phaser.Scene {
         this.feedbackView?.clearDamageFeedback();
         this.feedbackView?.showNotice(t("world_session.respawned_notice", { hp: message.hp }));
       },
+    });
+
+    // Task 299 -- Town rest refill feedback: show a localized notice when
+    // the server restores HP and flask charges on entering a valid town zone.
+    // The synced Colyseus schema state is the source of truth for display;
+    // this just provides user-facing notification text.
+    this.room.onMessage("town_rest_refill", () => {
+      this.feedbackView?.showNotice(t("world_session.town_rest_refill"));
     });
 
     // Task 236 -- corpse interact rejection feedback
@@ -429,6 +454,8 @@ export class WorldSessionScene extends Phaser.Scene {
           message.targetEnemyId,
           t("world_area.skill_hit_label", { damage: message.damage }),
         );
+        // Task 310 — flash the enemy on skill hit for consistent feedback.
+        this.worldAreaView?.showEnemyHitFlash(message.targetEnemyId);
         this.renderOverlay();
       },
       onRejected: (message) => {
@@ -462,6 +489,9 @@ export class WorldSessionScene extends Phaser.Scene {
         this.renderOverlay();
       },
     });
+
+    // Task 298 — Show area name banner on zone entry.
+    this.showAreaBanner();
 
     this.renderOverlay();
     this.bootMarker?.destroy();
@@ -606,7 +636,24 @@ export class WorldSessionScene extends Phaser.Scene {
     this.renderOverlay();
   }
 
+  private showAreaBanner(): void {
+    if (this.room === null) return;
+    const state = this.room.state as unknown as Record<string, unknown>;
+    const zoneId = typeof state.zoneId === "string" && state.zoneId.length > 0
+      ? state.zoneId
+      : null;
+    if (zoneId === null || zoneId.length === 0) return;
+    this.areaBanner?.destroy();
+    this.areaBanner = createWorldSessionAreaBannerView();
+    this.areaBanner.show(zoneId);
+  }
+
   private handleSceneTeardown(): void {
+    // Null out room first so any pending onStateChange / onMessage
+    // callbacks that fire during or after teardown will see a null
+    // guard and skip rendering (prevents phantom overlays).
+    this.room = null;
+    this.account = null;
     this.apiClient = null;
     this.bootMarker?.destroy();
     this.bootMarker = null;
@@ -620,6 +667,8 @@ export class WorldSessionScene extends Phaser.Scene {
     this.vendorPanel = null;
     this.townServicePanel?.destroy();
     this.townServicePanel = null;
+    this.areaBanner?.destroy();
+    this.areaBanner = null;
     this.worldAreaView?.destroy();
     this.worldAreaView = null;
     this.destroyOverlay();
@@ -661,5 +710,15 @@ export class WorldSessionScene extends Phaser.Scene {
       this.account = await this.apiClient.getMe(sessionToken);
       this.renderOverlay();
     } catch { /* ignore */ }
+  }
+
+  // Task 310 — check if an entity ID belongs to a room enemy so
+  // damage_applied can route to enemy or player visual feedback.
+  private isEnemyEntityId(entityId: string): boolean {
+    if (this.room === null) return false;
+    const state = this.room.state as unknown as Record<string, unknown>;
+    const enemies = state?.enemies;
+    if (!(enemies instanceof Map)) return false;
+    return enemies.has(entityId);
   }
 }

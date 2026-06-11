@@ -290,15 +290,7 @@ export async function tryExecutePendingAction(context: DeferredActionExecutionCo
     });
 
     if (!dispatchResult.ok) {
-      const message = dispatchResult.rejected.reason === "inventory_full"
-        ? "Inventory full."
-        : "Pickup unavailable.";
       sendToClient("request_pickup_world_loot_rejected", dispatchResult.rejected);
-      sendToClient("interact_response", {
-        type: "interact_response",
-        objectId: validation.worldLoot.id,
-        message,
-      });
       return;
     }
 

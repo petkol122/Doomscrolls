@@ -160,6 +160,35 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
     if (!Number.isFinite(bounds.minX) || !Number.isFinite(bounds.maxX) || !Number.isFinite(bounds.minY) || !Number.isFinite(bounds.maxY)) {
       errors.push({ category: "zone", id: zone.id, message: "Bounds values must be finite numbers." });
     }
+
+    const restAreaBounds = zone.restAreaBounds;
+    if (restAreaBounds) {
+      if (!Number.isFinite(restAreaBounds.minX) || !Number.isFinite(restAreaBounds.maxX) || !Number.isFinite(restAreaBounds.minY) || !Number.isFinite(restAreaBounds.maxY)) {
+        errors.push({ category: "zone", id: zone.id, message: "Rest area bounds values must be finite numbers." });
+      }
+
+      if (restAreaBounds.minX >= restAreaBounds.maxX) {
+        errors.push({ category: "zone", id: zone.id, message: `Rest area bounds minX (${restAreaBounds.minX}) must be less than maxX (${restAreaBounds.maxX}).` });
+      }
+
+      if (restAreaBounds.minY >= restAreaBounds.maxY) {
+        errors.push({ category: "zone", id: zone.id, message: `Rest area bounds minY (${restAreaBounds.minY}) must be less than maxY (${restAreaBounds.maxY}).` });
+      }
+
+      // Ensure rest area bounds are within zone bounds
+      if (
+        restAreaBounds.minX < bounds.minX ||
+        restAreaBounds.maxX > bounds.maxX ||
+        restAreaBounds.minY < bounds.minY ||
+        restAreaBounds.maxY > bounds.maxY
+      ) {
+        errors.push({
+          category: "zone",
+          id: zone.id,
+          message: `Rest area bounds (${restAreaBounds.minX}, ${restAreaBounds.minY}) - (${restAreaBounds.maxX}, ${restAreaBounds.maxY}) must be within zone bounds (${bounds.minX}, ${bounds.minY}) - (${bounds.maxX}, ${bounds.maxY}).`,
+        });
+      }
+    }
   }
 
   for (const item of registry.items.all) {
@@ -291,7 +320,8 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
   const VALID_WORLD_PROP_KINDS = [
     "crate", "lamp", "debris", "junk", "ambient_rat", "ambient_pig",
     "ambient_chicken", "loot_container", "vendor", "town_service",
-    "waypoint", "combat_edge", "area_label", "path_marker", "boundary_marker"
+    "waypoint", "combat_edge", "area_label", "path_marker", "boundary_marker",
+    "safe_area_marker", "rest_area_marker"
   ] as const;
 
   for (const prop of registry.worldProps.all) {
@@ -305,6 +335,10 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
 
     if (!Number.isFinite(prop.x) || !Number.isFinite(prop.y)) {
       errors.push({ category: "worldProp", id: prop.id, message: "Coordinates must be finite numbers." });
+    }
+
+    if (prop.labelKey !== undefined && en[prop.labelKey] === undefined) {
+      errors.push({ category: "worldProp", id: prop.id, message: `Missing English localization key: ${prop.labelKey}` });
     }
   }
 

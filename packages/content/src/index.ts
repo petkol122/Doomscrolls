@@ -61,5 +61,6 @@ export type {
   ZoneContentBounds,
   ZoneContentDefinition,
   ZoneContentId,
+  ZoneContentRestAreaBounds,
   ZoneRoomType
 } from "./data/types";
