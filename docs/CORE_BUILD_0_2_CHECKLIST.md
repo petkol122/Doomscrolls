@@ -23,6 +23,8 @@ Track Core Build 0.2 tasks against their candidate pillars. Each row represents 
 
 **Core Build 0.2 has reached Release Candidate (RC) status after Tasks 285–315.** All 29 committed tasks are merged and validated. No new gameplay scope, no new content, no schema changes, no protocol additions will be added.
 
+**Core Build 0.2 is frozen for RC/bugfix-only.** 0.3 planning is underway under the **Playable Loop Build** theme. See [`docs/CORE_BUILD_0_3_PLAN.md`](./CORE_BUILD_0_3_PLAN.md) for the full plan, feature pillars, and candidate task list.
+
 ### Pillar Coverage (Final)
 
 | Pillar | Status | Tasks |

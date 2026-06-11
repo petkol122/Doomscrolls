@@ -2,7 +2,11 @@
 
 ## Status
 
-**Active development.** Core Build 0.1 is frozen for bugfix-only. 0.2 work began from the stable 0.1 RC baseline.
+**Release Candidate — Frozen for bugfix-only.** Core Build 0.2 has reached RC status. All 29 committed tasks (285–315) are merged and validated. No new gameplay scope, no new content, no schema changes, no protocol additions will be made.
+
+Only regressions or broken flows discovered during 0.2 RC validation may be patched. Each fix must be scoped to the minimum change required and must not expand 0.2 scope.
+
+Core Build 0.3 planning is underway. See [`docs/CORE_BUILD_0_3_PLAN.md`](./CORE_BUILD_0_3_PLAN.md).
 
 ---
 
