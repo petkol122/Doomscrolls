@@ -217,36 +217,36 @@ function createCharacterChip(
   panel.style.alignItems = "center";
   panel.style.justifyContent = "space-between";
   panel.style.gap = "10px";
-  panel.style.width = "min(260px, calc(100vw - 28px))";
-  panel.style.padding = "8px 10px";
+  panel.style.width = "min(220px, calc(100vw - 28px))";
+  panel.style.padding = "5px 8px";
 
   const textBlock = document.createElement("div");
   textBlock.style.display = "grid";
-  textBlock.style.gap = "2px";
+  textBlock.style.gap = "1px";
 
   const zoneLine = document.createElement("div");
   zoneLine.textContent = "The Nightmarket";
-  zoneLine.style.fontSize = "12px";
+  zoneLine.style.fontSize = "11px";
   zoneLine.style.fontWeight = "bold";
   zoneLine.style.color = "#d8c6a3";
   textBlock.appendChild(zoneLine);
 
   const testCombatLine = document.createElement("div");
   testCombatLine.textContent = "Temporary test combat zone";
-  testCombatLine.style.fontSize = "10px";
+  testCombatLine.style.fontSize = "9px";
   testCombatLine.style.color = "#a88d63";
   textBlock.appendChild(testCombatLine);
 
   const nameLine = document.createElement("div");
   nameLine.textContent = character.characterName;
-  nameLine.style.fontSize = "14px";
+  nameLine.style.fontSize = "13px";
   nameLine.style.fontWeight = "bold";
   nameLine.style.color = "#f0ddbb";
   textBlock.appendChild(nameLine);
 
   const subLine = document.createElement("div");
   subLine.textContent = `${displayName} • ${t("character.level")} ${level}`;
-  subLine.style.fontSize = "11px";
+  subLine.style.fontSize = "10px";
   subLine.style.color = "#b9d49a";
   textBlock.appendChild(subLine);
 
@@ -257,7 +257,7 @@ function createCharacterChip(
   leaveButton.style.width = "auto";
   leaveButton.style.flex = "0 0 auto";
   leaveButton.style.padding = "4px 8px";
-  leaveButton.style.fontSize = "11px";
+  leaveButton.style.fontSize = "10px";
   leaveButton.addEventListener("click", () => {
     onLeaveWorld();
   });
@@ -340,8 +340,8 @@ function renderHudContent(
 
   const panel = createCardSection();
   panel.style.display = "grid";
-  panel.style.gap = "6px";
-  panel.style.padding = "8px 12px";
+  panel.style.gap = "4px";
+  panel.style.padding = "6px 8px";
   panel.appendChild(createHudSection(
     selfHpSummary,
     selfHpRatio,
@@ -821,9 +821,7 @@ function createHudSection(
 
   wrapper.appendChild(createObjectiveTrackerCard(resolveObjectiveTrackerViewModel(objective, objectiveRewardGranted), onResetObjective));
 
-  wrapper.appendChild(createMiniHudStat("Resource", t("world_session.resource_placeholder")));
-  wrapper.appendChild(createMiniHudStat(t("character.level"), String(level ?? 1)));
-  wrapper.appendChild(createMiniHudStat(t("world_session.player_xp"), String(xp ?? 0)));
+  wrapper.appendChild(createMiniHudStat(`${t("character.level")} ${String(level ?? 1)}`, `XP ${String(xp ?? 0)}`));
 
   return wrapper;
 }
@@ -910,7 +908,7 @@ function formatMoveSpeed(moveSpeed: number): string {
 
 function createMiniHudStat(labelText: string, valueText: string): HTMLElement {
   const card = document.createElement("div");
-  card.style.padding = "6px 8px";
+  card.style.padding = "4px 8px";
   card.style.border = "1px solid #3c3122";
   card.style.borderRadius = "999px";
   card.style.background = "rgba(18, 14, 10, 0.9)";

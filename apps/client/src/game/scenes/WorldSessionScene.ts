@@ -27,11 +27,16 @@ import { createWorldSessionOverlayView } from "./worldSession/worldSessionOverla
 import {
   createVendorInteractionPanel,
   type VendorInteractionPanel,
+  type InventoryItemView,
 } from "./worldSession/vendorInteractionPanel";
 import {
   createTownServiceInteractionPanel,
   type TownServiceInteractionPanel,
 } from "./worldSession/townServiceInteractionPanel";
+import {
+  createStashInteractionPanel,
+  type StashInteractionPanel,
+} from "./worldSession/stashInteractionPanel";
 import {
   createWorldSessionAreaView,
   type WorldSessionAreaView,
@@ -113,6 +118,7 @@ export class WorldSessionScene extends Phaser.Scene {
   private lastObjectiveCompletionNotice: string | null = null;
   private vendorPanel: VendorInteractionPanel | null = null;
   private townServicePanel: TownServiceInteractionPanel | null = null;
+  private stashPanel: StashInteractionPanel | null = null;
   private utilityPanelOpenState: WorldSessionUtilityPanelOpenState = {
     controls: false,
     equipment: false,
@@ -183,22 +189,40 @@ export class WorldSessionScene extends Phaser.Scene {
         const vendorName = vendorService !== undefined
           ? t(vendorService.labelKey as never)
           : "Vendor";
+        // Build inventory items view for sell section
+        const inventoryItemsForSell = this.buildInventoryItemsForSell(character);
         this.vendorPanel?.destroy();
-        this.vendorPanel = createVendorInteractionPanel(vendorName, moneyCopper, {
+        this.vendorPanel = createVendorInteractionPanel(vendorName, moneyCopper, "nightmarket_suspicious_vendor", {
           stockEntries,
+          inventoryItems: inventoryItemsForSell,
+          onBuy: (vid, stockEntryId) => {
+            if (this.room !== null) {
+              this.room.send("request_buy_vendor_item", {
+                type: "request_buy_vendor_item",
+                vendorId: vid,
+                stockEntryId,
+              });
+            }
+          },
+          onSell: (vid, itemInstanceId) => {
+            if (this.room !== null) {
+              this.room.send("request_sell_item", {
+                type: "request_sell_item",
+                vendorId: vid,
+                itemInstanceId,
+              });
+            }
+          },
         });
         this.vendorPanel.show();
         return;
       }
       // Task 205 — Stash keeper / future town-service placeholder panel.
       if (objectId === "nightmarket_stash_keeper_01") {
-        const service = contentRegistry.townServices.get("nightmarket_stash_keeper");
-        if (service !== undefined) {
-          this.townServicePanel?.destroy();
-          this.townServicePanel = createTownServiceInteractionPanel(service);
-          this.townServicePanel.show();
-          return;
-        }
+        this.stashPanel?.destroy();
+        this.stashPanel = createStashInteractionPanel();
+        this.stashPanel.show();
+        return;
       }
       // Task 208 — Trainer town-service placeholder panel.
       if (objectId === "nightmarket_trainer_01") {
@@ -317,6 +341,68 @@ export class WorldSessionScene extends Phaser.Scene {
       const formatted = formatMoneyCompact(gained);
       this.feedbackView?.showNotice(`Picked up ${formatted}.`);
       void this.refreshAccountStateAfterPickup();
+    });
+
+    // Task 319 — Vendor buy accepted/rejected feedback
+    this.room.onMessage("request_buy_vendor_item_accepted", (message: { stockEntryId?: string; itemId?: string; priceCopper?: number; remainingCopper?: number }) => {
+      const itemId = typeof message.itemId === "string" ? message.itemId : "";
+      const itemDef = contentRegistry.items.get(itemId as never);
+      const itemLabel = itemDef !== undefined ? t(itemDef.nameKey as never) : "Item";
+      const remaining = typeof message.remainingCopper === "number" ? message.remainingCopper : 0;
+      const priceFormatted = typeof message.priceCopper === "number" ? formatMoneyCompact(message.priceCopper) : "";
+      this.feedbackView?.showNotice(t("town_service.vendor_panel.buy_success", { itemLabel, price: priceFormatted }));
+      this.vendorPanel?.updateMoney(remaining);
+      this.vendorPanel?.showFeedback(t("town_service.vendor_panel.buy_success", { itemLabel, price: priceFormatted }));
+      void this.refreshAccountStateAfterPickup();
+    });
+
+    this.room.onMessage("request_buy_vendor_item_rejected", (message: { reason?: string }) => {
+      const reason = typeof message?.reason === "string" ? message.reason : "";
+      const key = `town_service.vendor_panel.buy_rejected.${reason}` as Parameters<typeof t>[0];
+      const fallback = t("town_service.vendor_panel.buy_rejected.vendor_unavailable" as never);
+      const feedbackText = (() => { try { return t(key as never); } catch { return fallback; } })();
+      this.feedbackView?.showNotice(feedbackText);
+      this.vendorPanel?.showFeedback(feedbackText);
+    });
+
+    // Task 320 — Vendor sell accepted/rejected feedback
+    this.room.onMessage("request_sell_item_accepted", (message: { itemInstanceId?: string; definitionId?: string; sellPriceCopper?: number; remainingCopper?: number }) => {
+      const definitionId = typeof message.definitionId === "string" ? message.definitionId : "";
+      const itemDef = contentRegistry.items.get(definitionId as never);
+      const itemLabel = itemDef !== undefined ? t(itemDef.nameKey as never) : "Item";
+      const remaining = typeof message.remainingCopper === "number" ? message.remainingCopper : 0;
+      const priceFormatted = typeof message.sellPriceCopper === "number" ? formatMoneyCompact(message.sellPriceCopper) : "";
+      this.feedbackView?.showNotice(t("town_service.vendor_panel.sell_success" as never, { itemLabel, price: priceFormatted }));
+      this.vendorPanel?.updateMoney(remaining);
+      this.vendorPanel?.showFeedback(t("town_service.vendor_panel.sell_success" as never, { itemLabel, price: priceFormatted }));
+      void this.refreshAccountStateAfterPickup().then(() => {
+        if (this.account !== null && this.vendorPanel !== null) {
+          const char = this.account.characters.find((c) => c.id === this.characterId) ?? null;
+          this.vendorPanel.updateInventory(this.buildInventoryItemsForSell(char));
+        }
+      });
+    });
+
+    this.room.onMessage("request_sell_item_rejected", (message: { reason?: string }) => {
+      const reason = typeof message?.reason === "string" ? message.reason : "";
+      const key = `town_service.vendor_panel.sell_rejected.${reason}` as Parameters<typeof t>[0];
+      const fallback = t("town_service.vendor_panel.sell_rejected.vendor_unavailable" as never);
+      const feedbackText = (() => { try { return t(key as never); } catch { return fallback; } })();
+      this.feedbackView?.showNotice(feedbackText);
+      this.vendorPanel?.showFeedback(feedbackText);
+    });
+
+    this.room.onMessage("stash_items_listed", (message: { items?: unknown }) => {
+      const items = Array.isArray(message.items)
+        ? (message.items as import("@doomscrolls/shared").ItemInstance[])
+        : [];
+      this.stashPanel?.setItems(items);
+    });
+
+    this.room.onMessage("stash_items_list_rejected", () => {
+      const feedback = t("town_service.stash_keeper.load_failed" as never);
+      this.feedbackView?.showNotice(feedback);
+      this.stashPanel?.showFeedback(feedback);
     });
 
     this.room.onMessage("xp_gained", (message: { amount?: unknown; totalXp?: unknown; leveledUp?: unknown; level?: unknown; hp?: unknown; maxHp?: unknown; gainedMaxHp?: unknown }) => {
@@ -672,6 +758,8 @@ export class WorldSessionScene extends Phaser.Scene {
     this.vendorPanel = null;
     this.townServicePanel?.destroy();
     this.townServicePanel = null;
+    this.stashPanel?.destroy();
+    this.stashPanel = null;
     this.areaBanner?.destroy();
     this.areaBanner = null;
     this.worldAreaView?.destroy();
@@ -715,6 +803,38 @@ export class WorldSessionScene extends Phaser.Scene {
       this.account = await this.apiClient.getMe(sessionToken);
       this.renderOverlay();
     } catch { /* ignore */ }
+  }
+
+  // Task 320 — Build inventory items view model for vendor sell section.
+  // Only includes inventory items (not equipped items).
+  private buildInventoryItemsForSell(
+    character: { inventorySummaryItems?: readonly { itemInstanceId: string; definitionId: string }[] } | null,
+  ): InventoryItemView[] {
+    if (character?.inventorySummaryItems === undefined) {
+      return [];
+    }
+    const sellPriceRatio = 0.5;
+    const minSell = 1;
+    const items: InventoryItemView[] = [];
+    for (const item of character.inventorySummaryItems) {
+      const def = contentRegistry.items.get(item.definitionId as never);
+      if (def === undefined) continue;
+      let sellPrice = minSell;
+      for (const entry of contentRegistry.vendorStocks.all) {
+        if (entry.itemId === item.definitionId) {
+          sellPrice = Math.max(minSell, Math.floor(entry.priceCopper * sellPriceRatio));
+          break;
+        }
+      }
+      items.push({
+        itemInstanceId: item.itemInstanceId,
+        definitionId: item.definitionId,
+        itemLabel: t(def.nameKey as never),
+        sellPriceLabel: formatMoneyCompact(sellPrice),
+        sellPriceCopper: sellPrice,
+      });
+    }
+    return items;
   }
 
   // Task 310 — check if an entity ID belongs to a room enemy so

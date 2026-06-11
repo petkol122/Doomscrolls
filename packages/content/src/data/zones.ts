@@ -18,11 +18,12 @@ export const zones = [
     transitionZoneIds: ["blackwire_sewers"],
     mapKey: "map_nightmarket_placeholder",
     bounds: { minX: 0, maxX: 5000, minY: 0, maxY: 3600 },
-    // Task 303 — Physical town rest area: a rectangular region around the
-    // Nightmarket service cluster (spawn/services hub). Players standing
-    // inside this area get HP and healing flask charges restored.
-    // Bounds roughly cover the safe-area marker ring + service objects.
-    restAreaBounds: { minX: 40, maxX: 540, minY: 80, maxY: 480 }
+    // Task 303 / Task 328 — Physical town rest area: enlarged to match the
+    // widened Nightmarket spawn/services hub after the spacing pass.
+    // Players standing inside this area get HP and healing flask charges
+    // restored; bounds intentionally cover the safe/rest marker ring and the
+    // expanded service click targets.
+    restAreaBounds: { minX: 80, maxX: 780, minY: 120, maxY: 600 }
   },
   {
     id: "blackwire_sewers",

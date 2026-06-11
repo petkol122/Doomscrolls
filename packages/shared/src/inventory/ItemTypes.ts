@@ -5,7 +5,7 @@ import type { EquipmentSlot } from "./EquipmentTypes";
 
 export type ItemCategory = "weapon" | "armor" | "accessory" | "belt" | "flask" | "material";
 
-export type ItemLocationType = "room_loot" | "inventory" | "equipment" | "corpse_bound" | "deleted";
+export type ItemLocationType = "room_loot" | "inventory" | "stash" | "equipment" | "corpse_bound" | "deleted";
 
 export interface ItemSize {
   readonly width: number;
@@ -38,6 +38,14 @@ export interface InventoryItemLocation {
   readonly y: number;
 }
 
+export interface StashItemLocation {
+  readonly type: "stash";
+  readonly characterId: CharacterId;
+  readonly pageIndex: number;
+  readonly x: number;
+  readonly y: number;
+}
+
 export interface EquipmentItemLocation {
   readonly type: "equipment";
   readonly characterId: CharacterId;
@@ -58,6 +66,7 @@ export interface DeletedItemLocation {
 export type ItemLocation =
   | RoomLootLocation
   | InventoryItemLocation
+  | StashItemLocation
   | EquipmentItemLocation
   | CorpseBoundItemLocation
   | DeletedItemLocation;

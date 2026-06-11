@@ -244,6 +244,81 @@ export class CharacterRepository {
   }
 
   /**
+   * Atomically read the character's current `moneyCopper` total.
+   *
+   * Returns the `moneyCopper` value on success, or `null` when the
+   * character could not be found.
+   */
+  public async getMoneyCopper(characterId: string): Promise<number | null> {
+    const current = await this.db.character.findUnique({
+      where: { id: characterId },
+      select: { moneyCopper: true },
+    });
+    if (current === null) {
+      return null;
+    }
+    return Number.isFinite(current.moneyCopper) ? Math.max(0, current.moneyCopper) : 0;
+  }
+
+  /**
+   * Atomically subtract `amount` copper from a character's `moneyCopper` total.
+   *
+   * Returns the new `moneyCopper` total on success, or `null` when the
+   * character could not be found or has insufficient funds. The
+   * transaction makes the read-then-set safe against concurrent attempts.
+   */
+  public async decrementMoneyCopper(characterId: string, amount: number): Promise<number | null> {
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return null;
+    }
+    const safeAmount = Math.floor(amount);
+
+    if ("$transaction" in this.db) {
+      return this.db.$transaction(async (tx: Prisma.TransactionClient) => {
+        const current = await tx.character.findUnique({
+          where: { id: characterId },
+          select: { moneyCopper: true },
+        });
+        if (current === null) {
+          return null;
+        }
+        const safeCurrent = Number.isFinite(current.moneyCopper)
+          ? Math.max(0, current.moneyCopper)
+          : 0;
+        if (safeCurrent < safeAmount) {
+          return null;
+        }
+        const next = safeCurrent - safeAmount;
+        const updated = await tx.character.update({
+          where: { id: characterId },
+          data: { moneyCopper: next },
+          select: { moneyCopper: true },
+        });
+        return updated.moneyCopper;
+      });
+    }
+
+    const current = await this.db.character.findUnique({
+      where: { id: characterId },
+      select: { moneyCopper: true },
+    });
+    if (current === null) {
+      return null;
+    }
+    const safeCurrent = Number.isFinite(current.moneyCopper) ? Math.max(0, current.moneyCopper) : 0;
+    if (safeCurrent < safeAmount) {
+      return null;
+    }
+    const next = safeCurrent - safeAmount;
+    const updated = await this.db.character.update({
+      where: { id: characterId },
+      data: { moneyCopper: next },
+      select: { moneyCopper: true },
+    });
+    return updated.moneyCopper;
+  }
+
+  /**
    * Atomically add `delta` copper to a character's `moneyCopper` total.
    *
    * Returns the new `moneyCopper` total on success, or `null` when the

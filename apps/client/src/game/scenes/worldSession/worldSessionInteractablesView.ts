@@ -28,6 +28,14 @@ export interface WorldSessionInteractablesView {
       readonly projectionMode: WorldProjectionMode;
     },
   ) => void;
+  readonly updateProjection: (
+    room: Room<RoomState>,
+    projection: {
+      readonly bounds: WorldProjectionBounds;
+      readonly viewport: WorldProjectionViewport;
+      readonly projectionMode: WorldProjectionMode;
+    },
+  ) => void;
   readonly findClickedInteractable: (
     pointerX: number,
     pointerY: number,
@@ -49,12 +57,75 @@ export function createWorldSessionInteractablesView(
   parentContainer?.add(container);
   const graphicsObjects = new Map<string, Phaser.GameObjects.Graphics>();
   const labelTexts = new Map<string, Phaser.GameObjects.Text>();
+  const objectTypes = new Map<string, string>();
+  const openedStates = new Map<string, boolean>();
+  const objectLabels = new Map<string, string>();
   const hitAreas = new Map<
     string,
     { readonly screenX: number; readonly screenY: number; readonly worldX: number; readonly worldY: number }
   >();
   let screenOffsetX = 0;
   let screenOffsetY = 0;
+
+  const clearAll = (): void => {
+    graphicsObjects.forEach((g) => g.destroy());
+    labelTexts.forEach((t) => t.destroy());
+    graphicsObjects.clear();
+    labelTexts.clear();
+    objectTypes.clear();
+    openedStates.clear();
+    objectLabels.clear();
+    hitAreas.clear();
+  };
+
+  const drawInteractableGraphic = (
+    graphic: Phaser.GameObjects.Graphics,
+    objectType: string,
+    pixelX: number,
+    pixelY: number,
+    opened: boolean,
+  ): void => {
+    graphic.clear();
+    if (objectType === "vendor") {
+      graphic.fillStyle(0x7a4a8a, 0.9);
+      graphic.fillRect(pixelX - 12, pixelY - 16, 24, 32);
+      graphic.lineStyle(2, 0x5a2a6a, 0.9);
+      graphic.strokeRect(pixelX - 12, pixelY - 16, 24, 32);
+      return;
+    }
+    if (objectType === "town_service") {
+      graphic.fillStyle(0x2f7a7a, 0.9);
+      graphic.fillRect(pixelX - 12, pixelY - 16, 24, 32);
+      graphic.lineStyle(2, 0x1f5a5a, 0.9);
+      graphic.strokeRect(pixelX - 12, pixelY - 16, 24, 32);
+      return;
+    }
+    if (objectType === "loot_container") {
+      if (opened) {
+        graphic.fillStyle(0x5a4a3a, 0.8);
+        graphic.fillRect(pixelX - 10, pixelY - 6, 20, 12);
+        graphic.lineStyle(1, 0x3a2a1a, 0.9);
+        graphic.strokeRect(pixelX - 10, pixelY - 6, 20, 12);
+      } else {
+        graphic.fillStyle(0xc8a84a, 0.9);
+        graphic.fillRect(pixelX - 12, pixelY - 10, 24, 20);
+        graphic.lineStyle(1, 0x8a7a2a, 0.9);
+        graphic.strokeRect(pixelX - 12, pixelY - 10, 24, 20);
+      }
+      return;
+    }
+    graphic.fillStyle(0xa8873f, 0.8);
+    graphic.fillRect(pixelX - 8, pixelY - 8, 16, 16);
+    graphic.lineStyle(1, 0x6b5a2e, 0.9);
+    graphic.strokeRect(pixelX - 8, pixelY - 8, 16, 16);
+  };
+
+  const resolveDisplayLabel = (objectType: string, label: string, opened: boolean): string => {
+    if (objectType === "loot_container" && opened) {
+      return "Empty";
+    }
+    return label;
+  };
 
   const refresh = (
     room: Room<RoomState>,
@@ -64,12 +135,7 @@ export function createWorldSessionInteractablesView(
       readonly projectionMode: WorldProjectionMode;
     },
   ): void => {
-    // Clear existing objects
-    graphicsObjects.forEach((g) => g.destroy());
-    labelTexts.forEach((t) => t.destroy());
-    graphicsObjects.clear();
-    labelTexts.clear();
-    hitAreas.clear();
+    clearAll();
 
     // Get room state - check if it has interactables
     const state = room.state as unknown as Record<string, unknown>;
@@ -100,57 +166,79 @@ export function createWorldSessionInteractablesView(
       const pixelY = projectedPosition.y;
 
       const graphic = scene.add.graphics();
-      if (objectType === "vendor") {
-        // Task 197 — Vendor placeholder (purple, larger, NPC-like)
-        graphic.fillStyle(0x7a4a8a, 0.9);
-        graphic.fillRect(pixelX - 12, pixelY - 16, 24, 32);
-        graphic.lineStyle(2, 0x5a2a6a, 0.9);
-        graphic.strokeRect(pixelX - 12, pixelY - 16, 24, 32);
-      } else if (objectType === "town_service") {
-        // Task 205 — Town-service placeholder (teal, NPC-like, slightly
-        // distinct from the purple vendor so the player can tell them
-        // apart at a glance).
-        graphic.fillStyle(0x2f7a7a, 0.9);
-        graphic.fillRect(pixelX - 12, pixelY - 16, 24, 32);
-        graphic.lineStyle(2, 0x1f5a5a, 0.9);
-        graphic.strokeRect(pixelX - 12, pixelY - 16, 24, 32);
-      } else if (objectType === "loot_container") {
-        if (opened) {
-          // Opened container - grey/dark color, smaller
-          graphic.fillStyle(0x5a4a3a, 0.8);
-          graphic.fillRect(pixelX - 10, pixelY - 6, 20, 12);
-          graphic.lineStyle(1, 0x3a2a1a, 0.9);
-          graphic.strokeRect(pixelX - 10, pixelY - 6, 20, 12);
-        } else {
-          // Unopened container - golden/bronze color, larger
-          graphic.fillStyle(0xc8a84a, 0.9);
-          graphic.fillRect(pixelX - 12, pixelY - 10, 24, 20);
-          graphic.lineStyle(1, 0x8a7a2a, 0.9);
-          graphic.strokeRect(pixelX - 12, pixelY - 10, 24, 20);
-        }
-      } else {
-        // Default square placeholder for other interactables
-        graphic.fillStyle(0xa8873f, 0.8); // Gold-ish color for objects
-        graphic.fillRect(pixelX - 8, pixelY - 8, 16, 16);
-        graphic.lineStyle(1, 0x6b5a2e, 0.9);
-        graphic.strokeRect(pixelX - 8, pixelY - 8, 16, 16);
-      }
+      drawInteractableGraphic(graphic, objectType, pixelX, pixelY, opened);
       container.add(graphic);
       graphicsObjects.set(objectId, graphic);
+      objectTypes.set(objectId, objectType);
+      openedStates.set(objectId, opened);
+      objectLabels.set(objectId, label);
 
-      // Draw label - show different label for opened containers
-      let displayLabel = label;
-      if (objectType === "loot_container" && opened) {
-        displayLabel = "Empty";
-      }
+      const displayLabel = resolveDisplayLabel(objectType, label, opened);
       const labelText = scene.add.text(pixelX + 14, pixelY - 14, displayLabel, {
         color: "#d8c6a3",
         fontFamily: "Arial, sans-serif",
-        fontSize: "11px",
+        fontSize: "10px",
       });
       container.add(labelText);
       labelTexts.set(objectId, labelText);
 
+      hitAreas.set(objectId, {
+        screenX: pixelX + screenOffsetX,
+        screenY: pixelY + screenOffsetY,
+        worldX: x,
+        worldY: y,
+      });
+    });
+  };
+
+  const updateProjection = (
+    room: Room<RoomState>,
+    projection: {
+      readonly bounds: WorldProjectionBounds;
+      readonly viewport: WorldProjectionViewport;
+      readonly projectionMode: WorldProjectionMode;
+    },
+  ): void => {
+    const state = room.state as unknown as Record<string, unknown>;
+    const interactables = state.interactables as
+      | { forEach: (fn: (value: Record<string, unknown>, key: string) => void) => void }
+      | undefined;
+
+    if (!interactables) {
+      return;
+    }
+
+    interactables.forEach((value) => {
+      const objectId = String(value.id ?? "");
+      const x = typeof value.x === "number" ? value.x : 0;
+      const y = typeof value.y === "number" ? value.y : 0;
+      const opened = typeof value.opened === "boolean" ? value.opened : false;
+      const objectType = String(value.type ?? objectTypes.get(objectId) ?? "");
+      const label = String(value.label ?? objectLabels.get(objectId) ?? "Object");
+      const projectedPosition = worldToScreenActiveProjection(
+        x,
+        y,
+        projection.bounds,
+        projection.viewport,
+        projection.projectionMode,
+      );
+      const pixelX = projectedPosition.x;
+      const pixelY = projectedPosition.y;
+
+      const graphic = graphicsObjects.get(objectId);
+      if (graphic !== undefined) {
+        drawInteractableGraphic(graphic, objectType, pixelX, pixelY, opened);
+      }
+
+      const labelText = labelTexts.get(objectId);
+      if (labelText !== undefined) {
+        labelText.setPosition(pixelX + 14, pixelY - 14);
+        labelText.setText(resolveDisplayLabel(objectType, label, opened));
+      }
+
+      objectTypes.set(objectId, objectType);
+      openedStates.set(objectId, opened);
+      objectLabels.set(objectId, label);
       hitAreas.set(objectId, {
         screenX: pixelX + screenOffsetX,
         screenY: pixelY + screenOffsetY,
@@ -219,6 +307,7 @@ export function createWorldSessionInteractablesView(
 
   return {
     refresh,
+    updateProjection,
     findClickedInteractable,
     setHoveredObject,
     getHoveredObject,
@@ -227,9 +316,7 @@ export function createWorldSessionInteractablesView(
       screenOffsetY = y;
     },
     destroy: () => {
-      graphicsObjects.forEach((g) => g.destroy());
-      labelTexts.forEach((t) => t.destroy());
-      hitAreas.clear();
+      clearAll();
       container.destroy(true);
     },
   };

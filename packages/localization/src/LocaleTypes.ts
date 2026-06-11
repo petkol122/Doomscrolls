@@ -217,7 +217,13 @@ export const REQUIRED_LOCALIZATION_KEYS = [
   "world_session.rest_area_entered",
   "world_session.rest_area_exited",
   "town_service.suspicious_vendor.name",
-  "town_service.suspicious_vendor.unavailable"
+  "town_service.suspicious_vendor.unavailable",
+  "town_service.stash_keeper.panel_title",
+  "town_service.stash_keeper.foundation_notice",
+  "town_service.stash_keeper.empty",
+  "town_service.stash_keeper.page_position",
+  "town_service.stash_keeper.load_failed",
+  "ui.close"
 ] as const;
 
 export type RequiredLocalizationKey = (typeof REQUIRED_LOCALIZATION_KEYS)[number];

@@ -16,6 +16,7 @@ enum SessionStatus {
 enum ItemLocationType {
   ROOM_LOOT
   INVENTORY
+  STASH
   EQUIPMENT
   CORPSE_BOUND
   DELETED
@@ -171,6 +172,9 @@ model ItemInstance {
   inventoryPage     Int?
   inventoryX        Int?
   inventoryY        Int?
+  stashPage         Int?
+  stashX            Int?
+  stashY            Int?
   equipmentSlot     String?
   roomId            String?
   zoneId            String?
@@ -189,6 +193,8 @@ model ItemInstance {
   @@index([ownerCharacterId])
   @@index([definitionId])
   @@index([locationType])
+  @@index([ownerCharacterId, locationType])
+  @@index([ownerCharacterId, stashPage])
   @@index([roomId])
   @@index([zoneId])
   @@index([corpseId])

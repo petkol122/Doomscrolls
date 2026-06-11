@@ -13,8 +13,8 @@ export function applyWorldSessionOverlayRootStyles(root: HTMLDivElement): void {
   // through empty space. Interactive children opt back in via
   // `makeInteractiveAndStopWorldInput()` from `worldSessionPointerEvents`.
   root.style.fontFamily = "Arial, sans-serif";
-  root.style.padding = "12px 14px 16px";
-  root.style.gap = "10px";
+  root.style.padding = "8px 10px 10px";
+  root.style.gap = "6px";
   root.style.boxSizing = "border-box";
 }
 
@@ -45,7 +45,7 @@ export function applyWorldSessionOverlayHudStyles(panel: HTMLElement): void {
   panel.style.display = "grid";
   panel.style.alignSelf = "end";
   panel.style.justifySelf = "center";
-  panel.style.width = "min(760px, calc(100vw - 32px))";
+  panel.style.width = "min(680px, calc(100vw - 32px))";
   panel.style.maxWidth = "100%";
 }
 
@@ -55,12 +55,12 @@ export function applyWorldSessionOverlayPanelStyles(panel: HTMLElement): void {
   // click / contextmenu stoppers so the panel reliably catches input
   // and never lets a click leak to the Phaser world canvas behind it.
   makeInteractiveAndStopWorldInput(panel);
-  panel.style.padding = "8px 10px";
+  panel.style.padding = "6px 8px";
   panel.style.border = "1px solid #4d3f2a";
   panel.style.borderRadius = "12px";
   panel.style.background = "rgba(10, 8, 7, 0.86)";
   panel.style.color = "#d8c6a3";
-  panel.style.boxShadow = "0 10px 32px rgba(0, 0, 0, 0.35)";
+  panel.style.boxShadow = "0 6px 20px rgba(0, 0, 0, 0.3)";
   // Panels are display containers only; let canvas receive clicks in
   // the panel's empty area. Inner interactive children opt back in via
   // `pointerEvents: "auto"` on themselves (buttons, summaries, rows).

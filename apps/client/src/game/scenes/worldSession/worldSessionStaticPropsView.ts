@@ -21,6 +21,12 @@ export interface WorldSessionStaticPropsView {
     readonly viewport: WorldProjectionViewport;
     readonly projectionMode: WorldProjectionMode;
   }) => void;
+  readonly updateProjection: (projection: {
+    readonly zoneId: string;
+    readonly bounds: WorldProjectionBounds;
+    readonly viewport: WorldProjectionViewport;
+    readonly projectionMode: WorldProjectionMode;
+  }) => void;
   readonly destroy: () => void;
 }
 
@@ -31,6 +37,18 @@ export function createWorldSessionStaticPropsView(
   const container = scene.add.container(0, 0);
   parentContainer?.add(container);
   const propContainers = new Map<string, Phaser.GameObjects.Container>();
+  let currentZoneId: string | null = null;
+
+  const getProjectedProps = (projection: {
+    readonly zoneId: string;
+    readonly bounds: WorldProjectionBounds;
+    readonly viewport: WorldProjectionViewport;
+    readonly projectionMode: WorldProjectionMode;
+  }): StaticPropScreenSnapshot[] => contentRegistry.worldProps.all
+    .filter((prop) => prop.zoneId === projection.zoneId)
+    .map((prop) => projectProp(prop, projection))
+    .filter((prop): prop is StaticPropScreenSnapshot => prop !== null)
+    .sort((left, right) => left.y - right.y);
 
   const destroyAll = (): void => {
     for (const propContainer of propContainers.values()) {
@@ -46,12 +64,9 @@ export function createWorldSessionStaticPropsView(
     readonly projectionMode: WorldProjectionMode;
   }): void => {
     destroyAll();
+    currentZoneId = projection.zoneId;
 
-    const visibleProps = contentRegistry.worldProps.all
-      .filter((prop) => prop.zoneId === projection.zoneId)
-      .map((prop) => projectProp(prop, projection))
-      .filter((prop): prop is StaticPropScreenSnapshot => prop !== null)
-      .sort((left, right) => left.y - right.y);
+    const visibleProps = getProjectedProps(projection);
 
     for (const prop of visibleProps) {
       const propContainer = buildPropContainer(scene, prop);
@@ -60,8 +75,31 @@ export function createWorldSessionStaticPropsView(
     }
   };
 
+  const updateProjection = (projection: {
+    readonly zoneId: string;
+    readonly bounds: WorldProjectionBounds;
+    readonly viewport: WorldProjectionViewport;
+    readonly projectionMode: WorldProjectionMode;
+  }): void => {
+    if (currentZoneId !== projection.zoneId) {
+      refresh(projection);
+      return;
+    }
+
+    const visibleProps = getProjectedProps(projection);
+    for (const prop of visibleProps) {
+      const propContainer = propContainers.get(prop.id);
+      if (propContainer === undefined) {
+        continue;
+      }
+      propContainer.setPosition(prop.screenX, prop.screenY);
+      propContainer.setDepth(prop.screenY);
+    }
+  };
+
   return {
     refresh,
+    updateProjection,
     destroy: () => {
       destroyAll();
       container.destroy();
@@ -132,28 +170,23 @@ function buildPropContainer(
   const isRestArea = prop.kind === "rest_area_marker";
   const labelColor = isSafeArea ? "#7ab87a" : isRestArea ? "#7ad8c0" : isAreaLabel ? "#8a7f6e" : (isCombatEdge || isBoundaryMarker) ? "#cc6666" : isAmbientCreature ? "#f2d96b" : "#c8b08d";
   const displayLabel = resolvePropLabel(prop);
+  const labelFontSize = isAmbientCreature ? "9px" : isAreaLabel ? "13px" : "11px";
   const label = scene.add
     .text(0, 18, displayLabel, {
-      color: labelColor,
+      color: isAmbientCreature ? "#b8a050" : labelColor,
       fontFamily: "Arial, sans-serif",
-      fontSize: "11px",
+      fontSize: labelFontSize,
+      fontStyle: isAmbientCreature ? "normal" : "normal",
       stroke: "#120e0a",
       strokeThickness: 3,
     })
     .setOrigin(0.5);
-  const stateLabel = isAmbientCreature
-    ? scene.add
-        .text(0, -16, "Neutral", {
-          color: "#f5dc72",
-          fontFamily: "Arial, sans-serif",
-          fontSize: "10px",
-          stroke: "#120e0a",
-          strokeThickness: 3,
-        })
-        .setOrigin(0.5)
-    : null;
+  // No separate "Neutral" badge — the gold label color alone signals
+  // ambient/neutral status, keeping the label layer less noisy.
+  const stateLabel: null = null;
 
   propContainer.add(shadow);
+  // Ambient creature shadow stays minimal to reduce visual noise.
 
   switch (prop.kind) {
     case "crate": {

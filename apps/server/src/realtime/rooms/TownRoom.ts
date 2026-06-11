@@ -73,8 +73,11 @@ import { NIGHTMARKET_DEFAULT_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
 import { resolveTownZoneId } from "./resolveTownZoneId";
 import { CharacterRepository } from "../../persistence/repositories";
 import { ItemRepository } from "../../persistence/repositories/ItemRepository";
+import { toItemInstanceDto } from "../../persistence/mappers/itemMapper";
 import { tryResolveLevelProgression } from "./levelProgression";
 import { CharacterStatsService } from "../../character/CharacterStatsService";
+import { executeVendorBuyItem } from "./vendorBuyItem";
+import { executeVendorSellItem } from "./vendorSellItem";
 // Task 206 -- server-owned approach stop point for deferred queues
 // (attack / pickup / interact). The server still applies the
 // resolved target through applyMovementIntent; the client never
@@ -636,6 +639,8 @@ export class TownRoom extends Room {
   private dodgeHandlerRegistered = false;
   private healingFlaskHandlerRegistered = false;
   private skillSlotHandlerRegistered = false;
+  private vendorBuyHandlerRegistered = false;
+  private vendorSellHandlerRegistered = false;
 
   public override async onCreate(options: TownRoomJoinOptions): Promise<void> {
     const log = createRoomLogger(
@@ -662,6 +667,8 @@ export class TownRoom extends Room {
     this.registerDodgeHandler(log);
     this.registerHealingFlaskHandler(log);
     this.registerSkillSlotHandler(log);
+    this.registerVendorBuyHandler(log);
+    this.registerVendorSellHandler(log);
     this.setSimulationInterval((deltaMs: number) => {
       const state = this.state as TownRoomState;
       stepTownRoomMovement(state, deltaMs, {
@@ -1104,7 +1111,7 @@ export class TownRoom extends Room {
     }
     this.interactHandlerRegistered = true;
 
-    this.onMessage("request_interact", (client: Client, raw: unknown) => {
+    this.onMessage("request_interact", async (client: Client, raw: unknown) => {
       const state = this.state as TownRoomState;
       const message = raw as Partial<RequestInteractClientMessage> | null;
 
@@ -1247,6 +1254,31 @@ export class TownRoom extends Room {
           "TownRoom loot container interaction handled.",
         );
         return;
+      }
+
+      if (message.objectId === "nightmarket_stash_keeper_01") {
+        try {
+          const stashItems = await new ItemRepository().listStashItems(player.characterId.toString());
+          const stashListed: import("@doomscrolls/shared").StashItemsListedServerMessage = {
+            type: "stash_items_listed",
+            objectId: message.objectId,
+            serviceId: "nightmarket_stash_keeper",
+            items: stashItems.map((item) => toItemInstanceDto(item)),
+          };
+          try {
+            client.send("stash_items_listed", stashListed);
+          } catch {}
+        } catch {
+          const rejected: import("@doomscrolls/shared").StashItemsListRejectedServerMessage = {
+            type: "stash_items_list_rejected",
+            objectId: message.objectId,
+            serviceId: "nightmarket_stash_keeper",
+            reason: "list_failed",
+          };
+          try {
+            client.send("stash_items_list_rejected", rejected);
+          } catch {}
+        }
       }
 
       const response: InteractResponseServerMessage = {
@@ -2250,6 +2282,222 @@ export class TownRoom extends Room {
     });
   }
 
+  /**
+   * Task 319 — Register the `request_buy_vendor_item` message handler.
+   *
+   * Validates vendor existence, stock membership, price, player
+   * currency and inventory space, then atomically deducts copper
+   * and creates the inventory item. Sends accepted/rejected
+   * feedback to the originating client.
+   */
+  private registerVendorBuyHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.vendorBuyHandlerRegistered) {
+      return;
+    }
+    this.vendorBuyHandlerRegistered = true;
+
+    this.onMessage("request_buy_vendor_item", async (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const message = raw as { vendorId?: string; stockEntryId?: string } | null;
+
+      if (
+        !message ||
+        typeof message.vendorId !== "string" ||
+        typeof message.stockEntryId !== "string"
+      ) {
+        log.warn?.(
+          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+          "TownRoom request_buy_vendor_item rejected: invalid shape.",
+        );
+        return;
+      }
+
+      const player = state.playerPresence.get(client.sessionId);
+      if (player === undefined || player.lifeState !== "alive") {
+        try {
+          client.send("request_buy_vendor_item_rejected", {
+            type: "request_buy_vendor_item_rejected",
+            reason: "vendor_unavailable",
+          });
+        } catch {}
+        log.warn?.(
+          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+          "TownRoom request_buy_vendor_item rejected: player not found or downed.",
+        );
+        return;
+      }
+
+      const result = await executeVendorBuyItem({
+        characterId: player.characterId,
+        vendorId: message.vendorId,
+        stockEntryId: message.stockEntryId,
+      });
+
+      if (result.ok) {
+        const accepted: import("@doomscrolls/shared").RequestBuyVendorItemAcceptedServerMessage = {
+          type: "request_buy_vendor_item_accepted",
+          stockEntryId: result.stockEntryId,
+          itemId: result.itemId,
+          priceCopper: result.priceCopper,
+          remainingCopper: result.remainingCopper,
+        };
+        try { client.send("request_buy_vendor_item_accepted", accepted); } catch {}
+
+        // Also send a currency_picked_up message so the client can
+        // update the HUD money display without waiting for /me.
+        try {
+          client.send("currency_picked_up", {
+            type: "currency_picked_up",
+            characterId: player.characterId,
+            gainedCopper: 0,
+            totalMoneyCopper: result.remainingCopper,
+          });
+        } catch {}
+
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            stockEntryId: result.stockEntryId,
+            itemId: result.itemId,
+            priceCopper: result.priceCopper,
+            remainingCopper: result.remainingCopper,
+          },
+          "TownRoom request_buy_vendor_item accepted: item purchased.",
+        );
+      } else {
+        try {
+          client.send("request_buy_vendor_item_rejected", {
+            type: "request_buy_vendor_item_rejected",
+            reason: result.reason,
+            stockEntryId: message.stockEntryId,
+          });
+        } catch {}
+
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            reason: result.reason,
+          },
+          "TownRoom request_buy_vendor_item rejected.",
+        );
+      }
+    });
+  }
+
+  /**
+   * Task 320 — Register the `request_sell_item` message handler.
+   *
+   * Validates vendor existence, item ownership, equipment state,
+   * sellability and price, then atomically deletes the item and
+   * awards copper. Sends accepted/rejected feedback to the
+   * originating client.
+   */
+  private registerVendorSellHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.vendorSellHandlerRegistered) {
+      return;
+    }
+    this.vendorSellHandlerRegistered = true;
+
+    this.onMessage("request_sell_item", async (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const message = raw as { vendorId?: string; itemInstanceId?: string } | null;
+
+      if (
+        !message ||
+        typeof message.vendorId !== "string" ||
+        typeof message.itemInstanceId !== "string"
+      ) {
+        log.warn?.(
+          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+          "TownRoom request_sell_item rejected: invalid shape.",
+        );
+        return;
+      }
+
+      const player = state.playerPresence.get(client.sessionId);
+      if (player === undefined || player.lifeState !== "alive") {
+        try {
+          client.send("request_sell_item_rejected", {
+            type: "request_sell_item_rejected",
+            reason: "vendor_unavailable",
+          });
+        } catch {}
+        log.warn?.(
+          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+          "TownRoom request_sell_item rejected: player not found or downed.",
+        );
+        return;
+      }
+
+      const result = await executeVendorSellItem({
+        characterId: player.characterId,
+        vendorId: message.vendorId,
+        itemInstanceId: message.itemInstanceId,
+      });
+
+      if (result.ok) {
+        const accepted: import("@doomscrolls/shared").RequestSellItemAcceptedServerMessage = {
+          type: "request_sell_item_accepted",
+          itemInstanceId: result.itemInstanceId,
+          definitionId: result.definitionId,
+          sellPriceCopper: result.sellPriceCopper,
+          remainingCopper: result.remainingCopper,
+        };
+        try { client.send("request_sell_item_accepted", accepted); } catch {}
+
+        // Also send a currency_picked_up message so the client can
+        // update the HUD money display without waiting for /me.
+        try {
+          client.send("currency_picked_up", {
+            type: "currency_picked_up",
+            characterId: player.characterId,
+            gainedCopper: result.sellPriceCopper,
+            totalMoneyCopper: result.remainingCopper,
+          });
+        } catch {}
+
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            itemInstanceId: result.itemInstanceId,
+            definitionId: result.definitionId,
+            sellPriceCopper: result.sellPriceCopper,
+            remainingCopper: result.remainingCopper,
+          },
+          "TownRoom request_sell_item accepted: item sold.",
+        );
+      } else {
+        try {
+          client.send("request_sell_item_rejected", {
+            type: "request_sell_item_rejected",
+            reason: result.reason,
+            itemInstanceId: message.itemInstanceId,
+          });
+        } catch {}
+
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            reason: result.reason,
+          },
+          "TownRoom request_sell_item rejected.",
+        );
+      }
+    });
+  }
+
   private applyEnemyAggroDamage(now: number, deltaMs: number): void {
     const state = this.state as TownRoomState;
 
@@ -2540,4 +2788,6 @@ export class TownRoom extends Room {
     });
   }
 }
+
+
 

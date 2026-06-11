@@ -1,5 +1,8 @@
 import type { CharacterDetails } from "../character/CharacterTypes";
 import type { CharacterCorpseState } from "../character/DeathTypes";
+import type { RequestBuyVendorItemRejectedReason } from "../room/VendorBuyTypes";
+import type { RequestSellItemRejectedReason } from "../room/VendorSellTypes";
+import type { StashItemsListRejectedReason } from "../room/StashTypes";
 import type { EquipmentLoadout } from "../inventory/EquipmentTypes";
 import type { InventoryGrid } from "../inventory/InventoryTypes";
 import type { ItemInstance } from "../inventory/ItemTypes";
@@ -369,6 +372,60 @@ export interface TownRestRefillServerMessage {
   readonly restoredFlaskCharges: number;
 }
 
+// ---------------------------------------------------------------------------
+// Task 319 — Vendor Foundation: Server-Authoritative Buy Item.
+//
+// Server sends accepted/rejected feedback after validating a vendor buy
+// request. The client never decides the price or item placement.
+// ---------------------------------------------------------------------------
+export interface RequestBuyVendorItemAcceptedServerMessage {
+  readonly type: "request_buy_vendor_item_accepted";
+  readonly stockEntryId: string;
+  readonly itemId: string;
+  readonly priceCopper: number;
+  readonly remainingCopper: number;
+}
+
+export interface RequestBuyVendorItemRejectedServerMessage {
+  readonly type: "request_buy_vendor_item_rejected";
+  readonly reason: RequestBuyVendorItemRejectedReason;
+  readonly stockEntryId?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Task 320 — Vendor Foundation: Server-Authoritative Sell Item.
+//
+// Server sends accepted/rejected feedback after validating a vendor sell
+// request. The client never decides the sell price.
+// ---------------------------------------------------------------------------
+export interface RequestSellItemAcceptedServerMessage {
+  readonly type: "request_sell_item_accepted";
+  readonly itemInstanceId: string;
+  readonly definitionId: string;
+  readonly sellPriceCopper: number;
+  readonly remainingCopper: number;
+}
+
+export interface RequestSellItemRejectedServerMessage {
+  readonly type: "request_sell_item_rejected";
+  readonly reason: RequestSellItemRejectedReason;
+  readonly itemInstanceId?: string;
+}
+
+export interface StashItemsListedServerMessage {
+  readonly type: "stash_items_listed";
+  readonly objectId: string;
+  readonly serviceId: string;
+  readonly items: readonly ItemInstance[];
+}
+
+export interface StashItemsListRejectedServerMessage {
+  readonly type: "stash_items_list_rejected";
+  readonly objectId: string;
+  readonly serviceId: string;
+  readonly reason: StashItemsListRejectedReason;
+}
+
 export type ServerRoomMessage =
   | RoomStateSnapshotServerMessage
   | RoomStatePatchServerMessage
@@ -404,4 +461,10 @@ export type ServerRoomMessage =
   | RequestUseSkillSlotRejectedServerMessage
   | CurrencyPickedUpServerMessage
   | TownRestRefillServerMessage
+  | RequestBuyVendorItemAcceptedServerMessage
+  | RequestBuyVendorItemRejectedServerMessage
+  | RequestSellItemAcceptedServerMessage
+  | RequestSellItemRejectedServerMessage
+  | StashItemsListedServerMessage
+  | StashItemsListRejectedServerMessage
   | ErrorServerMessage;
