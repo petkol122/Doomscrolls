@@ -198,7 +198,7 @@ export function getInteractableResponseMessage(objectId: string): string {
     return '"What\'re you buyin\'?"';
   }
   const responses: Record<string, string> = {
-    nightmarket_notice_board_01: "The notice board hums quietly.",
+    nightmarket_notice_board_01: t("world_prop.notice_board.label"),
   };
   return responses[objectId] ?? "You interact with the object.";
 }

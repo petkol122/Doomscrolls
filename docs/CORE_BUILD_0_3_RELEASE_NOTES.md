@@ -1,5 +1,28 @@
 # docs/CORE_BUILD_0_3_RELEASE_NOTES.md — Core Build 0.3 Release Notes
 
+## Task 332 — Remove Fake Objective Placeholder Only
+
+**Summary:**
+
+Removed the fake WorldSession objective placeholder from normal gameplay without introducing a real objective system yet. When no authoritative objective exists, the HUD now omits the objective section instead of inventing hint text, fake progress, or a fake completed state.
+
+**Changes:**
+
+- **`apps/client/src/game/scenes/worldSession/worldSessionOverlayView.ts`**: Removed the client-only fallback objective path that previously created a fake default tracked objective and a fake "no more notices" placeholder even when no real objective was active.
+
+- **`apps/client/src/game/scenes/worldSession/worldSessionOverlayView.ts`**: Updated the bottom HUD layout so the objective card is rendered only when real objective state exists in player presence. The HUD now collapses to vitality + level/XP when no objective is active.
+
+- **`apps/client/src/game/scenes/worldSession/worldSessionOverlayView.ts`**: Preserved rendering for real synced objective state, including active/completed labels, progress bar, and completion reward text when the server actually provides those values.
+
+**Verification:**
+
+- Focused code-path verification only; no broader gameplay systems were changed.
+
+**Known limitations:**
+
+- This task does not add a quest/objective system, tracking, rewards, persistence, or kill-progress logic.
+- Objective location text remains a simple neutral fallback in the existing real-objective HUD card until a future real objective/location pipeline is introduced.
+
 ## Task 331 — Travel Foundation: Town to Combat Area Routing
 
 **Summary:**

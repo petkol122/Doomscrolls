@@ -343,6 +343,7 @@ export interface ObjectiveUpdatedServerMessage {
   readonly current: number;
   readonly target: number;
   readonly completed: boolean;
+  readonly readyToTurnIn?: boolean;
   readonly xpReward?: number;
   readonly copperReward?: number;
 }

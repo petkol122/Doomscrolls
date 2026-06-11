@@ -1,6 +1,4 @@
 import type { Room } from "@colyseus/sdk";
-import { contentRegistry } from "@doomscrolls/content";
-import type { ObjectiveId } from "@doomscrolls/content";
 import { t } from "@doomscrolls/localization";
 import type { CharacterSummary, InventorySummaryItem, RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
 import type { StatModifier } from "@doomscrolls/shared";
@@ -25,7 +23,6 @@ import type { WorldProjectionMode } from "../../worldProjection";
 
 const COMMON_ITEM_COLOR = "#d8c6a3";
 const COMMON_ITEM_ACCENT_COLOR = "#a88d63";
-const DEFAULT_TRACKED_OBJECTIVE_ID = "cull_trashboars" as const;
 
 export interface WorldSessionUtilityPanelOpenState {
   readonly controls: boolean;
@@ -58,13 +55,10 @@ export interface WorldSessionOverlayView {
 
 interface ObjectiveTrackerViewModel {
   readonly title: string;
-  readonly titleHint: string;
   readonly stateLabel: string;
   readonly current: number;
   readonly target: number;
   readonly completed: boolean;
-  readonly isHint: boolean;
-  readonly allDone: boolean;
   readonly location?: string;
   readonly xpReward?: number;
   readonly copperReward?: number;
@@ -763,7 +757,9 @@ function createHudSection(
   const wrapper = document.createElement("section");
   wrapper.style.display = "grid";
   wrapper.style.gap = "8px";
-  wrapper.style.gridTemplateColumns = "minmax(240px, 1.6fr) repeat(2, minmax(72px, auto))";
+  wrapper.style.gridTemplateColumns = objective === null || objective === undefined
+    ? "minmax(240px, 1.6fr) minmax(72px, auto)"
+    : "minmax(240px, 1.6fr) minmax(176px, auto) minmax(72px, auto)";
   wrapper.style.alignItems = "center";
 
   const hpLine = document.createElement("div");
@@ -819,7 +815,10 @@ function createHudSection(
 
   wrapper.appendChild(vitalityCard);
 
-  wrapper.appendChild(createObjectiveTrackerCard(resolveObjectiveTrackerViewModel(objective, objectiveRewardGranted), onResetObjective));
+  const objectiveTrackerViewModel = resolveObjectiveTrackerViewModel(objective, objectiveRewardGranted);
+  if (objectiveTrackerViewModel !== null) {
+    wrapper.appendChild(createObjectiveTrackerCard(objectiveTrackerViewModel, onResetObjective));
+  }
 
   wrapper.appendChild(createMiniHudStat(`${t("character.level")} ${String(level ?? 1)}`, `XP ${String(xp ?? 0)}`));
 
@@ -938,32 +937,13 @@ function createObjectiveTrackerCard(objective: ObjectiveTrackerViewModel, onRese
   card.style.gap = "4px";
   card.style.padding = "8px 10px";
 
-  if (objective.allDone) {
-    // All objectives in chain are complete — show a dim "No more notices"
-    card.style.border = "1px solid #3c3122";
-    card.style.borderRadius = "12px";
-    card.style.background = "linear-gradient(180deg, rgba(20, 18, 14, 0.9) 0%, rgba(14, 12, 10, 0.9) 100%)";
-    card.style.minWidth = "176px";
-
-    const line = document.createElement("div");
-    line.textContent = t("objective.no_more_notices");
-    line.style.fontSize = "12px";
-    line.style.color = "#b9ae95";
-    card.appendChild(line);
-    return card;
-  }
-
   card.style.border = objective.completed
     ? "1px solid #4f6b3d"
-    : objective.isHint
-      ? "1px solid #3c3122"
-      : "1px solid #5a4727";
+    : "1px solid #5a4727";
   card.style.borderRadius = "12px";
   card.style.background = objective.completed
     ? "linear-gradient(180deg, rgba(20, 34, 18, 0.92) 0%, rgba(14, 22, 12, 0.92) 100%)"
-    : objective.isHint
-      ? "linear-gradient(180deg, rgba(20, 18, 14, 0.9) 0%, rgba(14, 12, 10, 0.9) 100%)"
-      : "linear-gradient(180deg, rgba(32, 24, 14, 0.92) 0%, rgba(18, 14, 10, 0.92) 100%)";
+    : "linear-gradient(180deg, rgba(32, 24, 14, 0.92) 0%, rgba(18, 14, 10, 0.92) 100%)";
   card.style.minWidth = "176px";
 
   const topRow = document.createElement("div");
@@ -975,7 +955,7 @@ function createObjectiveTrackerCard(objective: ObjectiveTrackerViewModel, onRese
   const title = document.createElement("div");
   title.textContent = "Objective";
   title.style.fontSize = "10px";
-  title.style.color = objective.completed ? "#9fca8b" : objective.isHint ? "#b9ae95" : "#c5a874";
+  title.style.color = objective.completed ? "#9fca8b" : "#c5a874";
   topRow.appendChild(title);
 
   const state = document.createElement("div");
@@ -983,49 +963,42 @@ function createObjectiveTrackerCard(objective: ObjectiveTrackerViewModel, onRese
   state.style.fontSize = "10px";
   state.style.fontWeight = "bold";
   state.style.textTransform = "uppercase";
-  state.style.color = objective.completed ? "#b9e5a8" : objective.isHint ? "#d0c3aa" : "#e0c88a";
+  state.style.color = objective.completed ? "#b9e5a8" : "#e0c88a";
   topRow.appendChild(state);
 
   card.appendChild(topRow);
 
   const trackerLine = document.createElement("div");
-  trackerLine.textContent = objective.isHint
-    ? objective.titleHint
-    : `${objective.title}: ${objective.current}/${objective.target}`;
+  trackerLine.textContent = `${objective.title}: ${objective.current}/${objective.target}`;
   trackerLine.style.fontSize = "12px";
   trackerLine.style.fontWeight = "bold";
-  trackerLine.style.color = objective.completed ? "#d8f0c8" : objective.isHint ? "#d6c8b0" : "#f0ddbb";
+  trackerLine.style.color = objective.completed ? "#d8f0c8" : "#f0ddbb";
   card.appendChild(trackerLine);
 
-  if (!objective.isHint) {
-    const subtitleLine = document.createElement("div");
-    // Show location if available, otherwise use fallback
-    subtitleLine.textContent = objective.location ?? "Nightmarket";
-    subtitleLine.style.fontSize = "10px";
-    subtitleLine.style.color = "#a88d63";
-    card.appendChild(subtitleLine);
-  }
+  const subtitleLine = document.createElement("div");
+  subtitleLine.textContent = objective.location ?? "Nightmarket";
+  subtitleLine.style.fontSize = "10px";
+  subtitleLine.style.color = "#a88d63";
+  card.appendChild(subtitleLine);
 
-  if (!objective.isHint) {
-    const progressFrame = document.createElement("div");
-    progressFrame.style.width = "100%";
-    progressFrame.style.height = "8px";
-    progressFrame.style.border = objective.completed ? "1px solid #567546" : "1px solid #5f4a2f";
-    progressFrame.style.borderRadius = "999px";
-    progressFrame.style.background = "rgba(10, 10, 10, 0.45)";
-    progressFrame.style.overflow = "hidden";
+  const progressFrame = document.createElement("div");
+  progressFrame.style.width = "100%";
+  progressFrame.style.height = "8px";
+  progressFrame.style.border = objective.completed ? "1px solid #567546" : "1px solid #5f4a2f";
+  progressFrame.style.borderRadius = "999px";
+  progressFrame.style.background = "rgba(10, 10, 10, 0.45)";
+  progressFrame.style.overflow = "hidden";
 
-    const progressFill = document.createElement("div");
-    const ratio = objective.target <= 0 ? 0 : Math.max(0, Math.min(1, objective.current / objective.target));
-    progressFill.style.width = `${ratio * 100}%`;
-    progressFill.style.height = "100%";
-    progressFill.style.borderRadius = "999px";
-    progressFill.style.background = objective.completed
-      ? "linear-gradient(90deg, #4c7e42 0%, #9fd27e 100%)"
-      : "linear-gradient(90deg, #8c6131 0%, #d6a45a 100%)";
-    progressFrame.appendChild(progressFill);
-    card.appendChild(progressFrame);
-  }
+  const progressFill = document.createElement("div");
+  const ratio = objective.target <= 0 ? 0 : Math.max(0, Math.min(1, objective.current / objective.target));
+  progressFill.style.width = `${ratio * 100}%`;
+  progressFill.style.height = "100%";
+  progressFill.style.borderRadius = "999px";
+  progressFill.style.background = objective.completed
+    ? "linear-gradient(90deg, #4c7e42 0%, #9fd27e 100%)"
+    : "linear-gradient(90deg, #8c6131 0%, #d6a45a 100%)";
+  progressFrame.appendChild(progressFill);
+  card.appendChild(progressFrame);
 
   // Show reward info for completed objectives (only if not already granted)
   if (objective.completed && objective.xpReward !== undefined && objective.copperReward !== undefined) {
@@ -1082,56 +1055,20 @@ function resolveObjectiveTrackerViewModel(
     readonly copperReward?: number;
   } | null | undefined,
   objectiveRewardGranted?: boolean,
-): ObjectiveTrackerViewModel {
-  const firstObjectiveContent = contentRegistry.objectives.get(DEFAULT_TRACKED_OBJECTIVE_ID);
-  const firstTitle = firstObjectiveContent === undefined ? "Objective available" : t(firstObjectiveContent.titleKey);
-  const firstLocation = firstObjectiveContent?.zoneId !== undefined
-    ? (firstObjectiveContent.zoneId.startsWith("nightmarket") ? "The Nightmarket" : firstObjectiveContent.zoneId)
-    : "The Nightmarket";
-
-  // All objectives done when no active objective AND reward was granted for last one
-  const isAllDone = objective === null && objectiveRewardGranted === true;
-
-  if (isAllDone) {
-    return {
-      title: "",
-      titleHint: "",
-      stateLabel: "",
-      current: 0,
-      target: 1,
-      completed: false,
-      isHint: true,
-      allDone: true,
-    };
-  }
+) : ObjectiveTrackerViewModel | null {
+  void objectiveRewardGranted;
 
   if (objective === null || objective === undefined) {
-    return {
-      title: firstTitle,
-      titleHint: `Notice Board: ${firstTitle}`,
-      stateLabel: "Hint",
-      current: 0,
-      target: firstObjectiveContent?.requiredKills ?? 1,
-      completed: false,
-      isHint: true,
-      allDone: false,
-      location: firstLocation,
-    };
+    return null;
   }
-
-  // Look up location from content if available
-  const objectiveContent = contentRegistry.objectives.get(objective.id as ObjectiveId);
 
   return {
     title: objective.label,
-    titleHint: objective.label,
     stateLabel: objective.completed ? "Complete" : "Active",
     current: objective.current,
     target: objective.target,
     completed: objective.completed,
-    isHint: false,
-    allDone: false,
-    location: objectiveContent?.zoneId ?? firstLocation,
+    location: "The Nightmarket",
     ...(objective.xpReward !== undefined && { xpReward: objective.xpReward }),
     ...(objective.copperReward !== undefined && { copperReward: objective.copperReward }),
   };

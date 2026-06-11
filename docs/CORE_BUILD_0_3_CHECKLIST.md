@@ -1,5 +1,14 @@
 # docs/CORE_BUILD_0_3_CHECKLIST.md — Core Build 0.3 Checklist
 
+## Task 332 — Remove Fake Objective Placeholder Only
+
+- [x] Audited the WorldSession HUD/objective display path in `worldSessionOverlayView.ts` and confirmed the fake placeholder lived in the client-only fallback view model
+- [x] Removed the fake default tracked objective hint and the fake "no more notices" placeholder from normal WorldSession HUD rendering
+- [x] Updated the HUD layout so the objective section is omitted entirely when no real objective exists
+- [x] Preserved real objective rendering when authoritative objective state is present
+- [x] Did not add quest/objective tracking, fake progress, rewards, persistence, or enemy kill handling changes
+- [x] Kept movement, combat, town routing, vendor, stash, waypoint, loot pickup, rest area, cursor feedback, zoom, camera, and Nightmarket spacing behavior unchanged
+
 ## Task 331 — Travel Foundation: Town to Combat Area Routing
 
 - [x] Audited existing `TownRoom`, `CombatRoom`, zone content, spawn points, location persistence, waypoint travel, and nearby enemy pocket foundations

@@ -69,6 +69,15 @@ export const en = {
   "objective.break_the_brute.title": "Break the Brute",
   "objective.break_the_brute.description":
     "The trashboar brute is the pack's backbone. Put it down and watch the rest scatter.",
+  "objective.accepted": "Objective accepted: {title}",
+  "objective.progress": "{title}: {current}/{target}",
+  "objective.ready_to_turn_in": "Objective ready to turn in: {title}",
+  "objective.turn_in_complete_reward": "Objective turned in! +{xpReward} XP, +{copperReward} copper",
+  "objective.turn_in_complete_reward_xp_only": "Objective turned in! +{xpReward} XP",
+  "objective.turn_in_complete_reward_copper_only": "Objective turned in! +{copperReward} copper",
+  "objective.state.active": "Active",
+  "objective.state.ready_to_turn_in": "Turn in",
+  "objective.state.completed": "Completed",
 
   "objective.complete_reward": "Objective complete! +{xpReward} XP, +{copperReward} copper",
   "objective.complete_reward_xp_only": "Objective complete! +{xpReward} XP",
