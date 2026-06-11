@@ -57,6 +57,7 @@ export const REQUIRED_LOCALIZATION_KEYS = [
   "objective.state.active",
   "objective.state.ready_to_turn_in",
   "objective.state.completed",
+  "objective.already_completed",
   "auth.username",
   "auth.password",
   "auth.login",

@@ -56,6 +56,7 @@ export interface WorldSessionOverlayView {
 interface ObjectiveTrackerViewModel {
   readonly title: string;
   readonly stateLabel: string;
+  readonly description?: string;
   readonly current: number;
   readonly target: number;
   readonly completed: boolean;
@@ -745,6 +746,7 @@ function createHudSection(
   objective?: {
     readonly id: string;
     readonly label: string;
+    readonly descriptionKey?: string;
     readonly current: number;
     readonly target: number;
     readonly completed: boolean;
@@ -968,6 +970,15 @@ function createObjectiveTrackerCard(objective: ObjectiveTrackerViewModel, onRese
 
   card.appendChild(topRow);
 
+  if (objective.description !== undefined) {
+    const descriptionLine = document.createElement("div");
+    descriptionLine.textContent = objective.description;
+    descriptionLine.style.fontSize = "10px";
+    descriptionLine.style.color = "#a88d63";
+    descriptionLine.style.fontStyle = "italic";
+    card.appendChild(descriptionLine);
+  }
+
   const trackerLine = document.createElement("div");
   trackerLine.textContent = `${objective.title}: ${objective.current}/${objective.target}`;
   trackerLine.style.fontSize = "12px";
@@ -1048,6 +1059,7 @@ function resolveObjectiveTrackerViewModel(
   objective: {
     readonly id: string;
     readonly label: string;
+    readonly descriptionKey?: string;
     readonly current: number;
     readonly target: number;
     readonly completed: boolean;
@@ -1065,6 +1077,7 @@ function resolveObjectiveTrackerViewModel(
   return {
     title: objective.label,
     stateLabel: objective.completed ? "Complete" : "Active",
+    ...(objective.descriptionKey !== undefined ? { description: t(objective.descriptionKey as never) } : {}),
     current: objective.current,
     target: objective.target,
     completed: objective.completed,

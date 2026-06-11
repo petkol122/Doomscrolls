@@ -340,6 +340,7 @@ export interface ObjectiveUpdatedServerMessage {
   readonly type: "objective_updated";
   readonly objectiveId: string;
   readonly label: string;
+  readonly descriptionKey?: string;
   readonly current: number;
   readonly target: number;
   readonly completed: boolean;

@@ -1,5 +1,37 @@
 # docs/CORE_BUILD_0_3_CHECKLIST.md — Core Build 0.3 Checklist
 
+## Task 333B — Objective Foundation: Increment Notice Board Kill Progress
+
+- [x] Audited current enemy death/kill resolution path in `TownRoom.ts` and related combat helpers
+- [x] Identified that the server already knows `validation.enemy.enemyId` (killed enemy type) and `player` (who gets kill credit) in both the basic attack handler (`registerAttackHandler`) and the Grave Spark skill handler (`registerSkillSlotHandler`)
+- [x] Created `apps/server/src/realtime/rooms/advanceObjectiveProgress.ts` — a focused, side-effect-free helper that increments progress by 1 and clamps at `requiredKills`, without granting rewards or marking `rewardGranted`
+- [x] Added guard/comments documenting that this is a single-objective foundation and not the final quest system
+- [x] Replaced the old `advanceNoticeBoardObjective` call in `registerAttackHandler` with `advanceObjectiveProgress` + a direct `objective_updated` message
+- [x] Replaced the old `advanceNoticeBoardObjective` call in `registerSkillSlotHandler` (Grave Spark) with `advanceObjectiveProgress` + a direct `objective_updated` message
+- [x] The `advanceObjectiveProgress` helper checks that the active objective matches the killed enemy type via `targetEnemyIds`
+- [x] Progress is clamped at `player.objectiveTarget` (the `requiredKills` from the content definition) — repeated kills after reaching the required count do not exceed it
+- [x] Non-target enemy kills are ignored (the objective is not incremented)
+- [x] No objective completion/turn-in logic, no reward logic, no persistence, no quest journal, no generic multi-objective system
+- [x] The old `advanceNoticeBoardObjective` function remains available but is no longer called from kill handlers; it still handles the completion+reward flow that will be used by a later task
+- [x] No enemy AI changes, no combat formula changes, no vendor/stash/waypoint/routing changes
+- [x] `pnpm typecheck` — 0 errors
+- [x] Pre-existing lint errors only (unrelated to this task)
+
+## Task 333 — Notice Board Sends Static Authoritative Objective State
+
+- [x] Extended `ObjectiveUpdatedServerMessage` with optional `descriptionKey` field
+- [x] Added `objectiveDescriptionKey` Colyseus schema field to `PlayerPresence`
+- [x] Server `startNoticeBoardObjective` now populates `descriptionKey` from content definition
+- [x] Server `buildObjectiveUpdatedMessage` conditionally includes `descriptionKey` in the protocol payload
+- [x] Client `registerInteractResponseListener` forwards `descriptionKey` from room messages
+- [x] Client `applyOptionalObjective` reads `objectiveDescriptionKey` from Colyseus schema and passes it through the presence entry
+- [x] HUD objective tracker card renders the localized description below the state label when present
+- [x] `resolveObjectiveTrackerViewModel` resolves the description key via `t()` for display
+- [x] No duplicate objective cards created by repeated notice board clicks (existing guard preserved)
+- [x] No fake objective placeholder restored
+- [x] No kill progress, no objective completion, no persistence, no rewards, no schema/database changes
+- [x] No movement, combat, town route, vendor buy/sell, stash transfer, waypoint travel, loot pickup, rest area, cursor feedback, zoom, camera, or Nightmarket spacing changes
+
 ## Task 332 — Remove Fake Objective Placeholder Only
 
 - [x] Audited the WorldSession HUD/objective display path in `worldSessionOverlayView.ts` and confirmed the fake placeholder lived in the client-only fallback view model
@@ -8,6 +40,30 @@
 - [x] Preserved real objective rendering when authoritative objective state is present
 - [x] Did not add quest/objective tracking, fake progress, rewards, persistence, or enemy kill handling changes
 - [x] Kept movement, combat, town routing, vendor, stash, waypoint, loot pickup, rest area, cursor feedback, zoom, camera, and Nightmarket spacing behavior unchanged
+
+## Task 333C — Objective Foundation: Notice Board Turn-In and One-Time Copper Reward
+
+- [x] Audited current objective fields on PlayerPresence (hasObjective, objectiveId, objectiveCompleted, objectiveRewardGranted — all present)
+- [x] Verfied advanceObjectiveProgress helper: sets objectiveCompleted but does NOT set rewardGranted or grant rewards
+- [x] Located the old advanceNoticeBoardObjective function — deliberately unused by kill handlers (commented), still available
+- [x] Added localized key `objective.already_completed` and English translation text to locale types and en.ts
+- [x] Added turn-in logic in the notice board interact handler (`nightmarket_notice_board_01`):
+  - [x] Objective completed + reward not granted → marks rewardGranted, grants copper via CharacterRepository.incrementMoneyCopper, sends currency_picked_up, resets HUD objective state via resetNoticeBoardObjective, sends interact_response with localized feedback
+  - [x] Objective completed + reward already granted → shows safe "already completed" message
+  - [x] Active but not completed → re-sends current state
+  - [x] No active objective → starts next in sequence or shows "no more notices"
+- [x] Turn-in clears the HUD objective tracker via resetNoticeBoardObjective after granting reward
+- [x] Kill progress path (both basic attack and Grave Spark) continues to use advanceObjectiveProgress only — no automatic reward on kill
+- [x] `pnpm typecheck` — 0 errors across all 5 workspace projects
+- [x] No schema/database changes
+- [x] No movement, combat, town route, vendor buy/sell, stash transfer, waypoint travel, loot pickup, rest area, cursor feedback, zoom, camera, or Nightmarket spacing changes
+
+**Known limitations (documented in release notes):**
+
+- Reward granting is session-scoped (objectiveRewardGranted lives on PlayerPresence only)
+- No persistence across room join/leave — re-joining resets objective state
+- No quest journal, no multi-objective system
+- Turn-in grants copper reward only (no XP on turn-in per task scope)
 
 ## Task 331 — Travel Foundation: Town to Combat Area Routing
 

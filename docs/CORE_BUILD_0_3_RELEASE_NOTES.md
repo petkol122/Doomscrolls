@@ -1,5 +1,58 @@
 # docs/CORE_BUILD_0_3_RELEASE_NOTES.md — Core Build 0.3 Release Notes
 
+## Task 333B — Objective Foundation: Increment Notice Board Kill Progress
+
+**Summary:**
+
+Server-authoritative objective progress tracking is now live for the Nightmarket notice board. When the player has an active objective and kills a matching enemy type, the server increments the kill count, clamps it at the required amount, and sends an `objective_updated` message to the client so the HUD stays synced. The change is intentionally minimal: it only tracks progress and sets the `completed` flag; it does NOT grant rewards, mark `rewardGranted`, persist the state, or introduce a quest journal.
+
+**Changes:**
+
+- **`apps/server/src/realtime/rooms/advanceObjectiveProgress.ts`** (new): A focused, side-effect-free helper that increments `objectiveCurrent` by 1, clamps at `objectiveTarget`, and sets `objectiveCompleted = true` when the required kill count is reached. It checks that the active objective exists and that the killed enemy type is in the objective's `targetEnemyIds`. Guards/comments document this as a single-objective foundation — not the final quest system.
+
+- **`apps/server/src/realtime/rooms/TownRoom.ts`**: Replaced the old `advanceNoticeBoardObjective` calls (which also granted rewards) in both `registerAttackHandler` and `registerSkillSlotHandler` with the new `advanceObjectiveProgress` helper. On successful progress the handler sends a direct `objective_updated` message back to the originating client. The old `advanceNoticeBoardObjective` function remains available for the completion+reward flow that a later task will use.
+
+**Verification:**
+
+- `pnpm typecheck` — 0 errors (all 5 workspace projects pass)
+- Pre-existing lint errors only (unrelated to this task)
+
+**Known limitations:**
+
+- No objective completion/turn-in logic — rewards are not granted when the kill target is reached
+- No persistence — objective state is lost on room leave (acceptable for this micro-task)
+- No quest journal, no generic multi-objective system
+- Only the single active notice board objective can track progress
+
+## Task 333 — Notice Board Sends Static Authoritative Objective State
+
+**Summary:**
+
+Extended the existing notice board interaction so that clicking `nightmarket_notice_board_01` sends a real server-authored objective state that includes the content-defined description key. The HUD objective card now renders the localized description below the state label. The change is purely a data-flow expansion — no kill progress, objective completion, persistence, or rewards were added.
+
+**Changes:**
+
+- **`packages/shared/src/protocol/ServerMessages.ts`**: Added optional `descriptionKey` field to `ObjectiveUpdatedServerMessage`.
+
+- **`apps/server/src/realtime/rooms/PlayerPresence.ts`**: Added `objectiveDescriptionKey` Colyseus schema field.
+
+- **`apps/server/src/realtime/rooms/TownRoom.ts`**: `startNoticeBoardObjective` now copies `objectiveDef.descriptionKey` into the player presence. `buildObjectiveUpdatedMessage` conditionally spreads `descriptionKey` into the protocol payload (guarded against `exactOptionalPropertyTypes`).
+
+- **`apps/client/src/net/interactResponseClient.ts`**: Forwards `descriptionKey` from the room `objective_updated` message into the typed callback.
+
+- **`apps/client/src/net/townRoomPresence.ts`**: Reads `objectiveDescriptionKey` from the Colyseus schema entry and includes it as `descriptionKey` on the presence `objective` object.
+
+- **`apps/client/src/game/scenes/worldSession/worldSessionOverlayView.ts`**: The HUD objective card now shows a localized description line when one is present. `resolveObjectiveTrackerViewModel` resolves the key via `t()` and passes the resolved string to the view model.
+
+**Verification:**
+
+- Focused code-path audit only; relies on existing typecheck/build pipeline for the affected file set.
+
+**Known limitations:**
+
+- Reloading/rejoining loses objective state (no persistence yet — acceptable for this micro-task).
+- No kill progress, objective completion, reward logic, or turn-in added.
+
 ## Task 332 — Remove Fake Objective Placeholder Only
 
 **Summary:**
@@ -73,7 +126,7 @@ Implemented the first real waypoint flow in the Nightmarket. Interacting with th
 
 - **`apps/server/prisma/schema.prisma`** and **`apps/server/prisma/migrations/20260611150000_add_character_waypoint_activations/migration.sql`**: Added persistent character-scoped waypoint activation storage through the new `CharacterWaypointActivation` model.
 
-- **`apps/server/src/persistence/repositories/CharacterRepository.ts`**: Added repository helpers to upsert a waypoint activation and list a character’s activated waypoints.
+- **`apps/server/src/persistence/repositories/CharacterRepository.ts`**: Added repository helpers to upsert a waypoint activation and list a character's activated waypoints.
 
 - **`apps/server/src/realtime/rooms/waypointService.ts`**: Added a focused waypoint helper module that activates the Nightmarket waypoint, builds the server-owned panel payload, validates the conservative travel destination, and maps typed rejection reasons to localized feedback.
 
@@ -128,6 +181,41 @@ Implemented the first real stash transfer flow in town. The Nightmarket stash ke
 - No stash sorting/filtering or tabs/pages UI beyond existing minimal placement fields
 - No account-wide stash
 - No stack splitting/merging changes
+
+## Task 333C — Objective Foundation: Notice Board Turn-In and One-Time Copper Reward
+
+**Summary:**
+
+The notice board turn-in flow is now live. When the player reaches the required kill count for the active notice board objective (e.g. "Cull Trashboars"), re-interacting with the Nightmarket notice board grants a server-authoritative one-time copper reward, marks the reward as granted, and clears the HUD objective tracker so the player can start the next objective in the chain.
+
+Kill progress remains strictly server-authoritative: reaching the required kill count sets `objectiveCompleted = true` but does **not** automatically grant rewards. The reward is granted only on explicit notice board interaction, with a safe "already completed" message on repeat interaction.
+
+**Changes:**
+
+- **`packages/localization/src/LocaleTypes.ts`** and **`packages/localization/src/locales/en.ts`**: Added `objective.already_completed` localization key with text "Already completed — no more work here."
+
+- **`apps/server/src/realtime/rooms/TownRoom.ts`**: Rewrote the notice board interact handler (`nightmarket_notice_board_01`) with a four-case turn-in flow:
+  1. Objective completed + reward not yet granted → marks `objectiveRewardGranted = true`, grants copper via `CharacterRepository.incrementMoneyCopper()`, sends `currency_picked_up`, clears HUD objective state via `resetNoticeBoardObjective()`, sends localized `interact_response` feedback.
+  2. Objective completed + reward already granted → sends localized "already completed" message.
+  3. Active but not completed → re-sends current objective state without resetting.
+  4. No active objective → starts the next uncompleted objective in the sequence, or shows "no more notices" if the chain is complete.
+
+- The turn-in path calls `resetNoticeBoardObjective()` after granting the reward, which removes the tracker card from the HUD. The player can re-interact to start the next objective in the sequence.
+
+- The kill progress path (both basic attack and Grave Spark handlers) continues to use only `advanceObjectiveProgress` which sets `objectiveCompleted` but never `objectiveRewardGranted` — rewards are never auto-granted on kill.
+
+**Verification:**
+
+- `pnpm typecheck` — 0 errors across all 5 workspace projects
+- No schema/database changes
+- No movement, combat, town route, vendor buy/sell, stash transfer, waypoint travel, loot pickup, rest area, cursor feedback, zoom, camera, or Nightmarket spacing changes
+
+**Known limitations:**
+
+- Reward granting is session-scoped (`objectiveRewardGranted` lives on `PlayerPresence` only — not persisted across room join/leave)
+- No quest journal, no generic multi-objective system
+- Turn-in grants copper reward only (no XP on turn-in per task scope)
+- Completing the objective chain and re-joining the room resets to an empty objective state (no persistence)
 
 ## Task 326 — WorldSession Camera/Projection Layer Unification Fix
 
@@ -360,7 +448,7 @@ Resolved the current targeted client lint issues in the WorldSession vendor/UI p
 
 **Changes:**
 
-- **`apps/client/src/game/scenes/worldSession/vendorInteractionPanel.ts`**: Removed an unused `computeClientSellPrice()` helper that was no longer referenced. Also replaced the Sell button handler’s non-null assertion with a direct call under the existing `onSell !== undefined` guard.
+- **`apps/client/src/game/scenes/worldSession/vendorInteractionPanel.ts`**: Removed an unused `computeClientSellPrice()` helper that was no longer referenced. Also replaced the Sell button handler's non-null assertion with a direct call under the existing `onSell !== undefined` guard.
 
 - **`apps/client/src/game/scenes/worldSession/worldSessionAreaView.ts`**: Removed the unused `previousHoverTargetId` variable left behind in the cursor-feedback hover path.
 
@@ -406,7 +494,7 @@ Added the minimal persistent stash data foundation without introducing stash UI 
 
 **Summary:**
 
-Implemented the first visible stash interaction path in the Nightmarket. Interacting with the Stash Keeper now opens a basic localized stash panel and lists the current character’s persisted stash items from the real `STASH` item location. The path is server-authoritative for listing only and does not introduce any fake transfer behavior.
+Implemented the first visible stash interaction path in the Nightmarket. Interacting with the Stash Keeper now opens a basic localized stash panel and lists the current character's persisted stash items from the real `STASH` item location. The path is server-authoritative for listing only and does not introduce any fake transfer behavior.
 
 **Changes:**
 
@@ -449,7 +537,7 @@ Fixed the recent WorldSession zoom/projection regression so zoom changes apply i
 
 - **`apps/client/src/game/scenes/worldSession/worldSessionAreaView.ts`**: Updated `setZoom()` so a zoom change immediately triggers `refreshFromRoomState()` using the latest active room reference. Zoom refresh no longer waits for player movement or a future Colyseus state update before projection/camera-dependent rendering catches up.
 
-- **`apps/client/src/game/scenes/worldSession/worldSessionAreaView.ts`**: Updated pointer-to-world conversion to use the current projection context’s `projectionMode` directly, ensuring ground-click resolution uses the same live projection state that rendering uses after zoom/projection changes.
+- **`apps/client/src/game/scenes/worldSession/worldSessionAreaView.ts`**: Updated pointer-to-world conversion to use the current projection context's `projectionMode` directly, ensuring ground-click resolution uses the same live projection state that rendering uses after zoom/projection changes.
 
 - **`apps/client/src/game/scenes/worldSession/worldSessionAreaView.ts`**: Added a cached `corpseScreenPositions` map and switched own-corpse hover/click hit-testing to use current projected screen positions plus current world coordinates. This removes one mixed-coordinate path that could drift after zoom and keeps corpse interaction aligned with the rendered marker.
 

@@ -79,6 +79,8 @@ export const en = {
   "objective.state.ready_to_turn_in": "Turn in",
   "objective.state.completed": "Completed",
 
+  "objective.already_completed": "Already completed — no more work here.",
+
   "objective.complete_reward": "Objective complete! +{xpReward} XP, +{copperReward} copper",
   "objective.complete_reward_xp_only": "Objective complete! +{xpReward} XP",
   "objective.complete_reward_copper_only": "Objective complete! +{copperReward} copper",

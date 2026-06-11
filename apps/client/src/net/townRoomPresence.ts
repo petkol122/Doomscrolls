@@ -73,6 +73,7 @@ export interface PlayerPresenceEntry {
   readonly objective?: {
     readonly id: string;
     readonly label: string;
+    readonly descriptionKey?: string;
     readonly current: number;
     readonly target: number;
     readonly completed: boolean;
@@ -371,6 +372,7 @@ function applyOptionalObjective(
 
   const rawId = value.objectiveId;
   const rawLabel = value.objectiveLabel;
+  const rawDescriptionKey = value.objectiveDescriptionKey;
   const rawCurrent = value.objectiveCurrent;
   const rawTarget = value.objectiveTarget;
   const rawCompleted = value.objectiveCompleted;
@@ -405,6 +407,9 @@ function applyOptionalObjective(
     objective: {
       id: rawId,
       label: rawLabel,
+      ...(typeof rawDescriptionKey === "string" && rawDescriptionKey.length > 0
+        ? { descriptionKey: rawDescriptionKey }
+        : {}),
       current: Math.max(0, Math.floor(rawCurrent)),
       target: Math.max(1, Math.floor(rawTarget)),
       completed: rawCompleted,
