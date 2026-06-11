@@ -290,6 +290,8 @@ export const en = {
   "world_prop.loot_container.empty": "The container has already been looted.",
 
   "town_service.vendor_panel.trading_locked": "Trading locked for Core 0.1.",
+  "town_service.suspicious_vendor.name": "Suspicious Vendor",
+  "town_service.suspicious_vendor.unavailable": "Vendor trading is not available yet.",
   "town_service.stash_keeper.name": "Stash Keeper",
   "town_service.stash_keeper.unavailable": "Stash storage is not available yet.",
 

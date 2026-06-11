@@ -28,7 +28,7 @@ export type SpawnPointContentId = "nightmarket_spawn";
 export type EquipmentSlotCategory = "weapon" | "armor" | "accessory" | "belt" | "flask";
 export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken" | "loot_container" | "vendor" | "town_service" | "waypoint" | "combat_edge" | "area_label" | "path_marker" | "boundary_marker" | "safe_area_marker" | "rest_area_marker";
 export type VendorId = "nightmarket_suspicious_vendor";
-export type TownServiceId = "nightmarket_stash_keeper" | "nightmarket_trainer" | "nightmarket_waypoint";
+export type TownServiceId = "nightmarket_stash_keeper" | "nightmarket_trainer" | "nightmarket_waypoint" | "nightmarket_suspicious_vendor";
 export type TownServiceKind = "vendor" | "stash" | "trainer" | "waypoint";
 
 export interface TownServiceContentDefinition {

@@ -215,7 +215,9 @@ export const REQUIRED_LOCALIZATION_KEYS = [
   "world_prop.junk.label",
   "world_session.town_rest_refill",
   "world_session.rest_area_entered",
-  "world_session.rest_area_exited"
+  "world_session.rest_area_exited",
+  "town_service.suspicious_vendor.name",
+  "town_service.suspicious_vendor.unavailable"
 ] as const;
 
 export type RequiredLocalizationKey = (typeof REQUIRED_LOCALIZATION_KEYS)[number];

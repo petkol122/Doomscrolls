@@ -183,9 +183,16 @@ export function getInteractableResponseMessage(objectId: string): string {
       return t(service.unavailableMessageKey);
     }
   }
+  // Vendor interaction — use town service content definition for greeting
+  if (objectId === "nightmarket_vendor_01") {
+    const vendorService = contentRegistry.townServices.get("nightmarket_suspicious_vendor");
+    if (vendorService !== undefined) {
+      return `${t(vendorService.labelKey)}: \"What're you buyin'?\"`;
+    }
+    return '"What\'re you buyin\'?"';
+  }
   const responses: Record<string, string> = {
     nightmarket_notice_board_01: "The notice board hums quietly.",
-    nightmarket_vendor_01: "Vendor trading is not available yet.",
   };
   return responses[objectId] ?? "You interact with the object.";
 }

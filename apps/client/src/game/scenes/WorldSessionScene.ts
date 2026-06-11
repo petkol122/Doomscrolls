@@ -178,8 +178,13 @@ export class WorldSessionScene extends Phaser.Scene {
         const stockEntries = contentRegistry.vendorStocks.all.filter(
           (entry) => entry.vendorId === "nightmarket_suspicious_vendor",
         );
+        // Vendor name from content/town-service definition
+        const vendorService = contentRegistry.townServices.get("nightmarket_suspicious_vendor");
+        const vendorName = vendorService !== undefined
+          ? t(vendorService.labelKey as never)
+          : "Vendor";
         this.vendorPanel?.destroy();
-        this.vendorPanel = createVendorInteractionPanel("Suspicious Vendor", moneyCopper, {
+        this.vendorPanel = createVendorInteractionPanel(vendorName, moneyCopper, {
           stockEntries,
         });
         this.vendorPanel.show();
