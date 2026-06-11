@@ -6,28 +6,25 @@ export interface StashInteractionPanel {
   readonly show: () => void;
   readonly destroy: () => void;
   readonly setItems: (items: readonly ItemInstance[]) => void;
+  readonly setInventoryItems: (items: readonly ItemInstance[]) => void;
   readonly showFeedback: (message: string) => void;
 }
 
-export function createStashInteractionPanel(): StashInteractionPanel {
+export function createStashInteractionPanel(options?: {
+  readonly onStore?: (itemInstanceId: string) => void;
+  readonly onTake?: (itemInstanceId: string) => void;
+}): StashInteractionPanel {
   let panelElement: HTMLDivElement | null = null;
   let listElement: HTMLDivElement | null = null;
   let feedbackElement: HTMLDivElement | null = null;
   let currentItems: readonly ItemInstance[] = [];
+  let currentInventoryItems: readonly ItemInstance[] = [];
 
   const buildList = (): HTMLDivElement => {
     const section = document.createElement("div");
     section.style.cssText = "display: grid; gap: 6px;";
 
-    if (currentItems.length === 0) {
-      const empty = document.createElement("div");
-      empty.textContent = t("town_service.stash_keeper.empty" as never);
-      empty.style.cssText = "color: #7a6a4f; font-size: 12px; font-style: italic;";
-      section.appendChild(empty);
-      return section;
-    }
-
-    for (const item of currentItems) {
+    const buildRow = (item: ItemInstance, actionLabel: string, onClick?: (itemInstanceId: string) => void): HTMLDivElement => {
       const row = document.createElement("div");
       row.style.cssText = `
         display: grid;
@@ -63,7 +60,49 @@ export function createStashInteractionPanel(): StashInteractionPanel {
         row.appendChild(qty);
       }
 
-      section.appendChild(row);
+      if (onClick !== undefined) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = actionLabel;
+        button.style.cssText = "margin-top: 4px; justify-self: start; padding: 4px 10px; font-size: 11px; background: #2a2218; border: 1px solid #4d3f2a; border-radius: 6px; color: #d8c6a3; cursor: pointer;";
+        button.addEventListener("click", () => onClick(item.id));
+        row.appendChild(button);
+      }
+
+      return row;
+    };
+
+    const inventoryHeader = document.createElement("div");
+    inventoryHeader.textContent = t("town_service.stash_keeper.inventory_header" as never);
+    inventoryHeader.style.cssText = "color: #f0ddbb; font-size: 13px; font-weight: bold; margin-top: 4px;";
+    section.appendChild(inventoryHeader);
+
+    if (currentInventoryItems.length === 0) {
+      const emptyInventory = document.createElement("div");
+      emptyInventory.textContent = t("town_service.vendor_panel.sell_empty" as never);
+      emptyInventory.style.cssText = "color: #7a6a4f; font-size: 12px; font-style: italic;";
+      section.appendChild(emptyInventory);
+    } else {
+      for (const item of currentInventoryItems) {
+        section.appendChild(buildRow(item, t("town_service.stash_keeper.store_action" as never), options?.onStore));
+      }
+    }
+
+    const stashHeader = document.createElement("div");
+    stashHeader.textContent = t("town_service.stash_keeper.stash_header" as never);
+    stashHeader.style.cssText = "color: #f0ddbb; font-size: 13px; font-weight: bold; margin-top: 8px;";
+    section.appendChild(stashHeader);
+
+    if (currentItems.length === 0) {
+      const empty = document.createElement("div");
+      empty.textContent = t("town_service.stash_keeper.empty" as never);
+      empty.style.cssText = "color: #7a6a4f; font-size: 12px; font-style: italic;";
+      section.appendChild(empty);
+      return section;
+    }
+
+    for (const item of currentItems) {
+      section.appendChild(buildRow(item, t("town_service.stash_keeper.take_action" as never), options?.onTake));
     }
 
     return section;
@@ -164,6 +203,10 @@ export function createStashInteractionPanel(): StashInteractionPanel {
     destroy: hideExisting,
     setItems: (items) => {
       currentItems = items;
+      rerenderList();
+    },
+    setInventoryItems: (items) => {
+      currentInventoryItems = items;
       rerenderList();
     },
     showFeedback: (message) => {

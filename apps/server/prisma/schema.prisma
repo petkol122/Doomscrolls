@@ -111,12 +111,27 @@ model Character {
   inventory Inventory?
   items     ItemInstance[]
   corpses   Corpse[]
+  waypointActivations CharacterWaypointActivation[]
 
   @@unique([userId, characterNameNormalized])
   @@index([userId])
   @@index([originId])
   @@index([classId])
   @@index([currentZoneId])
+}
+
+model CharacterWaypointActivation {
+  id          String   @id @default(uuid())
+  characterId String
+  waypointId  String
+  zoneId      String
+  activatedAt DateTime @default(now())
+
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, waypointId])
+  @@index([characterId])
+  @@index([zoneId])
 }
 
 model CharacterStats {

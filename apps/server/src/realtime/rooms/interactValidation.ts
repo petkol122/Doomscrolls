@@ -165,6 +165,12 @@ function buildCrateWorldLootId(
  * client stay aligned on the "not available yet" copy.
  */
 export function getInteractableResponseMessage(objectId: string): string {
+  if (objectId === "nightmarket_blackwire_gate_01") {
+    return t("town_service.route.blackwire_gate.prompt");
+  }
+  if (objectId === "nightmarket_blackwire_return_01") {
+    return t("town_service.route.blackwire_return.prompt");
+  }
   if (objectId === "nightmarket_stash_keeper_01") {
     const service = contentRegistry.townServices.get("nightmarket_stash_keeper");
     if (service !== undefined) {

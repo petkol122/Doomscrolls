@@ -200,6 +200,32 @@ export interface RequestSellItemClientMessage {
   readonly itemInstanceId: string;
 }
 
+/**
+ * Task 329 — Stash Foundation: Server-authoritative inventory -> stash transfer.
+ */
+export interface RequestStoreInventoryItemInStashClientMessage {
+  readonly type: "request_store_inventory_item_in_stash";
+  readonly serviceId: string;
+  readonly itemInstanceId: string;
+  readonly pageIndex?: number;
+  readonly x?: number;
+  readonly y?: number;
+}
+
+/**
+ * Task 329 — Stash Foundation: Server-authoritative stash -> inventory transfer.
+ */
+export interface RequestTakeStashItemToInventoryClientMessage {
+  readonly type: "request_take_stash_item_to_inventory";
+  readonly serviceId: string;
+  readonly itemInstanceId: string;
+}
+
+export interface RequestWaypointTravelClientMessage {
+  readonly type: "request_waypoint_travel";
+  readonly waypointId: string;
+}
+
 export type ClientRoomMessage =
   | MoveToPointClientMessage
   | AttackTargetClientMessage
@@ -224,4 +250,7 @@ export type ClientRoomMessage =
   | RequestUseHealingFlaskClientMessage
   | RequestUseSkillSlotClientMessage
   | RequestBuyVendorItemClientMessage
-  | RequestSellItemClientMessage;
+  | RequestSellItemClientMessage
+  | RequestStoreInventoryItemInStashClientMessage
+  | RequestTakeStashItemToInventoryClientMessage
+  | RequestWaypointTravelClientMessage;

@@ -26,6 +26,7 @@ export * from "./room/SpawnPointTypes";
 export * from "./room/VendorBuyTypes";
 export * from "./room/VendorSellTypes";
 export * from "./room/StashTypes";
+export * from "./room/WaypointTypes";
 export * from "./room/PlayerPosition";
 export * from "./room/RoomJoinTypes";
 export * from "./room/InteractableObjectTypes";

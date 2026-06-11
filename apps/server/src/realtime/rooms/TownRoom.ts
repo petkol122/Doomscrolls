@@ -78,11 +78,19 @@ import { tryResolveLevelProgression } from "./levelProgression";
 import { CharacterStatsService } from "../../character/CharacterStatsService";
 import { executeVendorBuyItem } from "./vendorBuyItem";
 import { executeVendorSellItem } from "./vendorSellItem";
+import { executeStoreInventoryItemInStash, executeTakeStashItemToInventory } from "./stashTransferItem";
 // Task 206 -- server-owned approach stop point for deferred queues
 // (attack / pickup / interact). The server still applies the
 // resolved target through applyMovementIntent; the client never
 // decides the stop point.
 import { resolveApproachTarget } from "./resolveApproachTarget";
+import {
+  activateAndBuildWaypointPanel,
+  getRouteRejectedMessage,
+  getWaypointRejectedMessage,
+  resolveRouteTravel,
+  resolveWaypointTravel,
+} from "./waypointService";
 
 // Task 227 -- enemy movement speed is authored in the same
 // per-second stat space as the player's derived `moveSpeed` (see
@@ -641,6 +649,7 @@ export class TownRoom extends Room {
   private skillSlotHandlerRegistered = false;
   private vendorBuyHandlerRegistered = false;
   private vendorSellHandlerRegistered = false;
+  private stashTransferHandlerRegistered = false;
 
   public override async onCreate(options: TownRoomJoinOptions): Promise<void> {
     const log = createRoomLogger(
@@ -669,6 +678,7 @@ export class TownRoom extends Room {
     this.registerSkillSlotHandler(log);
     this.registerVendorBuyHandler(log);
     this.registerVendorSellHandler(log);
+    this.registerStashTransferHandler(log);
     this.setSimulationInterval((deltaMs: number) => {
       const state = this.state as TownRoomState;
       stepTownRoomMovement(state, deltaMs, {
@@ -1281,6 +1291,90 @@ export class TownRoom extends Room {
         }
       }
 
+      if (message.objectId === "nightmarket_waypoint_01") {
+        try {
+          const waypointOpened = await activateAndBuildWaypointPanel(player.characterId);
+          if (waypointOpened !== null) {
+            try {
+              client.send("waypoint_opened", waypointOpened);
+            } catch {}
+          }
+        } catch {
+          const response: InteractResponseServerMessage = {
+            type: "interact_response",
+            objectId: message.objectId,
+            message: getWaypointRejectedMessage("travel_failed"),
+          };
+          try {
+            client.send("interact_response", response);
+          } catch {}
+        }
+        return;
+      }
+
+      if (
+        message.objectId === "nightmarket_blackwire_gate_01"
+        || message.objectId === "nightmarket_blackwire_return_01"
+      ) {
+        try {
+          const result = await resolveRouteTravel(state.zoneId, message.objectId);
+          if (!result.ok) {
+            const rejected: import("@doomscrolls/shared").RequestRouteTravelRejectedServerMessage = {
+              type: "request_route_travel_rejected",
+              objectId: message.objectId,
+              reason: result.reason,
+            };
+            try { client.send("request_route_travel_rejected", rejected); } catch {}
+            return;
+          }
+
+          player.x = result.x;
+          player.y = result.y;
+          player.targetX = result.x;
+          player.targetY = result.y;
+          player.hasMovementTarget = false;
+          clearPendingAction(player);
+
+          try {
+            await new CharacterService().updateCharacterLocation(
+              player.characterId,
+              result.zoneId,
+              result.x,
+              result.y,
+              Math.max(0, Math.min(player.maxHp, player.hp)),
+              Math.max(0, Math.min(player.maxFlaskCharges, Math.floor(player.flaskCharges))),
+            );
+          } catch {
+            const rejected: import("@doomscrolls/shared").RequestRouteTravelRejectedServerMessage = {
+              type: "request_route_travel_rejected",
+              objectId: message.objectId,
+              reason: "travel_failed",
+            };
+            try { client.send("request_route_travel_rejected", rejected); } catch {}
+            return;
+          }
+
+          const accepted: import("@doomscrolls/shared").RequestRouteTravelAcceptedServerMessage = {
+            type: "request_route_travel_accepted",
+            objectId: result.objectId,
+            zoneId: result.zoneId,
+            x: result.x,
+            y: result.y,
+            message: `${t(result.messageKey as never)} ${t(result.areaKey as never)}`,
+            areaLabel: t(result.areaKey as never),
+          };
+          try { client.send("request_route_travel_accepted", accepted); } catch {}
+        } catch {
+          const response: InteractResponseServerMessage = {
+            type: "interact_response",
+            objectId: message.objectId,
+            message: getRouteRejectedMessage("travel_failed"),
+          };
+          try { client.send("interact_response", response); } catch {}
+        }
+        return;
+      }
+
       const response: InteractResponseServerMessage = {
         type: "interact_response",
         objectId: message.objectId,
@@ -1305,6 +1399,87 @@ export class TownRoom extends Room {
         },
         "TownRoom request_interact accepted and response sent.",
       );
+    });
+
+    this.onMessage("request_waypoint_travel", async (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+      const message = raw as { waypointId?: unknown } | null;
+
+      if (player === undefined || player.lifeState !== "alive") {
+        const rejected: import("@doomscrolls/shared").RequestWaypointTravelRejectedServerMessage = {
+          type: "request_waypoint_travel_rejected",
+          reason: "travel_failed",
+          ...(typeof message?.waypointId === "string" ? { waypointId: message.waypointId } : {}),
+        };
+        try { client.send("request_waypoint_travel_rejected", rejected); } catch {}
+        return;
+      }
+
+      if (typeof message?.waypointId !== "string" || message.waypointId.length === 0) {
+        const rejected: import("@doomscrolls/shared").RequestWaypointTravelRejectedServerMessage = {
+          type: "request_waypoint_travel_rejected",
+          reason: "invalid_destination",
+        };
+        try { client.send("request_waypoint_travel_rejected", rejected); } catch {}
+        return;
+      }
+
+      try {
+        const result = await resolveWaypointTravel(player.characterId, state.zoneId, message.waypointId);
+        if (!result.ok) {
+          const rejected: import("@doomscrolls/shared").RequestWaypointTravelRejectedServerMessage = {
+            type: "request_waypoint_travel_rejected",
+            waypointId: message.waypointId,
+            reason: result.reason,
+          };
+          try { client.send("request_waypoint_travel_rejected", rejected); } catch {}
+          return;
+        }
+
+        player.x = result.x;
+        player.y = result.y;
+        player.targetX = result.x;
+        player.targetY = result.y;
+        player.hasMovementTarget = false;
+        clearPendingAction(player);
+
+        try {
+          await new CharacterService().updateCharacterLocation(
+            player.characterId,
+            result.zoneId,
+            result.x,
+            result.y,
+            Math.max(0, Math.min(player.maxHp, player.hp)),
+            Math.max(0, Math.min(player.maxFlaskCharges, Math.floor(player.flaskCharges))),
+          );
+        } catch {
+          const rejected: import("@doomscrolls/shared").RequestWaypointTravelRejectedServerMessage = {
+            type: "request_waypoint_travel_rejected",
+            waypointId: message.waypointId,
+            reason: "travel_failed",
+          };
+          try { client.send("request_waypoint_travel_rejected", rejected); } catch {}
+          return;
+        }
+
+        const accepted: import("@doomscrolls/shared").RequestWaypointTravelAcceptedServerMessage = {
+          type: "request_waypoint_travel_accepted",
+          waypointId: result.waypointId,
+          zoneId: result.zoneId,
+          x: result.x,
+          y: result.y,
+          message: t("town_service.waypoint.travel_success" as never),
+        };
+        try { client.send("request_waypoint_travel_accepted", accepted); } catch {}
+      } catch {
+        const rejected: import("@doomscrolls/shared").RequestWaypointTravelRejectedServerMessage = {
+          type: "request_waypoint_travel_rejected",
+          waypointId: message.waypointId,
+          reason: "travel_failed",
+        };
+        try { client.send("request_waypoint_travel_rejected", rejected); } catch {}
+      }
     });
   }
 
@@ -2498,6 +2673,148 @@ export class TownRoom extends Room {
     });
   }
 
+  private registerStashTransferHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.stashTransferHandlerRegistered) {
+      return;
+    }
+    this.stashTransferHandlerRegistered = true;
+
+    this.onMessage("request_store_inventory_item_in_stash", async (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+      const message = raw as {
+        serviceId?: unknown;
+        itemInstanceId?: unknown;
+        pageIndex?: unknown;
+        x?: unknown;
+        y?: unknown;
+      } | null;
+
+      if (
+        message === null ||
+        typeof message !== "object" ||
+        typeof message.serviceId !== "string" ||
+        typeof message.itemInstanceId !== "string"
+      ) {
+        try {
+          client.send("request_store_inventory_item_in_stash_rejected", {
+            type: "request_store_inventory_item_in_stash_rejected",
+            serviceId: "nightmarket_stash_keeper",
+            reason: "stash_unavailable",
+          });
+        } catch {}
+        return;
+      }
+
+      if (player === undefined || player.lifeState !== "alive") {
+        try {
+          client.send("request_store_inventory_item_in_stash_rejected", {
+            type: "request_store_inventory_item_in_stash_rejected",
+            serviceId: message.serviceId,
+            itemInstanceId: message.itemInstanceId,
+            reason: "stash_unavailable",
+          });
+        } catch {}
+        return;
+      }
+
+      const result = await executeStoreInventoryItemInStash({
+        characterId: player.characterId.toString(),
+        serviceId: message.serviceId,
+        itemInstanceId: message.itemInstanceId,
+        ...(typeof message.pageIndex === "number" ? { pageIndex: message.pageIndex } : {}),
+        ...(typeof message.x === "number" ? { x: message.x } : {}),
+        ...(typeof message.y === "number" ? { y: message.y } : {}),
+      });
+
+      if (result.ok) {
+        try {
+          client.send("request_store_inventory_item_in_stash_accepted", {
+            type: "request_store_inventory_item_in_stash_accepted",
+            serviceId: message.serviceId,
+            itemInstanceId: result.itemInstanceId,
+            stashItems: result.stashItems,
+          });
+        } catch {}
+        return;
+      }
+
+      log.debug?.({ roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, reason: result.reason }, "TownRoom request_store_inventory_item_in_stash rejected.");
+      try {
+        client.send("request_store_inventory_item_in_stash_rejected", {
+          type: "request_store_inventory_item_in_stash_rejected",
+          serviceId: message.serviceId,
+          itemInstanceId: message.itemInstanceId,
+          reason: result.reason,
+        });
+      } catch {}
+    });
+
+    this.onMessage("request_take_stash_item_to_inventory", async (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+      const message = raw as { serviceId?: unknown; itemInstanceId?: unknown } | null;
+
+      if (
+        message === null ||
+        typeof message !== "object" ||
+        typeof message.serviceId !== "string" ||
+        typeof message.itemInstanceId !== "string"
+      ) {
+        try {
+          client.send("request_take_stash_item_to_inventory_rejected", {
+            type: "request_take_stash_item_to_inventory_rejected",
+            serviceId: "nightmarket_stash_keeper",
+            reason: "stash_unavailable",
+          });
+        } catch {}
+        return;
+      }
+
+      if (player === undefined || player.lifeState !== "alive") {
+        try {
+          client.send("request_take_stash_item_to_inventory_rejected", {
+            type: "request_take_stash_item_to_inventory_rejected",
+            serviceId: message.serviceId,
+            itemInstanceId: message.itemInstanceId,
+            reason: "stash_unavailable",
+          });
+        } catch {}
+        return;
+      }
+
+      const result = await executeTakeStashItemToInventory({
+        characterId: player.characterId.toString(),
+        serviceId: message.serviceId,
+        itemInstanceId: message.itemInstanceId,
+      });
+
+      if (result.ok) {
+        try {
+          client.send("request_take_stash_item_to_inventory_accepted", {
+            type: "request_take_stash_item_to_inventory_accepted",
+            serviceId: message.serviceId,
+            itemInstanceId: result.itemInstanceId,
+            stashItems: result.stashItems,
+          });
+        } catch {}
+        return;
+      }
+
+      log.debug?.({ roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, reason: result.reason }, "TownRoom request_take_stash_item_to_inventory rejected.");
+      try {
+        client.send("request_take_stash_item_to_inventory_rejected", {
+          type: "request_take_stash_item_to_inventory_rejected",
+          serviceId: message.serviceId,
+          itemInstanceId: message.itemInstanceId,
+          reason: result.reason,
+        });
+      } catch {}
+    });
+  }
+
   private applyEnemyAggroDamage(now: number, deltaMs: number): void {
     const state = this.state as TownRoomState;
 
@@ -2788,6 +3105,10 @@ export class TownRoom extends Room {
     });
   }
 }
+
+
+
+
 
 
 

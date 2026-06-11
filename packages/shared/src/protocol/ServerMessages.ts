@@ -2,7 +2,12 @@ import type { CharacterDetails } from "../character/CharacterTypes";
 import type { CharacterCorpseState } from "../character/DeathTypes";
 import type { RequestBuyVendorItemRejectedReason } from "../room/VendorBuyTypes";
 import type { RequestSellItemRejectedReason } from "../room/VendorSellTypes";
-import type { StashItemsListRejectedReason } from "../room/StashTypes";
+import type {
+  RequestStoreInventoryItemInStashRejectedReason,
+  RequestTakeStashItemToInventoryRejectedReason,
+  StashItemsListRejectedReason,
+} from "../room/StashTypes";
+import type { WaypointDestinationEntry, WaypointRejectedReason } from "../room/WaypointTypes";
 import type { EquipmentLoadout } from "../inventory/EquipmentTypes";
 import type { InventoryGrid } from "../inventory/InventoryTypes";
 import type { ItemInstance } from "../inventory/ItemTypes";
@@ -426,6 +431,79 @@ export interface StashItemsListRejectedServerMessage {
   readonly reason: StashItemsListRejectedReason;
 }
 
+export interface RequestStoreInventoryItemInStashAcceptedServerMessage {
+  readonly type: "request_store_inventory_item_in_stash_accepted";
+  readonly serviceId: string;
+  readonly itemInstanceId: string;
+  readonly stashItems: readonly ItemInstance[];
+}
+
+export interface RequestStoreInventoryItemInStashRejectedServerMessage {
+  readonly type: "request_store_inventory_item_in_stash_rejected";
+  readonly serviceId: string;
+  readonly itemInstanceId?: string;
+  readonly reason: RequestStoreInventoryItemInStashRejectedReason;
+}
+
+export interface RequestTakeStashItemToInventoryAcceptedServerMessage {
+  readonly type: "request_take_stash_item_to_inventory_accepted";
+  readonly serviceId: string;
+  readonly itemInstanceId: string;
+  readonly stashItems: readonly ItemInstance[];
+}
+
+export interface RequestTakeStashItemToInventoryRejectedServerMessage {
+  readonly type: "request_take_stash_item_to_inventory_rejected";
+  readonly serviceId: string;
+  readonly itemInstanceId?: string;
+  readonly reason: RequestTakeStashItemToInventoryRejectedReason;
+}
+
+export interface WaypointOpenedServerMessage {
+  readonly type: "waypoint_opened";
+  readonly objectId: string;
+  readonly waypointId: string;
+  readonly activated: boolean;
+  readonly destinations: readonly WaypointDestinationEntry[];
+}
+
+export interface RequestWaypointTravelAcceptedServerMessage {
+  readonly type: "request_waypoint_travel_accepted";
+  readonly waypointId: string;
+  readonly zoneId: ZoneId;
+  readonly x: number;
+  readonly y: number;
+  readonly message: string;
+}
+
+export interface RequestWaypointTravelRejectedServerMessage {
+  readonly type: "request_waypoint_travel_rejected";
+  readonly waypointId?: string;
+  readonly reason: WaypointRejectedReason;
+}
+
+export type RequestRouteTravelRejectedReason =
+  | "route_unavailable"
+  | "destination_unavailable"
+  | "invalid_destination"
+  | "travel_failed";
+
+export interface RequestRouteTravelAcceptedServerMessage {
+  readonly type: "request_route_travel_accepted";
+  readonly objectId: string;
+  readonly zoneId: ZoneId;
+  readonly x: number;
+  readonly y: number;
+  readonly message: string;
+  readonly areaLabel: string;
+}
+
+export interface RequestRouteTravelRejectedServerMessage {
+  readonly type: "request_route_travel_rejected";
+  readonly objectId?: string;
+  readonly reason: RequestRouteTravelRejectedReason;
+}
+
 export type ServerRoomMessage =
   | RoomStateSnapshotServerMessage
   | RoomStatePatchServerMessage
@@ -467,4 +545,13 @@ export type ServerRoomMessage =
   | RequestSellItemRejectedServerMessage
   | StashItemsListedServerMessage
   | StashItemsListRejectedServerMessage
+  | RequestStoreInventoryItemInStashAcceptedServerMessage
+  | RequestStoreInventoryItemInStashRejectedServerMessage
+  | RequestTakeStashItemToInventoryAcceptedServerMessage
+  | RequestTakeStashItemToInventoryRejectedServerMessage
+  | WaypointOpenedServerMessage
+  | RequestWaypointTravelAcceptedServerMessage
+  | RequestWaypointTravelRejectedServerMessage
+  | RequestRouteTravelAcceptedServerMessage
+  | RequestRouteTravelRejectedServerMessage
   | ErrorServerMessage;

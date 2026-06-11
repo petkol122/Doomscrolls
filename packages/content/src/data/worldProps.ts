@@ -24,6 +24,7 @@ export const worldProps = [
   { id: "nightmarket_stash_keeper_01",   zoneId: "nightmarket", kind: "town_service",  label: "Stash Keeper",       labelKey: "world_prop.stash_keeper.label",       x: 570, y: 250 },
   { id: "nightmarket_trainer_01",        zoneId: "nightmarket", kind: "town_service",  label: "Trainer",            labelKey: "world_prop.trainer.label",            x: 660, y: 445 },
   { id: "nightmarket_waypoint_01",      zoneId: "nightmarket", kind: "waypoint",      label: "Waypoint",          labelKey: "world_prop.waypoint.label",           x: 435, y: 540 },
+  { id: "nightmarket_blackwire_gate_01", zoneId: "nightmarket", kind: "town_service", label: "Blackwire Gate", labelKey: "world_prop.blackwire_gate.label" as never, x: 735, y: 560 },
   { id: "nightmarket_crates_01",         zoneId: "nightmarket", kind: "crate",         label: "Market Crates",     labelKey: "world_prop.market_crates.label",      x: 110, y: 355 },
   { id: "nightmarket_loot_container_01", zoneId: "nightmarket", kind: "loot_container",label: "Crate",             labelKey: "world_prop.crate.label",              x: 205, y: 510 },
   { id: "nightmarket_junk_01",           zoneId: "nightmarket", kind: "junk",          label: "Market Junk",       labelKey: "world_prop.market_junk.label",        x: 785, y: 350 },
@@ -66,6 +67,7 @@ export const worldProps = [
 
   // ── Region 4: Runt combat pocket (first main sewer edge) ──
   { id: "nightmarket_sewer_edge_marker_01", zoneId: "nightmarket", kind: "combat_edge", label: "→ Blackwire Sewer Edge", labelKey: "world_prop.edge_blackwire_sewer.label", x: 3000, y: 2190 },
+  { id: "nightmarket_blackwire_return_01", zoneId: "nightmarket", kind: "combat_edge", label: "← Return to Nightmarket Services", labelKey: "world_prop.return_nightmarket_services.label" as never, x: 2890, y: 2260 },
   { id: "nightmarket_sewer_debris_01",      zoneId: "nightmarket", kind: "debris",      label: "Sewer Edge Debris",      labelKey: "world_prop.sewer_edge_debris.label",    x: 2940, y: 2140 },
   { id: "nightmarket_junk_02",              zoneId: "nightmarket", kind: "junk",        label: "Scrap Pile",             labelKey: "world_prop.scrap_pile.label",            x: 3160, y: 2310 },
   { id: "nightmarket_debris_03",            zoneId: "nightmarket", kind: "debris",      label: "Sewer Rubble",           labelKey: "world_prop.sewer_rubble.label",          x: 3300, y: 2440 },

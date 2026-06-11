@@ -243,6 +243,21 @@ export class CharacterRepository {
     });
   }
 
+  public listWaypointActivations(characterId: string) {
+    return this.db.characterWaypointActivation.findMany({
+      where: { characterId },
+      orderBy: [{ activatedAt: "asc" }, { waypointId: "asc" }],
+    });
+  }
+
+  public activateWaypoint(characterId: string, waypointId: string, zoneId: string) {
+    return this.db.characterWaypointActivation.upsert({
+      where: { characterId_waypointId: { characterId, waypointId } },
+      update: {},
+      create: { characterId, waypointId, zoneId },
+    });
+  }
+
   /**
    * Atomically read the character's current `moneyCopper` total.
    *

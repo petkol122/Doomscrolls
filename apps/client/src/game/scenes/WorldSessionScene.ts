@@ -34,6 +34,10 @@ import {
   type TownServiceInteractionPanel,
 } from "./worldSession/townServiceInteractionPanel";
 import {
+  createWaypointInteractionPanel,
+  type WaypointInteractionPanel,
+} from "./worldSession/waypointInteractionPanel";
+import {
   createStashInteractionPanel,
   type StashInteractionPanel,
 } from "./worldSession/stashInteractionPanel";
@@ -119,6 +123,7 @@ export class WorldSessionScene extends Phaser.Scene {
   private vendorPanel: VendorInteractionPanel | null = null;
   private townServicePanel: TownServiceInteractionPanel | null = null;
   private stashPanel: StashInteractionPanel | null = null;
+  private waypointPanel: WaypointInteractionPanel | null = null;
   private utilityPanelOpenState: WorldSessionUtilityPanelOpenState = {
     controls: false,
     equipment: false,
@@ -220,23 +225,32 @@ export class WorldSessionScene extends Phaser.Scene {
       // Task 205 — Stash keeper / future town-service placeholder panel.
       if (objectId === "nightmarket_stash_keeper_01") {
         this.stashPanel?.destroy();
-        this.stashPanel = createStashInteractionPanel();
+        this.stashPanel = createStashInteractionPanel({
+          onStore: (itemInstanceId) => {
+            this.room?.send("request_store_inventory_item_in_stash", {
+              type: "request_store_inventory_item_in_stash",
+              serviceId: "nightmarket_stash_keeper",
+              itemInstanceId,
+            });
+          },
+          onTake: (itemInstanceId) => {
+            this.room?.send("request_take_stash_item_to_inventory", {
+              type: "request_take_stash_item_to_inventory",
+              serviceId: "nightmarket_stash_keeper",
+              itemInstanceId,
+            });
+          },
+        });
+        const character = this.account !== null && this.characterId !== null
+          ? this.account.characters.find((c) => c.id === this.characterId) ?? null
+          : null;
+        this.stashPanel.setInventoryItems(this.buildInventoryItemsForStash(character));
         this.stashPanel.show();
         return;
       }
       // Task 208 — Trainer town-service placeholder panel.
       if (objectId === "nightmarket_trainer_01") {
         const service = contentRegistry.townServices.get("nightmarket_trainer");
-        if (service !== undefined) {
-          this.townServicePanel?.destroy();
-          this.townServicePanel = createTownServiceInteractionPanel(service);
-          this.townServicePanel.show();
-          return;
-        }
-      }
-      // Task 209 — Waypoint town-service placeholder panel.
-      if (objectId === "nightmarket_waypoint_01") {
-        const service = contentRegistry.townServices.get("nightmarket_waypoint");
         if (service !== undefined) {
           this.townServicePanel?.destroy();
           this.townServicePanel = createTownServiceInteractionPanel(service);
@@ -343,6 +357,57 @@ export class WorldSessionScene extends Phaser.Scene {
       void this.refreshAccountStateAfterPickup();
     });
 
+    this.room.onMessage("waypoint_opened", (message: { destinations?: unknown }) => {
+      const destinations = Array.isArray(message.destinations) ? message.destinations as import("@doomscrolls/shared").WaypointDestinationEntry[] : [];
+      this.waypointPanel?.destroy();
+      this.waypointPanel = createWaypointInteractionPanel({
+        onTravel: (waypointId) => {
+          this.room?.send("request_waypoint_travel", {
+            type: "request_waypoint_travel",
+            waypointId,
+          });
+        },
+      });
+      this.waypointPanel.show(destinations);
+      this.feedbackView?.showNotice(t("town_service.waypoint.opened" as never));
+    });
+
+    this.room.onMessage("request_waypoint_travel_accepted", (message: { message?: unknown }) => {
+      const feedback = typeof message.message === "string" && message.message.length > 0
+        ? message.message
+        : t("town_service.waypoint.travel_success" as never);
+      this.feedbackView?.showNotice(feedback);
+    });
+
+    this.room.onMessage("request_waypoint_travel_rejected", (message: { reason?: unknown }) => {
+      const reason = typeof message.reason === "string" ? message.reason : "travel_failed";
+      const key = `town_service.waypoint.rejected.${reason}` as Parameters<typeof t>[0];
+      const fallback = t("town_service.waypoint.rejected.travel_failed" as never);
+      const feedback = (() => { try { return t(key as never); } catch { return fallback; } })();
+      this.feedbackView?.showNotice(feedback);
+    });
+
+    this.room.onMessage("request_route_travel_accepted", (message: { message?: unknown; areaLabel?: unknown }) => {
+      const feedback = typeof message.message === "string" && message.message.length > 0
+        ? message.message
+        : t("town_service.route.travel_success.generic" as never);
+      this.feedbackView?.showNotice(feedback);
+      const areaLabel = typeof message.areaLabel === "string" && message.areaLabel.length > 0
+        ? message.areaLabel
+        : null;
+      if (areaLabel !== null) {
+        this.showAttackFeedback(areaLabel);
+      }
+    });
+
+    this.room.onMessage("request_route_travel_rejected", (message: { reason?: unknown }) => {
+      const reason = typeof message.reason === "string" ? message.reason : "travel_failed";
+      const key = `town_service.route.rejected.${reason}` as Parameters<typeof t>[0];
+      const fallback = t("town_service.route.rejected.travel_failed" as never);
+      const feedback = (() => { try { return t(key as never); } catch { return fallback; } })();
+      this.feedbackView?.showNotice(feedback);
+    });
+
     // Task 319 — Vendor buy accepted/rejected feedback
     this.room.onMessage("request_buy_vendor_item_accepted", (message: { stockEntryId?: string; itemId?: string; priceCopper?: number; remainingCopper?: number }) => {
       const itemId = typeof message.itemId === "string" ? message.itemId : "";
@@ -397,6 +462,59 @@ export class WorldSessionScene extends Phaser.Scene {
         ? (message.items as import("@doomscrolls/shared").ItemInstance[])
         : [];
       this.stashPanel?.setItems(items);
+    });
+
+    this.room.onMessage("request_store_inventory_item_in_stash_accepted", (message: { itemInstanceId?: string; stashItems?: unknown }) => {
+      const itemId = typeof message.itemInstanceId === "string" ? message.itemInstanceId : "";
+      const item = this.findInventorySummaryItem(itemId);
+      const def = item !== null ? contentRegistry.items.get(item.definitionId as never) : undefined;
+      const itemLabel = def !== undefined ? t(def.nameKey as never) : "Item";
+      const stashItems = Array.isArray(message.stashItems) ? message.stashItems as import("@doomscrolls/shared").ItemInstance[] : [];
+      this.stashPanel?.setItems(stashItems);
+      const feedback = t("town_service.stash_keeper.store_success" as never, { itemLabel });
+      this.feedbackView?.showNotice(feedback);
+      this.stashPanel?.showFeedback(feedback);
+      void this.refreshAccountStateAfterPickup().then(() => {
+        const character = this.account !== null && this.characterId !== null
+          ? this.account.characters.find((c) => c.id === this.characterId) ?? null
+          : null;
+        this.stashPanel?.setInventoryItems(this.buildInventoryItemsForStash(character));
+      });
+    });
+
+    this.room.onMessage("request_take_stash_item_to_inventory_accepted", (message: { itemInstanceId?: string; stashItems?: unknown }) => {
+      const itemId = typeof message.itemInstanceId === "string" ? message.itemInstanceId : "";
+      const stashItems = Array.isArray(message.stashItems) ? message.stashItems as import("@doomscrolls/shared").ItemInstance[] : [];
+      const takenItem = stashItems.find((item) => item.id === itemId);
+      const fallbackDefinitionId = takenItem?.definitionId ?? "";
+      const def = contentRegistry.items.get(fallbackDefinitionId as never);
+      const itemLabel = def !== undefined ? t(def.nameKey as never) : "Item";
+      this.stashPanel?.setItems(stashItems);
+      const feedback = t("town_service.stash_keeper.take_success" as never, { itemLabel });
+      this.feedbackView?.showNotice(feedback);
+      this.stashPanel?.showFeedback(feedback);
+      void this.refreshAccountStateAfterPickup().then(() => {
+        const character = this.account !== null && this.characterId !== null
+          ? this.account.characters.find((c) => c.id === this.characterId) ?? null
+          : null;
+        this.stashPanel?.setInventoryItems(this.buildInventoryItemsForStash(character));
+      });
+    });
+
+    const showStashRejected = (reason?: string): void => {
+      const key = `town_service.stash_keeper.rejected.${typeof reason === "string" ? reason : "stash_unavailable"}` as Parameters<typeof t>[0];
+      const fallback = t("town_service.stash_keeper.rejected.stash_unavailable" as never);
+      const feedbackText = (() => { try { return t(key as never); } catch { return fallback; } })();
+      this.feedbackView?.showNotice(feedbackText);
+      this.stashPanel?.showFeedback(feedbackText);
+    };
+
+    this.room.onMessage("request_store_inventory_item_in_stash_rejected", (message: { reason?: string }) => {
+      showStashRejected(message.reason);
+    });
+
+    this.room.onMessage("request_take_stash_item_to_inventory_rejected", (message: { reason?: string }) => {
+      showStashRejected(message.reason);
     });
 
     this.room.onMessage("stash_items_list_rejected", () => {
@@ -835,6 +953,37 @@ export class WorldSessionScene extends Phaser.Scene {
       });
     }
     return items;
+  }
+
+  private buildInventoryItemsForStash(
+    character: { inventorySummaryItems?: readonly { itemInstanceId: string; definitionId: string }[] } | null,
+  ): import("@doomscrolls/shared").ItemInstance[] {
+    if (character?.inventorySummaryItems === undefined) {
+      return [];
+    }
+    const items: import("@doomscrolls/shared").ItemInstance[] = [];
+    for (const item of character.inventorySummaryItems) {
+      items.push({
+        id: item.itemInstanceId as never,
+        definitionId: item.definitionId as never,
+        stackQuantity: 1,
+        ownerCharacterId: this.characterId as never,
+        location: { type: "inventory", characterId: this.characterId as never, pageIndex: 0, x: 0, y: 0 } as import("@doomscrolls/shared").ItemLocation,
+        createdAt: new Date(0).toISOString() as never,
+        updatedAt: new Date(0).toISOString() as never,
+      });
+    }
+    return items;
+  }
+
+  private findInventorySummaryItem(itemInstanceId: string): { readonly itemInstanceId: string; readonly definitionId: string } | null {
+    const character = this.account !== null && this.characterId !== null
+      ? this.account.characters.find((candidate) => candidate.id === this.characterId) ?? null
+      : null;
+    if (character?.inventorySummaryItems === undefined) {
+      return null;
+    }
+    return character.inventorySummaryItems.find((item) => item.itemInstanceId === itemInstanceId) ?? null;
   }
 
   // Task 310 — check if an entity ID belongs to a room enemy so

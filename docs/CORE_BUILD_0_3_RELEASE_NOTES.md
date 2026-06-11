@@ -1,5 +1,111 @@
 # docs/CORE_BUILD_0_3_RELEASE_NOTES.md — Core Build 0.3 Release Notes
 
+## Task 331 — Travel Foundation: Town to Combat Area Routing
+
+**Summary:**
+
+Implemented the first real server-authoritative town → combat → town loop inside the existing Nightmarket zone. Players can now use a Blackwire Gate near the service hub to jump to the hostile Blackwire Sewer Edge pocket and use a return marker there to jump back to the Nightmarket services area.
+
+**Changes:**
+
+- **`packages/content/src/data/spawnPoints.ts`** and **`packages/content/src/data/types.ts`**: Added two real same-zone travel destinations, one for the combat-edge arrival point and one for the return point to the service hub, and extended the spawn-point content id union accordingly.
+
+- **`packages/content/src/data/worldProps.ts`**: Added a service-hub route interactable (`nightmarket_blackwire_gate_01`) and a combat-edge return interactable (`nightmarket_blackwire_return_01`) using the existing Nightmarket zone.
+
+- **`apps/server/src/realtime/rooms/initializeTownInteractables.ts`**: Extended the data-driven interactable initialization to include `combat_edge` props in the synced interactable set.
+
+- **`apps/server/src/realtime/rooms/interactValidation.ts`**: Added localized safe interaction prompt text for the new Blackwire gate and return marker.
+
+- **`apps/server/src/realtime/rooms/waypointService.ts`**: Added a focused same-zone route-travel resolver with server-owned validation for known route interactables, known destination spawn points, and valid in-bounds destination coordinates, plus localized rejection mapping.
+
+- **`packages/shared/src/protocol/ServerMessages.ts`**: Added accepted/rejected room-message contracts for route travel feedback so the client consumes explicit server results.
+
+- **`apps/server/src/realtime/rooms/TownRoom.ts`**: Added the new route-travel interaction flow. On success, the server immediately updates synced player position, clears pending movement/action state, persists the new character location through `CharacterService.updateCharacterLocation()`, and sends localized travel feedback.
+
+- **`apps/client/src/game/scenes/WorldSessionScene.ts`**: Added accepted/rejected route-travel feedback handling using the existing world-session notice flow, without any fake client-side transition or local-only position change.
+
+- **`packages/localization/src/locales/en.ts`** and **`packages/localization/src/LocaleTypes.ts`**: Added the required localization keys for the new route prompts, success/rejection text, new spawn labels, and interactable labels.
+
+**Verification:**
+
+- Focused validation is still pending.
+
+**Known limitations:**
+
+- Travel currently stays inside the existing Nightmarket zone instead of switching to `CombatRoom`.
+- No dungeon system, world map, portal system, minimap, or quest-driven travel was added.
+- The loop intentionally reuses the current Nightmarket hostile pocket rather than introducing a separate real combat-room handoff.
+
+## Task 330 — Waypoint Foundation: Activate and Use Basic Town Waypoint
+
+**Summary:**
+
+Implemented the first real waypoint flow in the Nightmarket. Interacting with the Nightmarket waypoint now activates it for the current character, opens a localized waypoint panel, lists the currently available destination, and allows a basic server-authoritative travel action that updates both live room position and persisted character location.
+
+**Changes:**
+
+- **`packages/shared/src/room/WaypointTypes.ts`**: Added shared waypoint destination and rejection types for the new waypoint foundation.
+
+- **`packages/shared/src/protocol/ClientMessages.ts`** and **`packages/shared/src/protocol/ServerMessages.ts`**: Added `request_waypoint_travel`, `waypoint_opened`, `request_waypoint_travel_accepted`, and `request_waypoint_travel_rejected` message contracts so the client sends only travel intent while the server owns activation, validation, and the resulting position update.
+
+- **`apps/server/prisma/schema.prisma`** and **`apps/server/prisma/migrations/20260611150000_add_character_waypoint_activations/migration.sql`**: Added persistent character-scoped waypoint activation storage through the new `CharacterWaypointActivation` model.
+
+- **`apps/server/src/persistence/repositories/CharacterRepository.ts`**: Added repository helpers to upsert a waypoint activation and list a character’s activated waypoints.
+
+- **`apps/server/src/realtime/rooms/waypointService.ts`**: Added a focused waypoint helper module that activates the Nightmarket waypoint, builds the server-owned panel payload, validates the conservative travel destination, and maps typed rejection reasons to localized feedback.
+
+- **`apps/server/src/realtime/rooms/TownRoom.ts`**: Replaced the old waypoint placeholder interaction with a real room-authoritative flow. Interacting with `nightmarket_waypoint_01` now activates and opens the waypoint panel. The new `request_waypoint_travel` handler validates the destination, updates synced player presence coordinates server-side, clears movement targets/pending actions, and persists the new character location immediately.
+
+- **`apps/client/src/game/scenes/worldSession/waypointInteractionPanel.ts`**: Added a dedicated localized waypoint panel instead of reusing the generic placeholder town-service panel. The panel shows a title, subtitle, available destinations, travel buttons, and an empty state.
+
+- **`apps/client/src/game/scenes/WorldSessionScene.ts`**: Added handling for `waypoint_opened`, `request_waypoint_travel_accepted`, and `request_waypoint_travel_rejected`. The client now opens the real panel on server response, sends travel intent back to the room, and displays localized success/failure feedback.
+
+- **`packages/localization/src/locales/en.ts`** and **`packages/localization/src/LocaleTypes.ts`**: Added the required localized waypoint panel text, status text, destination label, and rejection messages.
+
+**Verification:**
+
+- `pnpm --filter @doomscrolls/server prisma:generate` — passed after releasing the locked Prisma engine file
+- Focused typecheck/runtime verification still pending
+
+**Known limitations:**
+
+- Only one conservative destination is exposed for now: Nightmarket Arrival
+- No world map, minimap, travel cost, cooldown, portal system, or combat-room routing
+- Waypoint unlocks are currently character-scoped, not account-scoped
+
+## Task 329 — Stash Foundation: Server-Authoritative Inventory ↔ Stash Transfer
+
+**Summary:**
+
+Implemented the first real stash transfer flow in town. The Nightmarket stash keeper now supports storing inventory items into stash and taking stash items back into inventory through server-authoritative Colyseus room messages. The server validates ownership, item state, stash availability, and placement rules before updating persistence atomically.
+
+**Changes:**
+
+- **`packages/shared/src/room/StashTypes.ts`**: Added typed rejection reasons for both transfer directions so the client can display safe localized failure feedback without inventing state.
+
+- **`packages/shared/src/protocol/ClientMessages.ts`** and **`packages/shared/src/protocol/ServerMessages.ts`**: Added `request_store_inventory_item_in_stash` and `request_take_stash_item_to_inventory` message contracts plus accepted/rejected response types. Accepted responses include the refreshed authoritative stash item list.
+
+- **`apps/server/src/realtime/rooms/stashTransferItem.ts`**: Added the server-authoritative stash transfer service. It validates ownership and item location, resolves stash/inventory placement using grid collision rules, and updates the item location atomically in a Prisma transaction.
+
+- **`apps/server/src/realtime/rooms/TownRoom.ts`**: Registered async handlers for both stash transfer directions and reused the existing stash keeper room-service flow. Transfers remain room/server authoritative; the client only sends intent.
+
+- **`apps/client/src/game/scenes/worldSession/stashInteractionPanel.ts`**: Upgraded the stash panel from list-only to a simple two-section view with Inventory and Stash entries plus localized Store / Take buttons.
+
+- **`apps/client/src/game/scenes/WorldSessionScene.ts`**: Wired Store / Take button clicks to the new room messages, handled accepted/rejected responses, refreshed stash list state from authoritative room responses, and refreshed inventory/account state through the existing `/me` path.
+
+- **`packages/localization/src/locales/en.ts`** and **`packages/localization/src/LocaleTypes.ts`**: Added localized success messages, action labels, section labels, and rejection feedback for stash full / inventory full / item-state failures.
+
+**Verification:**
+
+- Focused verification is still pending.
+
+**Known limitations:**
+
+- No drag/drop stash UI
+- No stash sorting/filtering or tabs/pages UI beyond existing minimal placement fields
+- No account-wide stash
+- No stack splitting/merging changes
+
 ## Task 326 — WorldSession Camera/Projection Layer Unification Fix
 
 **Summary:**

@@ -1,5 +1,18 @@
 # docs/CORE_BUILD_0_3_CHECKLIST.md — Core Build 0.3 Checklist
 
+## Task 331 — Travel Foundation: Town to Combat Area Routing
+
+- [x] Audited existing `TownRoom`, `CombatRoom`, zone content, spawn points, location persistence, waypoint travel, and nearby enemy pocket foundations
+- [x] Chose the safer same-zone Nightmarket routing path instead of room switching, reusing the existing hostile pockets and viewport/camera behavior
+- [x] Added a Blackwire Gate interactable near the Nightmarket service hub and a return interactable near the Blackwire Sewer Edge pocket
+- [x] Added same-zone travel spawn points for hub → combat-edge entry and combat-edge → hub return
+- [x] Extended town interactable initialization so combat-edge props can participate in the real interact flow
+- [x] Added server-authoritative route validation and travel resolution for known interactables and known destination spawn points
+- [x] Successful route travel now clears pending movement/action state, updates live synced player position immediately, and persists character location through the existing location service
+- [x] Added localized route prompts, success text, rejection text, and world-prop labels for the new route/return interactables
+- [x] Wired client feedback handling for accepted/rejected route travel without inventing client-only transitions
+- [x] Kept routing inside the existing Nightmarket zone so camera/projection/zoom and enemy viewport culling behavior continue to use the existing world-session path
+
 ## Task 326 — WorldSession Camera/Projection Layer Unification Fix
 
 - [x] Audited `worldSessionAreaView.ts` and related render views to find every world-to-screen, screen-to-world, camera-offset, and hit-test conversion path
@@ -132,3 +145,32 @@
 - [x] Moved Nightmarket enemy spawn pockets farther from town and farther from each other using content `spawnZones` only
 - [x] Preserved existing vendor buy/sell, stash listing, rest area, notice interaction, combat, loot pickup, cursor feedback, zoom, and camera behavior by leaving interaction IDs and code paths unchanged
 - [ ] Focused validation pending
+
+## Task 329 — Stash Foundation: Server-Authoritative Inventory ↔ Stash Transfer
+
+- [x] Audited existing inventory persistence, stash persistence, stash panel flow, and inventory placement rules
+- [x] Added shared client/server room message contracts for inventory -> stash and stash -> inventory transfer
+- [x] Added typed server-owned stash transfer rejection reasons and localized feedback keys
+- [x] Implemented server-authoritative inventory -> stash validation and atomic location update
+- [x] Implemented server-authoritative stash -> inventory validation and existing-grid-based placement resolution
+- [x] Kept stash listing refresh on successful transfers by returning updated stash items through room messages
+- [x] Refreshed client inventory/account state after successful transfers using the existing `/me` refresh path
+- [x] Updated the stash panel with simple Store / Take actions (no drag/drop)
+- [x] Kept scope limited: no stash tabs, no sorting/filtering, no account-wide stash, no schema changes
+- [ ] Focused verification pending
+
+## Task 330 — Waypoint Foundation: Activate and Use Basic Town Waypoint
+
+- [x] Audited existing `nightmarket_waypoint_01` content, town interactable initialization, interact validation, character position persistence, and TownRoom/player movement flow
+- [x] Added shared waypoint contracts for client travel intent, waypoint panel open payload, travel accepted/rejected responses, and typed rejection reasons
+- [x] Added character-scoped persistent waypoint activation support through Prisma `CharacterWaypointActivation`
+- [x] Added committed Prisma migration `20260611150000_add_character_waypoint_activations`
+- [x] Reused the existing Nightmarket waypoint interactable so interacting with `nightmarket_waypoint_01` activates it for the current character if needed
+- [x] Added a real localized waypoint panel with title, available destinations, travel button, and empty-state handling
+- [x] Added one conservative server-authoritative travel destination: Nightmarket Arrival (`nightmarket_waypoint_01` -> `nightmarket_spawn`)
+- [x] Server validates current waypoint context, destination existence, activation/unlock state, and destination spawn position bounds before travel
+- [x] Travel updates live player room state server-authoritatively by moving the synced player presence to the destination coordinates
+- [x] Travel also persists character location immediately through the existing `CharacterService.updateCharacterLocation()` path
+- [x] Added localized waypoint success and failure feedback
+- [x] Kept scope limited: no world map, no minimap, no travel cost/cooldown, no combat-room routing, no portal/quest/stash/vendor redesign
+- [ ] Focused verification pending
