@@ -32,6 +32,9 @@ export interface WorldSessionInteractablesView {
     pointerX: number,
     pointerY: number,
   ) => { readonly objectId: string; readonly worldX: number; readonly worldY: number } | null;
+  // Task 314 — set the hovered interactable object ID for highlight feedback.
+  readonly setHoveredObject: (objectId: string | null) => void;
+  readonly getHoveredObject: () => string | null;
   readonly setScreenOffset: (x: number, y: number) => void;
   readonly destroy: () => void;
 }
@@ -196,9 +199,29 @@ export function createWorldSessionInteractablesView(
     };
   };
 
+  let hoveredObjectId: string | null = null;
+
+  const setHoveredObject = (objectId: string | null): void => {
+    // Clear previous hover highlight
+    if (hoveredObjectId !== null && hoveredObjectId !== objectId) {
+      const prevGraphic = graphicsObjects.get(hoveredObjectId);
+      if (prevGraphic !== undefined) {
+        prevGraphic.clear();
+        // Redraw the graphic without hover highlight — we rely on the next
+        // refresh() call to fully redraw, so we just do a simple clear here.
+        hoveredObjectId = null;
+      }
+    }
+    hoveredObjectId = objectId;
+  };
+
+  const getHoveredObject = (): string | null => hoveredObjectId;
+
   return {
     refresh,
     findClickedInteractable,
+    setHoveredObject,
+    getHoveredObject,
     setScreenOffset: (x: number, y: number) => {
       screenOffsetX = x;
       screenOffsetY = y;

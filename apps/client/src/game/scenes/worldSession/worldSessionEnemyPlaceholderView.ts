@@ -122,6 +122,10 @@ export interface WorldSessionEnemyPlaceholderView {
   readonly hide: () => void;
   // Task 094 - show or hide the enemy attack telegraph warning marker.
   readonly setTelegraphing: (active: boolean, attackKind?: "normal" | "heavy") => void;
+  // Task 310 — brief white-flash tint when a server-confirmed hit lands.
+  readonly flashHit: () => void;
+  // Task 314 — show/hide hover highlight ring around this enemy.
+  readonly setHovered: (hovered: boolean) => void;
   readonly destroy: () => void;
 }
 
@@ -223,10 +227,11 @@ export function createWorldSessionEnemyPlaceholderView(
     })
     .setOrigin(0.5);
 
-  // Task 094 - telegraph warning marker. A pulsing yellow triangle
-  // above the enemy that is shown only during the enemy attack windup.
-  // The marker is purely visual; the server still decides when the
-  // actual damage lands. The marker is hidden by default.
+  // Task 094 / Task 312 — telegraph warning marker and body glow.
+  // A pulsing yellow triangle above the enemy shown during windup,
+  // plus a body/ring tint that makes the enemy itself visually
+  // "charge up" so incoming attacks are much easier to notice.
+  // The marker is purely visual; the server still decides damage.
   const telegraphMarker = scene.add.triangle(0, -14, 0, 0, 18, 0, 9, 18, 0xffe14a, 0.95);
   telegraphMarker.setStrokeStyle(2, 0x6b4a00, 0.9);
   telegraphMarker.setVisible(false);
@@ -253,6 +258,21 @@ export function createWorldSessionEnemyPlaceholderView(
     })
     .setOrigin(0.5);
   heavyTelegraphLabel.setVisible(false);
+
+  // Task 312 — "INCOMING" label shown during windup for extra readability.
+  const incomingLabel = scene.add
+    .text(0, -42, "", {
+      color: "#ffe8a0",
+      fontFamily: "Arial, sans-serif",
+      fontSize: "9px",
+      fontStyle: "bold",
+      stroke: "#2a1200",
+      strokeThickness: 3,
+      backgroundColor: "#6b2008",
+      padding: { left: 3, right: 3, top: 1, bottom: 1 },
+    })
+    .setOrigin(0.5);
+  incomingLabel.setVisible(false);
 
   // Task 244 â€” defeated "X" cross marker, hidden by default. Shown
   // only while the server reports `defeated: true` so the corpse
@@ -282,6 +302,7 @@ export function createWorldSessionEnemyPlaceholderView(
     telegraphMarker,
     telegraphExclaim,
     heavyTelegraphLabel,
+    incomingLabel,
     aggroExclaim,
     defeatedCrossOutline,
     defeatedCrossV,
@@ -353,8 +374,8 @@ export function createWorldSessionEnemyPlaceholderView(
       core.setVisible(false);
       stateText.setColor("#b8b8b8");
       stateText.setText(formatStateText(nextEnemy));
-      labelText.setColor("#b8b8b8");
-      labelText.setText(`${t(nextEnemy.label)} â€¢ ${t("world_area.enemy_defeated_label")}`);
+      labelText.setColor("#999999");
+      labelText.setText(`${t(nextEnemy.label)} [${t("world_area.enemy_defeated_label")}]`);
       hpText.setColor("#b8b8b8");
       hpText.setText(
         t("world_area.enemy_respawning_in", {
@@ -445,6 +466,19 @@ export function createWorldSessionEnemyPlaceholderView(
   };
 
   let telegraphTween: Phaser.Tweens.Tween | null = null;
+  // Task 312 — body/ring glow during windup. Saves original fill/stroke
+  // and applies a warning tint so the enemy itself visually "charges
+  // up", making incoming attacks much easier to notice.
+  let telegraphGlowTween: Phaser.Tweens.Tween | null = null;
+  let savedBodyFill: number = 0;
+  let savedBodyFillAlpha: number = 1;
+  let savedBodyStrokeColor: number = 0;
+  let savedBodyStrokeAlpha: number = 1;
+  let savedRingFill: number = 0;
+  let savedRingFillAlpha: number = 1;
+  let savedRingStrokeColor: number = 0;
+  let savedRingStrokeAlpha: number = 1;
+
   const setTelegraphing = (active: boolean, attackKind: "normal" | "heavy" = "normal"): void => {
     const isHeavy = attackKind === "heavy";
     telegraphMarker.setFillStyle(isHeavy ? 0xff6a3d : 0xffe14a, 0.95);
@@ -454,7 +488,32 @@ export function createWorldSessionEnemyPlaceholderView(
     telegraphMarker.setVisible(active);
     telegraphExclaim.setVisible(active);
     heavyTelegraphLabel.setVisible(active && isHeavy);
+
+    // Task 312 — "INCOMING" label and body/ring glow.
+    incomingLabel.setText(isHeavy ? "INCOMING!" : "INCOMING");
+    incomingLabel.setColor(isHeavy ? "#ffccaa" : "#ffe8a0");
+    incomingLabel.setBackgroundColor(isHeavy ? "#7a1008" : "#6b2008");
+    incomingLabel.setVisible(active);
+
     if (active) {
+      // Save original body/ring colors so we can restore them.
+      savedBodyFill = body.fillColor ?? 0;
+      savedBodyFillAlpha = body.alpha;
+      savedBodyStrokeColor = body.strokeColor ?? 0;
+      savedBodyStrokeAlpha = body.alpha;
+      savedRingFill = ring.fillColor ?? 0;
+      savedRingFillAlpha = ring.alpha;
+      savedRingStrokeColor = ring.strokeColor ?? 0;
+      savedRingStrokeAlpha = ring.alpha;
+
+      // Apply warning tint to body: amber for normal, hot red for heavy.
+      body.setFillStyle(isHeavy ? 0xff3a10 : 0xffaa22, 1);
+      body.setStrokeStyle(3, isHeavy ? 0xff6644 : 0xffdd66, 1);
+      // Apply glowing ring around the enemy.
+      ring.setFillStyle(isHeavy ? 0x7a1008 : 0x6b4008, 0.65);
+      ring.setStrokeStyle(3, isHeavy ? 0xff4422 : 0xffcc44, 0.95);
+
+      // Pulsing marker tween.
       if (telegraphTween === null) {
         telegraphTween = scene.tweens.add({
           targets: [telegraphMarker, telegraphExclaim, heavyTelegraphLabel],
@@ -467,14 +526,90 @@ export function createWorldSessionEnemyPlaceholderView(
       } else if (!telegraphTween.isPlaying()) {
         telegraphTween.restart();
       }
-    } else if (telegraphTween !== null) {
-      telegraphTween.stop();
-      telegraphTween = null;
-      telegraphMarker.setScale(1);
-      telegraphExclaim.setScale(1);
-      heavyTelegraphLabel.setScale(1);
-      heavyTelegraphLabel.setVisible(false);
+      // Pulsing body/ring glow tween (single tween, no unbounded accumulation).
+      if (telegraphGlowTween === null) {
+        telegraphGlowTween = scene.tweens.add({
+          targets: [body, ring],
+          scaleX: { from: 1, to: 1.08 },
+          scaleY: { from: 1, to: 1.08 },
+          yoyo: true,
+          duration: isHeavy ? 160 : 130,
+          repeat: -1,
+          ease: "Sine.easeInOut",
+        });
+      } else if (!telegraphGlowTween.isPlaying()) {
+        telegraphGlowTween.restart();
+      }
+    } else {
+      // Stop marker tween.
+      if (telegraphTween !== null) {
+        telegraphTween.stop();
+        telegraphTween = null;
+        telegraphMarker.setScale(1);
+        telegraphExclaim.setScale(1);
+        heavyTelegraphLabel.setScale(1);
+        heavyTelegraphLabel.setVisible(false);
+      }
+      // Stop body/ring glow tween and restore original colors.
+      if (telegraphGlowTween !== null) {
+        telegraphGlowTween.stop();
+        telegraphGlowTween = null;
+      }
+      body.setScale(1);
+      ring.setScale(1);
+      body.setFillStyle(savedBodyFill, savedBodyFillAlpha);
+      body.setStrokeStyle(2, savedBodyStrokeColor, savedBodyStrokeAlpha);
+      ring.setFillStyle(savedRingFill, savedRingFillAlpha);
+      ring.setStrokeStyle(2, savedRingStrokeColor, savedRingStrokeAlpha);
+      incomingLabel.setVisible(false);
     }
+  };
+
+  // Task 310 — brief hit flash. Preserves the current body fill/stroke
+  // so the flash does not fight with chasing/returning/idle visual state.
+  let flashTween: Phaser.Tweens.Tween | null = null;
+  const flashHit = (): void => {
+    if (body.fillColor === undefined) return;
+    const originalFill = body.fillColor;
+    const originalAlpha = body.alpha;
+    body.setFillStyle(0xffffff, 1);
+    if (flashTween !== null) {
+      flashTween.stop();
+    }
+    flashTween = scene.tweens.add({
+      targets: body,
+      alpha: { from: 1, to: originalAlpha },
+      duration: 120,
+      onComplete: () => {
+        body.setFillStyle(originalFill, originalAlpha);
+        flashTween = null;
+      },
+    });
+  };
+
+  // Task 314 — hover highlight ring. A separate ellipse shown on top
+  // of the existing ring when the player's cursor is over this enemy.
+  // It does not interfere with chasing/returning/idle visual state.
+  const hoverRing = scene.add.ellipse(
+    0,
+    initialVisual.ringOffsetY,
+    initialVisual.ringWidth + 14,
+    initialVisual.ringHeight + 10,
+    0xffcc44,
+    0.18,
+  );
+  hoverRing.setStrokeStyle(2, 0xffcc44, 0.7);
+  hoverRing.setVisible(false);
+  // Insert hoverRing before body so it appears between ring and body visually
+  const hoverRingIndex = container.getIndex(body);
+  container.addAt(hoverRing, hoverRingIndex);
+
+  const setHovered = (hovered: boolean): void => {
+    if (enemy.defeated) {
+      hoverRing.setVisible(false);
+      return;
+    }
+    hoverRing.setVisible(hovered);
   };
 
   applyEnemyVisualState(enemy);
@@ -484,10 +619,21 @@ export function createWorldSessionEnemyPlaceholderView(
     refresh,
     hide,
     setTelegraphing,
+    flashHit,
+    setHovered,
     destroy: () => {
+      hoverRing.destroy();
       if (telegraphTween !== null) {
         telegraphTween.stop();
         telegraphTween = null;
+      }
+      if (telegraphGlowTween !== null) {
+        telegraphGlowTween.stop();
+        telegraphGlowTween = null;
+      }
+      if (flashTween !== null) {
+        flashTween.stop();
+        flashTween = null;
       }
       container.destroy(true);
     },

@@ -912,6 +912,14 @@ export class TownRoom extends Room {
 
     state.playerPresence.delete(_client.sessionId);
     state.connectedPlayerCount = state.playerPresence.size;
+
+    // Clear any enemy that was targeting this player so a stale
+    // target is not re-acquired after the player leaves.
+    state.enemies.forEach((enemy) => {
+      if (enemy.targetPlayerSessionId === _client.sessionId) {
+        clearEnemyTargetAndReturn(enemy);
+      }
+    });
   }
 
   /**

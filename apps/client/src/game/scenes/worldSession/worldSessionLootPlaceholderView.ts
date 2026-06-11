@@ -125,6 +125,8 @@ function getLootLabelStrokeColor(loot: TownRoomWorldLootSnapshot): string {
 
 export interface WorldSessionLootPlaceholderView {
   readonly refresh: (loot: TownRoomWorldLootSnapshot, isPendingTarget?: boolean) => void;
+  // Task 314 — show/hide hover highlight ring around this loot item.
+  readonly setHovered: (hovered: boolean) => void;
   readonly destroy: () => void;
 }
 
@@ -171,6 +173,23 @@ export function createWorldSessionLootPlaceholderView(
 
   container.add([glow, ping, targetRing, body, labelBg, labelText]);
 
+  // Task 314 — hover highlight ring. Separate from the existing targetRing
+  // (which is used for pending pickup state). Shown when the player's cursor
+  // is over this loot item.
+  const hoverRing = scene.add.ellipse(0, 0, 36, 36);
+  hoverRing.setStrokeStyle(2, 0xffe7a8, 0);
+  container.addAt(hoverRing, container.getIndex(body));
+
+  const setHovered = (hovered: boolean): void => {
+    if (hovered) {
+      hoverRing.setStrokeStyle(2, 0xffe7a8, 0.65);
+      hoverRing.setVisible(true);
+    } else {
+      hoverRing.setStrokeStyle(2, 0xffe7a8, 0);
+      hoverRing.setVisible(false);
+    }
+  };
+
   const applyPendingTargetState = (isPendingTarget: boolean): void => {
     if (isPendingTarget) {
       targetRing.setStrokeStyle(2, 0xfbf2a2, 0.95);
@@ -186,6 +205,7 @@ export function createWorldSessionLootPlaceholderView(
   applyPendingTargetState(false);
 
   return {
+    setHovered,
     refresh: (nextLoot: TownRoomWorldLootSnapshot, isPendingTarget = false) => {
       const nextScatter = getScatterOffset(nextLoot.id);
     container.setPosition(nextLoot.x + nextScatter.x, nextLoot.y + nextScatter.y);

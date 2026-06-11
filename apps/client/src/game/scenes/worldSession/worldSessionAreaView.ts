@@ -49,6 +49,7 @@ import {
   type TownRoomWorldLootSnapshot,
 } from "../../../net/townRoomWorldLoot";
 import type { WorldSessionEnemyPlaceholderView } from "./worldSessionEnemyPlaceholderView";
+import type { WorldSessionInteractablesView } from "./worldSessionInteractablesView";
 import {
   createWorldSessionLootPlaceholderView,
   getScatterOffset,
@@ -62,6 +63,11 @@ import { shouldIgnoreWorldSessionCombatHotkey } from "./worldSessionCombatHotkey
 import {
   checkPlayerInRestArea,
 } from "./townRestAreaDetection";
+import {
+  createWorldSessionCursorFeedback,
+  type HoverTargetInfo,
+  type WorldSessionCursorFeedback,
+} from "./worldSessionCursorFeedback";
 
 interface PositionSnapshot {
   readonly x: number;
@@ -142,11 +148,71 @@ export interface WorldSessionAreaView {
   readonly showPlayerFloatingDamage: (text: string) => void;
   readonly showEnemyTelegraph: (enemyId: string, attackKind?: "normal" | "heavy") => void;
   readonly resolveEnemyAttackOutcome: (enemyId: string, outcome: "hit" | "miss") => void;
+  // Task 310 — brief white-flash on the enemy body when a hit lands.
+  readonly showEnemyHitFlash: (enemyId: string) => void;
+  // Task 311 — brief red-flash on the player body when server-confirmed
+  // damage lands. Purely visual; no gameplay state mutation.
+  readonly showPlayerHitFlash: () => void;
   readonly getSelfWorldPosition: () => { readonly x: number; readonly y: number } | null;
   readonly getLastClickTarget: () => ClickTargetSnapshot | null;
   readonly getSkillTargetingState: () => WorldSessionSkillTargetingState;
   readonly setPendingPickupTarget: (worldLootId: string | null) => void;
   readonly destroy: () => void;
+}
+
+/**
+ * Resolve what the pointer is hovering over, matching click priority.
+ * Returns null when the pointer is outside the viewport or over nothing
+ * actionable (ground only when in debug_top_down mode).
+ */
+function resolveHoverTarget(
+  pointerX: number,
+  pointerY: number,
+  enemyScreenPositions: ReadonlyMap<string, EnemyScreenPositionSnapshot>,
+  lootScreenPositions: ReadonlyMap<string, WorldLootScreenPositionSnapshot>,
+  corpseMarkers: ReadonlyMap<string, Phaser.GameObjects.Container>,
+  worldOffset: WorldContainerOffset,
+  selfSessionId: string | null,
+  selfWorldPosition: { readonly x: number; readonly y: number } | null,
+  interactablesView: WorldSessionInteractablesView,
+  projectionMode: WorldProjectionMode,
+): HoverTargetInfo | null {
+  // Priority 1: Enemy (living)
+  const hitEnemy = findClickedEnemy(enemyScreenPositions, pointerX, pointerY);
+  if (hitEnemy !== null) {
+    const pos = enemyScreenPositions.get(hitEnemy.id);
+    const label = pos?.label;
+    if (label !== undefined) {
+      return { type: "enemy", label };
+    }
+    return { type: "enemy" };
+  }
+
+  // Priority 2: Loot
+  const hitLoot = findClickedWorldLoot(lootScreenPositions, pointerX, pointerY);
+  if (hitLoot !== null) {
+    return { type: "loot" };
+  }
+
+  // Priority 3: Own corpse
+  if (findClickedOwnCorpseInteractive(
+    corpseMarkers, pointerX, pointerY, worldOffset, selfSessionId, selfWorldPosition,
+  )) {
+    return { type: "own_corpse" };
+  }
+
+  // Priority 4: Interactable object
+  const hitInteractable = interactablesView.findClickedInteractable(pointerX, pointerY);
+  if (hitInteractable !== null) {
+    return { type: "interactable" };
+  }
+
+  // Priority 5: Ground (only in debug_top_down mode)
+  if (projectionMode === "debug_top_down") {
+    return { type: "ground" };
+  }
+
+  return null;
 }
 
 export function createWorldSessionAreaView(
@@ -186,6 +252,7 @@ export function createWorldSessionAreaView(
   const enemyScreenPositions = new Map<string, EnemyScreenPositionSnapshot>();
   const lootScreenPositions = new Map<string, WorldLootScreenPositionSnapshot>();
   const corpseMarkers = new Map<string, Phaser.GameObjects.Container>();
+  const corpseGlowTweens = new Map<string, Phaser.Tweens.Tween>();
 
   const targetMarker = scene.add.circle(-9999, -9999, 7, 0xff4a4a, 0.8);
   const targetLabel = scene.add.text(layout.originX + 10, layout.originY + layout.height - 20, "", {
@@ -253,6 +320,9 @@ export function createWorldSessionAreaView(
   // those handlers and the inputZone handler short-circuits when it is set.
   let pointerHandledByTarget = false;
 
+  // Task 314 — cursor feedback (hover label + highlight rings).
+  const cursorFeedback: WorldSessionCursorFeedback = createWorldSessionCursorFeedback(scene, container);
+
   let previousPosition: PositionSnapshot | null = null;
   let lastClickTarget: ClickTargetSnapshot | null = null;
   let projectionMode: WorldProjectionMode = defaultWorldProjection;
@@ -284,6 +354,9 @@ export function createWorldSessionAreaView(
     strokeThickness: 3,
   }).setOrigin(0.5);
   worldContainer.add(restAreaIndicator);
+
+  // Task 314 — track previous hover target to clear highlights when leaving.
+  let previousHoverTargetId: string | null = null;
 
   // --- Module-scope projection values ---
   // Input handlers are registered ONCE during setup (not per-frame) and read
@@ -618,14 +691,62 @@ export function createWorldSessionAreaView(
     onDebugStateChange?.();
   });
 
+  // Task 314 — Enhanced POINTER_MOVE handler. Updates hover cursor feedback
+  // (label + highlight rings) for all world target types. Uses the same hit
+  // logic as the click handlers so hover feedback matches click priority.
+  // No per-frame objects created — only text/setStyle calls and visibility
+  // toggles on existing Phaser objects.
   inputZone.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
+    const worldOffset = currentWorldOffset;
+
+    // Update enemy hover tracking (existing logic for skill targeting)
     const hoveredEnemy = findClickedEnemy(enemyScreenPositions, pointer.x, pointer.y);
     const nextHoveredEnemyId = hoveredEnemy?.id ?? null;
     if (nextHoveredEnemyId !== hoveredEnemyId) {
+      // Clear previous enemy hover highlight
+      if (hoveredEnemyId !== null) {
+        const prevEnemyView = enemyPlaceholders.get(hoveredEnemyId);
+        prevEnemyView?.setHovered(false);
+      }
       hoveredEnemyId = nextHoveredEnemyId;
+      // Apply new enemy hover highlight
+      if (hoveredEnemyId !== null) {
+        const nextEnemyView = enemyPlaceholders.get(hoveredEnemyId);
+        nextEnemyView?.setHovered(true);
+      }
       onDebugStateChange?.();
     }
 
+    // Resolve world cursor target for hover label (matches click priority)
+    const inViewport = isPointerInsideViewport(pointer.x, pointer.y);
+    if (inViewport) {
+      const hoverTarget = resolveHoverTarget(
+        pointer.x,
+        pointer.y,
+        enemyScreenPositions,
+        lootScreenPositions,
+        corpseMarkers,
+        worldOffset,
+        selfSessionId,
+        selfWorldPosition,
+        interactablesView,
+        projectionMode,
+      );
+
+      if (hoverTarget !== null) {
+        cursorFeedback.setPosition(pointer.x, pointer.y);
+        cursorFeedback.updateHover(hoverTarget);
+        cursorFeedback.setVisible(true);
+      } else {
+        cursorFeedback.updateHover(null);
+        cursorFeedback.setVisible(false);
+      }
+    } else {
+      cursorFeedback.updateHover(null);
+      cursorFeedback.setVisible(false);
+    }
+
+    // Handle held movement
     if (!pointer.leftButtonDown()) {
       clearHeldMovementTarget();
       return;
@@ -910,21 +1031,49 @@ export function createWorldSessionAreaView(
           const isOwnCorpse = player.sessionId === selfSessionId;
           if (marker === undefined) {
             marker = scene.add.container(screenPos.x, screenPos.y);
+            marker.setDepth(350 + corpsePos.y);
             if (isOwnCorpse) {
+              // Task 311 — own corpse marker: larger, brighter, with a
+              // pulsing glow tween and a "Click to recover" prompt so
+              // the player can immediately distinguish their corpse
+              // from defeated enemies and other players' corpses.
+              const markerGlow = scene.add.ellipse(0, 0, 36, 36, 0x20aaaa, 0.18);
               const markerBg = scene.add.ellipse(0, 12, 28, 16, 0x003333, 0.5);
-              const markerBody = scene.add.rectangle(0, 0, 16, 24, 0x2a5c5c, 0.9);
-              markerBody.setStrokeStyle(2, 0x4ab0b0, 0.95);
+              const markerBody = scene.add.rectangle(0, 0, 18, 26, 0x2a6060, 0.92);
+              markerBody.setStrokeStyle(2, 0x5ad0d0, 0.95);
               const markerCross = scene.add.circle(0, -14, 6, 0x206060, 0.9);
-              markerCross.setStrokeStyle(2, 0x4ab0b0, 0.95);
+              markerCross.setStrokeStyle(2, 0x5ad0d0, 0.95);
               const markerLabel = scene.add.text(0, -30, "☠ " + player.displayName, {
-                color: "#4ad8d8",
+                color: "#5aeaea",
                 fontFamily: "Arial, sans-serif",
                 fontSize: "10px",
                 fontStyle: "bold",
                 stroke: "#0a2020",
                 strokeThickness: 3,
               }).setOrigin(0.5);
-              marker.add([markerBg, markerBody, markerCross, markerLabel]);
+              const recoverLabel = scene.add.text(0, 26, "Click to recover", {
+                color: "#a0f0f0",
+                fontFamily: "Arial, sans-serif",
+                fontSize: "9px",
+                fontStyle: "bold",
+                stroke: "#0a2020",
+                strokeThickness: 3,
+                backgroundColor: "rgba(10, 40, 40, 0.85)",
+                padding: { left: 4, right: 4, top: 2, bottom: 2 },
+              }).setOrigin(0.5);
+              marker.add([markerGlow, markerBg, markerBody, markerCross, markerLabel, recoverLabel]);
+              // Subtle pulsing glow so own corpse draws attention.
+              const pulseTween = scene.tweens.add({
+                targets: markerGlow,
+                alpha: { from: 0.18, to: 0.45 },
+                scaleX: { from: 1, to: 1.3 },
+                scaleY: { from: 1, to: 1.3 },
+                duration: 900,
+                yoyo: true,
+                repeat: -1,
+                ease: "Sine.easeInOut",
+              });
+              corpseGlowTweens.set(player.sessionId, pulseTween);
             } else {
               const markerBg = scene.add.ellipse(0, 12, 24, 12, 0x330000, 0.3);
               const markerBody = scene.add.rectangle(0, 0, 14, 20, 0x5c2a2a, 0.85);
@@ -945,12 +1094,18 @@ export function createWorldSessionAreaView(
             corpseMarkers.set(player.sessionId, marker);
           } else {
             marker.setPosition(screenPos.x, screenPos.y);
+            marker.setDepth(350 + corpsePos.y);
           }
         }
       }
     }
     for (const [sessionId, marker] of corpseMarkers.entries()) {
       if (!currentCorpsePlayerIds.has(sessionId)) {
+        const pt = corpseGlowTweens.get(sessionId);
+        if (pt !== undefined) {
+          pt.stop();
+          corpseGlowTweens.delete(sessionId);
+        }
         marker.destroy(true);
         corpseMarkers.delete(sessionId);
       }
@@ -1139,6 +1294,21 @@ export function createWorldSessionAreaView(
     floatingDamageView.show(selfScreenPosition.x, selfScreenPosition.y - 18, text);
   };
 
+  // Task 310 — brief enemy body flash on server-confirmed hit.
+  const showEnemyHitFlash = (enemyId: string): void => {
+    const view = enemyPlaceholders.get(enemyId);
+    if (view !== undefined) {
+      view.flashHit();
+    }
+  };
+
+  // Task 311 — brief red flash on the player body when server-confirmed
+  // damage lands. Delegates to the player placeholder's flashDamage()
+  // which tweens a red overlay without modifying base torso state.
+  const showPlayerHitFlash = (): void => {
+    playerPlaceholder.flashDamage();
+  };
+
   const showEnemyTelegraph = (enemyId: string, attackKind: "normal" | "heavy" = "normal"): void => {
     const view = enemyPlaceholders.get(enemyId);
     if (view === undefined) {
@@ -1172,6 +1342,8 @@ export function createWorldSessionAreaView(
     setProjectionMode,
     showEnemyFloatingDamage,
     showPlayerFloatingDamage,
+    showEnemyHitFlash,
+    showPlayerHitFlash,
     showEnemyTelegraph,
     resolveEnemyAttackOutcome,
     getSelfWorldPosition: () => selfWorldPosition,
@@ -1236,7 +1408,12 @@ export function createWorldSessionAreaView(
         marker.destroy(true);
       }
       corpseMarkers.clear();
+      for (const pt of corpseGlowTweens.values()) {
+        pt.stop();
+      }
+      corpseGlowTweens.clear();
       floatingDamageView.destroy();
+      cursorFeedback.destroy();
       restAreaIndicator.setText("");
       selfScreenPosition = null;
       container.destroy(true);
@@ -1283,6 +1460,39 @@ function findClickedOwnCorpse(
     worldY: corpseWorldY,
     inRange,
   };
+}
+
+/**
+ * Task 314 — Non-interactive variant of findClickedOwnCorpse used for
+ * hover detection only. Returns a simple boolean when the pointer is
+ * over the player's own corpse, without distance/range info.
+ */
+function findClickedOwnCorpseInteractive(
+  corpseMarkers: ReadonlyMap<string, Phaser.GameObjects.Container>,
+  pointerX: number,
+  pointerY: number,
+  worldOffset: WorldContainerOffset,
+  selfSessionId: string | null,
+  selfWorldPosition: { readonly x: number; readonly y: number } | null,
+): boolean {
+  if (selfSessionId === null || selfWorldPosition === null) {
+    return false;
+  }
+  const marker = corpseMarkers.get(selfSessionId);
+  if (marker === undefined) {
+    return false;
+  }
+
+  const corpseWorldX = marker.x;
+  const corpseWorldY = marker.y;
+
+  const markerScreenX = corpseWorldX + worldOffset.x;
+  const markerScreenY = corpseWorldY + worldOffset.y;
+  const dx = pointerX - markerScreenX;
+  const dy = pointerY - markerScreenY;
+  const hitRadiusPx = 24;
+  const distanceSquared = dx * dx + dy * dy;
+  return distanceSquared <= hitRadiusPx * hitRadiusPx;
 }
 
 function findClickedEnemy(

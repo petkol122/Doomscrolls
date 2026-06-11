@@ -242,8 +242,10 @@ export class WorldSessionScene extends Phaser.Scene {
 
     registerAttackResponseListeners(this.room, {
       onAccepted: (message) => {
-        this.showAttackFeedback(t("world_area.attack_confirmed"));
-        this.worldAreaView?.showEnemyFloatingDamage(message.targetEnemyId, "-1");
+        // Task 310 — flash the hit enemy and show a brief "Hit!" indicator.
+        // Actual damage number is shown by the damage_applied handler.
+        this.worldAreaView?.showEnemyHitFlash(message.targetEnemyId);
+        this.worldAreaView?.showEnemyFloatingDamage(message.targetEnemyId, "Hit!");
       },
       onRejected: (message) => {
         this.showAttackFeedback(
@@ -258,7 +260,20 @@ export class WorldSessionScene extends Phaser.Scene {
       },
       onDamageApplied: (message) => {
         const isDowned = message.remainingHp <= 0;
-        this.worldAreaView?.showPlayerFloatingDamage(`-${message.damage}`);
+        // Task 310 — route damage_applied to enemy or player visual.
+        const isEnemyTarget = this.isEnemyEntityId(message.targetEntityId);
+        if (isEnemyTarget) {
+          this.worldAreaView?.showEnemyFloatingDamage(message.targetEntityId, `-${message.damage}`);
+          this.worldAreaView?.showEnemyHitFlash(message.targetEntityId);
+        } else {
+          // Task 311 — player took server-confirmed damage: red flash +
+          // floating damage number. Camera shake on downed for emphasis.
+          this.worldAreaView?.showPlayerFloatingDamage(`-${message.damage}`);
+          this.worldAreaView?.showPlayerHitFlash();
+          if (isDowned) {
+            this.cameras.main.shake(180, 0.008);
+          }
+        }
         this.feedbackView?.showDamageFeedback(
           isDowned
             ? t("world_session.downed_damage_feedback", { damage: message.damage })
@@ -439,6 +454,8 @@ export class WorldSessionScene extends Phaser.Scene {
           message.targetEnemyId,
           t("world_area.skill_hit_label", { damage: message.damage }),
         );
+        // Task 310 — flash the enemy on skill hit for consistent feedback.
+        this.worldAreaView?.showEnemyHitFlash(message.targetEnemyId);
         this.renderOverlay();
       },
       onRejected: (message) => {
@@ -632,6 +649,11 @@ export class WorldSessionScene extends Phaser.Scene {
   }
 
   private handleSceneTeardown(): void {
+    // Null out room first so any pending onStateChange / onMessage
+    // callbacks that fire during or after teardown will see a null
+    // guard and skip rendering (prevents phantom overlays).
+    this.room = null;
+    this.account = null;
     this.apiClient = null;
     this.bootMarker?.destroy();
     this.bootMarker = null;
@@ -688,5 +710,15 @@ export class WorldSessionScene extends Phaser.Scene {
       this.account = await this.apiClient.getMe(sessionToken);
       this.renderOverlay();
     } catch { /* ignore */ }
+  }
+
+  // Task 310 — check if an entity ID belongs to a room enemy so
+  // damage_applied can route to enemy or player visual feedback.
+  private isEnemyEntityId(entityId: string): boolean {
+    if (this.room === null) return false;
+    const state = this.room.state as unknown as Record<string, unknown>;
+    const enemies = state?.enemies;
+    if (!(enemies instanceof Map)) return false;
+    return enemies.has(entityId);
   }
 }
