@@ -112,6 +112,7 @@ model Character {
   items     ItemInstance[]
   corpses   Corpse[]
   waypointActivations CharacterWaypointActivation[]
+  objectives          CharacterObjective[]
 
   @@unique([userId, characterNameNormalized])
   @@index([userId])
@@ -213,6 +214,23 @@ model ItemInstance {
   @@index([roomId])
   @@index([zoneId])
   @@index([corpseId])
+}
+
+model CharacterObjective {
+  id               String   @id @default(uuid())
+  characterId      String
+  objectiveId      String
+  currentProgress  Int      @default(0)
+  requiredProgress Int      @default(0)
+  completed        Boolean  @default(false)
+  rewardGranted    Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, objectiveId])
+  @@index([characterId])
 }
 
 model Corpse {

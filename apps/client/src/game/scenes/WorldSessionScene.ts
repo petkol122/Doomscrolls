@@ -38,6 +38,10 @@ import {
   type WaypointInteractionPanel,
 } from "./worldSession/waypointInteractionPanel";
 import {
+  createWorldSessionTravelOverlayView,
+  type WorldSessionTravelOverlayKind,
+} from "./worldSession/worldSessionTravelOverlayView";
+import {
   createStashInteractionPanel,
   type StashInteractionPanel,
 } from "./worldSession/stashInteractionPanel";
@@ -124,6 +128,10 @@ export class WorldSessionScene extends Phaser.Scene {
   private townServicePanel: TownServiceInteractionPanel | null = null;
   private stashPanel: StashInteractionPanel | null = null;
   private waypointPanel: WaypointInteractionPanel | null = null;
+  private travelOverlayView: ReturnType<typeof createWorldSessionTravelOverlayView> | null = null;
+  private pendingTravelKind: WorldSessionTravelOverlayKind | null = null;
+  private pendingTravelHideAfterStateApply = false;
+  private travelOverlayTimeout: ReturnType<typeof setTimeout> | null = null;
   private utilityPanelOpenState: WorldSessionUtilityPanelOpenState = {
     controls: false,
     equipment: false,
@@ -160,6 +168,7 @@ export class WorldSessionScene extends Phaser.Scene {
     }
 
     this.feedbackView = createWorldSessionFeedbackView(this);
+    this.travelOverlayView = createWorldSessionTravelOverlayView();
     this.apiClient = clientEnv.apiUrl === undefined ? null : new ApiClient(clientEnv.apiUrl);
 
     this.worldAreaView = createWorldSessionAreaView(
@@ -349,19 +358,26 @@ export class WorldSessionScene extends Phaser.Scene {
     });
 
     this.room.onMessage("currency_picked_up", (message: { gainedCopper?: unknown; totalMoneyCopper?: unknown }) => {
+      // Task 334 — Only show the "Picked up" notice when the player
+      // actually gained copper. Zero-gain messages (e.g. vendor buy
+      // money update) should not show a misleading "Picked up 0."
+      // notice.
       const gained = typeof message.gainedCopper === "number" && Number.isFinite(message.gainedCopper) && message.gainedCopper > 0
         ? Math.floor(message.gainedCopper)
         : 0;
-      const formatted = formatMoneyCompact(gained);
-      this.feedbackView?.showNotice(`Picked up ${formatted}.`);
+      if (gained > 0) {
+        const formatted = formatMoneyCompact(gained);
+        this.feedbackView?.showNotice(`Picked up ${formatted}.`);
+      }
       void this.refreshAccountStateAfterPickup();
     });
 
-    this.room.onMessage("waypoint_opened", (message: { destinations?: unknown }) => {
+    this.room.onMessage("waypoint_opened", (message: { destinations?: unknown; activated?: unknown; waypointId?: unknown }) => {
       const destinations = Array.isArray(message.destinations) ? message.destinations as import("@doomscrolls/shared").WaypointDestinationEntry[] : [];
       this.waypointPanel?.destroy();
       this.waypointPanel = createWaypointInteractionPanel({
         onTravel: (waypointId) => {
+          this.beginTravelOverlay("waypoint");
           this.room?.send("request_waypoint_travel", {
             type: "request_waypoint_travel",
             waypointId,
@@ -369,10 +385,14 @@ export class WorldSessionScene extends Phaser.Scene {
         },
       });
       this.waypointPanel.show(destinations);
-      this.feedbackView?.showNotice(t("town_service.waypoint.opened" as never));
+      const notice = message.activated === true
+        ? t("town_service.waypoint.discovered" as never)
+        : t("town_service.waypoint.already_discovered" as never);
+      this.feedbackView?.showNotice(notice);
     });
 
     this.room.onMessage("request_waypoint_travel_accepted", (message: { message?: unknown }) => {
+      this.pendingTravelHideAfterStateApply = true;
       const feedback = typeof message.message === "string" && message.message.length > 0
         ? message.message
         : t("town_service.waypoint.travel_success" as never);
@@ -380,6 +400,7 @@ export class WorldSessionScene extends Phaser.Scene {
     });
 
     this.room.onMessage("request_waypoint_travel_rejected", (message: { reason?: unknown }) => {
+      this.finishTravelOverlay(false);
       const reason = typeof message.reason === "string" ? message.reason : "travel_failed";
       const key = `town_service.waypoint.rejected.${reason}` as Parameters<typeof t>[0];
       const fallback = t("town_service.waypoint.rejected.travel_failed" as never);
@@ -388,6 +409,7 @@ export class WorldSessionScene extends Phaser.Scene {
     });
 
     this.room.onMessage("request_route_travel_accepted", (message: { message?: unknown; areaLabel?: unknown }) => {
+      this.pendingTravelHideAfterStateApply = true;
       const feedback = typeof message.message === "string" && message.message.length > 0
         ? message.message
         : t("town_service.route.travel_success.generic" as never);
@@ -401,6 +423,7 @@ export class WorldSessionScene extends Phaser.Scene {
     });
 
     this.room.onMessage("request_route_travel_rejected", (message: { reason?: unknown }) => {
+      this.finishTravelOverlay(false);
       const reason = typeof message.reason === "string" ? message.reason : "travel_failed";
       const key = `town_service.route.rejected.${reason}` as Parameters<typeof t>[0];
       const fallback = t("town_service.route.rejected.travel_failed" as never);
@@ -418,7 +441,15 @@ export class WorldSessionScene extends Phaser.Scene {
       this.feedbackView?.showNotice(t("town_service.vendor_panel.buy_success", { itemLabel, price: priceFormatted }));
       this.vendorPanel?.updateMoney(remaining);
       this.vendorPanel?.showFeedback(t("town_service.vendor_panel.buy_success", { itemLabel, price: priceFormatted }));
-      void this.refreshAccountStateAfterPickup();
+      // Task 334 — After a successful buy, refresh account state and
+      // update the vendor panel sell inventory so the newly purchased
+      // item appears in the sell section immediately.
+      void this.refreshAccountStateAfterPickup().then(() => {
+        if (this.account !== null && this.vendorPanel !== null) {
+          const char = this.account.characters.find((c) => c.id === this.characterId) ?? null;
+          this.vendorPanel.updateInventory(this.buildInventoryItemsForSell(char));
+        }
+      });
     });
 
     this.room.onMessage("request_buy_vendor_item_rejected", (message: { reason?: string }) => {
@@ -709,6 +740,9 @@ export class WorldSessionScene extends Phaser.Scene {
       if (this.room !== null) {
         this.worldAreaView?.refreshFromRoomState(this.room);
         this.renderOverlay();
+        if (this.pendingTravelHideAfterStateApply) {
+          this.finishTravelOverlay(true);
+        }
       }
     });
 
@@ -836,6 +870,34 @@ export class WorldSessionScene extends Phaser.Scene {
     this.overlay = null;
   }
 
+  private beginTravelOverlay(kind: WorldSessionTravelOverlayKind): void {
+    this.pendingTravelKind = kind;
+    this.pendingTravelHideAfterStateApply = false;
+    if (this.travelOverlayTimeout !== null) {
+      clearTimeout(this.travelOverlayTimeout);
+      this.travelOverlayTimeout = null;
+    }
+    this.travelOverlayView?.show(kind);
+    this.travelOverlayTimeout = setTimeout(() => {
+      this.travelOverlayTimeout = null;
+      this.finishTravelOverlay(false);
+      this.feedbackView?.showNotice(t("world_session.travel_overlay.timeout" as never));
+    }, 2500);
+  }
+
+  private finishTravelOverlay(hideAfterStateApplied: boolean): void {
+    this.pendingTravelHideAfterStateApply = false;
+    this.pendingTravelKind = null;
+    if (this.travelOverlayTimeout !== null) {
+      clearTimeout(this.travelOverlayTimeout);
+      this.travelOverlayTimeout = null;
+    }
+    this.travelOverlayView?.hide();
+    if (!hideAfterStateApplied) {
+      this.renderOverlay();
+    }
+  }
+
   private showAttackFeedback(message: string): void {
     this.feedbackView?.showAttackFeedback(message);
   }
@@ -878,8 +940,18 @@ export class WorldSessionScene extends Phaser.Scene {
     this.townServicePanel = null;
     this.stashPanel?.destroy();
     this.stashPanel = null;
+    this.waypointPanel?.destroy();
+    this.waypointPanel = null;
     this.areaBanner?.destroy();
     this.areaBanner = null;
+    if (this.travelOverlayTimeout !== null) {
+      clearTimeout(this.travelOverlayTimeout);
+      this.travelOverlayTimeout = null;
+    }
+    this.pendingTravelKind = null;
+    this.pendingTravelHideAfterStateApply = false;
+    this.travelOverlayView?.destroy();
+    this.travelOverlayView = null;
     this.worldAreaView?.destroy();
     this.worldAreaView = null;
     this.destroyOverlay();

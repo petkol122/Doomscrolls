@@ -12,6 +12,8 @@ import { isPositionInsideZoneBounds } from "./validateCharacterLocation";
 
 const NIGHTMARKET_WAYPOINT_OBJECT_ID = "nightmarket_waypoint_01";
 const NIGHTMARKET_WAYPOINT_ID = "nightmarket_waypoint_01";
+const BLACKWIRE_COMBAT_EDGE_WAYPOINT_OBJECT_ID = "nightmarket_waypoint_blackwire_combat_edge";
+const BLACKWIRE_COMBAT_EDGE_WAYPOINT_ID = "nightmarket_waypoint_blackwire_combat_edge";
 const BLACKWIRE_GATE_OBJECT_ID = "nightmarket_blackwire_gate_01";
 const BLACKWIRE_RETURN_OBJECT_ID = "nightmarket_blackwire_return_01";
 
@@ -49,29 +51,64 @@ export interface WaypointTravelFailure {
   readonly reason: WaypointRejectedReason;
 }
 
-export async function activateAndBuildWaypointPanel(
-  characterId: CharacterId,
-): Promise<WaypointOpenedServerMessage | null> {
-  const repository = new CharacterRepository();
-  await repository.activateWaypoint(characterId.toString(), NIGHTMARKET_WAYPOINT_ID, "nightmarket");
-  const activations = await repository.listWaypointActivations(characterId.toString());
-  const activeIds = new Set(activations.map((entry: { waypointId: string }) => entry.waypointId));
-  const destinations: WaypointDestinationEntry[] = [
+function resolveWaypointFromObjectId(objectId: string): {
+  readonly objectId: string;
+  readonly waypointId: string;
+} | null {
+  if (objectId === NIGHTMARKET_WAYPOINT_OBJECT_ID) {
+    return { objectId, waypointId: NIGHTMARKET_WAYPOINT_ID };
+  }
+  if (objectId === BLACKWIRE_COMBAT_EDGE_WAYPOINT_OBJECT_ID) {
+    return { objectId, waypointId: BLACKWIRE_COMBAT_EDGE_WAYPOINT_ID };
+  }
+  return null;
+}
+
+function buildWaypointDestinations(activeIds: ReadonlySet<string>): WaypointDestinationEntry[] {
+  const allDestinations: readonly WaypointDestinationEntry[] = [
     {
       waypointId: NIGHTMARKET_WAYPOINT_ID,
       zoneId: "nightmarket" as ZoneId,
       labelKey: "waypoint.destination.nightmarket_arrival",
-      activated: activeIds.has(NIGHTMARKET_WAYPOINT_ID),
-      available: true,
+    },
+    {
+      waypointId: BLACKWIRE_COMBAT_EDGE_WAYPOINT_ID,
+      zoneId: "nightmarket" as ZoneId,
+      labelKey: "waypoint.destination.nightmarket_blackwire_combat_edge",
     },
   ];
 
+  return allDestinations.filter((entry) => activeIds.has(entry.waypointId));
+}
+
+export async function activateAndBuildWaypointPanel(
+  characterId: CharacterId,
+  objectId: string,
+): Promise<WaypointOpenedServerMessage | null> {
+  const resolvedWaypoint = resolveWaypointFromObjectId(objectId);
+  if (resolvedWaypoint === null) {
+    return null;
+  }
+
+  const repository = new CharacterRepository();
+  const existingActivations = await repository.listWaypointActivations(characterId.toString());
+  const alreadyActivated = existingActivations.some(
+    (entry: { waypointId: string }) => entry.waypointId === resolvedWaypoint.waypointId,
+  );
+
+  if (!alreadyActivated) {
+    await repository.activateWaypoint(characterId.toString(), resolvedWaypoint.waypointId, "nightmarket");
+  }
+
+  const activations = await repository.listWaypointActivations(characterId.toString());
+  const activeIds = new Set(activations.map((entry: { waypointId: string }) => entry.waypointId));
+
   return {
     type: "waypoint_opened",
-    objectId: NIGHTMARKET_WAYPOINT_OBJECT_ID,
-    waypointId: NIGHTMARKET_WAYPOINT_ID,
-    activated: activeIds.has(NIGHTMARKET_WAYPOINT_ID),
-    destinations,
+    objectId: resolvedWaypoint.objectId,
+    waypointId: resolvedWaypoint.waypointId,
+    activated: !alreadyActivated,
+    destinations: buildWaypointDestinations(activeIds),
   };
 }
 
@@ -83,9 +120,13 @@ export async function resolveWaypointTravel(
   if (currentZoneId !== ("nightmarket" as ZoneId)) {
     return { ok: false, reason: "waypoint_unavailable" };
   }
-  if (waypointId !== NIGHTMARKET_WAYPOINT_ID) {
+  if (waypointId !== NIGHTMARKET_WAYPOINT_ID && waypointId !== BLACKWIRE_COMBAT_EDGE_WAYPOINT_ID) {
     return { ok: false, reason: "destination_unavailable" };
   }
+
+  const spawnId = waypointId === BLACKWIRE_COMBAT_EDGE_WAYPOINT_ID
+    ? "nightmarket_blackwire_combat_entry"
+    : "nightmarket_spawn";
 
   const repository = new CharacterRepository();
   const activations = await repository.listWaypointActivations(characterId.toString());
@@ -94,7 +135,7 @@ export async function resolveWaypointTravel(
     return { ok: false, reason: "destination_not_activated" };
   }
 
-  const spawn = contentRegistry.spawnPoints.get("nightmarket_spawn" as never);
+  const spawn = contentRegistry.spawnPoints.get(spawnId as never);
   if (spawn === undefined) {
     return { ok: false, reason: "invalid_destination" };
   }

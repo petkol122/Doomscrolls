@@ -63,24 +63,36 @@ export const en = {
   "skill.grave_spark.description":
     "A crackling burst of grave-charged energy that sears a single target.",
 
+  // ── Notice Board Objective Flow ──
+  // Task 337: Improved feedback clarity — start message mentions the
+  // route/waypoint destination, progress shows current/required kills,
+  // ready-to-turn-in tells player to return, turn-in shows copper gained.
   "objective.cull_trashboars.title": "Cull Trashboars",
   "objective.cull_trashboars.description":
     "Thin the trashboar pack at Blackwire Sewer Edge before it spills deeper into the alleys.",
   "objective.break_the_brute.title": "Break the Brute",
   "objective.break_the_brute.description":
     "The trashboar brute is the pack's backbone. Put it down and watch the rest scatter.",
-  "objective.accepted": "Objective accepted: {title}",
-  "objective.progress": "{title}: {current}/{target}",
-  "objective.ready_to_turn_in": "Objective ready to turn in: {title}",
-  "objective.turn_in_complete_reward": "Objective turned in! +{xpReward} XP, +{copperReward} copper",
-  "objective.turn_in_complete_reward_xp_only": "Objective turned in! +{xpReward} XP",
-  "objective.turn_in_complete_reward_copper_only": "Objective turned in! +{copperReward} copper",
+
+  // Feedback shown when a new objective starts
+  "objective.accepted_with_route": "[ {title} ] Use the Blackwire gate or waypoint to reach the sewers and hunt {targetEnemy}.",
+  // Progress feedback (sent as interact_response when the player interacts while active)
+  "objective.progress_feedback": "[ {title} ] {current}/{target} {targetEnemy} killed.",
+  // Feedback shown when the objective kill target is met
+  "objective.ready_to_turn_in": "All {targetEnemy} eliminated! Return to the Notice Board in Nightmarket Services to collect your reward.",
+  // Turn-in reward feedback uses the same keys but the text is clearer now
+  "objective.turn_in_complete_reward": "Turned in! +{xpReward} XP, +{copperReward} copper",
+  "objective.turn_in_complete_reward_xp_only": "Turned in! +{xpReward} XP",
+  "objective.turn_in_complete_reward_copper_only": "Turned in! +{copperReward} copper",
+
+  // HUD state labels
   "objective.state.active": "Active",
-  "objective.state.ready_to_turn_in": "Turn in",
+  "objective.state.ready_to_turn_in": "Return to Board",
   "objective.state.completed": "Completed",
 
   "objective.already_completed": "Already completed — no more work here.",
 
+  // HUD reward line (shown when objective completed but not yet turned in)
   "objective.complete_reward": "Objective complete! +{xpReward} XP, +{copperReward} copper",
   "objective.complete_reward_xp_only": "Objective complete! +{xpReward} XP",
   "objective.complete_reward_copper_only": "Objective complete! +{copperReward} copper",
@@ -198,6 +210,11 @@ export const en = {
   // Future: Diablo-like right orb resource (mana/class resource) — placeholder until class resource system lands
   "world_session.resource": "Resource",
   "world_session.resource_placeholder": "Coming later",
+  "world_session.travel_overlay.route_title": "Traveling",
+  "world_session.travel_overlay.route_message": "Moving to the next area. Your new position will appear only after the server applies the travel.",
+  "world_session.travel_overlay.waypoint_title": "Attuning Waypoint",
+  "world_session.travel_overlay.waypoint_message": "Channeling waypoint travel. Arrival remains server-authoritative.",
+  "world_session.travel_overlay.timeout": "Travel response took too long.",
 
   "world_area.title": "World Area",
   "world_area.click_instruction": "Click inside to move.",
@@ -352,17 +369,18 @@ export const en = {
   "town_service.waypoint.panel_title": "Waypoint",
   "town_service.waypoint.panel_subtitle": "Choose a discovered destination.",
   "town_service.waypoint.opened": "Waypoint opened.",
+  "town_service.waypoint.discovered": "Waypoint discovered.",
+  "town_service.waypoint.already_discovered": "Waypoint already discovered.",
   "town_service.waypoint.empty": "No waypoint destinations available.",
   "town_service.waypoint.travel_action": "Travel",
   "town_service.waypoint.travel_success": "Travel complete.",
-  "town_service.waypoint.status.activated": "Activated",
-  "town_service.waypoint.status.not_activated": "Not activated",
   "town_service.waypoint.rejected.waypoint_unavailable": "Waypoint unavailable.",
-  "town_service.waypoint.rejected.destination_unavailable": "Destination unavailable.",
-  "town_service.waypoint.rejected.destination_not_activated": "Destination not activated.",
+  "town_service.waypoint.rejected.destination_unavailable": "Destination locked or unavailable.",
+  "town_service.waypoint.rejected.destination_not_activated": "Destination locked or unavailable.",
   "town_service.waypoint.rejected.invalid_destination": "Invalid destination.",
   "town_service.waypoint.rejected.travel_failed": "Travel failed.",
   "waypoint.destination.nightmarket_arrival": "Nightmarket Arrival",
+  "waypoint.destination.nightmarket_blackwire_combat_edge": "Blackwire Combat Edge",
 
   "town_service.route.blackwire_gate.prompt": "The Blackwire gate leads toward a hostile sewer edge.",
   "town_service.route.blackwire_return.prompt": "Return to the Nightmarket service hub.",
@@ -389,6 +407,7 @@ export const en = {
   "world_prop.stash_keeper.label": "Stash Keeper",
   "world_prop.trainer.label": "Trainer",
   "world_prop.waypoint.label": "Waypoint",
+  "world_prop.blackwire_waypoint.label": "Blackwire Waypoint",
   "world_prop.blackwire_gate.label": "Blackwire Gate",
   "world_prop.market_crates.label": "Market Crates",
   "world_prop.rest_area.label": "Rest Area",

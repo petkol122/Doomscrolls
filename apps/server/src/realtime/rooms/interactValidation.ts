@@ -183,7 +183,7 @@ export function getInteractableResponseMessage(objectId: string): string {
       return t(service.unavailableMessageKey);
     }
   }
-  if (objectId === "nightmarket_waypoint_01") {
+  if (objectId === "nightmarket_waypoint_01" || objectId === "nightmarket_waypoint_blackwire_combat_edge") {
     const service = contentRegistry.townServices.get("nightmarket_waypoint");
     if (service !== undefined) {
       return t(service.unavailableMessageKey);

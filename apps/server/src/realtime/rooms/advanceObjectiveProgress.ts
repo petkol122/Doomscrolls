@@ -8,6 +8,7 @@ import type { EnemyContentDefinition } from "@doomscrolls/content";
  * as its lookup key. We alias it here to avoid inlining the cast.
  */
 type ContentEnemyId = EnemyContentDefinition["id"];
+
 /**
  * Objective progress update — single-objective foundation only.
  *
@@ -23,6 +24,13 @@ type ContentEnemyId = EnemyContentDefinition["id"];
  * Once the final quest system is implemented, this module should be
  * replaced by a generic objective manager that supports multiple
  * active objectives, quest chains, dynamic conditions, and persistence.
+ *
+ * Task 333D — Accepts an optional `onPersistUpdate` callback that is
+ * called after the in-memory progress has been advanced. The caller
+ * (TownRoom) must use this to persist the new state to the database
+ * so progress survives reconnect/rejoin. The callback is fire-and-forget
+ * from the caller's perspective; the caller must not await it in the
+ * hot path.
  */
 export function advanceObjectiveProgress(
   player: {
@@ -37,6 +45,17 @@ export function advanceObjectiveProgress(
     objectiveRewardGranted: boolean;
   },
   enemyId: string,
+  /**
+   * Optional fire-and-forget persistence callback. Called after the
+   * in-memory player objective state has been mutated so the caller
+   * can persist the new progress to the database.
+   */
+  onPersistUpdate?: (updated: {
+    readonly characterId: CharacterId;
+    readonly objectiveId: string;
+    readonly currentProgress: number;
+    readonly completed: boolean;
+  }) => void,
 ): {
   readonly changed: boolean;
   readonly objectiveId: string;
@@ -70,6 +89,18 @@ export function advanceObjectiveProgress(
   // Completion/turn-in and reward logic is deferred to a later task.
   if (nextCurrent >= player.objectiveTarget) {
     player.objectiveCompleted = true;
+  }
+
+  // Task 333D — Fire the optional persistence callback so the database
+  // is kept in sync with the in-memory state. The caller is responsible
+  // for providing the callback and handling any async persistence.
+  if (onPersistUpdate !== undefined) {
+    onPersistUpdate({
+      characterId: player.characterId,
+      objectiveId: player.objectiveId,
+      currentProgress: player.objectiveCurrent,
+      completed: player.objectiveCompleted,
+    });
   }
 
   return {

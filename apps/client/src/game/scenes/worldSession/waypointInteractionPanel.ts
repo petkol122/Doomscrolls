@@ -54,17 +54,13 @@ export function createWaypointInteractionPanel(options: {
         row.style.cssText = "display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 8px; border: 1px solid #29414f; border-radius: 6px; background: rgba(19,27,32,0.9);";
 
         const info = document.createElement("div");
-        const availabilityKey = destination.activated
-          ? "town_service.waypoint.status.activated"
-          : "town_service.waypoint.status.not_activated";
-        info.textContent = `${t(destination.labelKey as never)} — ${t(availabilityKey as never)}`;
+        info.textContent = t(destination.labelKey as never);
         info.style.cssText = "color: #d8e2ea; font-size: 12px;";
         row.appendChild(info);
 
         const button = document.createElement("button");
         button.type = "button";
         button.textContent = t("town_service.waypoint.travel_action" as never);
-        button.disabled = !destination.available || !destination.activated;
         button.style.cssText = "padding: 6px 12px; font-size: 12px; background: #1d2d36; border: 1px solid #41657a; border-radius: 6px; color: #d3e5f3; cursor: pointer;";
         button.addEventListener("click", () => options.onTravel(destination.waypointId));
         row.appendChild(button);

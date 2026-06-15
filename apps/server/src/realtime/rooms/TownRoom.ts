@@ -72,7 +72,7 @@ import { contentRegistry, NOTICE_BOARD_OBJECTIVE_SEQUENCE } from "@doomscrolls/c
 import type { SpawnPointContentId, ObjectiveId } from "@doomscrolls/content";
 import { NIGHTMARKET_DEFAULT_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
 import { resolveTownZoneId } from "./resolveTownZoneId";
-import { CharacterRepository } from "../../persistence/repositories";
+import { CharacterRepository, ObjectiveRepository } from "../../persistence/repositories";
 import { ItemRepository } from "../../persistence/repositories/ItemRepository";
 import { toItemInstanceDto } from "../../persistence/mappers/itemMapper";
 import { tryResolveLevelProgression } from "./levelProgression";
@@ -253,65 +253,6 @@ function getActiveObjectiveContent(
     return undefined;
   }
   return contentRegistry.objectives.get(player.objectiveId as ObjectiveId);
-}
-
-async function advanceNoticeBoardObjective(
-  player: {
-    characterId: CharacterId;
-    xp: number;
-    level: number;
-    objectiveId: string;
-    objectiveLabel: string;
-    objectiveCurrent: number;
-    objectiveTarget: number;
-    objectiveCompleted: boolean;
-    objectiveRewardGranted: boolean;
-  },
-  enemyId: string,
-  sendToClient: (type: string, payload: unknown) => void,
-): Promise<void> {
-  if (player.objectiveRewardGranted || player.objectiveId.length === 0) {
-    return;
-  }
-
-  const activeObjective = getActiveObjectiveContent(player);
-  if (activeObjective === undefined) {
-    return;
-  }
-
-  if (!activeObjective.targetEnemyIds.includes(enemyId as ContentEnemyId)) {
-    return;
-  }
-
-  player.objectiveCurrent = Math.min(player.objectiveTarget, player.objectiveCurrent + 1);
-  if (player.objectiveCurrent >= player.objectiveTarget) {
-    player.objectiveCompleted = true;
-  }
-
-  const reward = player.objectiveCompleted
-    ? { xpReward: activeObjective.xpReward, copperReward: activeObjective.copperReward }
-    : undefined;
-  sendToClient("objective_updated", buildObjectiveUpdatedMessage(player, activeObjective.id, reward));
-
-  if (player.objectiveCompleted) {
-    player.objectiveRewardGranted = true;
-    await grantFlatXpReward(player, activeObjective.xpReward, sendToClient);
-
-    const copperReward = activeObjective.copperReward;
-    if (Number.isFinite(copperReward) && copperReward > 0) {
-      const rep = new CharacterRepository();
-      const total = await rep.incrementMoneyCopper(player.characterId.toString(), copperReward);
-      if (total !== null) {
-        const currencyMsg: import("@doomscrolls/shared").CurrencyPickedUpServerMessage = {
-          type: "currency_picked_up",
-          characterId: player.characterId,
-          gainedCopper: copperReward,
-          totalMoneyCopper: total,
-        };
-        sendToClient("currency_picked_up", currencyMsg);
-      }
-    }
-  }
 }
 
 async function grantFlatXpReward(
@@ -835,6 +776,39 @@ export class TownRoom extends Room {
       resolvedUserId,
     );
 
+    // Task 333D — Load persisted objective state for this character
+    // so progress, completion and reward-granted status survive
+    // reconnects. Only the first objective in the notice board
+    // sequence that is not yet reward-granted is relevant; this is
+    // a single-objective foundation, not a full quest journal.
+    const objectiveRepo = new ObjectiveRepository();
+    let persistedObjective: {
+      objectiveId: string;
+      currentProgress: number;
+      requiredProgress: number;
+      completed: boolean;
+      rewardGranted: boolean;
+    } | undefined;
+    for (const candidateId of NOTICE_BOARD_OBJECTIVE_SEQUENCE) {
+      const objectiveRow = await objectiveRepo.findByCharacterAndObjective(characterId.toString(), candidateId);
+      if (objectiveRow !== null && !objectiveRow.rewardGranted) {
+        persistedObjective = {
+          objectiveId: objectiveRow.objectiveId,
+          currentProgress: objectiveRow.currentProgress,
+          requiredProgress: objectiveRow.requiredProgress,
+          completed: objectiveRow.completed,
+          rewardGranted: objectiveRow.rewardGranted,
+        };
+        break;
+      }
+      // If reward is granted but the character has this objective,
+      // keep scanning for the next uncompleted one.
+      if (objectiveRow !== null && objectiveRow.rewardGranted) {
+        continue;
+      }
+      break; // No state at all means the character hasn't started this one.
+    }
+
     // Delegate presence building (spawn point resolution + initial
     // world position copy) to a dedicated helper so this room file
     // stays a thin Colyseus shell.
@@ -853,6 +827,7 @@ export class TownRoom extends Room {
       restoredLocationZoneId: result.character.lastLocationZoneId ?? undefined,
       restoredLocationX: result.character.lastLocationX ?? undefined,
       restoredLocationY: result.character.lastLocationY ?? undefined,
+      objectiveState: persistedObjective,
     });
 
     // Task 299 — Town Rest Refill: restore HP and flask charges to
@@ -1227,44 +1202,60 @@ export class TownRoom extends Room {
         //     state (no duplicate, no reset).
         //  4. No active objective → start next available one in the
         //     sequence, or show "no more notices" if done.
-        // Reward granting is session-scoped (objectiveRewardGranted on
-        // PlayerPresence). No persistence across room join/leave yet.
-        // Kill progress only sets objectiveCompleted; it does NOT
-        // grant rewards automatically. The old advanceNoticeBoardObjective
-        // function (which granted rewards on kill) is deliberately
-        // unused in the current kill path.
+        // Task 333E — Reward granting persists rewardGranted = true
+        // BEFORE granting copper to prevent duplicate reward on
+        // reconnect/crash. HUD display fields are cleared but
+        // objectiveId and objectiveRewardGranted are kept so
+        // findNextNoticeBoardObjective can skip completed objectives.
         if (player.hasObjective && player.objectiveId.length > 0 && player.objectiveCompleted && !player.objectiveRewardGranted) {
-          // Turn in: grant reward, mark granted, clear HUD state.
+          // Turn in: persist rewardGranted, grant copper, clear HUD.
           const activeObjective = getActiveObjectiveContent(player);
           if (activeObjective !== undefined) {
-            player.objectiveRewardGranted = true;
-            // Grant copper reward (no XP reward for turn-in per
-            // task scope — only copper).
+            const turnInCharId = player.characterId;
+            const turnInObjId = player.objectiveId;
+            const turnInLabel = player.objectiveLabel;
             const copperReward = activeObjective.copperReward;
-            void (async () => {
-              if (Number.isFinite(copperReward) && copperReward > 0) {
-                const { CharacterRepository } = await import("../../persistence/repositories");
-                const rep = new CharacterRepository();
-                const total = await rep.incrementMoneyCopper(player.characterId.toString(), copperReward);
-                if (total !== null) {
-                  const currencyMsg: import("@doomscrolls/shared").CurrencyPickedUpServerMessage = {
-                    type: "currency_picked_up",
-                    characterId: player.characterId,
-                    gainedCopper: copperReward,
-                    totalMoneyCopper: total,
-                  };
-                  try { client.send("currency_picked_up", currencyMsg); } catch {}
-                }
+
+            // Persist rewardGranted = true to DB FIRST. This
+            // prevents duplicate copper on reconnect/crash.
+            try {
+              await new ObjectiveRepository().markRewardGranted(
+                turnInCharId.toString(),
+                turnInObjId,
+              );
+            } catch {
+              // Persistence failed — do not grant reward.
+              return;
+            }
+
+            // Grant copper reward (awaited, not fire-and-forget).
+            if (Number.isFinite(copperReward) && copperReward > 0) {
+              const rep = new CharacterRepository();
+              const total = await rep.incrementMoneyCopper(turnInCharId.toString(), copperReward);
+              if (total !== null) {
+                const currencyMsg: import("@doomscrolls/shared").CurrencyPickedUpServerMessage = {
+                  type: "currency_picked_up",
+                  characterId: turnInCharId,
+                  gainedCopper: copperReward,
+                  totalMoneyCopper: total,
+                };
+                try { client.send("currency_picked_up", currencyMsg); } catch {}
               }
-            })();
-            // Clear the HUD objective state so the tracker card
-            // disappears — the player can re-interact to start the
-            // next objective in the chain.
-            resetNoticeBoardObjective(player);
+            }
+
+            // Clear HUD display fields but keep objectiveId and
+            // objectiveRewardGranted so findNextNoticeBoardObjective
+            // can properly skip completed objectives on re-interact.
+            player.hasObjective = false;
+            player.objectiveLabel = "";
+            player.objectiveCurrent = 0;
+            player.objectiveTarget = 0;
+            player.objectiveCompleted = false;
+
             // Send interact_response with localized turn-in feedback.
             const turnInText = copperReward > 0
               ? t("objective.turn_in_complete_reward_copper_only" as never, { copperReward } as never)
-              : t("objective.ready_to_turn_in" as never, { title: player.objectiveLabel } as never);
+              : t("objective.ready_to_turn_in" as never, { title: turnInLabel } as never);
             const turnInMessage: import("@doomscrolls/shared").InteractResponseServerMessage = {
               type: "interact_response",
               objectId: message.objectId,
@@ -1272,7 +1263,7 @@ export class TownRoom extends Room {
             };
             try { client.send("interact_response", turnInMessage); } catch {}
             log.debug?.(
-              { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, characterId: player.characterId, objectiveId: player.objectiveId, copperReward },
+              { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, characterId: turnInCharId, objectiveId: turnInObjId, copperReward },
               "TownRoom notice board turn-in accepted: reward granted.",
             );
           }
@@ -1298,7 +1289,37 @@ export class TownRoom extends Room {
           const next = findNextNoticeBoardObjective(player);
           if (next !== undefined) {
             const objectiveUpdate = startNoticeBoardObjective(player, next.objective);
+            // Task 333E — Persist objective start immediately so
+            // progress = 0 survives reconnect without waiting for
+            // the first kill.
+            void new ObjectiveRepository().create(
+              player.characterId.toString(),
+              next.objective.id,
+              next.objective.requiredKills,
+            ).catch(() => {});
+
+            // Send objective_updated to sync schema state
             try { client.send("objective_updated", objectiveUpdate); } catch {}
+
+            // Task 337: Send interact_response with improved start feedback
+            // mentioning the route/waypoint destination.
+            const startEnemyNames = next.objective.targetEnemyIds.map((eid) => {
+              const enemyDef = contentRegistry.enemies.get(eid);
+              return enemyDef !== undefined ? t(enemyDef.nameKey) : eid;
+            });
+            const targetEnemyLabel = startEnemyNames.length === 1
+              ? startEnemyNames[0]
+              : startEnemyNames.join(" / ");
+            const startFeedback = t("objective.accepted_with_route" as never, {
+              title: objectiveUpdate.label,
+              targetEnemy: targetEnemyLabel,
+            } as never);
+            const startMessage: import("@doomscrolls/shared").InteractResponseServerMessage = {
+              type: "interact_response",
+              objectId: message.objectId,
+              message: startFeedback,
+            };
+            try { client.send("interact_response", startMessage); } catch {}
           } else {
             // All objectives completed – clear hasObjective so the
             // tracker does not show stale completed data, but keep the
@@ -1369,9 +1390,9 @@ export class TownRoom extends Room {
         }
       }
 
-      if (message.objectId === "nightmarket_waypoint_01") {
+      if (message.objectId === "nightmarket_waypoint_01" || message.objectId === "nightmarket_waypoint_blackwire_combat_edge") {
         try {
-          const waypointOpened = await activateAndBuildWaypointPanel(player.characterId);
+          const waypointOpened = await activateAndBuildWaypointPanel(player.characterId, message.objectId);
           if (waypointOpened !== null) {
             try {
               client.send("waypoint_opened", waypointOpened);
@@ -1410,6 +1431,9 @@ export class TownRoom extends Room {
           player.y = result.y;
           player.targetX = result.x;
           player.targetY = result.y;
+          // Task 334 — Immediately clear movement target and pending
+          // action so stale move-to-interact/attack/pickup state cannot
+          // fire after the player has teleported to a new position.
           player.hasMovementTarget = false;
           clearPendingAction(player);
 
@@ -1432,6 +1456,8 @@ export class TownRoom extends Room {
             return;
           }
 
+          // Client receives new player position via Colyseus schema
+          // sync; no client-side fake transition is sent.
           const accepted: import("@doomscrolls/shared").RequestRouteTravelAcceptedServerMessage = {
             type: "request_route_travel_accepted",
             objectId: result.objectId,
@@ -1519,6 +1545,9 @@ export class TownRoom extends Room {
         player.y = result.y;
         player.targetX = result.x;
         player.targetY = result.y;
+        // Task 334 — Immediately clear movement target and pending
+        // action so stale move-to-interact/attack/pickup state cannot
+        // fire after the player has teleported to a new position.
         player.hasMovementTarget = false;
         clearPendingAction(player);
 
@@ -1541,6 +1570,8 @@ export class TownRoom extends Room {
           return;
         }
 
+        // Client receives new player position via Colyseus schema
+        // sync; no client-side fake transition is sent.
         const accepted: import("@doomscrolls/shared").RequestWaypointTravelAcceptedServerMessage = {
           type: "request_waypoint_travel_accepted",
           waypointId: result.waypointId,
@@ -1734,10 +1765,16 @@ export class TownRoom extends Room {
         // foundation only). The new helper only tracks progress and
         // sets the completed flag when the required kill count is
         // reached; it does NOT grant rewards or mark rewardGranted.
-        // Completion/turn-in and reward logic is deferred to a later
-        // task. The old advanceNoticeBoardObjective remains available
-        // but is no longer called from this handler.
-        const progressResult = advanceObjectiveProgress(player, validation.enemy.enemyId);
+        // Completion/turn-in and reward logic is handled by the
+        // notice board interaction handler (explicit turn-in path);
+        // kill progress is reward-free.
+        const progressResult = advanceObjectiveProgress(player, validation.enemy.enemyId, (updated) => {
+          void new ObjectiveRepository().updateProgress(
+            updated.characterId.toString(),
+            updated.objectiveId,
+            updated.currentProgress,
+          ).catch(() => {});
+        });
         if (progressResult !== undefined) {
           const progressUpdate: ObjectiveUpdatedServerMessage = {
             type: "objective_updated",
@@ -2516,7 +2553,13 @@ export class TownRoom extends Room {
         spawnWorldLootOnEnemyDefeat(state, enemy, now);
         // Task 333B — Objective progress increment (single-objective
         // foundation only). Same approach as the basic attack handler.
-        const progressResult = advanceObjectiveProgress(player, enemy.enemyId);
+        const progressResult = advanceObjectiveProgress(player, enemy.enemyId, (updated) => {
+          void new ObjectiveRepository().updateProgress(
+            updated.characterId.toString(),
+            updated.objectiveId,
+            updated.currentProgress,
+          ).catch(() => {});
+        });
         if (progressResult !== undefined) {
           const progressUpdate: ObjectiveUpdatedServerMessage = {
             type: "objective_updated",
@@ -3210,6 +3253,8 @@ export class TownRoom extends Room {
     });
   }
 }
+
+
 
 
 

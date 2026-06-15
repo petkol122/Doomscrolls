@@ -752,6 +752,7 @@ function createHudSection(
     readonly completed: boolean;
     readonly xpReward?: number;
     readonly copperReward?: number;
+    readonly targetEnemyLabel?: string | undefined;
   } | null,
   onResetObjective?: () => void,
   objectiveRewardGranted?: boolean,
@@ -1065,6 +1066,7 @@ function resolveObjectiveTrackerViewModel(
     readonly completed: boolean;
     readonly xpReward?: number;
     readonly copperReward?: number;
+    readonly targetEnemyLabel?: string | undefined;
   } | null | undefined,
   objectiveRewardGranted?: boolean,
 ) : ObjectiveTrackerViewModel | null {
@@ -1074,14 +1076,35 @@ function resolveObjectiveTrackerViewModel(
     return null;
   }
 
+  // Build a more actionable description that includes target enemy
+  // and progress in the description field.
+  const description = objective.descriptionKey !== undefined
+    ? t(objective.descriptionKey as never)
+    : undefined;
+
+  // State label: "Return to Board" when completed, "Active" otherwise
+  const stateLabel = objective.completed
+    ? t("objective.state.ready_to_turn_in")
+    : t("objective.state.active");
+
+  // Build actionable subtitle: show target enemy when active, return hint when ready
+  let subtitle: string | undefined;
+  if (objective.completed) {
+    subtitle = t("objective.ready_to_turn_in", {
+      targetEnemy: objective.targetEnemyLabel ?? "targets",
+    });
+  } else if (objective.targetEnemyLabel !== undefined) {
+    subtitle = `${objective.targetEnemyLabel} — ${objective.current}/${objective.target}`;
+  }
+
   return {
     title: objective.label,
-    stateLabel: objective.completed ? "Complete" : "Active",
-    ...(objective.descriptionKey !== undefined ? { description: t(objective.descriptionKey as never) } : {}),
+    stateLabel,
+    ...(description !== undefined ? { description } : {}),
     current: objective.current,
     target: objective.target,
     completed: objective.completed,
-    location: "The Nightmarket",
+    location: subtitle ?? "The Nightmarket",
     ...(objective.xpReward !== undefined && { xpReward: objective.xpReward }),
     ...(objective.copperReward !== undefined && { copperReward: objective.copperReward }),
   };

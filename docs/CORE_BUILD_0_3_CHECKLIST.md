@@ -1,5 +1,134 @@
 # docs/CORE_BUILD_0_3_CHECKLIST.md — Core Build 0.3 Checklist
 
+---
+
+## Core 0.3 Playable Loop Checkpoint — Closure Status
+
+**Date:** 2026-06-12
+**Checkpoint:** Core 0.3 playable-loop checkpoint
+**Status:** Checkpoint closed. All planned 0.3 pillars have shipped at foundation level.
+
+### Shipped 0.3 Systems
+
+| System | Tasks | Status |
+|--------|-------|--------|
+| Vendor buy/sell | 318, 319, 320, 322 | Shipped — server-authoritative buy and sell with copper economy |
+| Stash listing/store/take | 323, 324, 329 | Shipped — persistent character stash with server-authoritative transfer |
+| Waypoint activation/travel | 330, 336 | Shipped — persistent activation, two destinations (Nightmarket Arrival + Blackwire Combat Edge) |
+| Town → combat route and return | 331 | Shipped — same-zone Blackwire Gate / Sewer Edge route loop |
+| Notice board objective start/progress/turn-in/reward | 333, 332, 333B, 333C, 333D, 333E, 333F | Shipped — single-objective foundation with persistence and copper reward |
+| Objective persistence hardening | 333D, 333E | Shipped — persisted start, progress, reward-grant prevents duplicate copper |
+| WorldSession zoom/projection/culling fixes | 325, 326, 327 | Shipped — zoom range, projection unification, enemy culling |
+| Nightmarket physical spacing pass | 328 | Shipped — expanded hub footprint, reduced clutter crowding |
+| Playable loop hardening audit | 334 | Shipped — end-to-end audit with two bug fixes |
+
+### Current 0.3 Status
+
+#### What is playable now
+
+- Login, character creation, and character selection (Core 0.1/0.2)
+- Enter the Nightmarket hub with real server-authoritative player presence
+- Notice board objective: start objective, kill Trashboar Runts for progress, turn in for copper reward
+- Town → combat route: use Blackwire Gate to teleport to Blackwire Sewer Edge, fight enemies, loot
+- Combat → town return: use return marker to teleport back to Nightmarket hub
+- Vendor buy: purchase items from Suspicious Vendor with server-validated copper deduction
+- Vendor sell: sell inventory items for copper with server-validated item removal
+- Stash store: store inventory items into persistent character stash
+- Stash take: take stash items back into inventory with grid-based placement
+- Waypoint discovery: clicking a physical waypoint unlocks that destination for the current character
+- Waypoint travel: panel opens from either physical waypoint and lists only discovered destinations
+- Loot pickup, rest area HP/flask refill, cursor feedback, zoom, camera follow
+- Reconnect/rejoin restoration: objective state, character location, HP, flask charges restored
+- HUD overlay: vitality, level/XP, objective tracker, money display
+
+#### What is still foundation-only
+
+- Objective system: single-objective notice board chain only; no quest journal, no multi-objective, no item/XP rewards
+- Vendor economy: fixed 50% sell price; no stock refresh, no buyback, no reputation, no haggling
+- Stash: character-scoped only; no drag/drop, no tabs, no sorting, no account-wide stash, no stash grid UI
+- Waypoint: two same-zone physical waypoint discoveries only; no world map, no minimap, no multi-zone network
+- Town → combat routing: same-zone teleport only; no real CombatRoom handoff, no room migration
+
+#### What is still explicitly deferred
+
+- Multi-zone/CombatRoom handoff (Colyseus room migration)
+- Quest journal, quest log, multi-objective system
+- Full world map / minimap
+- Advanced vendor economy (restock, buyback, reputation, dynamic pricing)
+- Stash drag/drop, tabs, account-wide stash
+- Full art/map pipeline
+- Vue/app-shell migration
+- Procedural dungeons, bosses, PvP, guilds, trading, crafting
+
+### Known Limitations
+
+- Objective system is still single-objective / foundation — only the notice board chain works; no generic quest framework exists
+- No quest journal or persistent quest log UI
+- No multi-zone / CombatRoom handoff yet — the combat route reuses the same Nightmarket zone
+- No full world map / minimap
+- No advanced vendor economy (restock, buyback, reputation, dynamic pricing)
+- No stash drag/drop / tabs / account-wide stash
+- No full art/map pipeline — all visuals remain placeholder/content-data-driven
+- Progress persistence is fire-and-forget on the kill path (acceptable for current scope)
+- Waypoint has two destinations (Nightmarket Arrival + Blackwire Combat Edge) but no multi-zone network
+
+### Blockers and Risks
+
+- Runtime verification still needed where not manually confirmed (Task 325 zoom, Task 329 stash transfer, Task 328 spacing, Task 330 waypoint)
+- Prisma/client generation Windows lock risk — Prisma engine file lock was encountered during Task 330; may recur after schema changes
+- Camera/projection regressions should remain on watch — the zoom/projection unification (Tasks 325–327) touched core rendering paths
+- Objective persistence / reward duplication should remain on watch — `rewardGranted` persistence hardened in Task 333E but no integration test coverage yet
+
+### Task 337 — Objective UX Polish: Clear Route and Turn-In Feedback
+
+- [x] Updated localization keys: added `objective.accepted_with_route`, `objective.progress_feedback`; improved `objective.ready_to_turn_in`, `objective.turn_in_complete_reward_copper_only`, `objective.state.ready_to_turn_in`
+- [x] HUD objective tracker now shows localized state label "Active" / "Return to Board"
+- [x] HUD subtitle now shows target enemy + progress while active, return-to-board instruction when complete
+- [x] Target enemy label is resolved from content registry (e.g. "Trashboar Runt / Trashboar Brute")
+- [x] Server sends improved interact_response on start: mentions route/waypoint and target enemy
+- [x] Server sends improved interact_response on turn-in: shows copper gained
+- [x] Client presence helper resolves `targetEnemyLabel` from objective content enemy definitions
+- [x] No objective persistence, kill tracking, reward logic, quest journal, minimap markers, or route arrows changed
+- [x] `pnpm typecheck` — 0 errors
+- [x] Pre-existing lint errors only
+
+### Task 339 — Travel UX: Basic Teleport Loading Overlay
+
+- [x] Audited route travel and waypoint travel flow in `WorldSessionScene.ts`, `TownRoom.ts`, and `waypointService.ts`
+- [x] Confirmed travel remains server-authoritative: route/waypoint acceptance still resolves position from server state, not client-only teleport logic
+- [x] Added `apps/client/src/game/scenes/worldSession/worldSessionTravelOverlayView.ts` as a lightweight reusable DOM overlay with translucent full-screen pointer capture
+- [x] Route travel now shows the overlay when the request is sent and hides it only after synced state is applied, rejection arrives, or a short timeout expires
+- [x] Waypoint travel now shows the overlay when the request is sent and hides it only after synced state is applied, rejection arrives, or a short timeout expires
+- [x] Overlay cleanup covers scene shutdown/destroy and clears timers to avoid stale listener/timer leakage
+- [x] Added localized route/waypoint travel overlay copy and timeout feedback
+- [x] No cross-room handoff, CombatRoom migration, fake travel success, progress bar, minimap, or schema/database changes
+
+### Proposed Next-Scope Candidates (Post-0.3 Checkpoint)
+
+These are candidates for the next implementation wave. They are listed without starting any implementation.
+
+1. **Objective runtime smoke pass** — Manual or automated end-to-end verification of the full objective loop (start → kill → progress → turn-in → reward → next objective) to confirm persistence and duplication guards hold at runtime
+2. **CombatRoom handoff investigation** — Explore Colyseus room migration feasibility for a real TownRoom → CombatRoom transition with state preservation
+3. **Second waypoint destination** — Add a real second waypoint destination (e.g. a future zone) to validate the waypoint network data flow beyond the single self-loop
+4. **First quest journal / lightweight objective panel polish** — Expand the objective tracker into a minimal toggleable quest log with objective details and multi-step support
+5. **Stash / vendor UI readability pass** — Improve stash panel layout (sections, item readability) and vendor panel clarity (stock vs sell sections, price readability)
+6. **First content expansion after 0.3 checkpoint** — Add a second objective type, new enemy variant, or new zone content to validate the content pipeline end-to-end
+
+---
+
+## Task 333E — Objective Persistence Hardening: Persist Start and Turn-In Reliably
+
+- [x] Fixed objective start persistence: `startNoticeBoardObjective` now immediately calls `ObjectiveRepository().create()` so the `CharacterObjective` row is written on objective start (not deferred to first kill)
+- [x] Fixed turn-in persistence: reward-granted state (`rewardGranted = true`) is persisted via `ObjectiveRepository().markRewardGranted()` BEFORE granting the copper reward — this prevents duplicate copper after reconnect/crash
+- [x] Turn-in now uses awaited persistence (not fire-and-forget with `void`)
+- [x] Fixed turn-in HUD state: after reward is granted, HUD display fields (`hasObjective`, `objectiveLabel`, `objectiveCurrent`, `objectiveTarget`, `objectiveCompleted`) are cleared, but `objectiveId` and `objectiveRewardGranted` are kept on PlayerPresence so `findNextNoticeBoardObjective` can properly skip the completed objective and advance to the next one
+- [x] Progress persistence already correct (`updateProgress` callback on kill — fire-and-forget, with clamping at required count)
+- [x] Existing persisted state restoration on `onJoin` already handles `0 / required` correctly (scans sequence for first non-reward-granted row)
+- [x] No schema changes (existing model supports all fields)
+- [x] Updated `docs/CORE_BUILD_0_3_CHECKLIST.md`
+- [x] Updated `docs/CORE_BUILD_0_3_RELEASE_NOTES.md`
+- [x] No movement, combat, town route, vendor buy/sell, stash transfer, waypoint travel, loot pickup, rest area, cursor feedback, zoom, camera, or Nightmarket spacing changes
+
 ## Task 333B — Objective Foundation: Increment Notice Board Kill Progress
 
 - [x] Audited current enemy death/kill resolution path in `TownRoom.ts` and related combat helpers
@@ -12,7 +141,7 @@
 - [x] Progress is clamped at `player.objectiveTarget` (the `requiredKills` from the content definition) — repeated kills after reaching the required count do not exceed it
 - [x] Non-target enemy kills are ignored (the objective is not incremented)
 - [x] No objective completion/turn-in logic, no reward logic, no persistence, no quest journal, no generic multi-objective system
-- [x] The old `advanceNoticeBoardObjective` function remains available but is no longer called from kill handlers; it still handles the completion+reward flow that will be used by a later task
+- [x] The old `advanceNoticeBoardObjective` function has been removed (Task 333F) — kill progress is reward-free via `advanceObjectiveProgress`
 - [x] No enemy AI changes, no combat formula changes, no vendor/stash/waypoint/routing changes
 - [x] `pnpm typecheck` — 0 errors
 - [x] Pre-existing lint errors only (unrelated to this task)
@@ -45,7 +174,7 @@
 
 - [x] Audited current objective fields on PlayerPresence (hasObjective, objectiveId, objectiveCompleted, objectiveRewardGranted — all present)
 - [x] Verfied advanceObjectiveProgress helper: sets objectiveCompleted but does NOT set rewardGranted or grant rewards
-- [x] Located the old advanceNoticeBoardObjective function — deliberately unused by kill handlers (commented), still available
+- [x] The old `advanceNoticeBoardObjective` function was removed in Task 333F — no auto-reward-on-kill path remains
 - [x] Added localized key `objective.already_completed` and English translation text to locale types and en.ts
 - [x] Added turn-in logic in the notice board interact handler (`nightmarket_notice_board_01`):
   - [x] Objective completed + reward not granted → marks rewardGranted, grants copper via CharacterRepository.incrementMoneyCopper, sends currency_picked_up, resets HUD objective state via resetNoticeBoardObjective, sends interact_response with localized feedback
@@ -196,7 +325,23 @@
 - [x] Hid offscreen enemy placeholders without destroying/recreating them, preserving the existing Task 307 performance guard against per-frame rebuild/listener churn
 - [x] Cleared stale hovered/selected enemy state when an enemy leaves the currently visible projected set so offscreen enemies are not hoverable/clickable and do not keep stale targeting UI
 - [x] Added guardrail comments documenting the difference between server-known enemies, client-rendered visible enemies, and client-clickable visible enemies
-- [ ] Focused verification pending
+## Task 334 — Core 0.3 Playable Loop Hardening Audit
+
+- [x] Audited the full Core 0.3 playable loop: login/enter world, Nightmarket spawn, notice board objective start, town → combat route, enemy kill progress, loot pickup, return route, objective turn-in reward, vendor buy/sell, stash store/take, waypoint activation/travel, reconnect/rejoin restoration
+- [x] Audited objective persistence and reward duplication — confirmed `rewardGranted` is persisted before copper grant (Task 333E), rejoin scan correctly skips completed objectives, no duplicate reward path exists
+- [x] Audited money/HUD refresh — confirmed `currency_picked_up` message is sent after vendor buy, sell, objective turn-in, and loot pickup; client `refreshAccountStateAfterPickup()` is called in all paths
+- [x] Audited inventory refresh after vendor/stash — confirmed sell handler and stash store/take handlers update panel inventory after `/me` refresh; buy handler was missing this update (fixed)
+- [x] Audited position persistence after route/waypoint — confirmed `CharacterService.updateCharacterLocation()` is called after both route and waypoint travel before sending accepted message
+- [x] Audited camera/projection after travel — confirmed travel stays within same Nightmarket zone so existing camera/projection/culling logic applies; client receives new position via Colyseus schema sync
+- [x] Audited offscreen enemy culling after travel — confirmed existing viewport culling and enemy aggro distance check handles the new position correctly after teleport
+- [x] Audited interactable clickability — confirmed spacing pass (Task 328) preserved all interaction IDs and code paths; no clickability regressions found
+- [x] Audited stale pending movement/action state — confirmed both route and waypoint handlers clear `hasMovementTarget` and `clearPendingAction()` before sending accepted message (guard comments added)
+- [x] Audited reconnect/rejoin restoration — confirmed persisted objective state, character location, flask charges, and HP are all restored on rejoin via `buildTownPlayerPresence` and `applyTownRestRefill`
+- [x] **Bug fix**: Vendor buy accepted handler now refreshes vendor panel sell inventory after account state refresh so the newly purchased item appears in the sell section immediately (was missing — sell handler already had this)
+- [x] **Bug fix**: `currency_picked_up` client handler now only shows "Picked up X" notice when `gainedCopper > 0`, preventing a misleading "Picked up 0." notice after vendor buy operations
+- [x] Added guard comments to route travel and waypoint travel handlers documenting why `hasMovementTarget` and `clearPendingAction` must be cleared immediately after teleport
+- [x] `pnpm typecheck` — 0 errors across all 5 workspace projects
+- [x] No schema/database changes, no new gameplay systems, no UI redesign
 
 ## Task 328 — Nightmarket Physical Scale and Content Spacing Pass
 
@@ -223,6 +368,64 @@
 - [x] Updated the stash panel with simple Store / Take actions (no drag/drop)
 - [x] Kept scope limited: no stash tabs, no sorting/filtering, no account-wide stash, no schema changes
 - [ ] Focused verification pending
+
+## Task 338 — Waypoint Discovery: Unlock Destinations by Clicking Waypoints
+
+- [x] Audited the current waypoint foundation from Tasks 330 and 336 in `waypointService.ts`, `TownRoom.ts`, content data, localization, and docs
+- [x] Removed the auto-unlock behavior where opening the Nightmarket waypoint activated both destinations
+- [x] Kept `nightmarket_waypoint_01` as the Nightmarket hub waypoint and made interaction activate only its own destination
+- [x] Added a physical Blackwire combat-edge waypoint object with stable content id `nightmarket_waypoint_blackwire_combat_edge`
+- [x] Reused the existing world-prop/interactable pattern (`kind: "waypoint"`) so the new object participates in the same server-authoritative interact flow
+- [x] The server now validates the interacted waypoint object through the existing interactable registry and activates only the matched waypoint destination for the current character
+- [x] The waypoint panel now opens from either waypoint object and lists only discovered/activated destinations
+- [x] Locked destinations remain non-usable on the server: undiscovered travel still rejects with safe destination-unavailable feedback
+- [x] Existing same-zone waypoint travel validation/persistence remains in place: destination existence, spawn-point validity, pending-action cleanup, live synced position update, and persisted character location update
+- [x] Added localized discovery feedback for newly discovered vs already discovered waypoints and locked/unavailable destination attempts
+- [ ] Focused verification pending
+
+## Task 333D — Objective Foundation: Persist Notice Board Objective State
+
+- [x] Audited current session-scoped objective fields on PlayerPresence (hasObjective, objectiveId, objectiveCompleted, objectiveRewardGranted — all present for Tasks 333A–333C)
+- [x] Added `CharacterObjective` Prisma model to `apps/server/prisma/schema.prisma` with: characterId, objectiveId, currentProgress, requiredProgress, completed, rewardGranted, createdAt, updatedAt
+- [x] Added committed Prisma migration `20260611210000_add_character_objective_state` with the new table, unique index on (characterId, objectiveId), and FK + cascade
+- [x] Added Oppositive relation from `Character.objectives` to `CharacterObjective`
+- [x] Created `apps/server/src/persistence/repositories/ObjectiveRepository.ts` with focused helpers:
+  - [x] `findByCharacterAndObjective(characterId, objectiveId)` — returns state or null
+  - [x] `create(characterId, objectiveId, requiredProgress)` — starts a new objective state record
+  - [x] `updateProgress(characterId, objectiveId, newProgress)` — clamps and persists, sets completed when clamp reached
+  - [x] `markCompleted(characterId, objectiveId)` — sets completed = true
+  - [x] `markRewardGranted(characterId, objectiveId)` — sets rewardGranted = true
+- [x] Exported `ObjectiveRepository` from `apps/server/src/persistence/repositories/index.ts`
+- [x] Extended `BuildTownPlayerPresenceInput` in `buildPlayerPresence.ts` with optional `objectiveState` parameter
+- [x] `buildTownPlayerPresence` now populates PlayerPresence objective fields from persisted state when present (including objectiveId, currentProgress, requiredProgress, completed, rewardGranted)
+- [x] `TownRoom.onJoin` now loads persisted objective state by scanning the NOTICE_BOARD_OBJECTIVE_SEQUENCE for the first non-reward-granted record, then passes it to `buildTownPlayerPresence`
+- [x] Extended `advanceObjectiveProgress` with optional `onPersistUpdate` callback that fires after in-memory progress is advanced
+- [x] Both `registerAttackHandler` and `registerSkillSlotHandler` pass a fire-and-forget persistence callback to `advanceObjectiveProgress` that calls `ObjectiveRepository.updateProgress()`
+- [x] Progress persists on every kill (fire-and-forget, not awaited)
+- [x] Completed/ready-to-turn-in state survives reconnect/rejoin
+- [x] Reward-granted state survives reconnect/rejoin
+- [x] Rejoining after reward turn-in does not allow duplicate copper rewards (persisted `rewardGranted` prevents re-granting)
+- [x] HUD still renders only real server-authored objective state (no change)
+- [x] `pnpm typecheck` — 0 errors (server passes cleanly after objectiveState optional fix)
+- [x] `pnpm lint` — pre-existing errors only (no unused function warnings after Task 333F removed `advanceNoticeBoardObjective`)
+- [x] Added comments marking this as a foundation, not the final quest journal system
+- [x] Updated `docs/CORE_BUILD_0_3_CHECKLIST.md`
+- [x] Updated `docs/CORE_BUILD_0_3_RELEASE_NOTES.md`
+- [x] No movement, combat, town route, vendor buy/sell, stash transfer, waypoint travel, loot pickup, rest area, cursor feedback, zoom, camera, or Nightmarket spacing changes
+
+## Task 333F — Objective Foundation: Remove Legacy Auto-Reward Objective Helper
+
+- [x] Audited `advanceNoticeBoardObjective` function — defined in `TownRoom.ts` but never called anywhere after Task 333B
+- [x] Confirmed current objective flow uses `startNoticeBoardObjective` for starting, `advanceObjectiveProgress` for kill progress only, and notice board interaction for explicit turn-in and copper reward
+- [x] Removed `advanceNoticeBoardObjective` function (57 lines of dead code including reward granting and copper persistence logic)
+- [x] Removed stale comment referencing the old function in `registerAttackHandler`
+- [x] Verified no auto-reward-on-kill path remains — kill handlers use `advanceObjectiveProgress` only (reward-free)
+- [x] Objective start, kill progress, completion/ready state, explicit turn-in, and reward-granted persistence remain unchanged
+- [x] No new objective features, no quest journal, no new rewards, no persistence model changes
+- [x] No schema/database changes
+- [x] No movement, combat, loot, town route, vendor buy/sell, stash transfer, waypoint travel, rest area, cursor feedback, zoom, camera, or Nightmarket spacing changes
+- [x] Updated `docs/CORE_BUILD_0_3_CHECKLIST.md`
+- [x] Updated `docs/CORE_BUILD_0_3_RELEASE_NOTES.md`
 
 ## Task 330 — Waypoint Foundation: Activate and Use Basic Town Waypoint
 

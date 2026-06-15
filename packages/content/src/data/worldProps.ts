@@ -67,6 +67,7 @@ export const worldProps = [
 
   // ── Region 4: Runt combat pocket (first main sewer edge) ──
   { id: "nightmarket_sewer_edge_marker_01", zoneId: "nightmarket", kind: "combat_edge", label: "→ Blackwire Sewer Edge", labelKey: "world_prop.edge_blackwire_sewer.label", x: 3000, y: 2190 },
+  { id: "nightmarket_waypoint_blackwire_combat_edge", zoneId: "nightmarket", kind: "waypoint", label: "Blackwire Waypoint", labelKey: "world_prop.blackwire_waypoint.label" as never, x: 3045, y: 2260 },
   { id: "nightmarket_blackwire_return_01", zoneId: "nightmarket", kind: "combat_edge", label: "← Return to Nightmarket Services", labelKey: "world_prop.return_nightmarket_services.label" as never, x: 2890, y: 2260 },
   { id: "nightmarket_sewer_debris_01",      zoneId: "nightmarket", kind: "debris",      label: "Sewer Edge Debris",      labelKey: "world_prop.sewer_edge_debris.label",    x: 2940, y: 2140 },
   { id: "nightmarket_junk_02",              zoneId: "nightmarket", kind: "junk",        label: "Scrap Pile",             labelKey: "world_prop.scrap_pile.label",            x: 3160, y: 2310 },
