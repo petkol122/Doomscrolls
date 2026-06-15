@@ -2,7 +2,7 @@ import { t } from "@doomscrolls/localization";
 
 const FADE_DURATION_MS = 150;
 
-export type WorldSessionTravelOverlayKind = "route" | "waypoint";
+export type WorldSessionTravelOverlayKind = "route" | "waypoint" | "handoff";
 
 export interface WorldSessionTravelOverlayView {
   readonly show: (kind: WorldSessionTravelOverlayKind) => void;
@@ -18,6 +18,13 @@ function resolveOverlayCopy(kind: WorldSessionTravelOverlayKind): {
     return {
       title: t("world_session.travel_overlay.waypoint_title" as never),
       message: t("world_session.travel_overlay.waypoint_message" as never),
+    };
+  }
+
+  if (kind === "handoff") {
+    return {
+      title: "Entering Combat",
+      message: "Leaving town and joining the combat room. Arrival remains server-authoritative.",
     };
   }
 

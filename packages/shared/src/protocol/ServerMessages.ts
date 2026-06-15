@@ -145,6 +145,29 @@ export interface ZoneTransitionApprovedServerMessage {
   readonly targetZoneId: ZoneId;
 }
 
+export type TownCombatHandoffRejectedReason =
+  | "transition_unavailable"
+  | "invalid_destination"
+  | "duplicate_request"
+  | "player_not_ready"
+  | "transition_failed";
+
+export interface TownCombatHandoffApprovedServerMessage {
+  readonly type: "town_combat_handoff_approved";
+  readonly characterId: CharacterId;
+  readonly fromRoomKind: "town";
+  readonly toRoomKind: "combat";
+  readonly targetZoneId: ZoneId;
+  readonly targetSpawnKey: string;
+  readonly message: string;
+}
+
+export interface TownCombatHandoffRejectedServerMessage {
+  readonly type: "town_combat_handoff_rejected";
+  readonly objectId?: string;
+  readonly reason: TownCombatHandoffRejectedReason;
+}
+
 // ---------------------------------------------------------------------------
 // Movement intent acknowledgement / rejection (Task 026)
 //
@@ -524,6 +547,8 @@ export type ServerRoomMessage =
   | CorpseInteractAcceptedServerMessage
   | CorpseRecoveredServerMessage
   | ChatMessageServerMessage
+  | TownCombatHandoffApprovedServerMessage
+  | TownCombatHandoffRejectedServerMessage
   | ZoneTransitionApprovedServerMessage
   | RequestMoveRejectedServerMessage
   | RequestAttackAcceptedServerMessage

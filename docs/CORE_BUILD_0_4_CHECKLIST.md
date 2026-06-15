@@ -45,10 +45,24 @@
 
 #### Wave 2 — Travel / Realm Investigation
 
-- [ ] Investigate CombatRoom / cross-zone / cross-room handoff feasibility
-- [ ] Define the first safe real transition path
-- [ ] Define real loading/transition overlay expectations
+- [x] Investigate CombatRoom / cross-zone / cross-room handoff feasibility
+- [x] Define the first safe real transition path
+- [x] Define real loading/transition overlay expectations
 - [ ] Preserve same-zone travel stability while broader travel work is explored
+
+Task 342 status note:
+
+- [x] `docs/CORE_BUILD_0_4_HANDOFF_INVESTIGATION.md` documents the current 0.3 TownRoom/CombatRoom/session architecture, current same-room waypoint/route travel, current persistence boundaries (location, HP, flask, objective state, inventory/vendor/stash assumptions), and a minimal server-authoritative handoff recommendation for future TownRoom → CombatRoom or cross-zone travel.
+- [x] The investigation concludes that current 0.3 “travel” inside `WorldSessionScene` is same-room repositioning with a loading overlay, not a real room join, and recommends a conservative validated leave + target-room join as the first safe 0.4 implementation path.
+
+Task 343 status note:
+
+- [x] Reused the existing `nightmarket_blackwire_gate_01` route trigger as the single conservative TownRoom → CombatRoom handoff entry.
+- [x] Kept waypoint travel and the Nightmarket return route on the existing same-room path; only the Blackwire gate now approves a room handoff.
+- [x] Added a minimal server-authoritative handoff approval/rejection payload so the client can leave `TownRoom` and join `CombatRoom` through the existing room join contract.
+- [x] Persisted intended combat-zone room state through the existing character persistence path before leaving town (`currentZoneId` + last location + HP/flask state).
+- [x] Reused the existing travel/loading overlay for the leave-and-join handoff path rather than adding a new broad transition system.
+- [ ] Focused runtime/typecheck verification pending.
 
 #### Wave 3 — Objective / Journal Expansion
 

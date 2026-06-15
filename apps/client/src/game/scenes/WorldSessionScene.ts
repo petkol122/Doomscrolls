@@ -15,6 +15,7 @@ import { contentRegistry } from "@doomscrolls/content";
 import type { AccountState } from "../../net/ApiClient";
 import { ApiClient } from "../../net/ApiClient";
 import { clientEnv } from "../../config/env";
+import { createRealtimeClient, joinCombatRoom } from "../../net/RealtimeClient";
 import { registerAttackResponseListeners } from "../../net/attackIntentClient";
 import { registerInteractResponseListener } from "../../net/interactResponseClient";
 import { registerPickupWorldLootResponseListeners } from "../../net/pickupWorldLootClient";
@@ -140,6 +141,7 @@ export class WorldSessionScene extends Phaser.Scene {
   };
   private areaBanner: WorldSessionAreaBannerView | null = null;
   private latestSkillRejectedReason: string | null = null;
+  private pendingRoomHandoff = false;
 
   public constructor() {
     super("WorldSessionScene");
@@ -428,6 +430,29 @@ export class WorldSessionScene extends Phaser.Scene {
       const key = `town_service.route.rejected.${reason}` as Parameters<typeof t>[0];
       const fallback = t("town_service.route.rejected.travel_failed" as never);
       const feedback = (() => { try { return t(key as never); } catch { return fallback; } })();
+      this.feedbackView?.showNotice(feedback);
+    });
+
+    this.room.onMessage("town_combat_handoff_approved", (message: { targetZoneId?: unknown; message?: unknown }) => {
+      const targetZoneId = typeof message.targetZoneId === "string" && message.targetZoneId.length > 0
+        ? message.targetZoneId
+        : "blackwire_sewers";
+      const feedback = typeof message.message === "string" && message.message.length > 0
+        ? message.message
+        : "Entering combat.";
+      this.feedbackView?.showNotice(feedback);
+      void this.beginCombatRoomHandoff(targetZoneId as never);
+    });
+
+    this.room.onMessage("town_combat_handoff_rejected", (message: { reason?: unknown }) => {
+      this.pendingRoomHandoff = false;
+      this.finishTravelOverlay(false);
+      const reason = typeof message.reason === "string" ? message.reason : "transition_failed";
+      const feedback = reason === "duplicate_request"
+        ? "Transition already in progress."
+        : reason === "player_not_ready"
+          ? "Could not enter world."
+          : "Could not enter world.";
       this.feedbackView?.showNotice(feedback);
     });
 
@@ -950,6 +975,7 @@ export class WorldSessionScene extends Phaser.Scene {
     }
     this.pendingTravelKind = null;
     this.pendingTravelHideAfterStateApply = false;
+    this.pendingRoomHandoff = false;
     this.travelOverlayView?.destroy();
     this.travelOverlayView = null;
     this.worldAreaView?.destroy();
@@ -993,6 +1019,42 @@ export class WorldSessionScene extends Phaser.Scene {
       this.account = await this.apiClient.getMe(sessionToken);
       this.renderOverlay();
     } catch { /* ignore */ }
+  }
+
+  private async beginCombatRoomHandoff(targetZoneId: import("@doomscrolls/shared").ZoneId): Promise<void> {
+    if (this.pendingRoomHandoff || this.characterId === null || this.account === null) {
+      return;
+    }
+
+    const currentRoom = this.room;
+    const sessionToken = window.localStorage.getItem("doomscrolls.sessionToken");
+    if (currentRoom === null || typeof sessionToken !== "string" || sessionToken.length === 0) {
+      this.finishTravelOverlay(false);
+      this.feedbackView?.showNotice("Could not enter world.");
+      return;
+    }
+
+    this.pendingRoomHandoff = true;
+    this.beginTravelOverlay("handoff");
+
+    try {
+      try { currentRoom.leave(); } catch {}
+      const nextClient = createRealtimeClient();
+      const nextRoom = await joinCombatRoom(nextClient, sessionToken as never, this.characterId, targetZoneId);
+      this.room = nextRoom;
+      this.pendingTravelHideAfterStateApply = false;
+      this.pendingTravelKind = null;
+      this.pendingRoomHandoff = false;
+      this.scene.restart({
+        account: this.account,
+        characterId: this.characterId,
+        room: nextRoom,
+      });
+    } catch {
+      this.pendingRoomHandoff = false;
+      this.finishTravelOverlay(false);
+      this.feedbackView?.showNotice("Could not enter world.");
+    }
   }
 
   // Task 320 — Build inventory items view model for vendor sell section.

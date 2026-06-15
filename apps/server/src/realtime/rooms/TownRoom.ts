@@ -1416,8 +1416,27 @@ export class TownRoom extends Room {
         || message.objectId === "nightmarket_blackwire_return_01"
       ) {
         try {
+          if (message.objectId === "nightmarket_blackwire_gate_01" && (player as { pendingRoomHandoff?: boolean }).pendingRoomHandoff === true) {
+            const rejected: import("@doomscrolls/shared").TownCombatHandoffRejectedServerMessage = {
+              type: "town_combat_handoff_rejected",
+              objectId: message.objectId,
+              reason: "duplicate_request",
+            };
+            try { client.send("town_combat_handoff_rejected", rejected); } catch {}
+            return;
+          }
+
           const result = await resolveRouteTravel(state.zoneId, message.objectId);
           if (!result.ok) {
+            if (message.objectId === "nightmarket_blackwire_gate_01") {
+              const rejected: import("@doomscrolls/shared").TownCombatHandoffRejectedServerMessage = {
+                type: "town_combat_handoff_rejected",
+                objectId: message.objectId,
+                reason: result.reason === "invalid_destination" ? "invalid_destination" : "transition_unavailable",
+              };
+              try { client.send("town_combat_handoff_rejected", rejected); } catch {}
+              return;
+            }
             const rejected: import("@doomscrolls/shared").RequestRouteTravelRejectedServerMessage = {
               type: "request_route_travel_rejected",
               objectId: message.objectId,
@@ -1427,15 +1446,47 @@ export class TownRoom extends Room {
             return;
           }
 
+          player.hasMovementTarget = false;
+          clearPendingAction(player);
+
+          if (result.handoffRoomKind === "combat") {
+            try {
+              await new CharacterService().updateCharacterRoomIntent(
+                player.characterId,
+                result.zoneId,
+                result.x,
+                result.y,
+                Math.max(0, Math.min(player.maxHp, player.hp)),
+                Math.max(0, Math.min(player.maxFlaskCharges, Math.floor(player.flaskCharges))),
+              );
+            } catch {
+              const rejected: import("@doomscrolls/shared").TownCombatHandoffRejectedServerMessage = {
+                type: "town_combat_handoff_rejected",
+                objectId: message.objectId,
+                reason: "transition_failed",
+              };
+              try { client.send("town_combat_handoff_rejected", rejected); } catch {}
+              return;
+            }
+
+            (player as { pendingRoomHandoff?: boolean }).pendingRoomHandoff = true;
+            const approved: import("@doomscrolls/shared").TownCombatHandoffApprovedServerMessage = {
+              type: "town_combat_handoff_approved",
+              characterId: player.characterId,
+              fromRoomKind: "town",
+              toRoomKind: "combat",
+              targetZoneId: result.zoneId,
+              targetSpawnKey: result.targetSpawnKey ?? "blackwire_entry",
+              message: `${t(result.messageKey as never)} ${t(result.areaKey as never)}`,
+            };
+            try { client.send("town_combat_handoff_approved", approved); } catch {}
+            return;
+          }
+
           player.x = result.x;
           player.y = result.y;
           player.targetX = result.x;
           player.targetY = result.y;
-          // Task 334 — Immediately clear movement target and pending
-          // action so stale move-to-interact/attack/pickup state cannot
-          // fire after the player has teleported to a new position.
-          player.hasMovementTarget = false;
-          clearPendingAction(player);
 
           try {
             await new CharacterService().updateCharacterLocation(
@@ -1469,6 +1520,15 @@ export class TownRoom extends Room {
           };
           try { client.send("request_route_travel_accepted", accepted); } catch {}
         } catch {
+          if (message.objectId === "nightmarket_blackwire_gate_01") {
+            const rejected: import("@doomscrolls/shared").TownCombatHandoffRejectedServerMessage = {
+              type: "town_combat_handoff_rejected",
+              objectId: message.objectId,
+              reason: "transition_failed",
+            };
+            try { client.send("town_combat_handoff_rejected", rejected); } catch {}
+            return;
+          }
           const response: InteractResponseServerMessage = {
             type: "interact_response",
             objectId: message.objectId,
@@ -3253,6 +3313,7 @@ export class TownRoom extends Room {
     });
   }
 }
+
 
 
 
