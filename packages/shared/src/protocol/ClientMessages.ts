@@ -226,6 +226,11 @@ export interface RequestWaypointTravelClientMessage {
   readonly waypointId: string;
 }
 
+export interface RequestCombatReturnClientMessage {
+  readonly type: "request_combat_return";
+  readonly objectId: string;
+}
+
 export type ClientRoomMessage =
   | MoveToPointClientMessage
   | AttackTargetClientMessage
@@ -253,4 +258,5 @@ export type ClientRoomMessage =
   | RequestSellItemClientMessage
   | RequestStoreInventoryItemInStashClientMessage
   | RequestTakeStashItemToInventoryClientMessage
-  | RequestWaypointTravelClientMessage;
+  | RequestWaypointTravelClientMessage
+  | RequestCombatReturnClientMessage;

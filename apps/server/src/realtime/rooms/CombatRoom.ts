@@ -25,7 +25,7 @@ import { validateAttackIntent } from "./attackIntentValidation";
 import { consumeAttackCooldown } from "./attackCooldown";
 import { applyEnemyDamage } from "./applyEnemyDamage";
 import { restoreFlaskToFull } from "./healingFlaskConfig";
-import { clearPendingAction } from "./pendingActionState";
+import { clearPendingAction, setPendingAction } from "./pendingActionState";
 import {
   ENEMY_ATTACK_RANGE,
   clearEnemyTargetAndReturn,
@@ -33,6 +33,8 @@ import {
 } from "./enemyAiHelpers";
 import { contentRegistry } from "@doomscrolls/content";
 import { CharacterService } from "../../character/CharacterService";
+import { contentRegistry as roomContentRegistry } from "@doomscrolls/content";
+import { isPositionInsideZoneBounds } from "./validateCharacterLocation";
 
 // Task 227 -- enemy movement speed is authored in the same per-second
 // stat space as the player's derived `moveSpeed`. The runtime
@@ -135,6 +137,7 @@ export class CombatRoom extends Room {
   private movementIntentHandlerRegistered = false;
   private attackHandlerRegistered = false;
   private respawnHandlerRegistered = false;
+  private combatReturnHandlerRegistered = false;
 
   public override async onCreate(options: CombatRoomJoinOptions): Promise<void> {
     const log = createRoomLogger(
@@ -157,6 +160,7 @@ export class CombatRoom extends Room {
     this.registerMovementIntentHandler(log);
     this.registerAttackHandler(log);
     this.registerRespawnHandler(log);
+    this.registerCombatReturnHandler(log);
 
     this.setSimulationInterval((deltaMs: number) => {
       // The CombatRoomState has the same `playerPresence` shape
@@ -516,6 +520,107 @@ export class CombatRoom extends Room {
           y: player.y,
         },
         "CombatRoom request_respawn accepted: player HP restored and teleported to combat spawn centre.",
+      );
+    });
+  }
+
+  private registerCombatReturnHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.combatReturnHandlerRegistered) {
+      return;
+    }
+    this.combatReturnHandlerRegistered = true;
+
+    this.onMessage("request_combat_return", async (client: Client, raw: unknown) => {
+      const state = this.state as CombatRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+      const message = raw as { objectId?: unknown } | null;
+      const objectId = typeof message?.objectId === "string" ? message.objectId : "";
+
+      const reject = (reason: import("@doomscrolls/shared").TownCombatHandoffRejectedReason): void => {
+        const rejected: import("@doomscrolls/shared").CombatTownReturnRejectedServerMessage = {
+          type: "combat_town_return_rejected",
+          ...(objectId.length > 0 ? { objectId } : {}),
+          reason,
+        };
+        try { client.send("combat_town_return_rejected", rejected); } catch {}
+      };
+
+      if (player === undefined) {
+        reject("player_not_ready");
+        return;
+      }
+
+      if (player.hasPendingAction && player.pendingActionType === "zone_transition") {
+        reject("duplicate_request");
+        return;
+      }
+
+      if (player.lifeState !== "alive") {
+        reject("player_not_ready");
+        return;
+      }
+
+      if (objectId !== "combat_return_to_nightmarket") {
+        reject("transition_unavailable");
+        return;
+      }
+
+      const returnSpawn = roomContentRegistry.spawnPoints.get("nightmarket_blackwire_combat_entry" as never);
+      if (
+        returnSpawn === undefined
+        || returnSpawn.zoneId !== "nightmarket"
+        || !isPositionInsideZoneBounds("nightmarket" as ZoneId, returnSpawn.x, returnSpawn.y)
+      ) {
+        reject("invalid_destination");
+        return;
+      }
+
+      try {
+        setPendingAction(player, {
+          type: "zone_transition",
+          targetId: objectId,
+          targetX: returnSpawn.x,
+          targetY: returnSpawn.y,
+        });
+        await new CharacterService().updateCharacterRoomIntent(
+          player.characterId,
+          "nightmarket",
+          returnSpawn.x,
+          returnSpawn.y,
+          Math.max(0, Math.min(player.maxHp, player.hp)),
+          Math.max(0, Math.min(player.maxFlaskCharges, Math.floor(player.flaskCharges))),
+        );
+
+        const approved: import("@doomscrolls/shared").CombatTownReturnApprovedServerMessage = {
+          type: "combat_town_return_approved",
+          characterId: player.characterId,
+          objectId,
+          fromRoomKind: "combat",
+          toRoomKind: "town",
+          targetZoneId: "nightmarket" as ZoneId,
+          targetSpawnKey: "nightmarket_blackwire_combat_entry",
+          message: "Returning to Nightmarket.",
+        };
+        try { client.send("combat_town_return_approved", approved); } catch {}
+      } catch {
+        clearPendingAction(player);
+        reject("transition_failed");
+        return;
+      }
+
+      log.info?.(
+        {
+          roomId: this.roomId,
+          roomName: this.roomName,
+          sessionId: client.sessionId,
+          characterId: player.characterId,
+          objectId,
+          targetZoneId: "nightmarket",
+          targetSpawnKey: "nightmarket_blackwire_combat_entry",
+        },
+        "CombatRoom request_combat_return approved for conservative leave-and-join handoff back to TownRoom.",
       );
     });
   }

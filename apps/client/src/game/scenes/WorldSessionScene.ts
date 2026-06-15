@@ -15,7 +15,7 @@ import { contentRegistry } from "@doomscrolls/content";
 import type { AccountState } from "../../net/ApiClient";
 import { ApiClient } from "../../net/ApiClient";
 import { clientEnv } from "../../config/env";
-import { createRealtimeClient, joinCombatRoom } from "../../net/RealtimeClient";
+import { createRealtimeClient, joinCombatRoom, joinTownRoom } from "../../net/RealtimeClient";
 import { registerAttackResponseListeners } from "../../net/attackIntentClient";
 import { registerInteractResponseListener } from "../../net/interactResponseClient";
 import { registerPickupWorldLootResponseListeners } from "../../net/pickupWorldLootClient";
@@ -456,6 +456,37 @@ export class WorldSessionScene extends Phaser.Scene {
       this.feedbackView?.showNotice(feedback);
     });
 
+    this.room.onMessage("combat_town_return_approved", (message: { targetZoneId?: unknown; message?: unknown }) => {
+      const targetZoneId = typeof message.targetZoneId === "string" && message.targetZoneId.length > 0
+        ? message.targetZoneId
+        : null;
+      if (targetZoneId === null) {
+        this.pendingRoomHandoff = false;
+        this.finishTravelOverlay(false);
+        this.feedbackView?.showNotice("Could not enter world.");
+        return;
+      }
+
+      const feedback = typeof message.message === "string" && message.message.length > 0
+        ? message.message
+        : "Returning to town.";
+      this.feedbackView?.showNotice(feedback);
+      this.pendingRoomHandoff = false;
+      void this.beginTownRoomReturnHandoff(targetZoneId as never);
+    });
+
+    this.room.onMessage("combat_town_return_rejected", (message: { reason?: unknown }) => {
+      this.pendingRoomHandoff = false;
+      this.finishTravelOverlay(false);
+      this.feedbackView?.showNotice(
+        message.reason === "duplicate_request"
+          ? "Return already in progress."
+          : message.reason === "player_not_ready"
+            ? "Cannot return right now."
+            : "Could not enter world.",
+      );
+    });
+
     // Task 319 — Vendor buy accepted/rejected feedback
     this.room.onMessage("request_buy_vendor_item_accepted", (message: { stockEntryId?: string; itemId?: string; priceCopper?: number; remainingCopper?: number }) => {
       const itemId = typeof message.itemId === "string" ? message.itemId : "";
@@ -851,6 +882,9 @@ export class WorldSessionScene extends Phaser.Scene {
       () => {
         void this.handleLeaveWorld();
       },
+      () => {
+        this.handleRequestReturnToTown();
+      },
       () => this.utilityPanelOpenState,
       (nextState: WorldSessionUtilityPanelOpenState) => {
         this.utilityPanelOpenState = nextState;
@@ -1055,6 +1089,61 @@ export class WorldSessionScene extends Phaser.Scene {
       this.finishTravelOverlay(false);
       this.feedbackView?.showNotice("Could not enter world.");
     }
+  }
+
+  private async beginTownRoomReturnHandoff(targetZoneId: import("@doomscrolls/shared").ZoneId): Promise<void> {
+    if (this.characterId === null || this.account === null) {
+      return;
+    }
+
+    const currentRoom = this.room;
+    const sessionToken = window.localStorage.getItem("doomscrolls.sessionToken");
+    if (currentRoom === null || typeof sessionToken !== "string" || sessionToken.length === 0) {
+      this.finishTravelOverlay(false);
+      this.feedbackView?.showNotice("Could not enter world.");
+      return;
+    }
+
+    this.beginTravelOverlay("return_handoff");
+
+    try {
+      try { currentRoom.leave(); } catch {}
+      const nextClient = createRealtimeClient();
+      const nextRoom = await joinTownRoom(nextClient, sessionToken as never, this.characterId, targetZoneId);
+      this.room = nextRoom;
+      this.pendingTravelHideAfterStateApply = false;
+      this.pendingTravelKind = null;
+      this.pendingRoomHandoff = false;
+      this.scene.restart({
+        account: this.account,
+        characterId: this.characterId,
+        room: nextRoom,
+      });
+    } catch {
+      this.pendingRoomHandoff = false;
+      this.finishTravelOverlay(false);
+      this.feedbackView?.showNotice("Could not enter world.");
+    }
+  }
+
+  private handleRequestReturnToTown(): void {
+    if (this.room === null || this.pendingRoomHandoff) {
+      return;
+    }
+
+    const state = this.room.state as unknown as Record<string, unknown>;
+    const roomKind = typeof state.roomKind === "string" ? state.roomKind : "";
+    if (roomKind !== "combat") {
+      this.feedbackView?.showNotice("Cannot return right now.");
+      return;
+    }
+
+    this.beginTravelOverlay("return_handoff");
+    this.pendingRoomHandoff = true;
+    this.room.send("request_combat_return", {
+      type: "request_combat_return",
+      objectId: "combat_return_to_nightmarket",
+    });
   }
 
   // Task 320 — Build inventory items view model for vendor sell section.

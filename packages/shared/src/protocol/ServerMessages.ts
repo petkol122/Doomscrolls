@@ -168,6 +168,23 @@ export interface TownCombatHandoffRejectedServerMessage {
   readonly reason: TownCombatHandoffRejectedReason;
 }
 
+export interface CombatTownReturnApprovedServerMessage {
+  readonly type: "combat_town_return_approved";
+  readonly characterId: CharacterId;
+  readonly objectId: string;
+  readonly fromRoomKind: "combat";
+  readonly toRoomKind: "town";
+  readonly targetZoneId: ZoneId;
+  readonly targetSpawnKey: string;
+  readonly message: string;
+}
+
+export interface CombatTownReturnRejectedServerMessage {
+  readonly type: "combat_town_return_rejected";
+  readonly objectId?: string;
+  readonly reason: TownCombatHandoffRejectedReason;
+}
+
 // ---------------------------------------------------------------------------
 // Movement intent acknowledgement / rejection (Task 026)
 //
@@ -549,6 +566,8 @@ export type ServerRoomMessage =
   | ChatMessageServerMessage
   | TownCombatHandoffApprovedServerMessage
   | TownCombatHandoffRejectedServerMessage
+  | CombatTownReturnApprovedServerMessage
+  | CombatTownReturnRejectedServerMessage
   | ZoneTransitionApprovedServerMessage
   | RequestMoveRejectedServerMessage
   | RequestAttackAcceptedServerMessage

@@ -62,7 +62,16 @@ Task 343 status note:
 - [x] Added a minimal server-authoritative handoff approval/rejection payload so the client can leave `TownRoom` and join `CombatRoom` through the existing room join contract.
 - [x] Persisted intended combat-zone room state through the existing character persistence path before leaving town (`currentZoneId` + last location + HP/flask state).
 - [x] Reused the existing travel/loading overlay for the leave-and-join handoff path rather than adding a new broad transition system.
-- [ ] Focused runtime/typecheck verification pending.
+- [x] Focused runtime/typecheck verification passed via `pnpm typecheck`.
+
+Task 344 status note:
+
+- [x] Added one conservative server-authoritative `CombatRoom` → `TownRoom` return trigger through a dedicated `request_combat_return` message path instead of broadening the travel system.
+- [x] Validated the only supported return target on the server (`nightmarket` via the approved `nightmarket_blackwire_combat_entry` spawn), with safe rejection for invalid, duplicate, stale, or not-ready requests.
+- [x] Persisted intended town return state through the existing character room-intent path before leaving combat (`currentZoneId` + last location + HP/flask state), leaving objective/inventory/loot persistence flows intact.
+- [x] Reused the existing leave-and-join room handoff approach and loading overlay pattern so the client leaves `CombatRoom` and rejoins `TownRoom` through the existing room join contract.
+- [x] Added a conservative in-session return control for combat sessions only; this is a temporary controlled return affordance, not generalized cross-zone travel.
+- [x] Focused runtime/typecheck verification passed via `pnpm typecheck`.
 
 #### Wave 3 — Objective / Journal Expansion
 

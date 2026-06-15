@@ -117,3 +117,36 @@ The default recommendation is to start with **CombatRoom / cross-zone handoff in
 Core Build 0.4 should be understood as a **controlled expansion build**.
 
 It is broader than 0.3, but it is not intended to replace or destabilize the shipped 0.3 loop. The existing playable loop remains the baseline that 0.4 must preserve while extending the game toward broader realm, objective, and world progression foundations.
+
+---
+
+## Task 344 — Conservative CombatRoom → TownRoom return handoff skeleton
+
+**Date:** 2026-06-15
+**Status:** Implemented
+
+### Summary
+
+Added the smallest safe Core 0.4 return path from `CombatRoom` back to `TownRoom`, mirroring the Task 343 leave-and-join handoff style without generalizing the full travel system.
+
+### What changed
+
+- Added a dedicated conservative `request_combat_return` client/server message path.
+- Added `combat_town_return_approved` / `combat_town_return_rejected` server messages so the client can reuse the existing leave-and-join room handoff behavior.
+- Implemented a `CombatRoom` return validator that accepts only the controlled Nightmarket return target and safely rejects duplicate, invalid, or not-ready requests.
+- Reused `CharacterService.updateCharacterRoomIntent()` so return approval persists intended town destination, HP, and flask state before the combat room is left.
+- Reused the existing room join infrastructure on the client to leave `CombatRoom` and rejoin `TownRoom` with the approved target zone.
+- Reused the travel overlay pattern with a conservative `return_handoff` copy variant instead of introducing a larger transition framework.
+- Added a temporary combat-only “Return to Town” control in the world-session overlay as the minimal sanctioned return trigger.
+
+### Constraints preserved
+
+- No generalized cross-zone travel system was introduced.
+- No client authority over destination approval was added.
+- No same-room repositioning shortcut was used; return remains leave-and-join semantics.
+- Existing objective, inventory, and loot persistence flows were not reset or intentionally broadened.
+- Existing 0.3 town loop behavior stayed on its prior path outside the controlled combat return handoff.
+
+### Verification
+
+- `pnpm typecheck`
