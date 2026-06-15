@@ -6,7 +6,9 @@
 
 **Date:** 2026-06-12
 **Checkpoint:** Core 0.3 playable-loop checkpoint
-**Status:** Closed. All planned 0.3 pillars have shipped at foundation level.
+**Status:** Closed. All planned 0.3 pillars have shipped at foundation level. **Core Build 0.3 is now Release Candidate / bugfix-only.**
+
+New scope should move to Core Build 0.4 planning. Any further 0.3 work should be limited to minimal bug fixes for confirmed regressions or broken shipped flows.
 
 ### Shipped Systems Summary
 
