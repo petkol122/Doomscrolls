@@ -27,3 +27,5 @@ export type { UpdateSettingsData } from "./SettingsRepository";
 
 export { UserRepository } from "./UserRepository";
 export type { CreateUserData } from "./UserRepository";
+
+export { ObjectiveRepository } from "./ObjectiveRepository";

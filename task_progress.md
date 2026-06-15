@@ -1,10 +1,11 @@
-# Task 315: Reconnect and Phantom Presence Cleanup Audit
+# Task 318 Todo
 
-- [x] Read and understand the task requirements
-- [x] Audit server-side leave/cleanup (TownRoom, CombatRoom, presence, corpse, pending state)
-- [x] Audit client scene teardown/reconnect (WorldSessionScene, area views, overlays, handlers)
-- [x] Fix: TownRoom.onLeave missing enemy target cleanup (phantom player target reference)
-- [x] Fix: WorldSessionScene room.onStateChange handler lifecycle (may fire after teardown)
-- [x] Update docs/CORE_BUILD_0_2_CHECKLIST.md
-- [x] Update docs/CORE_BUILD_0_2_RELEASE_NOTES.md
-- [x] Verify existing behavior remains unchanged
+- [x] Audit existing town service / vendor interactables and vendorStocks content data
+- [x] Add TownServiceContentDefinition for vendor (currently missing in townServices.ts)
+- [x] Add localization key for vendor name in town service context
+- [x] Update server getInteractableResponseMessage to show vendor greeting (not "not available")
+- [x] Update client WorldSessionScene to use localized vendor name from content
+- [x] Update docs/CORE_BUILD_0_3_PLAN.md task status
+- [x] Create docs/CORE_BUILD_0_3_CHECKLIST.md
+- [x] Create docs/CORE_BUILD_0_3_RELEASE_NOTES.md
+- [x] Run pnpm lint, typecheck, test, build

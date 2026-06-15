@@ -50,6 +50,9 @@ export function registerInteractResponseListener(
       type: "objective_updated",
       objectiveId: msg.objectiveId,
       label: msg.label,
+      ...(typeof msg.descriptionKey === "string" && msg.descriptionKey.length > 0
+        ? { descriptionKey: msg.descriptionKey }
+        : {}),
       current: msg.current,
       target: msg.target,
       completed: msg.completed,

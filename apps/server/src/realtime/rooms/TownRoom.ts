@@ -60,6 +60,7 @@ import type {
   RequestUseHealingFlaskAcceptedServerMessage,
   RequestUseHealingFlaskRejectedServerMessage,
 } from "@doomscrolls/shared";
+import { advanceObjectiveProgress } from "./advanceObjectiveProgress";
 import { respawnTownEnemies } from "./respawnTownEnemies";
 import { spawnWorldLootOnEnemyDefeat } from "./spawnWorldLootOnEnemyDefeat";
 import { applyWanderMovement } from "./wanderEnemies";
@@ -71,15 +72,26 @@ import { contentRegistry, NOTICE_BOARD_OBJECTIVE_SEQUENCE } from "@doomscrolls/c
 import type { SpawnPointContentId, ObjectiveId } from "@doomscrolls/content";
 import { NIGHTMARKET_DEFAULT_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
 import { resolveTownZoneId } from "./resolveTownZoneId";
-import { CharacterRepository } from "../../persistence/repositories";
+import { CharacterRepository, ObjectiveRepository } from "../../persistence/repositories";
 import { ItemRepository } from "../../persistence/repositories/ItemRepository";
+import { toItemInstanceDto } from "../../persistence/mappers/itemMapper";
 import { tryResolveLevelProgression } from "./levelProgression";
 import { CharacterStatsService } from "../../character/CharacterStatsService";
+import { executeVendorBuyItem } from "./vendorBuyItem";
+import { executeVendorSellItem } from "./vendorSellItem";
+import { executeStoreInventoryItemInStash, executeTakeStashItemToInventory } from "./stashTransferItem";
 // Task 206 -- server-owned approach stop point for deferred queues
 // (attack / pickup / interact). The server still applies the
 // resolved target through applyMovementIntent; the client never
 // decides the stop point.
 import { resolveApproachTarget } from "./resolveApproachTarget";
+import {
+  activateAndBuildWaypointPanel,
+  getRouteRejectedMessage,
+  getWaypointRejectedMessage,
+  resolveRouteTravel,
+  resolveWaypointTravel,
+} from "./waypointService";
 
 // Task 227 -- enemy movement speed is authored in the same
 // per-second stat space as the player's derived `moveSpeed` (see
@@ -170,6 +182,7 @@ function buildObjectiveUpdatedMessage(
   player: {
     objectiveId: string;
     objectiveLabel: string;
+    objectiveDescriptionKey?: string;
     objectiveCurrent: number;
     objectiveTarget: number;
     objectiveCompleted: boolean;
@@ -181,6 +194,9 @@ function buildObjectiveUpdatedMessage(
     type: "objective_updated",
     objectiveId,
     label: player.objectiveLabel,
+    ...(player.objectiveDescriptionKey !== undefined && player.objectiveDescriptionKey.length > 0
+      ? { descriptionKey: player.objectiveDescriptionKey }
+      : {}),
     current: player.objectiveCurrent,
     target: player.objectiveTarget,
     completed: player.objectiveCompleted,
@@ -193,6 +209,7 @@ function startNoticeBoardObjective(
     hasObjective: boolean;
     objectiveId: string;
     objectiveLabel: string;
+    objectiveDescriptionKey: string;
     objectiveCurrent: number;
     objectiveTarget: number;
     objectiveCompleted: boolean;
@@ -203,6 +220,7 @@ function startNoticeBoardObjective(
   player.hasObjective = true;
   player.objectiveId = objectiveDef.id;
   player.objectiveLabel = t(objectiveDef.titleKey);
+  player.objectiveDescriptionKey = objectiveDef.descriptionKey;
   player.objectiveCurrent = 0;
   player.objectiveTarget = objectiveDef.requiredKills;
   player.objectiveCompleted = false;
@@ -235,65 +253,6 @@ function getActiveObjectiveContent(
     return undefined;
   }
   return contentRegistry.objectives.get(player.objectiveId as ObjectiveId);
-}
-
-async function advanceNoticeBoardObjective(
-  player: {
-    characterId: CharacterId;
-    xp: number;
-    level: number;
-    objectiveId: string;
-    objectiveLabel: string;
-    objectiveCurrent: number;
-    objectiveTarget: number;
-    objectiveCompleted: boolean;
-    objectiveRewardGranted: boolean;
-  },
-  enemyId: string,
-  sendToClient: (type: string, payload: unknown) => void,
-): Promise<void> {
-  if (player.objectiveRewardGranted || player.objectiveId.length === 0) {
-    return;
-  }
-
-  const activeObjective = getActiveObjectiveContent(player);
-  if (activeObjective === undefined) {
-    return;
-  }
-
-  if (!activeObjective.targetEnemyIds.includes(enemyId as ContentEnemyId)) {
-    return;
-  }
-
-  player.objectiveCurrent = Math.min(player.objectiveTarget, player.objectiveCurrent + 1);
-  if (player.objectiveCurrent >= player.objectiveTarget) {
-    player.objectiveCompleted = true;
-  }
-
-  const reward = player.objectiveCompleted
-    ? { xpReward: activeObjective.xpReward, copperReward: activeObjective.copperReward }
-    : undefined;
-  sendToClient("objective_updated", buildObjectiveUpdatedMessage(player, activeObjective.id, reward));
-
-  if (player.objectiveCompleted) {
-    player.objectiveRewardGranted = true;
-    await grantFlatXpReward(player, activeObjective.xpReward, sendToClient);
-
-    const copperReward = activeObjective.copperReward;
-    if (Number.isFinite(copperReward) && copperReward > 0) {
-      const rep = new CharacterRepository();
-      const total = await rep.incrementMoneyCopper(player.characterId.toString(), copperReward);
-      if (total !== null) {
-        const currencyMsg: import("@doomscrolls/shared").CurrencyPickedUpServerMessage = {
-          type: "currency_picked_up",
-          characterId: player.characterId,
-          gainedCopper: copperReward,
-          totalMoneyCopper: total,
-        };
-        sendToClient("currency_picked_up", currencyMsg);
-      }
-    }
-  }
 }
 
 async function grantFlatXpReward(
@@ -636,6 +595,9 @@ export class TownRoom extends Room {
   private dodgeHandlerRegistered = false;
   private healingFlaskHandlerRegistered = false;
   private skillSlotHandlerRegistered = false;
+  private vendorBuyHandlerRegistered = false;
+  private vendorSellHandlerRegistered = false;
+  private stashTransferHandlerRegistered = false;
 
   public override async onCreate(options: TownRoomJoinOptions): Promise<void> {
     const log = createRoomLogger(
@@ -662,6 +624,9 @@ export class TownRoom extends Room {
     this.registerDodgeHandler(log);
     this.registerHealingFlaskHandler(log);
     this.registerSkillSlotHandler(log);
+    this.registerVendorBuyHandler(log);
+    this.registerVendorSellHandler(log);
+    this.registerStashTransferHandler(log);
     this.setSimulationInterval((deltaMs: number) => {
       const state = this.state as TownRoomState;
       stepTownRoomMovement(state, deltaMs, {
@@ -811,6 +776,39 @@ export class TownRoom extends Room {
       resolvedUserId,
     );
 
+    // Task 333D — Load persisted objective state for this character
+    // so progress, completion and reward-granted status survive
+    // reconnects. Only the first objective in the notice board
+    // sequence that is not yet reward-granted is relevant; this is
+    // a single-objective foundation, not a full quest journal.
+    const objectiveRepo = new ObjectiveRepository();
+    let persistedObjective: {
+      objectiveId: string;
+      currentProgress: number;
+      requiredProgress: number;
+      completed: boolean;
+      rewardGranted: boolean;
+    } | undefined;
+    for (const candidateId of NOTICE_BOARD_OBJECTIVE_SEQUENCE) {
+      const objectiveRow = await objectiveRepo.findByCharacterAndObjective(characterId.toString(), candidateId);
+      if (objectiveRow !== null && !objectiveRow.rewardGranted) {
+        persistedObjective = {
+          objectiveId: objectiveRow.objectiveId,
+          currentProgress: objectiveRow.currentProgress,
+          requiredProgress: objectiveRow.requiredProgress,
+          completed: objectiveRow.completed,
+          rewardGranted: objectiveRow.rewardGranted,
+        };
+        break;
+      }
+      // If reward is granted but the character has this objective,
+      // keep scanning for the next uncompleted one.
+      if (objectiveRow !== null && objectiveRow.rewardGranted) {
+        continue;
+      }
+      break; // No state at all means the character hasn't started this one.
+    }
+
     // Delegate presence building (spawn point resolution + initial
     // world position copy) to a dedicated helper so this room file
     // stays a thin Colyseus shell.
@@ -829,6 +827,7 @@ export class TownRoom extends Room {
       restoredLocationZoneId: result.character.lastLocationZoneId ?? undefined,
       restoredLocationX: result.character.lastLocationX ?? undefined,
       restoredLocationY: result.character.lastLocationY ?? undefined,
+      objectiveState: persistedObjective,
     });
 
     // Task 299 — Town Rest Refill: restore HP and flask charges to
@@ -1104,7 +1103,7 @@ export class TownRoom extends Room {
     }
     this.interactHandlerRegistered = true;
 
-    this.onMessage("request_interact", (client: Client, raw: unknown) => {
+    this.onMessage("request_interact", async (client: Client, raw: unknown) => {
       const state = this.state as TownRoomState;
       const message = raw as Partial<RequestInteractClientMessage> | null;
 
@@ -1191,19 +1190,136 @@ export class TownRoom extends Room {
       // Send response message to the requesting client
       const responseMessage = getInteractableResponseMessage(message.objectId);
       if (message.objectId === "nightmarket_notice_board_01") {
-        // If the player already has an active objective that is not yet
-        // completed and not yet rewarded, re-interacting just re-sends
-        // the current state without resetting or duplicating.
-        if (player.hasObjective && player.objectiveId.length > 0 && !player.objectiveCompleted && !player.objectiveRewardGranted) {
+        // Task 333C — Turn-in flow for the completed notice board
+        // objective. The flow is:
+        //  1. Objective is completed AND reward not yet granted → turn
+        //     it in, grant copper reward, mark rewardGranted, clear
+        //     the HUD objective state, send interact_response with
+        //     localized turn-in feedback.
+        //  2. Objective is completed AND reward already granted → show
+        //     safe "already completed" message.
+        //  3. Objective is active but not completed → re-send current
+        //     state (no duplicate, no reset).
+        //  4. No active objective → start next available one in the
+        //     sequence, or show "no more notices" if done.
+        // Task 333E — Reward granting persists rewardGranted = true
+        // BEFORE granting copper to prevent duplicate reward on
+        // reconnect/crash. HUD display fields are cleared but
+        // objectiveId and objectiveRewardGranted are kept so
+        // findNextNoticeBoardObjective can skip completed objectives.
+        if (player.hasObjective && player.objectiveId.length > 0 && player.objectiveCompleted && !player.objectiveRewardGranted) {
+          // Turn in: persist rewardGranted, grant copper, clear HUD.
+          const activeObjective = getActiveObjectiveContent(player);
+          if (activeObjective !== undefined) {
+            const turnInCharId = player.characterId;
+            const turnInObjId = player.objectiveId;
+            const turnInLabel = player.objectiveLabel;
+            const copperReward = activeObjective.copperReward;
+
+            // Persist rewardGranted = true to DB FIRST. This
+            // prevents duplicate copper on reconnect/crash.
+            try {
+              await new ObjectiveRepository().markRewardGranted(
+                turnInCharId.toString(),
+                turnInObjId,
+              );
+            } catch {
+              // Persistence failed — do not grant reward.
+              return;
+            }
+
+            // Grant copper reward (awaited, not fire-and-forget).
+            if (Number.isFinite(copperReward) && copperReward > 0) {
+              const rep = new CharacterRepository();
+              const total = await rep.incrementMoneyCopper(turnInCharId.toString(), copperReward);
+              if (total !== null) {
+                const currencyMsg: import("@doomscrolls/shared").CurrencyPickedUpServerMessage = {
+                  type: "currency_picked_up",
+                  characterId: turnInCharId,
+                  gainedCopper: copperReward,
+                  totalMoneyCopper: total,
+                };
+                try { client.send("currency_picked_up", currencyMsg); } catch {}
+              }
+            }
+
+            // Clear HUD display fields but keep objectiveId and
+            // objectiveRewardGranted so findNextNoticeBoardObjective
+            // can properly skip completed objectives on re-interact.
+            player.hasObjective = false;
+            player.objectiveLabel = "";
+            player.objectiveCurrent = 0;
+            player.objectiveTarget = 0;
+            player.objectiveCompleted = false;
+
+            // Send interact_response with localized turn-in feedback.
+            const turnInText = copperReward > 0
+              ? t("objective.turn_in_complete_reward_copper_only" as never, { copperReward } as never)
+              : t("objective.ready_to_turn_in" as never, { title: turnInLabel } as never);
+            const turnInMessage: import("@doomscrolls/shared").InteractResponseServerMessage = {
+              type: "interact_response",
+              objectId: message.objectId,
+              message: turnInText,
+            };
+            try { client.send("interact_response", turnInMessage); } catch {}
+            log.debug?.(
+              { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, characterId: turnInCharId, objectiveId: turnInObjId, copperReward },
+              "TownRoom notice board turn-in accepted: reward granted.",
+            );
+          }
+        } else if (player.hasObjective && player.objectiveId.length > 0 && player.objectiveCompleted && player.objectiveRewardGranted) {
+          // Already completed and rewarded — show safe message.
+          // The HUD objective tracker was already cleared on turn-in;
+          // this is the re-interact case for the same completed objective.
+          const doneMessage: import("@doomscrolls/shared").InteractResponseServerMessage = {
+            type: "interact_response",
+            objectId: message.objectId,
+            message: t("objective.already_completed" as never),
+          };
+          try { client.send("interact_response", doneMessage); } catch {}
+        } else if (player.hasObjective && player.objectiveId.length > 0 && !player.objectiveCompleted && !player.objectiveRewardGranted) {
+          // Active objective that is not yet complete — re-send current
+          // state without resetting or duplicating.
           const reSend = buildObjectiveUpdatedMessage(player, player.objectiveId);
           try { client.send("objective_updated", reSend); } catch {}
         } else {
-          // Find the next available objective in the sequence (skips
-          // already-completed ones where reward was granted).
+          // No active objective — find the next available one in the
+          // sequence (skips already-completed ones where reward was
+          // granted).
           const next = findNextNoticeBoardObjective(player);
           if (next !== undefined) {
             const objectiveUpdate = startNoticeBoardObjective(player, next.objective);
+            // Task 333E — Persist objective start immediately so
+            // progress = 0 survives reconnect without waiting for
+            // the first kill.
+            void new ObjectiveRepository().create(
+              player.characterId.toString(),
+              next.objective.id,
+              next.objective.requiredKills,
+            ).catch(() => {});
+
+            // Send objective_updated to sync schema state
             try { client.send("objective_updated", objectiveUpdate); } catch {}
+
+            // Task 337: Send interact_response with improved start feedback
+            // mentioning the route/waypoint destination.
+            const startEnemyNames = next.objective.targetEnemyIds.map((eid) => {
+              const enemyDef = contentRegistry.enemies.get(eid);
+              return enemyDef !== undefined ? t(enemyDef.nameKey) : eid;
+            });
+            const targetEnemyLabel = startEnemyNames.length === 1
+              ? startEnemyNames[0]
+              : startEnemyNames.join(" / ");
+            const startFeedback = t("objective.accepted_with_route" as never, {
+              title: objectiveUpdate.label,
+              targetEnemy: targetEnemyLabel,
+            } as never);
+            const startMessage: import("@doomscrolls/shared").InteractResponseServerMessage = {
+              type: "interact_response",
+              objectId: message.objectId,
+              message: startFeedback,
+            };
+            try { client.send("interact_response", startMessage); } catch {}
           } else {
             // All objectives completed – clear hasObjective so the
             // tracker does not show stale completed data, but keep the
@@ -1213,7 +1329,7 @@ export class TownRoom extends Room {
             const doneMessage: import("@doomscrolls/shared").InteractResponseServerMessage = {
               type: "interact_response",
               objectId: message.objectId,
-              message: "No more notices for now.",
+              message: t("objective.no_more_notices" as never),
             };
             try { client.send("interact_response", doneMessage); } catch {}
           }
@@ -1249,6 +1365,120 @@ export class TownRoom extends Room {
         return;
       }
 
+      if (message.objectId === "nightmarket_stash_keeper_01") {
+        try {
+          const stashItems = await new ItemRepository().listStashItems(player.characterId.toString());
+          const stashListed: import("@doomscrolls/shared").StashItemsListedServerMessage = {
+            type: "stash_items_listed",
+            objectId: message.objectId,
+            serviceId: "nightmarket_stash_keeper",
+            items: stashItems.map((item) => toItemInstanceDto(item)),
+          };
+          try {
+            client.send("stash_items_listed", stashListed);
+          } catch {}
+        } catch {
+          const rejected: import("@doomscrolls/shared").StashItemsListRejectedServerMessage = {
+            type: "stash_items_list_rejected",
+            objectId: message.objectId,
+            serviceId: "nightmarket_stash_keeper",
+            reason: "list_failed",
+          };
+          try {
+            client.send("stash_items_list_rejected", rejected);
+          } catch {}
+        }
+      }
+
+      if (message.objectId === "nightmarket_waypoint_01" || message.objectId === "nightmarket_waypoint_blackwire_combat_edge") {
+        try {
+          const waypointOpened = await activateAndBuildWaypointPanel(player.characterId, message.objectId);
+          if (waypointOpened !== null) {
+            try {
+              client.send("waypoint_opened", waypointOpened);
+            } catch {}
+          }
+        } catch {
+          const response: InteractResponseServerMessage = {
+            type: "interact_response",
+            objectId: message.objectId,
+            message: getWaypointRejectedMessage("travel_failed"),
+          };
+          try {
+            client.send("interact_response", response);
+          } catch {}
+        }
+        return;
+      }
+
+      if (
+        message.objectId === "nightmarket_blackwire_gate_01"
+        || message.objectId === "nightmarket_blackwire_return_01"
+      ) {
+        try {
+          const result = await resolveRouteTravel(state.zoneId, message.objectId);
+          if (!result.ok) {
+            const rejected: import("@doomscrolls/shared").RequestRouteTravelRejectedServerMessage = {
+              type: "request_route_travel_rejected",
+              objectId: message.objectId,
+              reason: result.reason,
+            };
+            try { client.send("request_route_travel_rejected", rejected); } catch {}
+            return;
+          }
+
+          player.x = result.x;
+          player.y = result.y;
+          player.targetX = result.x;
+          player.targetY = result.y;
+          // Task 334 — Immediately clear movement target and pending
+          // action so stale move-to-interact/attack/pickup state cannot
+          // fire after the player has teleported to a new position.
+          player.hasMovementTarget = false;
+          clearPendingAction(player);
+
+          try {
+            await new CharacterService().updateCharacterLocation(
+              player.characterId,
+              result.zoneId,
+              result.x,
+              result.y,
+              Math.max(0, Math.min(player.maxHp, player.hp)),
+              Math.max(0, Math.min(player.maxFlaskCharges, Math.floor(player.flaskCharges))),
+            );
+          } catch {
+            const rejected: import("@doomscrolls/shared").RequestRouteTravelRejectedServerMessage = {
+              type: "request_route_travel_rejected",
+              objectId: message.objectId,
+              reason: "travel_failed",
+            };
+            try { client.send("request_route_travel_rejected", rejected); } catch {}
+            return;
+          }
+
+          // Client receives new player position via Colyseus schema
+          // sync; no client-side fake transition is sent.
+          const accepted: import("@doomscrolls/shared").RequestRouteTravelAcceptedServerMessage = {
+            type: "request_route_travel_accepted",
+            objectId: result.objectId,
+            zoneId: result.zoneId,
+            x: result.x,
+            y: result.y,
+            message: `${t(result.messageKey as never)} ${t(result.areaKey as never)}`,
+            areaLabel: t(result.areaKey as never),
+          };
+          try { client.send("request_route_travel_accepted", accepted); } catch {}
+        } catch {
+          const response: InteractResponseServerMessage = {
+            type: "interact_response",
+            objectId: message.objectId,
+            message: getRouteRejectedMessage("travel_failed"),
+          };
+          try { client.send("interact_response", response); } catch {}
+        }
+        return;
+      }
+
       const response: InteractResponseServerMessage = {
         type: "interact_response",
         objectId: message.objectId,
@@ -1273,6 +1503,92 @@ export class TownRoom extends Room {
         },
         "TownRoom request_interact accepted and response sent.",
       );
+    });
+
+    this.onMessage("request_waypoint_travel", async (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+      const message = raw as { waypointId?: unknown } | null;
+
+      if (player === undefined || player.lifeState !== "alive") {
+        const rejected: import("@doomscrolls/shared").RequestWaypointTravelRejectedServerMessage = {
+          type: "request_waypoint_travel_rejected",
+          reason: "travel_failed",
+          ...(typeof message?.waypointId === "string" ? { waypointId: message.waypointId } : {}),
+        };
+        try { client.send("request_waypoint_travel_rejected", rejected); } catch {}
+        return;
+      }
+
+      if (typeof message?.waypointId !== "string" || message.waypointId.length === 0) {
+        const rejected: import("@doomscrolls/shared").RequestWaypointTravelRejectedServerMessage = {
+          type: "request_waypoint_travel_rejected",
+          reason: "invalid_destination",
+        };
+        try { client.send("request_waypoint_travel_rejected", rejected); } catch {}
+        return;
+      }
+
+      try {
+        const result = await resolveWaypointTravel(player.characterId, state.zoneId, message.waypointId);
+        if (!result.ok) {
+          const rejected: import("@doomscrolls/shared").RequestWaypointTravelRejectedServerMessage = {
+            type: "request_waypoint_travel_rejected",
+            waypointId: message.waypointId,
+            reason: result.reason,
+          };
+          try { client.send("request_waypoint_travel_rejected", rejected); } catch {}
+          return;
+        }
+
+        player.x = result.x;
+        player.y = result.y;
+        player.targetX = result.x;
+        player.targetY = result.y;
+        // Task 334 — Immediately clear movement target and pending
+        // action so stale move-to-interact/attack/pickup state cannot
+        // fire after the player has teleported to a new position.
+        player.hasMovementTarget = false;
+        clearPendingAction(player);
+
+        try {
+          await new CharacterService().updateCharacterLocation(
+            player.characterId,
+            result.zoneId,
+            result.x,
+            result.y,
+            Math.max(0, Math.min(player.maxHp, player.hp)),
+            Math.max(0, Math.min(player.maxFlaskCharges, Math.floor(player.flaskCharges))),
+          );
+        } catch {
+          const rejected: import("@doomscrolls/shared").RequestWaypointTravelRejectedServerMessage = {
+            type: "request_waypoint_travel_rejected",
+            waypointId: message.waypointId,
+            reason: "travel_failed",
+          };
+          try { client.send("request_waypoint_travel_rejected", rejected); } catch {}
+          return;
+        }
+
+        // Client receives new player position via Colyseus schema
+        // sync; no client-side fake transition is sent.
+        const accepted: import("@doomscrolls/shared").RequestWaypointTravelAcceptedServerMessage = {
+          type: "request_waypoint_travel_accepted",
+          waypointId: result.waypointId,
+          zoneId: result.zoneId,
+          x: result.x,
+          y: result.y,
+          message: t("town_service.waypoint.travel_success" as never),
+        };
+        try { client.send("request_waypoint_travel_accepted", accepted); } catch {}
+      } catch {
+        const rejected: import("@doomscrolls/shared").RequestWaypointTravelRejectedServerMessage = {
+          type: "request_waypoint_travel_rejected",
+          waypointId: message.waypointId,
+          reason: "travel_failed",
+        };
+        try { client.send("request_waypoint_travel_rejected", rejected); } catch {}
+      }
     });
   }
 
@@ -1445,15 +1761,36 @@ export class TownRoom extends Room {
         ? spawnWorldLootOnEnemyDefeat(state, validation.enemy, now)
         : [];
       if (damageResult.defeated) {
-        void advanceNoticeBoardObjective(player, validation.enemy.enemyId, (type, payload) => {
+        // Task 333B — Objective progress increment (single-objective
+        // foundation only). The new helper only tracks progress and
+        // sets the completed flag when the required kill count is
+        // reached; it does NOT grant rewards or mark rewardGranted.
+        // Completion/turn-in and reward logic is handled by the
+        // notice board interaction handler (explicit turn-in path);
+        // kill progress is reward-free.
+        const progressResult = advanceObjectiveProgress(player, validation.enemy.enemyId, (updated) => {
+          void new ObjectiveRepository().updateProgress(
+            updated.characterId.toString(),
+            updated.objectiveId,
+            updated.currentProgress,
+          ).catch(() => {});
+        });
+        if (progressResult !== undefined) {
+          const progressUpdate: ObjectiveUpdatedServerMessage = {
+            type: "objective_updated",
+            objectiveId: progressResult.objectiveId,
+            label: progressResult.label,
+            descriptionKey: progressResult.descriptionKey,
+            current: progressResult.current,
+            target: progressResult.target,
+            completed: progressResult.completed,
+          };
           try {
-            client.send(type, payload);
+            client.send("objective_updated", progressUpdate);
           } catch {
             // ignore send failures; authoritative state persists
           }
-        }).catch(() => {
-          // keep kill flow authoritative even if temporary objective progression fails
-        });
+        }
         void grantEnemyDefeatXp(player, validation.enemy.enemyId, (type, payload) => {
           try {
             client.send(type, payload);
@@ -2214,9 +2551,27 @@ export class TownRoom extends Room {
 
       if (damageResult.defeated) {
         spawnWorldLootOnEnemyDefeat(state, enemy, now);
-        void advanceNoticeBoardObjective(player, enemy.enemyId, (type, payload) => {
-          try { client.send(type, payload); } catch {}
-        }).catch(() => {});
+        // Task 333B — Objective progress increment (single-objective
+        // foundation only). Same approach as the basic attack handler.
+        const progressResult = advanceObjectiveProgress(player, enemy.enemyId, (updated) => {
+          void new ObjectiveRepository().updateProgress(
+            updated.characterId.toString(),
+            updated.objectiveId,
+            updated.currentProgress,
+          ).catch(() => {});
+        });
+        if (progressResult !== undefined) {
+          const progressUpdate: ObjectiveUpdatedServerMessage = {
+            type: "objective_updated",
+            objectiveId: progressResult.objectiveId,
+            label: progressResult.label,
+            descriptionKey: progressResult.descriptionKey,
+            current: progressResult.current,
+            target: progressResult.target,
+            completed: progressResult.completed,
+          };
+          try { client.send("objective_updated", progressUpdate); } catch {}
+        }
         void grantEnemyDefeatXp(player, enemy.enemyId, (type, payload) => {
           try { client.send(type, payload); } catch {}
         }).catch(() => {});
@@ -2247,6 +2602,364 @@ export class TownRoom extends Room {
         },
         "TownRoom request_use_skill_slot accepted: Grave Spark hit target.",
       );
+    });
+  }
+
+  /**
+   * Task 319 — Register the `request_buy_vendor_item` message handler.
+   *
+   * Validates vendor existence, stock membership, price, player
+   * currency and inventory space, then atomically deducts copper
+   * and creates the inventory item. Sends accepted/rejected
+   * feedback to the originating client.
+   */
+  private registerVendorBuyHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.vendorBuyHandlerRegistered) {
+      return;
+    }
+    this.vendorBuyHandlerRegistered = true;
+
+    this.onMessage("request_buy_vendor_item", async (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const message = raw as { vendorId?: string; stockEntryId?: string } | null;
+
+      if (
+        !message ||
+        typeof message.vendorId !== "string" ||
+        typeof message.stockEntryId !== "string"
+      ) {
+        log.warn?.(
+          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+          "TownRoom request_buy_vendor_item rejected: invalid shape.",
+        );
+        return;
+      }
+
+      const player = state.playerPresence.get(client.sessionId);
+      if (player === undefined || player.lifeState !== "alive") {
+        try {
+          client.send("request_buy_vendor_item_rejected", {
+            type: "request_buy_vendor_item_rejected",
+            reason: "vendor_unavailable",
+          });
+        } catch {}
+        log.warn?.(
+          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+          "TownRoom request_buy_vendor_item rejected: player not found or downed.",
+        );
+        return;
+      }
+
+      const result = await executeVendorBuyItem({
+        characterId: player.characterId,
+        vendorId: message.vendorId,
+        stockEntryId: message.stockEntryId,
+      });
+
+      if (result.ok) {
+        const accepted: import("@doomscrolls/shared").RequestBuyVendorItemAcceptedServerMessage = {
+          type: "request_buy_vendor_item_accepted",
+          stockEntryId: result.stockEntryId,
+          itemId: result.itemId,
+          priceCopper: result.priceCopper,
+          remainingCopper: result.remainingCopper,
+        };
+        try { client.send("request_buy_vendor_item_accepted", accepted); } catch {}
+
+        // Also send a currency_picked_up message so the client can
+        // update the HUD money display without waiting for /me.
+        try {
+          client.send("currency_picked_up", {
+            type: "currency_picked_up",
+            characterId: player.characterId,
+            gainedCopper: 0,
+            totalMoneyCopper: result.remainingCopper,
+          });
+        } catch {}
+
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            stockEntryId: result.stockEntryId,
+            itemId: result.itemId,
+            priceCopper: result.priceCopper,
+            remainingCopper: result.remainingCopper,
+          },
+          "TownRoom request_buy_vendor_item accepted: item purchased.",
+        );
+      } else {
+        try {
+          client.send("request_buy_vendor_item_rejected", {
+            type: "request_buy_vendor_item_rejected",
+            reason: result.reason,
+            stockEntryId: message.stockEntryId,
+          });
+        } catch {}
+
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            reason: result.reason,
+          },
+          "TownRoom request_buy_vendor_item rejected.",
+        );
+      }
+    });
+  }
+
+  /**
+   * Task 320 — Register the `request_sell_item` message handler.
+   *
+   * Validates vendor existence, item ownership, equipment state,
+   * sellability and price, then atomically deletes the item and
+   * awards copper. Sends accepted/rejected feedback to the
+   * originating client.
+   */
+  private registerVendorSellHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.vendorSellHandlerRegistered) {
+      return;
+    }
+    this.vendorSellHandlerRegistered = true;
+
+    this.onMessage("request_sell_item", async (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const message = raw as { vendorId?: string; itemInstanceId?: string } | null;
+
+      if (
+        !message ||
+        typeof message.vendorId !== "string" ||
+        typeof message.itemInstanceId !== "string"
+      ) {
+        log.warn?.(
+          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+          "TownRoom request_sell_item rejected: invalid shape.",
+        );
+        return;
+      }
+
+      const player = state.playerPresence.get(client.sessionId);
+      if (player === undefined || player.lifeState !== "alive") {
+        try {
+          client.send("request_sell_item_rejected", {
+            type: "request_sell_item_rejected",
+            reason: "vendor_unavailable",
+          });
+        } catch {}
+        log.warn?.(
+          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+          "TownRoom request_sell_item rejected: player not found or downed.",
+        );
+        return;
+      }
+
+      const result = await executeVendorSellItem({
+        characterId: player.characterId,
+        vendorId: message.vendorId,
+        itemInstanceId: message.itemInstanceId,
+      });
+
+      if (result.ok) {
+        const accepted: import("@doomscrolls/shared").RequestSellItemAcceptedServerMessage = {
+          type: "request_sell_item_accepted",
+          itemInstanceId: result.itemInstanceId,
+          definitionId: result.definitionId,
+          sellPriceCopper: result.sellPriceCopper,
+          remainingCopper: result.remainingCopper,
+        };
+        try { client.send("request_sell_item_accepted", accepted); } catch {}
+
+        // Also send a currency_picked_up message so the client can
+        // update the HUD money display without waiting for /me.
+        try {
+          client.send("currency_picked_up", {
+            type: "currency_picked_up",
+            characterId: player.characterId,
+            gainedCopper: result.sellPriceCopper,
+            totalMoneyCopper: result.remainingCopper,
+          });
+        } catch {}
+
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            itemInstanceId: result.itemInstanceId,
+            definitionId: result.definitionId,
+            sellPriceCopper: result.sellPriceCopper,
+            remainingCopper: result.remainingCopper,
+          },
+          "TownRoom request_sell_item accepted: item sold.",
+        );
+      } else {
+        try {
+          client.send("request_sell_item_rejected", {
+            type: "request_sell_item_rejected",
+            reason: result.reason,
+            itemInstanceId: message.itemInstanceId,
+          });
+        } catch {}
+
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            reason: result.reason,
+          },
+          "TownRoom request_sell_item rejected.",
+        );
+      }
+    });
+  }
+
+  private registerStashTransferHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.stashTransferHandlerRegistered) {
+      return;
+    }
+    this.stashTransferHandlerRegistered = true;
+
+    this.onMessage("request_store_inventory_item_in_stash", async (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+      const message = raw as {
+        serviceId?: unknown;
+        itemInstanceId?: unknown;
+        pageIndex?: unknown;
+        x?: unknown;
+        y?: unknown;
+      } | null;
+
+      if (
+        message === null ||
+        typeof message !== "object" ||
+        typeof message.serviceId !== "string" ||
+        typeof message.itemInstanceId !== "string"
+      ) {
+        try {
+          client.send("request_store_inventory_item_in_stash_rejected", {
+            type: "request_store_inventory_item_in_stash_rejected",
+            serviceId: "nightmarket_stash_keeper",
+            reason: "stash_unavailable",
+          });
+        } catch {}
+        return;
+      }
+
+      if (player === undefined || player.lifeState !== "alive") {
+        try {
+          client.send("request_store_inventory_item_in_stash_rejected", {
+            type: "request_store_inventory_item_in_stash_rejected",
+            serviceId: message.serviceId,
+            itemInstanceId: message.itemInstanceId,
+            reason: "stash_unavailable",
+          });
+        } catch {}
+        return;
+      }
+
+      const result = await executeStoreInventoryItemInStash({
+        characterId: player.characterId.toString(),
+        serviceId: message.serviceId,
+        itemInstanceId: message.itemInstanceId,
+        ...(typeof message.pageIndex === "number" ? { pageIndex: message.pageIndex } : {}),
+        ...(typeof message.x === "number" ? { x: message.x } : {}),
+        ...(typeof message.y === "number" ? { y: message.y } : {}),
+      });
+
+      if (result.ok) {
+        try {
+          client.send("request_store_inventory_item_in_stash_accepted", {
+            type: "request_store_inventory_item_in_stash_accepted",
+            serviceId: message.serviceId,
+            itemInstanceId: result.itemInstanceId,
+            stashItems: result.stashItems,
+          });
+        } catch {}
+        return;
+      }
+
+      log.debug?.({ roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, reason: result.reason }, "TownRoom request_store_inventory_item_in_stash rejected.");
+      try {
+        client.send("request_store_inventory_item_in_stash_rejected", {
+          type: "request_store_inventory_item_in_stash_rejected",
+          serviceId: message.serviceId,
+          itemInstanceId: message.itemInstanceId,
+          reason: result.reason,
+        });
+      } catch {}
+    });
+
+    this.onMessage("request_take_stash_item_to_inventory", async (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+      const message = raw as { serviceId?: unknown; itemInstanceId?: unknown } | null;
+
+      if (
+        message === null ||
+        typeof message !== "object" ||
+        typeof message.serviceId !== "string" ||
+        typeof message.itemInstanceId !== "string"
+      ) {
+        try {
+          client.send("request_take_stash_item_to_inventory_rejected", {
+            type: "request_take_stash_item_to_inventory_rejected",
+            serviceId: "nightmarket_stash_keeper",
+            reason: "stash_unavailable",
+          });
+        } catch {}
+        return;
+      }
+
+      if (player === undefined || player.lifeState !== "alive") {
+        try {
+          client.send("request_take_stash_item_to_inventory_rejected", {
+            type: "request_take_stash_item_to_inventory_rejected",
+            serviceId: message.serviceId,
+            itemInstanceId: message.itemInstanceId,
+            reason: "stash_unavailable",
+          });
+        } catch {}
+        return;
+      }
+
+      const result = await executeTakeStashItemToInventory({
+        characterId: player.characterId.toString(),
+        serviceId: message.serviceId,
+        itemInstanceId: message.itemInstanceId,
+      });
+
+      if (result.ok) {
+        try {
+          client.send("request_take_stash_item_to_inventory_accepted", {
+            type: "request_take_stash_item_to_inventory_accepted",
+            serviceId: message.serviceId,
+            itemInstanceId: result.itemInstanceId,
+            stashItems: result.stashItems,
+          });
+        } catch {}
+        return;
+      }
+
+      log.debug?.({ roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, reason: result.reason }, "TownRoom request_take_stash_item_to_inventory rejected.");
+      try {
+        client.send("request_take_stash_item_to_inventory_rejected", {
+          type: "request_take_stash_item_to_inventory_rejected",
+          serviceId: message.serviceId,
+          itemInstanceId: message.itemInstanceId,
+          reason: result.reason,
+        });
+      } catch {}
     });
   }
 
@@ -2540,4 +3253,12 @@ export class TownRoom extends Room {
     });
   }
 }
+
+
+
+
+
+
+
+
 

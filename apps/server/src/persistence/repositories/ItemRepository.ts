@@ -10,6 +10,9 @@ export interface CreateItemInstanceData {
   readonly inventoryPage?: number;
   readonly inventoryX?: number;
   readonly inventoryY?: number;
+  readonly stashPage?: number;
+  readonly stashX?: number;
+  readonly stashY?: number;
   readonly equipmentSlot?: string;
   readonly roomId?: string;
   readonly zoneId?: string;
@@ -27,6 +30,9 @@ export interface UpdateItemLocationData {
   readonly inventoryPage?: number | null;
   readonly inventoryX?: number | null;
   readonly inventoryY?: number | null;
+  readonly stashPage?: number | null;
+  readonly stashX?: number | null;
+  readonly stashY?: number | null;
   readonly equipmentSlot?: string | null;
   readonly roomId?: string | null;
   readonly zoneId?: string | null;
@@ -57,6 +63,16 @@ export class ItemRepository {
     });
   }
 
+  public listStashItems(characterId: string) {
+    return this.db.itemInstance.findMany({
+      where: {
+        ownerCharacterId: characterId,
+        locationType: ItemLocationType.STASH,
+      },
+      orderBy: [{ stashPage: "asc" }, { stashY: "asc" }, { stashX: "asc" }, { createdAt: "asc" }],
+    });
+  }
+
   public listEquippedItems(characterId: string) {
     return this.db.itemInstance.findMany({
       where: {
@@ -73,5 +89,13 @@ export class ItemRepository {
 
   public updateItemLocation(itemInstanceId: string, data: UpdateItemLocationData) {
     return this.db.itemInstance.update({ where: { id: itemInstanceId }, data });
+  }
+
+  /**
+   * Permanently remove an item instance from the database.
+   * Used by vendor sell to atomically delete the sold item.
+   */
+  public deleteItemInstance(itemInstanceId: string) {
+    return this.db.itemInstance.delete({ where: { id: itemInstanceId } });
   }
 }

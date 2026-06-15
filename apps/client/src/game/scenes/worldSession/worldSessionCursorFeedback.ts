@@ -7,7 +7,6 @@
  */
 
 import Phaser from "phaser";
-import { t } from "@doomscrolls/localization";
 
 export type HoverTargetType =
   | "enemy"

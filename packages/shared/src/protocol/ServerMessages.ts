@@ -1,5 +1,13 @@
 import type { CharacterDetails } from "../character/CharacterTypes";
 import type { CharacterCorpseState } from "../character/DeathTypes";
+import type { RequestBuyVendorItemRejectedReason } from "../room/VendorBuyTypes";
+import type { RequestSellItemRejectedReason } from "../room/VendorSellTypes";
+import type {
+  RequestStoreInventoryItemInStashRejectedReason,
+  RequestTakeStashItemToInventoryRejectedReason,
+  StashItemsListRejectedReason,
+} from "../room/StashTypes";
+import type { WaypointDestinationEntry, WaypointRejectedReason } from "../room/WaypointTypes";
 import type { EquipmentLoadout } from "../inventory/EquipmentTypes";
 import type { InventoryGrid } from "../inventory/InventoryTypes";
 import type { ItemInstance } from "../inventory/ItemTypes";
@@ -332,9 +340,11 @@ export interface ObjectiveUpdatedServerMessage {
   readonly type: "objective_updated";
   readonly objectiveId: string;
   readonly label: string;
+  readonly descriptionKey?: string;
   readonly current: number;
   readonly target: number;
   readonly completed: boolean;
+  readonly readyToTurnIn?: boolean;
   readonly xpReward?: number;
   readonly copperReward?: number;
 }
@@ -367,6 +377,133 @@ export interface TownRestRefillServerMessage {
   readonly type: "town_rest_refill";
   readonly restoredHp: number;
   readonly restoredFlaskCharges: number;
+}
+
+// ---------------------------------------------------------------------------
+// Task 319 — Vendor Foundation: Server-Authoritative Buy Item.
+//
+// Server sends accepted/rejected feedback after validating a vendor buy
+// request. The client never decides the price or item placement.
+// ---------------------------------------------------------------------------
+export interface RequestBuyVendorItemAcceptedServerMessage {
+  readonly type: "request_buy_vendor_item_accepted";
+  readonly stockEntryId: string;
+  readonly itemId: string;
+  readonly priceCopper: number;
+  readonly remainingCopper: number;
+}
+
+export interface RequestBuyVendorItemRejectedServerMessage {
+  readonly type: "request_buy_vendor_item_rejected";
+  readonly reason: RequestBuyVendorItemRejectedReason;
+  readonly stockEntryId?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Task 320 — Vendor Foundation: Server-Authoritative Sell Item.
+//
+// Server sends accepted/rejected feedback after validating a vendor sell
+// request. The client never decides the sell price.
+// ---------------------------------------------------------------------------
+export interface RequestSellItemAcceptedServerMessage {
+  readonly type: "request_sell_item_accepted";
+  readonly itemInstanceId: string;
+  readonly definitionId: string;
+  readonly sellPriceCopper: number;
+  readonly remainingCopper: number;
+}
+
+export interface RequestSellItemRejectedServerMessage {
+  readonly type: "request_sell_item_rejected";
+  readonly reason: RequestSellItemRejectedReason;
+  readonly itemInstanceId?: string;
+}
+
+export interface StashItemsListedServerMessage {
+  readonly type: "stash_items_listed";
+  readonly objectId: string;
+  readonly serviceId: string;
+  readonly items: readonly ItemInstance[];
+}
+
+export interface StashItemsListRejectedServerMessage {
+  readonly type: "stash_items_list_rejected";
+  readonly objectId: string;
+  readonly serviceId: string;
+  readonly reason: StashItemsListRejectedReason;
+}
+
+export interface RequestStoreInventoryItemInStashAcceptedServerMessage {
+  readonly type: "request_store_inventory_item_in_stash_accepted";
+  readonly serviceId: string;
+  readonly itemInstanceId: string;
+  readonly stashItems: readonly ItemInstance[];
+}
+
+export interface RequestStoreInventoryItemInStashRejectedServerMessage {
+  readonly type: "request_store_inventory_item_in_stash_rejected";
+  readonly serviceId: string;
+  readonly itemInstanceId?: string;
+  readonly reason: RequestStoreInventoryItemInStashRejectedReason;
+}
+
+export interface RequestTakeStashItemToInventoryAcceptedServerMessage {
+  readonly type: "request_take_stash_item_to_inventory_accepted";
+  readonly serviceId: string;
+  readonly itemInstanceId: string;
+  readonly stashItems: readonly ItemInstance[];
+}
+
+export interface RequestTakeStashItemToInventoryRejectedServerMessage {
+  readonly type: "request_take_stash_item_to_inventory_rejected";
+  readonly serviceId: string;
+  readonly itemInstanceId?: string;
+  readonly reason: RequestTakeStashItemToInventoryRejectedReason;
+}
+
+export interface WaypointOpenedServerMessage {
+  readonly type: "waypoint_opened";
+  readonly objectId: string;
+  readonly waypointId: string;
+  readonly activated: boolean;
+  readonly destinations: readonly WaypointDestinationEntry[];
+}
+
+export interface RequestWaypointTravelAcceptedServerMessage {
+  readonly type: "request_waypoint_travel_accepted";
+  readonly waypointId: string;
+  readonly zoneId: ZoneId;
+  readonly x: number;
+  readonly y: number;
+  readonly message: string;
+}
+
+export interface RequestWaypointTravelRejectedServerMessage {
+  readonly type: "request_waypoint_travel_rejected";
+  readonly waypointId?: string;
+  readonly reason: WaypointRejectedReason;
+}
+
+export type RequestRouteTravelRejectedReason =
+  | "route_unavailable"
+  | "destination_unavailable"
+  | "invalid_destination"
+  | "travel_failed";
+
+export interface RequestRouteTravelAcceptedServerMessage {
+  readonly type: "request_route_travel_accepted";
+  readonly objectId: string;
+  readonly zoneId: ZoneId;
+  readonly x: number;
+  readonly y: number;
+  readonly message: string;
+  readonly areaLabel: string;
+}
+
+export interface RequestRouteTravelRejectedServerMessage {
+  readonly type: "request_route_travel_rejected";
+  readonly objectId?: string;
+  readonly reason: RequestRouteTravelRejectedReason;
 }
 
 export type ServerRoomMessage =
@@ -404,4 +541,19 @@ export type ServerRoomMessage =
   | RequestUseSkillSlotRejectedServerMessage
   | CurrencyPickedUpServerMessage
   | TownRestRefillServerMessage
+  | RequestBuyVendorItemAcceptedServerMessage
+  | RequestBuyVendorItemRejectedServerMessage
+  | RequestSellItemAcceptedServerMessage
+  | RequestSellItemRejectedServerMessage
+  | StashItemsListedServerMessage
+  | StashItemsListRejectedServerMessage
+  | RequestStoreInventoryItemInStashAcceptedServerMessage
+  | RequestStoreInventoryItemInStashRejectedServerMessage
+  | RequestTakeStashItemToInventoryAcceptedServerMessage
+  | RequestTakeStashItemToInventoryRejectedServerMessage
+  | WaypointOpenedServerMessage
+  | RequestWaypointTravelAcceptedServerMessage
+  | RequestWaypointTravelRejectedServerMessage
+  | RequestRouteTravelAcceptedServerMessage
+  | RequestRouteTravelRejectedServerMessage
   | ErrorServerMessage;

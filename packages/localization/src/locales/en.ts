@@ -63,6 +63,10 @@ export const en = {
   "skill.grave_spark.description":
     "A crackling burst of grave-charged energy that sears a single target.",
 
+  // ── Notice Board Objective Flow ──
+  // Task 337: Improved feedback clarity — start message mentions the
+  // route/waypoint destination, progress shows current/required kills,
+  // ready-to-turn-in tells player to return, turn-in shows copper gained.
   "objective.cull_trashboars.title": "Cull Trashboars",
   "objective.cull_trashboars.description":
     "Thin the trashboar pack at Blackwire Sewer Edge before it spills deeper into the alleys.",
@@ -70,6 +74,25 @@ export const en = {
   "objective.break_the_brute.description":
     "The trashboar brute is the pack's backbone. Put it down and watch the rest scatter.",
 
+  // Feedback shown when a new objective starts
+  "objective.accepted_with_route": "[ {title} ] Use the Blackwire gate or waypoint to reach the sewers and hunt {targetEnemy}.",
+  // Progress feedback (sent as interact_response when the player interacts while active)
+  "objective.progress_feedback": "[ {title} ] {current}/{target} {targetEnemy} killed.",
+  // Feedback shown when the objective kill target is met
+  "objective.ready_to_turn_in": "All {targetEnemy} eliminated! Return to the Notice Board in Nightmarket Services to collect your reward.",
+  // Turn-in reward feedback uses the same keys but the text is clearer now
+  "objective.turn_in_complete_reward": "Turned in! +{xpReward} XP, +{copperReward} copper",
+  "objective.turn_in_complete_reward_xp_only": "Turned in! +{xpReward} XP",
+  "objective.turn_in_complete_reward_copper_only": "Turned in! +{copperReward} copper",
+
+  // HUD state labels
+  "objective.state.active": "Active",
+  "objective.state.ready_to_turn_in": "Return to Board",
+  "objective.state.completed": "Completed",
+
+  "objective.already_completed": "Already completed — no more work here.",
+
+  // HUD reward line (shown when objective completed but not yet turned in)
   "objective.complete_reward": "Objective complete! +{xpReward} XP, +{copperReward} copper",
   "objective.complete_reward_xp_only": "Objective complete! +{xpReward} XP",
   "objective.complete_reward_copper_only": "Objective complete! +{copperReward} copper",
@@ -187,6 +210,11 @@ export const en = {
   // Future: Diablo-like right orb resource (mana/class resource) — placeholder until class resource system lands
   "world_session.resource": "Resource",
   "world_session.resource_placeholder": "Coming later",
+  "world_session.travel_overlay.route_title": "Traveling",
+  "world_session.travel_overlay.route_message": "Moving to the next area. Your new position will appear only after the server applies the travel.",
+  "world_session.travel_overlay.waypoint_title": "Attuning Waypoint",
+  "world_session.travel_overlay.waypoint_message": "Channeling waypoint travel. Arrival remains server-authoritative.",
+  "world_session.travel_overlay.timeout": "Travel response took too long.",
 
   "world_area.title": "World Area",
   "world_area.click_instruction": "Click inside to move.",
@@ -284,20 +312,85 @@ export const en = {
   "error.missing_localization_key": "Missing localization key: {key}",
 
   "spawn.nightmarket.default": "Nightmarket Arrival",
+  "spawn.nightmarket.blackwire_combat_entry": "Blackwire Combat Entry",
+  "spawn.nightmarket.services_return": "Nightmarket Services Return",
 
   "world_prop.loot_container.name": "Loot Container",
   "world_prop.loot_container.description": "A shared container that may hold valuable finds.",
   "world_prop.loot_container.empty": "The container has already been looted.",
 
   "town_service.vendor_panel.trading_locked": "Trading locked for Core 0.1.",
+  "town_service.vendor_panel.buy_success": "Purchased {itemLabel} for {price}.",
+  "town_service.vendor_panel.buy_rejected.not_enough_currency": "Not enough copper.",
+  "town_service.vendor_panel.buy_rejected.inventory_full": "Inventory full.",
+  "town_service.vendor_panel.buy_rejected.item_unavailable": "Item unavailable.",
+  "town_service.vendor_panel.buy_rejected.vendor_unavailable": "Vendor unavailable.",
+  "town_service.vendor_panel.buy_rejected.invalid_stock_entry": "Item unavailable.",
+  "town_service.vendor_panel.sell_header": "Inventory",
+  "town_service.vendor_panel.sell_empty": "Nothing to sell.",
+  "town_service.vendor_panel.sell_success": "Sold {itemLabel} for {price}.",
+  "town_service.vendor_panel.sell_rejected.vendor_unavailable": "Vendor unavailable.",
+  "town_service.vendor_panel.sell_rejected.item_unavailable": "Item unavailable.",
+  "town_service.vendor_panel.sell_rejected.item_not_owned": "Item not found.",
+  "town_service.vendor_panel.sell_rejected.item_not_sellable": "Cannot sell this item.",
+  "town_service.vendor_panel.sell_rejected.item_equipped": "Unequip before selling.",
+  "town_service.vendor_panel.sell_rejected.invalid_price": "Item unavailable.",
+  "town_service.suspicious_vendor.name": "Suspicious Vendor",
+  "town_service.suspicious_vendor.unavailable": "Vendor trading is not available yet.",
   "town_service.stash_keeper.name": "Stash Keeper",
   "town_service.stash_keeper.unavailable": "Stash storage is not available yet.",
+  "town_service.stash_keeper.panel_title": "Character Stash",
+  "town_service.stash_keeper.foundation_notice": "Store and take items through the real server-authoritative stash service. Drag/drop, sorting, and stash tabs are not implemented yet.",
+  "town_service.stash_keeper.empty": "No persisted stash items yet.",
+  "town_service.stash_keeper.page_position": "Page {page} • X {x} • Y {y}",
+  "town_service.stash_keeper.load_failed": "Could not load stash items.",
+  "town_service.stash_keeper.inventory_header": "Inventory",
+  "town_service.stash_keeper.stash_header": "Stash",
+  "town_service.stash_keeper.store_action": "Store",
+  "town_service.stash_keeper.take_action": "Take",
+  "town_service.stash_keeper.store_success": "Stored {itemLabel}.",
+  "town_service.stash_keeper.take_success": "Took {itemLabel}.",
+  "town_service.stash_keeper.rejected.item_unavailable": "Item unavailable.",
+  "town_service.stash_keeper.rejected.item_not_owned": "Item not found.",
+  "town_service.stash_keeper.rejected.item_not_in_inventory": "Item is not in inventory.",
+  "town_service.stash_keeper.rejected.item_not_in_stash": "Item is not in stash.",
+  "town_service.stash_keeper.rejected.item_equipped": "Unequip before storing.",
+  "town_service.stash_keeper.rejected.inventory_full": "Inventory full.",
+  "town_service.stash_keeper.rejected.stash_full": "Stash full.",
+  "town_service.stash_keeper.rejected.invalid_stash_placement": "Invalid stash placement.",
+  "town_service.stash_keeper.rejected.stash_unavailable": "Stash unavailable.",
+  "ui.close": "Close",
 
   "town_service.trainer.name": "Trainer",
   "town_service.trainer.unavailable": "Training is not available yet.",
 
   "town_service.waypoint.name": "Waypoint",
   "town_service.waypoint.unavailable": "Waypoint activation is not available yet.",
+  "town_service.waypoint.panel_title": "Waypoint",
+  "town_service.waypoint.panel_subtitle": "Choose a discovered destination.",
+  "town_service.waypoint.opened": "Waypoint opened.",
+  "town_service.waypoint.discovered": "Waypoint discovered.",
+  "town_service.waypoint.already_discovered": "Waypoint already discovered.",
+  "town_service.waypoint.empty": "No waypoint destinations available.",
+  "town_service.waypoint.travel_action": "Travel",
+  "town_service.waypoint.travel_success": "Travel complete.",
+  "town_service.waypoint.rejected.waypoint_unavailable": "Waypoint unavailable.",
+  "town_service.waypoint.rejected.destination_unavailable": "Destination locked or unavailable.",
+  "town_service.waypoint.rejected.destination_not_activated": "Destination locked or unavailable.",
+  "town_service.waypoint.rejected.invalid_destination": "Invalid destination.",
+  "town_service.waypoint.rejected.travel_failed": "Travel failed.",
+  "waypoint.destination.nightmarket_arrival": "Nightmarket Arrival",
+  "waypoint.destination.nightmarket_blackwire_combat_edge": "Blackwire Combat Edge",
+
+  "town_service.route.blackwire_gate.prompt": "The Blackwire gate leads toward a hostile sewer edge.",
+  "town_service.route.blackwire_return.prompt": "Return to the Nightmarket service hub.",
+  "town_service.route.travel_success.generic": "Route travel complete.",
+  "town_service.route.travel_success.to_combat": "You push toward",
+  "town_service.route.travel_success.to_hub": "You return to",
+  "town_service.route.rejected.route_unavailable": "That route is unavailable here.",
+  "town_service.route.rejected.destination_unavailable": "That destination is unavailable.",
+  "town_service.route.rejected.invalid_destination": "That route destination is invalid.",
+  "town_service.route.rejected.travel_failed": "Route travel failed.",
 
   "zone.blackwire_sewer_edge.name": "→ Blackwire Sewer Edge",
   "zone.blackwire_sewer_edge.description": "The boundary where Nightmarket alleys give way to sewer tunnels crawling with trashboars.",
@@ -314,6 +407,8 @@ export const en = {
   "world_prop.stash_keeper.label": "Stash Keeper",
   "world_prop.trainer.label": "Trainer",
   "world_prop.waypoint.label": "Waypoint",
+  "world_prop.blackwire_waypoint.label": "Blackwire Waypoint",
+  "world_prop.blackwire_gate.label": "Blackwire Gate",
   "world_prop.market_crates.label": "Market Crates",
   "world_prop.rest_area.label": "Rest Area",
   "world_prop.crate.label": "Crate",
@@ -327,6 +422,7 @@ export const en = {
   "world_prop.sewer_rubble.label": "Sewer Rubble",
   "world_prop.skitter_refuse.label": "Skitter Refuse",
   "world_prop.edge_blackwire_sewer.label": "→ Blackwire Sewer Edge",
+  "world_prop.return_nightmarket_services.label": "← Return to Nightmarket Services",
   "world_prop.sewer_edge_debris.label": "Sewer Edge Debris",
   "world_prop.scrap_pile.label": "Scrap Pile",
   "world_prop.edge_blackwire_deep.label": "→ Blackwire Deep Edge",

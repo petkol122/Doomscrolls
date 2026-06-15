@@ -19,6 +19,7 @@ const INTERACTABLE_PROP_KINDS: ReadonlySet<WorldPropKind> = new Set<WorldPropKin
   "vendor",
   "waypoint",
   "loot_container",
+  "combat_edge",
 ]);
 
 export function initializeTownInteractables(

@@ -1,6 +1,7 @@
-import type { TownServiceContentDefinition, TownServiceId } from "./types";
+import type { ContentLocalizationKey, TownServiceContentDefinition, TownServiceId } from "./types";
 
 const townServiceId = (value: string): TownServiceId => value as TownServiceId;
+const locKey = (value: string): ContentLocalizationKey => value as ContentLocalizationKey;
 
 /**
  * Task 205 — Vendor Preview + Safe-Zone Services Batch
@@ -11,6 +12,13 @@ const townServiceId = (value: string): TownServiceId => value as TownServiceId;
  * placeholder when interacted with.
  */
 export const townServices = [
+  {
+    id: townServiceId("nightmarket_suspicious_vendor"),
+    serviceId: townServiceId("nightmarket_suspicious_vendor"),
+    serviceKind: "vendor",
+    labelKey: locKey("town_service.suspicious_vendor.name"),
+    unavailableMessageKey: locKey("town_service.suspicious_vendor.unavailable")
+  },
   {
     id: townServiceId("nightmarket_stash_keeper"),
     serviceId: townServiceId("nightmarket_stash_keeper"),

@@ -36,6 +36,18 @@ export function toItemLocationDto(item: PrismaItemInstance): ItemLocation {
         x: item.inventoryX,
         y: item.inventoryY,
       };
+    case ItemLocationType.STASH:
+      if (item.stashPage === null || item.stashX === null || item.stashY === null) {
+        throw new Error("Cannot map stash item without stash coordinates");
+      }
+
+      return {
+        type: "stash",
+        characterId: requireString(item.ownerCharacterId, "ItemInstance.ownerCharacterId") as CharacterId,
+        pageIndex: item.stashPage,
+        x: item.stashX,
+        y: item.stashY,
+      };
     case ItemLocationType.EQUIPMENT:
       return {
         type: "equipment",

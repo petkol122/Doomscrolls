@@ -91,6 +91,7 @@ interface EnemyScreenPositionSnapshot {
   readonly worldX: number;
   readonly worldY: number;
   readonly defeated: boolean;
+  readonly isVisible: boolean;
 }
 
 interface WorldLootScreenPositionSnapshot {
@@ -101,16 +102,31 @@ interface WorldLootScreenPositionSnapshot {
   readonly worldY: number;
 }
 
+interface CorpseScreenPositionSnapshot {
+  readonly sessionId: string;
+  readonly x: number;
+  readonly y: number;
+  readonly worldX: number;
+  readonly worldY: number;
+}
+
 interface ProjectedEnemySnapshot {
   readonly enemy: TownRoomEnemySnapshot;
   readonly screenX: number;
   readonly screenY: number;
+  readonly isVisible: boolean;
 }
 
 interface AreaProjectionContext {
   readonly bounds: WorldProjectionBounds;
   readonly viewport: WorldProjectionViewport;
   readonly projectionMode: WorldProjectionMode;
+}
+
+interface AreaWorldProjectionState {
+  readonly projection: AreaProjectionContext;
+  readonly offset: WorldContainerOffset;
+  readonly focusPosition: { readonly x: number; readonly y: number } | null;
 }
 
 interface WorldRectScreenBounds {
@@ -170,8 +186,7 @@ function resolveHoverTarget(
   pointerY: number,
   enemyScreenPositions: ReadonlyMap<string, EnemyScreenPositionSnapshot>,
   lootScreenPositions: ReadonlyMap<string, WorldLootScreenPositionSnapshot>,
-  corpseMarkers: ReadonlyMap<string, Phaser.GameObjects.Container>,
-  worldOffset: WorldContainerOffset,
+  corpseScreenPositions: ReadonlyMap<string, CorpseScreenPositionSnapshot>,
   selfSessionId: string | null,
   selfWorldPosition: { readonly x: number; readonly y: number } | null,
   interactablesView: WorldSessionInteractablesView,
@@ -196,7 +211,7 @@ function resolveHoverTarget(
 
   // Priority 3: Own corpse
   if (findClickedOwnCorpseInteractive(
-    corpseMarkers, pointerX, pointerY, worldOffset, selfSessionId, selfWorldPosition,
+    corpseScreenPositions, pointerX, pointerY, selfSessionId, selfWorldPosition,
   )) {
     return { type: "own_corpse" };
   }
@@ -225,6 +240,16 @@ export function createWorldSessionAreaView(
 ): WorldSessionAreaView {
   const graveSparkRange = 96;
   const movementHoldThrottleMs = 125;
+  // Task 327 — client visibility guardrail:
+  // - the server may still know/simulate enemies outside the camera,
+  // - but the client only renders/clicks enemies whose CURRENT live
+  //   projection lands inside the visible viewport (+ small padding),
+  // - and the same projection snapshot must drive render, hover, and click.
+  const ENTITY_VIEWPORT_PADDING_PX = 36;
+  const MIN_CAMERA_ZOOM = 0.55;
+  const MAX_CAMERA_ZOOM = 1.9;
+  const DEFAULT_CAMERA_ZOOM = 1.0;
+  const CAMERA_ZOOM_STEP = 0.1;
   const layout = resolveWorldSessionAreaLayout(scene);
   const container = scene.add.container(0, 0);
   const worldContainer = scene.add.container(0, 0);
@@ -251,6 +276,7 @@ export function createWorldSessionAreaView(
   const floatingDamageView: FloatingDamageNumberView = createFloatingDamageNumberView(scene, worldContainer);
   const enemyScreenPositions = new Map<string, EnemyScreenPositionSnapshot>();
   const lootScreenPositions = new Map<string, WorldLootScreenPositionSnapshot>();
+  const corpseScreenPositions = new Map<string, CorpseScreenPositionSnapshot>();
   const corpseMarkers = new Map<string, Phaser.GameObjects.Container>();
   const corpseGlowTweens = new Map<string, Phaser.Tweens.Tween>();
 
@@ -327,10 +353,9 @@ export function createWorldSessionAreaView(
   let lastClickTarget: ClickTargetSnapshot | null = null;
   let projectionMode: WorldProjectionMode = defaultWorldProjection;
   let selfScreenPosition: { readonly x: number; readonly y: number } | null = null;
-  let cameraZoom = 1;
-  const minZoom = 0.75;
-  const maxZoom = 1.6;
+  let cameraZoom = DEFAULT_CAMERA_ZOOM;
   let selfWorldPosition: { readonly x: number; readonly y: number } | null = null;
+  let latestRoom: Room<DoomscrollsRoomState> = room;
   const previousEnemyHp = new Map<string, number>();
   const previousEnemyDefeated = new Map<string, boolean>();
   const previousEnemyRespawnAtMs = new Map<string, number>();
@@ -355,19 +380,19 @@ export function createWorldSessionAreaView(
   }).setOrigin(0.5);
   worldContainer.add(restAreaIndicator);
 
-  // Task 314 — track previous hover target to clear highlights when leaving.
-  let previousHoverTargetId: string | null = null;
-
   // --- Module-scope projection values ---
   // Input handlers are registered ONCE during setup (not per-frame) and read
   // these module-scope variables. refreshFromRoomState() updates them on
   // Colyseus state changes so the next input event sees the latest camera.
-  let currentWorldProjection: AreaProjectionContext = {
-    bounds: { minX: 0, maxX: 1, minY: 0, maxY: 1 },
-    viewport: { originX: layout.originX, originY: layout.originY, width: layout.width, height: layout.height },
-    projectionMode,
+  let currentProjectionState: AreaWorldProjectionState = {
+    projection: {
+      bounds: { minX: 0, maxX: 1, minY: 0, maxY: 1 },
+      viewport: { originX: layout.originX, originY: layout.originY, width: layout.width, height: layout.height },
+      projectionMode,
+    },
+    offset: { x: 0, y: 0 },
+    focusPosition: null,
   };
-  let currentWorldOffset: WorldContainerOffset = { x: 0, y: 0 };
 
   // --- roomStateDirty ---
   // This flag gates the EXPENSIVE refresh path inside refreshFromRoomState().
@@ -421,7 +446,7 @@ export function createWorldSessionAreaView(
     worldOffset: WorldContainerOffset,
     worldProjection: AreaProjectionContext,
   ): ClickTargetSnapshot | null => {
-    if (projectionMode !== "debug_top_down" || !isPointerInsideViewport(pointer.x, pointer.y)) {
+    if (worldProjection.projectionMode !== "debug_top_down" || !isPointerInsideViewport(pointer.x, pointer.y)) {
       return null;
     }
 
@@ -430,7 +455,7 @@ export function createWorldSessionAreaView(
       pointer.y - worldOffset.y,
       worldProjection.bounds,
       worldProjection.viewport,
-      projectionMode,
+      worldProjection.projectionMode,
     );
 
     return {
@@ -448,7 +473,7 @@ export function createWorldSessionAreaView(
     sendMovementIntent(nextRoom, target.x, target.y);
   };
 
-  const clampZoom = (value: number): number => Math.min(Math.max(value, minZoom), maxZoom);
+  const clampZoom = (value: number): number => Math.min(Math.max(value, MIN_CAMERA_ZOOM), MAX_CAMERA_ZOOM);
   const setZoom = (value: number): void => {
     const nextZoom = clampZoom(value);
     if (nextZoom === cameraZoom) {
@@ -456,11 +481,12 @@ export function createWorldSessionAreaView(
     }
     cameraZoom = nextZoom;
     roomStateDirty = true;
+    refreshFromRoomState(latestRoom);
     onDebugStateChange?.();
   };
 
   scene.input.on(Phaser.Input.Events.POINTER_WHEEL, (_pointer: Phaser.Input.Pointer, _currentlyOver: Phaser.GameObjects.GameObject[], _deltaX: number, deltaY: number) => {
-    const step = deltaY > 0 ? -0.1 : 0.1;
+    const step = deltaY > 0 ? -CAMERA_ZOOM_STEP : CAMERA_ZOOM_STEP;
     setZoom(cameraZoom + step);
   });
 
@@ -477,21 +503,21 @@ export function createWorldSessionAreaView(
     for (const key of zoomInKeys) {
       key.on("down", () => {
         if (shouldIgnoreWorldSessionCombatHotkey()) return;
-        setZoom(cameraZoom + 0.1);
+        setZoom(cameraZoom + CAMERA_ZOOM_STEP);
       });
     }
     for (const key of zoomOutKeys) {
       key.on("down", () => {
         if (shouldIgnoreWorldSessionCombatHotkey()) return;
-        setZoom(cameraZoom - 0.1);
+        setZoom(cameraZoom - CAMERA_ZOOM_STEP);
       });
     }
   }
 
   // --- Input handler registration (ONE-TIME setup) ---
   // These handlers are registered ONCE during scene setup. They read
-  // currentWorldProjection / currentWorldOffset from module scope, which
-  // refreshFromRoomState() keeps up to date on Colyseus state changes.
+  // currentProjectionState from module scope, which refreshFromRoomState()
+  // keeps up to date on Colyseus state changes.
   //
   // GUARD: These must NOT be registered inside refreshFromRoomState() or
   // the UPDATE loop. Re-registering at ~60fps caused the primary lag
@@ -509,13 +535,13 @@ export function createWorldSessionAreaView(
       return;
     }
 
-    const worldOffset = currentWorldOffset;
-    const worldProjection = currentWorldProjection;
+    const worldOffset = currentProjectionState.offset;
+    const worldProjection = currentProjectionState.projection;
 
     const hitEnemy = findClickedEnemy(enemyScreenPositions, pointer.x, pointer.y);
     const hitLoot = findClickedWorldLoot(lootScreenPositions, pointer.x, pointer.y);
     const hitCorpse = findClickedOwnCorpse(
-      corpseMarkers, pointer.x, pointer.y, worldOffset, selfSessionId, selfWorldPosition,
+      corpseScreenPositions, pointer.x, pointer.y, selfSessionId, selfWorldPosition,
     );
     const hitInteractable = interactablesView.findClickedInteractable(pointer.x, pointer.y);
 
@@ -697,8 +723,6 @@ export function createWorldSessionAreaView(
   // No per-frame objects created — only text/setStyle calls and visibility
   // toggles on existing Phaser objects.
   inputZone.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
-    const worldOffset = currentWorldOffset;
-
     // Update enemy hover tracking (existing logic for skill targeting)
     const hoveredEnemy = findClickedEnemy(enemyScreenPositions, pointer.x, pointer.y);
     const nextHoveredEnemyId = hoveredEnemy?.id ?? null;
@@ -725,8 +749,7 @@ export function createWorldSessionAreaView(
         pointer.y,
         enemyScreenPositions,
         lootScreenPositions,
-        corpseMarkers,
-        worldOffset,
+        corpseScreenPositions,
         selfSessionId,
         selfWorldPosition,
         interactablesView,
@@ -756,7 +779,7 @@ export function createWorldSessionAreaView(
       return;
     }
 
-    const target = resolveWorldTargetFromPointer(pointer, currentWorldOffset, currentWorldProjection);
+    const target = resolveWorldTargetFromPointer(pointer, currentProjectionState.offset, currentProjectionState.projection);
     if (target === null) {
       clearHeldMovementTarget();
       return;
@@ -793,6 +816,7 @@ export function createWorldSessionAreaView(
   //   [D] Player position + rest area — lightweight: moves existing objects,
   //       updates text labels
   const refreshFromRoomState = (nextRoom: Room<DoomscrollsRoomState>): void => {
+    latestRoom = nextRoom;
     const zoneId = typeof nextRoom.state?.zoneId === "string" && nextRoom.state.zoneId.length > 0
       ? nextRoom.state.zoneId
       : "nightmarket";
@@ -814,12 +838,26 @@ export function createWorldSessionAreaView(
 
     // [A] Update module-scope projection values for input handlers.
     //     Lightweight — no Phaser object creation or destruction.
-    currentWorldProjection = worldProjection;
-    currentWorldOffset = worldOffset;
+    currentProjectionState = {
+      projection: worldProjection,
+      offset: worldOffset,
+      focusPosition: currentFocusPosition,
+    };
 
     worldContainer.setPosition(worldOffset.x, worldOffset.y);
     worldFrame.setPosition(worldOffset.x, worldOffset.y);
     interactablesView.setScreenOffset(worldOffset.x, worldOffset.y);
+
+    // Camera movement / zoom changes must reproject every world object even
+    // when no authoritative room state changed. This path is lightweight:
+    // it updates positions only and does not rebuild display objects.
+    staticPropsView.updateProjection({
+      zoneId,
+      bounds: worldProjection.bounds,
+      viewport: worldProjection.viewport,
+      projectionMode: worldProjection.projectionMode,
+    });
+    interactablesView.updateProjection(nextRoom, worldProjection);
 
     // [B] EXPENSIVE: Only when roomStateDirty. Destroys and recreates
     //     static props, interactables, and redraws graphics. This is the
@@ -850,9 +888,16 @@ export function createWorldSessionAreaView(
     //     entities are touched.
     //
     // --- Enemy snapshot processing ---
+    // Guardrail: keep a strict distinction between:
+    //   1) server-known enemies (`currentEnemies` from room state),
+    //   2) client-rendered visible enemies (`enemyPlaceholders`), and
+    //   3) client-clickable visible enemies (`enemyScreenPositions`).
+    // We may keep a placeholder instance alive for perf, but only enemies
+    // inside the current live viewport projection are rendered/clickable.
     const currentEnemies = getTownRoomEnemies(nextRoom.state);
+    enemyScreenPositions.clear();
     const projectedEnemies = currentEnemies
-      .map((enemy: TownRoomEnemySnapshot) => projectEnemyToArea(enemy, worldProjection))
+      .map((enemy: TownRoomEnemySnapshot) => projectEnemyToArea(enemy, worldProjection, ENTITY_VIEWPORT_PADDING_PX))
       .filter((enemy: ProjectedEnemySnapshot | null): enemy is ProjectedEnemySnapshot => enemy !== null);
     const currentEnemyIds = new Set(currentEnemies.map((enemy: TownRoomEnemySnapshot) => enemy.id));
 
@@ -891,15 +936,22 @@ export function createWorldSessionAreaView(
         enemyView.refresh(projectedViewEnemy);
       }
 
-      enemyScreenPositions.set(enemy.id, {
-        id: enemy.id,
-        label: t(enemy.label),
-        x: projectedEnemy.screenX + worldOffset.x,
-        y: projectedEnemy.screenY + worldOffset.y,
-        worldX: enemy.x,
-        worldY: enemy.y,
-        defeated: enemy.defeated,
-      });
+      if (!projectedEnemy.isVisible) {
+        enemyView.hide();
+      }
+
+      if (projectedEnemy.isVisible) {
+        enemyScreenPositions.set(enemy.id, {
+          id: enemy.id,
+          label: t(enemy.label),
+          x: projectedEnemy.screenX + worldOffset.x,
+          y: projectedEnemy.screenY + worldOffset.y,
+          worldX: enemy.x,
+          worldY: enemy.y,
+          defeated: enemy.defeated,
+          isVisible: true,
+        });
+      }
 
       const lastHp = previousEnemyHp.get(enemy.id);
       const lastDefeated = previousEnemyDefeated.get(enemy.id);
@@ -1015,6 +1067,7 @@ export function createWorldSessionAreaView(
 
     // --- Corpse marker processing (continues [C]) ---
     const currentCorpsePlayerIds = new Set<string>();
+    corpseScreenPositions.clear();
     if (presence !== null) {
       for (const player of presence.players) {
         if (player.hasCorpse === true && player.corpsePosition !== undefined) {
@@ -1027,6 +1080,13 @@ export function createWorldSessionAreaView(
             worldProjection.viewport,
             projectionMode,
           );
+          corpseScreenPositions.set(player.sessionId, {
+            sessionId: player.sessionId,
+            x: screenPos.x + worldOffset.x,
+            y: screenPos.y + worldOffset.y,
+            worldX: corpsePos.x,
+            worldY: corpsePos.y,
+          });
           let marker = corpseMarkers.get(player.sessionId);
           const isOwnCorpse = player.sessionId === selfSessionId;
           if (marker === undefined) {
@@ -1118,6 +1178,7 @@ export function createWorldSessionAreaView(
     // --- Player position and rest area ---
     if (self?.position === undefined) {
       hoveredEnemyId = null;
+      corpseScreenPositions.clear();
       playerPlaceholder.hide();
       targetMarker.setPosition(-9999, -9999);
       targetLabel.setText("");
@@ -1127,6 +1188,18 @@ export function createWorldSessionAreaView(
       previousPosition = null;
       selfWorldPosition = null;
       return;
+    }
+
+    if (hoveredEnemyId !== null && !enemyScreenPositions.has(hoveredEnemyId)) {
+      enemyPlaceholders.get(hoveredEnemyId)?.setHovered(false);
+      hoveredEnemyId = null;
+    }
+
+    if (selectedSkillTargetEnemyId !== null) {
+      const selectedTarget = enemyScreenPositions.get(selectedSkillTargetEnemyId);
+      if (selectedTarget === undefined || selectedTarget.defeated || !selectedTarget.isVisible) {
+        selectedSkillTargetEnemyId = null;
+      }
     }
 
     const { x, y } = self.position;
@@ -1276,6 +1349,7 @@ export function createWorldSessionAreaView(
 
     projectionMode = mode;
     roomStateDirty = true;
+    refreshFromRoomState(latestRoom);
     onDebugStateChange?.();
   };
 
@@ -1408,6 +1482,7 @@ export function createWorldSessionAreaView(
         marker.destroy(true);
       }
       corpseMarkers.clear();
+      corpseScreenPositions.clear();
       for (const pt of corpseGlowTweens.values()) {
         pt.stop();
       }
@@ -1422,42 +1497,36 @@ export function createWorldSessionAreaView(
 }
 
 function findClickedOwnCorpse(
-  corpseMarkers: ReadonlyMap<string, Phaser.GameObjects.Container>,
+  corpseScreenPositions: ReadonlyMap<string, CorpseScreenPositionSnapshot>,
   pointerX: number,
   pointerY: number,
-  worldOffset: WorldContainerOffset,
   selfSessionId: string | null,
   selfWorldPosition: { readonly x: number; readonly y: number } | null,
 ): { readonly worldX: number; readonly worldY: number; readonly inRange: boolean } | null {
   if (selfSessionId === null || selfWorldPosition === null) {
     return null;
   }
-  const marker = corpseMarkers.get(selfSessionId);
-  if (marker === undefined) {
+  const corpse = corpseScreenPositions.get(selfSessionId);
+  if (corpse === undefined) {
     return null;
   }
 
-  const corpseWorldX = marker.x;
-  const corpseWorldY = marker.y;
-
-  const markerScreenX = corpseWorldX + worldOffset.x;
-  const markerScreenY = corpseWorldY + worldOffset.y;
-  const dx = pointerX - markerScreenX;
-  const dy = pointerY - markerScreenY;
+  const dx = pointerX - corpse.x;
+  const dy = pointerY - corpse.y;
   const hitRadiusPx = 24;
   const distanceSquared = dx * dx + dy * dy;
   if (distanceSquared > hitRadiusPx * hitRadiusPx) {
     return null;
   }
 
-  const worldDx = corpseWorldX - selfWorldPosition.x;
-  const worldDy = corpseWorldY - selfWorldPosition.y;
+  const worldDx = corpse.worldX - selfWorldPosition.x;
+  const worldDy = corpse.worldY - selfWorldPosition.y;
   const worldDist = Math.sqrt(worldDx * worldDx + worldDy * worldDy);
   const inRange = worldDist <= 30;
 
   return {
-    worldX: corpseWorldX,
-    worldY: corpseWorldY,
+    worldX: corpse.worldX,
+    worldY: corpse.worldY,
     inRange,
   };
 }
@@ -1468,28 +1537,22 @@ function findClickedOwnCorpse(
  * over the player's own corpse, without distance/range info.
  */
 function findClickedOwnCorpseInteractive(
-  corpseMarkers: ReadonlyMap<string, Phaser.GameObjects.Container>,
+  corpseScreenPositions: ReadonlyMap<string, CorpseScreenPositionSnapshot>,
   pointerX: number,
   pointerY: number,
-  worldOffset: WorldContainerOffset,
   selfSessionId: string | null,
   selfWorldPosition: { readonly x: number; readonly y: number } | null,
 ): boolean {
   if (selfSessionId === null || selfWorldPosition === null) {
     return false;
   }
-  const marker = corpseMarkers.get(selfSessionId);
-  if (marker === undefined) {
+  const corpse = corpseScreenPositions.get(selfSessionId);
+  if (corpse === undefined) {
     return false;
   }
 
-  const corpseWorldX = marker.x;
-  const corpseWorldY = marker.y;
-
-  const markerScreenX = corpseWorldX + worldOffset.x;
-  const markerScreenY = corpseWorldY + worldOffset.y;
-  const dx = pointerX - markerScreenX;
-  const dy = pointerY - markerScreenY;
+  const dx = pointerX - corpse.x;
+  const dy = pointerY - corpse.y;
   const hitRadiusPx = 24;
   const distanceSquared = dx * dx + dy * dy;
   return distanceSquared <= hitRadiusPx * hitRadiusPx;
@@ -1505,7 +1568,7 @@ function findClickedEnemy(
   let closestHit: { readonly id: string; readonly worldX: number; readonly worldY: number; readonly distanceSquared: number } | null = null;
 
   for (const [id, position] of enemyScreenPositions.entries()) {
-    if (position.defeated) {
+    if (position.defeated || !position.isVisible) {
       continue;
     }
 
@@ -1628,6 +1691,7 @@ function formatItemRarityLabel(rarity: string): string {
 function projectEnemyToArea(
   enemy: TownRoomEnemySnapshot,
   projection: AreaProjectionContext,
+  viewportPaddingPx: number,
 ): ProjectedEnemySnapshot | null {
   const width = projection.bounds.maxX - projection.bounds.minX;
   const height = projection.bounds.maxY - projection.bounds.minY;
@@ -1662,7 +1726,29 @@ function projectEnemyToArea(
     enemy,
     screenX: projectedPosition.x,
     screenY: projectedPosition.y,
+    isVisible: isScreenPointInsideViewport(
+      projectedPosition.x,
+      projectedPosition.y,
+      projection.viewport,
+      viewportPaddingPx,
+    ),
   };
+}
+
+function isScreenPointInsideViewport(
+  x: number,
+  y: number,
+  viewport: WorldProjectionViewport,
+  paddingPx: number,
+): boolean {
+  // worldToScreenActiveProjection() returns coordinates in the viewport's
+  // local projection space; worldContainer/current screen offsets are applied
+  // later. Visibility must therefore use the same pre-offset local space.
+  const left = -paddingPx;
+  const right = viewport.width + paddingPx;
+  const top = -paddingPx;
+  const bottom = viewport.height + paddingPx;
+  return x >= left && x <= right && y >= top && y <= bottom;
 }
 
 /**
@@ -1682,7 +1768,7 @@ function createAreaProjectionContext(
   zoom: number,
   focusPosition: { readonly x: number; readonly y: number } | null,
 ): AreaProjectionContext {
-  const clampedZoom = Math.min(Math.max(zoom, 0.75), 1.6);
+  const clampedZoom = Math.min(Math.max(zoom, 0.55), 1.9);
   const fullWidth = bounds.maxX - bounds.minX;
   const fullHeight = bounds.maxY - bounds.minY;
   const visibleWidth = Math.min(fullWidth, fullWidth / clampedZoom);

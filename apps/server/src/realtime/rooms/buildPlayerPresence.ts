@@ -6,6 +6,14 @@ import { NIGHTMARKET_DEFAULT_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
 import { resolvePlayerInitialPosition } from "./validateCharacterLocation";
 import { restoreFlaskToFull } from "./healingFlaskConfig";
 
+export interface PersistedObjectiveState {
+  readonly objectiveId: string;
+  readonly currentProgress: number;
+  readonly requiredProgress: number;
+  readonly completed: boolean;
+  readonly rewardGranted: boolean;
+}
+
 export interface BuildTownPlayerPresenceInput {
   readonly sessionId: string;
   readonly characterId: CharacterId;
@@ -21,6 +29,13 @@ export interface BuildTownPlayerPresenceInput {
   readonly restoredLocationZoneId: string | undefined;
   readonly restoredLocationX: number | undefined;
   readonly restoredLocationY: number | undefined;
+  /**
+   * Optional persisted objective state for the character.
+   * When provided, the PlayerPresence objective fields are populated from
+   * this persisted state so progress, completion and reward-granted status
+   * survive reconnects. Undefined means no objective is in progress.
+   */
+  readonly objectiveState?: PersistedObjectiveState | undefined;
 }
 
 /**
@@ -69,6 +84,27 @@ export function buildTownPlayerPresence(
     presence.maxFlaskCharges,
     Math.max(0, restoredFlaskCharges),
   );
+
+  // Task 333D — Restore persisted objective state onto the presence
+  // entry so progress, completion and reward-granted status survive
+  // reconnects. When no persisted state exists, the presence defaults
+  // to the no-objective state set by the PlayerPresence constructor.
+  if (input.objectiveState !== undefined) {
+    const contentDef = contentRegistry.objectives.get(
+      input.objectiveState.objectiveId as never,
+    );
+    if (contentDef !== undefined) {
+      presence.hasObjective = true;
+      presence.objectiveId = input.objectiveState.objectiveId;
+      presence.objectiveLabel = contentDef.titleKey; // key, resolved client-side
+      presence.objectiveDescriptionKey = contentDef.descriptionKey;
+      presence.objectiveCurrent = input.objectiveState.currentProgress;
+      presence.objectiveTarget = input.objectiveState.requiredProgress;
+      presence.objectiveCompleted = input.objectiveState.completed;
+      presence.objectiveRewardGranted = input.objectiveState.rewardGranted;
+    }
+  }
+
   return presence;
 }
 

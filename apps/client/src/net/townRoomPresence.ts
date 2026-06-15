@@ -21,6 +21,7 @@ import type {
 } from "@doomscrolls/shared";
 import type { ObjectiveId } from "@doomscrolls/content";
 import { contentRegistry } from "@doomscrolls/content";
+import { t } from "@doomscrolls/localization";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -73,11 +74,14 @@ export interface PlayerPresenceEntry {
   readonly objective?: {
     readonly id: string;
     readonly label: string;
+    readonly descriptionKey?: string;
     readonly current: number;
     readonly target: number;
     readonly completed: boolean;
     readonly xpReward?: number;
     readonly copperReward?: number;
+    /** Human-readable enemy target name(s) resolved from content, e.g. "Trashboar Runt" or "Trashboar Brute" */
+    readonly targetEnemyLabel?: string | undefined;
   };
   readonly hasObjective?: boolean;
   readonly objectiveRewardGranted?: boolean;
@@ -371,6 +375,7 @@ function applyOptionalObjective(
 
   const rawId = value.objectiveId;
   const rawLabel = value.objectiveLabel;
+  const rawDescriptionKey = value.objectiveDescriptionKey;
   const rawCurrent = value.objectiveCurrent;
   const rawTarget = value.objectiveTarget;
   const rawCompleted = value.objectiveCompleted;
@@ -392,11 +397,32 @@ function applyOptionalObjective(
   }
 
   // Look up content to get rewards (for completed objective display)
+  // and to resolve target enemy label for HUD feedback.
   // Cast rawId to ObjectiveId for the content registry lookup
   const objectiveId = rawId as ObjectiveId;
   const content = contentRegistry?.objectives?.get?.(objectiveId);
   const xpReward = content?.xpReward;
   const copperReward = content?.copperReward;
+
+  // Resolve human-readable target enemy label(s) from content.
+  // If the objective targets multiple enemies, combine their names.
+  let targetEnemyLabel: string | undefined;
+  if (content !== undefined && content.targetEnemyIds.length > 0) {
+    const enemyNames = content.targetEnemyIds.map((eid) => {
+      const enemyDef = contentRegistry?.enemies?.get?.(eid);
+      if (enemyDef !== undefined) {
+        try {
+          return t(enemyDef.nameKey);
+        } catch {
+          return eid;
+        }
+      }
+      return eid;
+    });
+    targetEnemyLabel = enemyNames.length === 1
+      ? enemyNames[0]
+      : enemyNames.join(" / ");
+  }
 
   return {
     ...entry,
@@ -405,11 +431,15 @@ function applyOptionalObjective(
     objective: {
       id: rawId,
       label: rawLabel,
+      ...(typeof rawDescriptionKey === "string" && rawDescriptionKey.length > 0
+        ? { descriptionKey: rawDescriptionKey }
+        : {}),
       current: Math.max(0, Math.floor(rawCurrent)),
       target: Math.max(1, Math.floor(rawTarget)),
       completed: rawCompleted,
       ...(xpReward !== undefined && { xpReward }),
       ...(copperReward !== undefined && { copperReward }),
+      targetEnemyLabel,
     },
   };
 }

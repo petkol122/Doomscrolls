@@ -67,6 +67,7 @@ export class PlayerPresence extends Schema {
   @type("boolean") public hasObjective: boolean;
   @type("string") public objectiveId: string;
   @type("string") public objectiveLabel: string;
+  @type("string") public objectiveDescriptionKey: string;
   @type("number") public objectiveCurrent: number;
   @type("number") public objectiveTarget: number;
   @type("boolean") public objectiveCompleted: boolean;
@@ -125,6 +126,7 @@ export class PlayerPresence extends Schema {
     this.hasObjective = false;
     this.objectiveId = "";
     this.objectiveLabel = "";
+    this.objectiveDescriptionKey = "";
     this.objectiveCurrent = 0;
     this.objectiveTarget = 0;
     this.objectiveCompleted = false;

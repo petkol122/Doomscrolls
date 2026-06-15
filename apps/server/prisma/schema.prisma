@@ -16,6 +16,7 @@ enum SessionStatus {
 enum ItemLocationType {
   ROOM_LOOT
   INVENTORY
+  STASH
   EQUIPMENT
   CORPSE_BOUND
   DELETED
@@ -110,12 +111,28 @@ model Character {
   inventory Inventory?
   items     ItemInstance[]
   corpses   Corpse[]
+  waypointActivations CharacterWaypointActivation[]
+  objectives          CharacterObjective[]
 
   @@unique([userId, characterNameNormalized])
   @@index([userId])
   @@index([originId])
   @@index([classId])
   @@index([currentZoneId])
+}
+
+model CharacterWaypointActivation {
+  id          String   @id @default(uuid())
+  characterId String
+  waypointId  String
+  zoneId      String
+  activatedAt DateTime @default(now())
+
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, waypointId])
+  @@index([characterId])
+  @@index([zoneId])
 }
 
 model CharacterStats {
@@ -171,6 +188,9 @@ model ItemInstance {
   inventoryPage     Int?
   inventoryX        Int?
   inventoryY        Int?
+  stashPage         Int?
+  stashX            Int?
+  stashY            Int?
   equipmentSlot     String?
   roomId            String?
   zoneId            String?
@@ -189,9 +209,28 @@ model ItemInstance {
   @@index([ownerCharacterId])
   @@index([definitionId])
   @@index([locationType])
+  @@index([ownerCharacterId, locationType])
+  @@index([ownerCharacterId, stashPage])
   @@index([roomId])
   @@index([zoneId])
   @@index([corpseId])
+}
+
+model CharacterObjective {
+  id               String   @id @default(uuid())
+  characterId      String
+  objectiveId      String
+  currentProgress  Int      @default(0)
+  requiredProgress Int      @default(0)
+  completed        Boolean  @default(false)
+  rewardGranted    Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, objectiveId])
+  @@index([characterId])
 }
 
 model Corpse {

@@ -173,6 +173,59 @@ export interface RequestResetObjectiveClientMessage {
   readonly type: "request_reset_objective";
 }
 
+/**
+ * Task 319 — Vendor Foundation: Server-Authoritative Buy Item.
+ *
+ * Client sends a buy request with the vendor stock entry id.
+ * The server validates vendor existence, stock membership, price,
+ * player currency and inventory space. No client-sent price or
+ * item id is accepted.
+ */
+export interface RequestBuyVendorItemClientMessage {
+  readonly type: "request_buy_vendor_item";
+  readonly vendorId: string;
+  readonly stockEntryId: string;
+}
+
+/**
+ * Task 320 — Vendor Foundation: Server-Authoritative Sell Item.
+ *
+ * Client sends a sell request with the vendor id and the item instance
+ * id of the inventory item to sell. The server validates ownership,
+ * equipment state, sellability and price. No client-sent price is accepted.
+ */
+export interface RequestSellItemClientMessage {
+  readonly type: "request_sell_item";
+  readonly vendorId: string;
+  readonly itemInstanceId: string;
+}
+
+/**
+ * Task 329 — Stash Foundation: Server-authoritative inventory -> stash transfer.
+ */
+export interface RequestStoreInventoryItemInStashClientMessage {
+  readonly type: "request_store_inventory_item_in_stash";
+  readonly serviceId: string;
+  readonly itemInstanceId: string;
+  readonly pageIndex?: number;
+  readonly x?: number;
+  readonly y?: number;
+}
+
+/**
+ * Task 329 — Stash Foundation: Server-authoritative stash -> inventory transfer.
+ */
+export interface RequestTakeStashItemToInventoryClientMessage {
+  readonly type: "request_take_stash_item_to_inventory";
+  readonly serviceId: string;
+  readonly itemInstanceId: string;
+}
+
+export interface RequestWaypointTravelClientMessage {
+  readonly type: "request_waypoint_travel";
+  readonly waypointId: string;
+}
+
 export type ClientRoomMessage =
   | MoveToPointClientMessage
   | AttackTargetClientMessage
@@ -195,4 +248,9 @@ export type ClientRoomMessage =
   | RequestResetObjectiveClientMessage
   | RequestDodgeClientMessage
   | RequestUseHealingFlaskClientMessage
-  | RequestUseSkillSlotClientMessage;
+  | RequestUseSkillSlotClientMessage
+  | RequestBuyVendorItemClientMessage
+  | RequestSellItemClientMessage
+  | RequestStoreInventoryItemInStashClientMessage
+  | RequestTakeStashItemToInventoryClientMessage
+  | RequestWaypointTravelClientMessage;
