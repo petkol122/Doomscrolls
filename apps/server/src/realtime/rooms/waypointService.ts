@@ -12,10 +12,100 @@ import { isPositionInsideZoneBounds } from "./validateCharacterLocation";
 
 const NIGHTMARKET_WAYPOINT_OBJECT_ID = "nightmarket_waypoint_01";
 const NIGHTMARKET_WAYPOINT_ID = "nightmarket_waypoint_01";
-const BLACKWIRE_COMBAT_EDGE_WAYPOINT_OBJECT_ID = "nightmarket_waypoint_blackwire_combat_edge";
-const BLACKWIRE_COMBAT_EDGE_WAYPOINT_ID = "nightmarket_waypoint_blackwire_combat_edge";
-const BLACKWIRE_GATE_OBJECT_ID = "nightmarket_blackwire_gate_01";
 const BLACKWIRE_RETURN_OBJECT_ID = "nightmarket_blackwire_return_01";
+
+/**
+ * Core 0.6 Wave 2 — content-driven combat-zone routing table.
+ *
+ * Before this change, every combat-zone destination (Blackwire Sewers)
+ * was a set of named string constants plus an inline `zoneId` literal
+ * scattered across this file, TownRoom.ts and CombatRoom.ts. That pattern
+ * doubles for every new combat zone. This table is the single place a
+ * new combat zone's routing gets registered; the gate/waypoint/return
+ * resolution functions below all read from it instead of branching on
+ * hardcoded object ids.
+ */
+interface CombatZoneRoute {
+  readonly gateObjectId: string;
+  readonly combatZoneId: ZoneId;
+  /**
+   * Nightmarket-side spawn point used both directions: stored as the
+   * player's room-intent position before the combat handoff, and used
+   * as the landing position when the player leaves via the zone's
+   * `combat_return_gate`.
+   */
+  readonly entrySpawnId: string;
+  /** Cosmetic label carried in handoff messages only; never used to resolve a position. */
+  readonly targetSpawnKey: string;
+  readonly messageKey: string;
+  readonly areaKey: string;
+  readonly waypointObjectId?: string;
+  readonly waypointId?: string;
+  readonly waypointLabelKey?: string;
+}
+
+const COMBAT_ZONE_ROUTES: readonly CombatZoneRoute[] = [
+  {
+    gateObjectId: "nightmarket_blackwire_gate_01",
+    combatZoneId: "blackwire_sewers" as ZoneId,
+    entrySpawnId: "nightmarket_blackwire_combat_entry",
+    targetSpawnKey: "blackwire_entry",
+    messageKey: "town_service.route.travel_success.to_combat",
+    areaKey: "world_prop.area.blackwire_sewer_edge.label",
+    waypointObjectId: "nightmarket_waypoint_blackwire_combat_edge",
+    waypointId: "nightmarket_waypoint_blackwire_combat_edge",
+    waypointLabelKey: "waypoint.destination.nightmarket_blackwire_combat_edge",
+  },
+  {
+    // Core 0.6 — Static Yard, the second combat zone.
+    gateObjectId: "nightmarket_static_yard_gate_01",
+    combatZoneId: "static_yard" as ZoneId,
+    entrySpawnId: "nightmarket_static_yard_combat_entry",
+    targetSpawnKey: "static_yard_entry",
+    messageKey: "town_service.route.travel_success.to_combat",
+    areaKey: "world_prop.area.static_yard_edge.label",
+    waypointObjectId: "nightmarket_waypoint_static_yard_combat_edge",
+    waypointId: "nightmarket_waypoint_static_yard_combat_edge",
+    waypointLabelKey: "waypoint.destination.nightmarket_static_yard_combat_edge",
+  },
+];
+
+function findRouteByGateObjectId(objectId: string): CombatZoneRoute | undefined {
+  return COMBAT_ZONE_ROUTES.find((route) => route.gateObjectId === objectId);
+}
+
+function findRouteByWaypointObjectId(objectId: string): CombatZoneRoute | undefined {
+  return COMBAT_ZONE_ROUTES.find((route) => route.waypointObjectId === objectId);
+}
+
+function findRouteByWaypointId(waypointId: string): CombatZoneRoute | undefined {
+  return COMBAT_ZONE_ROUTES.find((route) => route.waypointId === waypointId);
+}
+
+function findRouteByCombatZoneId(zoneId: ZoneId): CombatZoneRoute | undefined {
+  return COMBAT_ZONE_ROUTES.find((route) => route.combatZoneId === zoneId);
+}
+
+/** True when `objectId` is a town-side gate that hands a player off into a combat zone. */
+export function isCombatGateObjectId(objectId: string): boolean {
+  return findRouteByGateObjectId(objectId) !== undefined;
+}
+
+/** True when `objectId` opens the waypoint panel (the base panel or a combat-zone fast-travel entry). */
+export function isWaypointObjectId(objectId: string): boolean {
+  return objectId === NIGHTMARKET_WAYPOINT_OBJECT_ID || findRouteByWaypointObjectId(objectId) !== undefined;
+}
+
+/**
+ * Nightmarket-side spawn id a player lands at when returning from
+ * `combatZoneId` through its `combat_return_gate`. Falls back to
+ * Blackwire's entry spawn for an unregistered zone, matching this
+ * file's existing "unknown combat zone falls back to Blackwire"
+ * convention used elsewhere in the realtime layer.
+ */
+export function resolveCombatZoneReturnSpawnId(combatZoneId: ZoneId): string {
+  return findRouteByCombatZoneId(combatZoneId)?.entrySpawnId ?? "nightmarket_blackwire_combat_entry";
+}
 
 export type RouteTravelRejectedReason =
   | "route_unavailable"
@@ -60,8 +150,9 @@ function resolveWaypointFromObjectId(objectId: string): {
   if (objectId === NIGHTMARKET_WAYPOINT_OBJECT_ID) {
     return { objectId, waypointId: NIGHTMARKET_WAYPOINT_ID };
   }
-  if (objectId === BLACKWIRE_COMBAT_EDGE_WAYPOINT_OBJECT_ID) {
-    return { objectId, waypointId: BLACKWIRE_COMBAT_EDGE_WAYPOINT_ID };
+  const route = findRouteByWaypointObjectId(objectId);
+  if (route !== undefined && route.waypointId !== undefined) {
+    return { objectId, waypointId: route.waypointId };
   }
   return null;
 }
@@ -77,11 +168,14 @@ function buildWaypointDestinations(activeIds: ReadonlySet<string>): WaypointDest
       zoneId: "nightmarket" as ZoneId,
       labelKey: "waypoint.destination.nightmarket_arrival",
     },
-    {
-      waypointId: BLACKWIRE_COMBAT_EDGE_WAYPOINT_ID,
+    ...COMBAT_ZONE_ROUTES.filter(
+      (route): route is CombatZoneRoute & { readonly waypointId: string; readonly waypointLabelKey: string } =>
+        route.waypointId !== undefined && route.waypointLabelKey !== undefined,
+    ).map((route) => ({
+      waypointId: route.waypointId,
       zoneId: "nightmarket" as ZoneId,
-      labelKey: "waypoint.destination.nightmarket_blackwire_combat_edge",
-    },
+      labelKey: route.waypointLabelKey,
+    })),
   ];
 
   return allDestinations.map((entry) => ({
@@ -129,13 +223,13 @@ export async function resolveWaypointTravel(
   if (currentZoneId !== ("nightmarket" as ZoneId)) {
     return { ok: false, reason: "waypoint_unavailable" };
   }
-  if (waypointId !== NIGHTMARKET_WAYPOINT_ID && waypointId !== BLACKWIRE_COMBAT_EDGE_WAYPOINT_ID) {
+
+  const route = findRouteByWaypointId(waypointId);
+  if (waypointId !== NIGHTMARKET_WAYPOINT_ID && route === undefined) {
     return { ok: false, reason: "destination_unavailable" };
   }
 
-  const spawnId = waypointId === BLACKWIRE_COMBAT_EDGE_WAYPOINT_ID
-    ? "nightmarket_blackwire_combat_entry"
-    : "nightmarket_spawn";
+  const spawnId = route !== undefined ? route.entrySpawnId : "nightmarket_spawn";
 
   const repository = new CharacterRepository();
   const activations = await repository.listWaypointActivations(characterId.toString());
@@ -188,51 +282,50 @@ export async function resolveRouteTravel(
     return { ok: false, reason: "route_unavailable" };
   }
 
-  const destinationSpawnId = (() => {
-    if (objectId === BLACKWIRE_GATE_OBJECT_ID) {
-      return "nightmarket_blackwire_combat_entry";
+  const combatRoute = findRouteByGateObjectId(objectId);
+  if (combatRoute !== undefined) {
+    const spawn = contentRegistry.spawnPoints.get(combatRoute.entrySpawnId as never);
+    if (spawn === undefined || spawn.zoneId !== "nightmarket") {
+      return { ok: false, reason: "invalid_destination" };
     }
-    if (objectId === BLACKWIRE_RETURN_OBJECT_ID) {
-      return "nightmarket_services_return";
+    if (!isPositionInsideZoneBounds("nightmarket" as ZoneId, spawn.x, spawn.y)) {
+      return { ok: false, reason: "invalid_destination" };
     }
-    return null;
-  })();
 
-  if (destinationSpawnId === null) {
-    return { ok: false, reason: "destination_unavailable" };
-  }
-
-  const spawn = contentRegistry.spawnPoints.get(destinationSpawnId as never);
-  if (spawn === undefined || spawn.zoneId !== "nightmarket") {
-    return { ok: false, reason: "invalid_destination" };
-  }
-  if (!isPositionInsideZoneBounds("nightmarket" as ZoneId, spawn.x, spawn.y)) {
-    return { ok: false, reason: "invalid_destination" };
-  }
-
-  if (objectId === BLACKWIRE_GATE_OBJECT_ID) {
     return {
       ok: true,
       objectId,
-      zoneId: "blackwire_sewers" as ZoneId,
+      zoneId: combatRoute.combatZoneId,
       x: spawn.x,
       y: spawn.y,
-      messageKey: "town_service.route.travel_success.to_combat",
-      areaKey: "world_prop.area.blackwire_sewer_edge.label",
+      messageKey: combatRoute.messageKey,
+      areaKey: combatRoute.areaKey,
       handoffRoomKind: "combat",
-      targetSpawnKey: "blackwire_entry",
+      targetSpawnKey: combatRoute.targetSpawnKey,
     };
   }
 
-  return {
-    ok: true,
-    objectId,
-    zoneId: "nightmarket" as ZoneId,
-    x: spawn.x,
-    y: spawn.y,
-    messageKey: "town_service.route.travel_success.to_hub",
-    areaKey: "world_prop.area.nightmarket_services.label",
-  };
+  if (objectId === BLACKWIRE_RETURN_OBJECT_ID) {
+    const spawn = contentRegistry.spawnPoints.get("nightmarket_services_return" as never);
+    if (spawn === undefined || spawn.zoneId !== "nightmarket") {
+      return { ok: false, reason: "invalid_destination" };
+    }
+    if (!isPositionInsideZoneBounds("nightmarket" as ZoneId, spawn.x, spawn.y)) {
+      return { ok: false, reason: "invalid_destination" };
+    }
+
+    return {
+      ok: true,
+      objectId,
+      zoneId: "nightmarket" as ZoneId,
+      x: spawn.x,
+      y: spawn.y,
+      messageKey: "town_service.route.travel_success.to_hub",
+      areaKey: "world_prop.area.nightmarket_services.label",
+    };
+  }
+
+  return { ok: false, reason: "destination_unavailable" };
 }
 
 export function getRouteRejectedMessage(reason: RouteTravelRejectedReason): string {

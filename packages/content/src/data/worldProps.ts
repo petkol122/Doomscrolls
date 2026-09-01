@@ -127,4 +127,12 @@ export const worldProps = [
 
   // ── CombatRoom physical return trigger ──
   { id: "combat_return_to_nightmarket", zoneId: "blackwire_sewers", kind: "combat_return_gate", label: "← Return to Nightmarket", labelKey: "world_prop.combat_return_gate.label" as never, x: 96, y: 520 },
+
+  // ── Core 0.6: Static Yard gate/waypoint (Nightmarket's previously-unused far corner) ──
+  { id: "nightmarket_label_static_yard_edge", zoneId: "nightmarket", kind: "area_label", label: "Static Yard Edge", labelKey: "world_prop.area.static_yard_edge.label" as never, x: 4900, y: 3540 },
+  { id: "nightmarket_static_yard_gate_01", zoneId: "nightmarket", kind: "town_service", label: "Static Yard Gate", labelKey: "world_prop.static_yard_gate.label" as never, x: 4900, y: 3500 },
+  { id: "nightmarket_waypoint_static_yard_combat_edge", zoneId: "nightmarket", kind: "waypoint", label: "Static Yard Waypoint", labelKey: "world_prop.static_yard_waypoint.label" as never, x: 4860, y: 3460 },
+
+  // ── Core 0.6: Static Yard CombatRoom physical return trigger ──
+  { id: "static_yard_return_to_nightmarket", zoneId: "static_yard", kind: "combat_return_gate", label: "← Return to Nightmarket", labelKey: "world_prop.combat_return_gate.label" as never, x: 90, y: 460 },
 ] as const satisfies readonly WorldPropContentDefinition[];

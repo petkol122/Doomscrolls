@@ -85,4 +85,41 @@ export const spawnZones = [
     minY: 2740,
     maxY: 3240,
   },
+  // ── Core 0.6 — Static Yard combat zone pockets ──
+  {
+    // Entry-side wretch cluster. Kept clear of the COMBAT_SPAWN_BOX
+    // entry area (x 96-180, y 420-520) and the return gate.
+    id: "static_yard_wretch_pocket_north",
+    zoneId: "static_yard",
+    enemyId: "static_wretch" as EnemyId,
+    count: 3,
+    minX: 150,
+    maxX: 300,
+    minY: 120,
+    maxY: 240,
+  },
+  {
+    // Second wretch pocket, mid-room, distinct from the north pocket so
+    // the room reads as inhabited without matching Blackwire's layout.
+    id: "static_yard_wretch_pocket_south",
+    zoneId: "static_yard",
+    enemyId: "static_wretch" as EnemyId,
+    count: 2,
+    minX: 480,
+    maxX: 620,
+    minY: 380,
+    maxY: 500,
+  },
+  {
+    // Single heavy anchor reusing the existing Trashboar Brute, mirroring
+    // Blackwire's own single-brute-anchor pattern.
+    id: "static_yard_brute_anchor",
+    zoneId: "static_yard",
+    enemyId: "trashboar_brute" as EnemyId,
+    count: 1,
+    minX: 620,
+    maxX: 740,
+    minY: 150,
+    maxY: 260,
+  },
 ] as const satisfies readonly SpawnZoneDefinition[];

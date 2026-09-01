@@ -27,5 +27,17 @@ export const spawnPoints = [
     x: 470,
     y: 500,
     labelKey: "spawn.nightmarket.services_return" as never
+  },
+  {
+    // Core 0.6 — Static Yard's nightmarket-side landing point, used both
+    // as the room-intent position stored before entering combat and as
+    // the position the player lands at when returning, mirroring
+    // nightmarket_blackwire_combat_entry's dual use.
+    id: "nightmarket_static_yard_combat_entry",
+    spawnPointId: spawnPointId("nightmarket_static_yard_combat_entry"),
+    zoneId: "nightmarket",
+    x: 4900,
+    y: 3460,
+    labelKey: "spawn.nightmarket.static_yard_combat_entry" as never
   }
 ] as const satisfies readonly SpawnPointContentDefinition[];
