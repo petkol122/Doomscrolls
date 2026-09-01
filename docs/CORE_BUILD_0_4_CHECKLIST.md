@@ -7,7 +7,7 @@
 **Date:** 2026-06-15
 **Build:** Core Build 0.4
 **Theme:** Realm, Quest, and World Expansion Foundation
-**Status:** Planning opened. Core Build 0.3 is RC / bugfix-only.
+**Status:** Waves 1-4 shipped (Tasks 342-355). Wave 5 hardening audit explicitly skipped by product decision (2026-09-01) to move faster into Core Build 0.5. **Core Build 0.4 is now RC / bugfix-only.** Core Build 0.5 planning is open — see [`docs/CORE_BUILD_0_5_PLAN.md`](./CORE_BUILD_0_5_PLAN.md).
 
 ### Planning Deliverables
 
