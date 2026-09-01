@@ -56,6 +56,22 @@ export const en = {
   "item.tarnished_coin.description":
     "A corroded coin stamped with a face nobody remembers. Still clinks when dropped.",
 
+  "item.scavenged_hood.name": "Scavenged Hood",
+  "item.scavenged_hood.description":
+    "Stitched together from whatever kept the rain off someone else first.",
+  "item.wraptape_gloves.name": "Wraptape Gloves",
+  "item.wraptape_gloves.description":
+    "Cheap tape wound tight enough to make every swing a little faster.",
+  "item.sewer_treads.name": "Sewer Treads",
+  "item.sewer_treads.description":
+    "Boots that have learned exactly where not to step.",
+  "item.scrapcord_belt.name": "Scrapcord Belt",
+  "item.scrapcord_belt.description":
+    "Braided cable and scrap, cinched tight enough to hold a person together.",
+  "item.signal_scarred_amulet.name": "Signal-Scarred Amulet",
+  "item.signal_scarred_amulet.description":
+    "It picks up something that isn't a signal. Wearing it helps you think anyway.",
+
   "skill.heavy_strike.name": "Heavy Strike",
   "skill.heavy_strike.description":
     "A deliberate attack that solves immediate problems through blunt force.",

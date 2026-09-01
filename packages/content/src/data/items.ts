@@ -108,5 +108,79 @@ export const items = [
     maxStackSize: 99,
     statModifiers: [],
     iconKey: "item_tarnished_coin_placeholder"
+  },
+
+  // ── Task 356 (Core 0.5) — equipment slot coverage. Fills the head,
+  // hands, feet, amulet, and belt slots, which were defined in the
+  // equipment schema since 0.1 but had no obtainable item until now. ──
+  {
+    id: itemId("scavenged_hood"),
+    nameKey: "item.scavenged_hood.name" as ContentLocalizationKey,
+    descriptionKey: "item.scavenged_hood.description" as ContentLocalizationKey,
+    category: "armor",
+    rarity: "common",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: ["head"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [{ target: "armor", operation: "add", value: 1 }],
+    durabilityMax: 20,
+    iconKey: "item_scavenged_hood_placeholder"
+  },
+  {
+    id: itemId("wraptape_gloves"),
+    nameKey: "item.wraptape_gloves.name" as ContentLocalizationKey,
+    descriptionKey: "item.wraptape_gloves.description" as ContentLocalizationKey,
+    category: "armor",
+    rarity: "common",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: ["hands"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [{ target: "attackCooldownMs", operation: "add", value: -40 }],
+    durabilityMax: 20,
+    iconKey: "item_wraptape_gloves_placeholder"
+  },
+  {
+    id: itemId("sewer_treads"),
+    nameKey: "item.sewer_treads.name" as ContentLocalizationKey,
+    descriptionKey: "item.sewer_treads.description" as ContentLocalizationKey,
+    category: "armor",
+    rarity: "common",
+    size: { width: 1, height: 2 },
+    allowedEquipmentSlots: ["feet"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [{ target: "moveSpeed", operation: "add", value: 0.15 }],
+    durabilityMax: 20,
+    iconKey: "item_sewer_treads_placeholder"
+  },
+  {
+    id: itemId("scrapcord_belt"),
+    nameKey: "item.scrapcord_belt.name" as ContentLocalizationKey,
+    descriptionKey: "item.scrapcord_belt.description" as ContentLocalizationKey,
+    category: "belt",
+    rarity: "common",
+    size: { width: 2, height: 1 },
+    allowedEquipmentSlots: ["belt"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [{ target: "toughness", operation: "add", value: 1 }],
+    durabilityMax: 20,
+    iconKey: "item_scrapcord_belt_placeholder"
+  },
+  {
+    id: itemId("signal_scarred_amulet"),
+    nameKey: "item.signal_scarred_amulet.name" as ContentLocalizationKey,
+    descriptionKey: "item.signal_scarred_amulet.description" as ContentLocalizationKey,
+    category: "accessory",
+    rarity: "rare",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: ["amulet"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [{ target: "mind", operation: "add", value: 2 }],
+    durabilityMax: 20,
+    iconKey: "item_signal_scarred_amulet_placeholder"
   }
 ] as const satisfies readonly ItemContentDefinition[];

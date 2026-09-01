@@ -43,12 +43,24 @@
 
 #### Wave 2 — Equipment Slot Coverage
 
-- [ ] Add at least one item for the `head` slot
-- [ ] Add at least one item for the `hands` slot
-- [ ] Add at least one item for the `feet` slot
-- [ ] Add at least one item for the `amulet` slot
-- [ ] Add at least one item for the `belt` slot
-- [ ] Wire new items into loot tables and/or vendor stock so they're obtainable through play
+- [x] Add at least one item for the `head` slot
+- [x] Add at least one item for the `hands` slot
+- [x] Add at least one item for the `feet` slot
+- [x] Add at least one item for the `amulet` slot
+- [x] Add at least one item for the `belt` slot
+- [x] Wire new items into loot tables and/or vendor stock so they're obtainable through play
+
+Task 356 status note:
+
+- [x] Added 5 new items filling every previously-dead equipment slot: `scavenged_hood` (head), `wraptape_gloves` (hands), `sewer_treads` (feet), `scrapcord_belt` (belt), `signal_scarred_amulet` (amulet, rare).
+- [x] All 9 equipment slots defined in `equipmentSlots.ts` now have at least one obtainable item.
+- [x] Reused the existing `ItemContentDefinition` shape and `StatModifier` model — no new item schema, no new equipment slot types, no new item categories.
+- [x] Used previously-unused-in-content stat modifier targets (`attackCooldownMs`, `moveSpeed`, `toughness`, `mind`) that were already supported by `SUPPORTED_STAT_MODIFIER_TARGETS` and clamped safely by `CharacterStatsService.applyDerivedModifiers` (min 1 for `attackCooldownMs`, min 0.01 for `moveSpeed`) — verified by reading the clamp logic, not just assumed.
+- [x] Wired all 5 items into both `sewer_starter_loot` and `sewer_brute_loot` loot tables (common weight 6, rare `signal_scarred_amulet` weight 1/2) and added matching vendor stock entries so items are obtainable through both RNG drops and a guaranteed purchase path.
+- [x] Added localization name/description keys for all 5 items to `en.ts` and `LocaleTypes.ts` `REQUIRED_LOCALIZATION_KEYS`, matching the existing item key convention.
+- [x] Manually cross-checked every new item/loot-table/vendor-stock entry against `ContentValidation.ts` rules (unique IDs, known equipment slots, known stat modifier targets, loot-entry rarity must match the item's declared rarity, positive loot weights) — `validateContentRegistry` itself isn't wired into any build/test script in this repo (matches existing 0.3/0.4 task verification depth), so this was a manual rule-by-rule check rather than an automated run.
+- [x] No crafting, affix rolling, new rarity tier, or economy changes — those remain Wave 3+/non-goals.
+- [x] `pnpm typecheck` — 0 errors.
 
 #### Wave 3 — Rarity and Loot Table Depth
 

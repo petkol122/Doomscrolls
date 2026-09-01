@@ -55,6 +55,38 @@ large new zone
 
 **Wave 2 — Equipment Slot Coverage**: add items for the five currently-empty equipment slots. It's the lowest-risk, most concrete gap, reuses the existing item/loot-table schema unchanged, and makes the new build theme visible in play immediately.
 
+---
+
+## Task 356 — Equipment slot coverage
+
+**Date:** 2026-09-01
+**Status:** Implemented
+
+### Summary
+
+Filled the 5 equipment slots (`head`, `hands`, `feet`, `amulet`, `belt`) that were defined in the equipment schema since 0.1 but had no obtainable item, closing the most concrete gap identified in 0.5 planning.
+
+### What changed
+
+- **`packages/content/src/data/items.ts`**: Added 5 items — `scavenged_hood` (head, +1 armor), `wraptape_gloves` (hands, -40ms attack cooldown), `sewer_treads` (feet, +0.15 move speed), `scrapcord_belt` (belt, +1 toughness), `signal_scarred_amulet` (amulet, rare, +2 mind).
+- **`packages/content/src/data/lootTables.ts`**: Added all 5 items to `sewer_starter_loot` and `sewer_brute_loot`.
+- **`packages/content/src/data/vendorStocks.ts`**: Added all 5 items to the Nightmarket Suspicious Vendor stock as a guaranteed purchase path alongside loot RNG.
+- **`packages/localization/src/locales/en.ts`** and **`LocaleTypes.ts`**: Added name/description localization keys for all 5 items.
+
+### Constraints preserved
+
+- All 9 equipment slots now have at least one item, but no new slot types were added.
+- Reused the existing item/loot-table/vendor-stock schema unchanged.
+- Items remain fixed-roll — no random affix generation was introduced.
+- No new rarity tier, crafting, or economy changes.
+
+### Verification
+
+- `pnpm typecheck` — 0 errors.
+- Every new content entry manually checked against `ContentValidation.ts` rules (unique IDs, known equipment slots, known stat modifier targets, loot-entry rarity matches item rarity, positive loot weights).
+
+---
+
 ### Build-state note
 
 Core Build 0.5 should be understood as a **controlled depth pass**, not a system rewrite. It fills gaps that already exist in the schema (empty slots, flat rarity, shared loot tables) rather than introducing new item mechanics. The existing 0.3/0.4 playable loop remains the baseline that 0.5 must preserve while making loot feel like real progression.

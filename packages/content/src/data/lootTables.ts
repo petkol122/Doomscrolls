@@ -12,13 +12,19 @@ export const lootTables = [
       { itemId: itemId("starter_pipe"), rarity: "common", weight: 10 },
       { itemId: itemId("sewer_jacket"), rarity: "common", weight: 7 },
       { itemId: itemId("rustbound_ring"), rarity: "rare", weight: 1 },
-      { itemId: itemId("tarnished_coin"), rarity: "common", weight: 8 }
+      { itemId: itemId("tarnished_coin"), rarity: "common", weight: 8 },
+      // Task 356 (Core 0.5) — equipment slot coverage entries.
+      { itemId: itemId("scavenged_hood"), rarity: "common", weight: 6 },
+      { itemId: itemId("wraptape_gloves"), rarity: "common", weight: 6 },
+      { itemId: itemId("sewer_treads"), rarity: "common", weight: 6 },
+      { itemId: itemId("scrapcord_belt"), rarity: "common", weight: 6 },
+      { itemId: itemId("signal_scarred_amulet"), rarity: "rare", weight: 1 }
     ]
   },
   {
     // Brute variant: same item pool as sewer_starter_loot, but with a
     // slightly higher rare weight so Brute kills feel marginally more
-    // rewarding. Rare items stay controlled (weight 2 of 100).
+    // rewarding. Rare items stay controlled relative to the common pool.
     id: "sewer_brute_loot",
     entries: [
       { itemId: itemId("blackwire_scrap"), rarity: "common", weight: 60 },
@@ -26,7 +32,13 @@ export const lootTables = [
       { itemId: itemId("starter_pipe"), rarity: "common", weight: 10 },
       { itemId: itemId("sewer_jacket"), rarity: "common", weight: 6 },
       { itemId: itemId("rustbound_ring"), rarity: "rare", weight: 2 },
-      { itemId: itemId("tarnished_coin"), rarity: "common", weight: 8 }
+      { itemId: itemId("tarnished_coin"), rarity: "common", weight: 8 },
+      // Task 356 (Core 0.5) — equipment slot coverage entries.
+      { itemId: itemId("scavenged_hood"), rarity: "common", weight: 6 },
+      { itemId: itemId("wraptape_gloves"), rarity: "common", weight: 6 },
+      { itemId: itemId("sewer_treads"), rarity: "common", weight: 6 },
+      { itemId: itemId("scrapcord_belt"), rarity: "common", weight: 6 },
+      { itemId: itemId("signal_scarred_amulet"), rarity: "rare", weight: 2 }
     ]
   }
 ] as const satisfies readonly LootTableDefinition[];
