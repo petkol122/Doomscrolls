@@ -1,7 +1,10 @@
+import { contentRegistry } from "@doomscrolls/content";
+import { t } from "@doomscrolls/localization";
 import type { CharacterId, SpawnPointId, ZoneId } from "@doomscrolls/shared";
 import { PlayerPresence } from "./PlayerPresence";
 import { isPositionInsideZoneBounds } from "./validateCharacterLocation";
 import { restoreFlaskToFull } from "./healingFlaskConfig";
+import type { PersistedObjectiveState } from "./buildPlayerPresence";
 
 export interface BuildCombatPlayerPresenceInput {
   readonly sessionId: string;
@@ -18,6 +21,10 @@ export interface BuildCombatPlayerPresenceInput {
   readonly restoredLocationZoneId: string | undefined;
   readonly restoredLocationX: number | undefined;
   readonly restoredLocationY: number | undefined;
+  readonly objectiveState?: PersistedObjectiveState | undefined;
+  readonly completedObjectives?: readonly {
+    readonly objectiveId: string;
+  }[];
 }
 
 const EMPTY_SPAWN_POINT_ID = "" as SpawnPointId;
@@ -82,5 +89,34 @@ export function buildCombatPlayerPresence(
     presence.maxFlaskCharges,
     Math.max(0, restoredFlaskCharges),
   );
+
+  if (input.objectiveState !== undefined) {
+    const contentDef = contentRegistry.objectives.get(
+      input.objectiveState.objectiveId as never,
+    );
+    if (contentDef !== undefined) {
+      presence.hasObjective = true;
+      presence.objectiveId = input.objectiveState.objectiveId;
+      presence.objectiveLabel = contentDef.titleKey;
+      presence.objectiveDescriptionKey = contentDef.descriptionKey;
+      presence.objectiveCurrent = input.objectiveState.currentProgress;
+      presence.objectiveTarget = input.objectiveState.requiredProgress;
+      presence.objectiveCompleted = input.objectiveState.completed;
+      presence.objectiveRewardGranted = input.objectiveState.rewardGranted;
+    }
+  }
+
+  if (input.completedObjectives !== undefined && input.completedObjectives.length > 0) {
+    const ids: string[] = [];
+    const titles: string[] = [];
+    for (const entry of input.completedObjectives) {
+      const contentDef = contentRegistry.objectives.get(entry.objectiveId as never);
+      ids.push(entry.objectiveId);
+      titles.push(contentDef !== undefined ? t(contentDef.titleKey) : entry.objectiveId);
+    }
+    presence.completedObjectiveIds = ids.join(",");
+    presence.completedObjectiveTitles = titles.join(",");
+  }
+
   return presence;
 }

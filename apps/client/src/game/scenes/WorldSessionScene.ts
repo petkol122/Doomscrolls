@@ -15,7 +15,7 @@ import { contentRegistry } from "@doomscrolls/content";
 import type { AccountState } from "../../net/ApiClient";
 import { ApiClient } from "../../net/ApiClient";
 import { clientEnv } from "../../config/env";
-import { createRealtimeClient, joinCombatRoom, joinTownRoom } from "../../net/RealtimeClient";
+import { createRealtimeClient, joinCombatRoom, joinResolvedCharacterRoom, joinTownRoom } from "../../net/RealtimeClient";
 import { registerAttackResponseListeners } from "../../net/attackIntentClient";
 import { registerInteractResponseListener } from "../../net/interactResponseClient";
 import { registerPickupWorldLootResponseListeners } from "../../net/pickupWorldLootClient";
@@ -46,6 +46,11 @@ import {
   createStashInteractionPanel,
   type StashInteractionPanel,
 } from "./worldSession/stashInteractionPanel";
+import {
+  createNoticeBoardInteractionPanel,
+  type NoticeBoardInteractionPanel,
+} from "./worldSession/noticeBoardInteractionPanel";
+import type { AvailableObjectiveEntry } from "../../net/interactResponseClient";
 import {
   createWorldSessionAreaView,
   type WorldSessionAreaView,
@@ -125,16 +130,19 @@ export class WorldSessionScene extends Phaser.Scene {
   private healingFlaskInput: WorldSessionHealingFlaskInput | null = null;
   private equipmentLoadout: EquipmentLoadout = createEmptyEquipmentLoadout();
   private lastObjectiveCompletionNotice: string | null = null;
+  private lastObjectiveReadyToTurnInId: string | null = null;
   private vendorPanel: VendorInteractionPanel | null = null;
   private townServicePanel: TownServiceInteractionPanel | null = null;
   private stashPanel: StashInteractionPanel | null = null;
   private waypointPanel: WaypointInteractionPanel | null = null;
+  private noticeBoardPanel: NoticeBoardInteractionPanel | null = null;
   private travelOverlayView: ReturnType<typeof createWorldSessionTravelOverlayView> | null = null;
   private pendingTravelKind: WorldSessionTravelOverlayKind | null = null;
   private pendingTravelHideAfterStateApply = false;
   private travelOverlayTimeout: ReturnType<typeof setTimeout> | null = null;
   private utilityPanelOpenState: WorldSessionUtilityPanelOpenState = {
     controls: false,
+    objectives: false,
     equipment: false,
     inventory: false,
     debug: false,
@@ -173,6 +181,14 @@ export class WorldSessionScene extends Phaser.Scene {
     this.travelOverlayView = createWorldSessionTravelOverlayView();
     this.apiClient = clientEnv.apiUrl === undefined ? null : new ApiClient(clientEnv.apiUrl);
 
+    this.input.keyboard?.on("keydown-J", () => {
+      this.utilityPanelOpenState = {
+        ...this.utilityPanelOpenState,
+        objectives: !this.utilityPanelOpenState.objectives,
+      };
+      this.renderOverlay();
+    });
+
     this.worldAreaView = createWorldSessionAreaView(
       this,
       this.room,
@@ -190,7 +206,32 @@ export class WorldSessionScene extends Phaser.Scene {
       },
     );
 
-    registerInteractResponseListener(this.room, (message: string, objectId?: string) => {
+    // Task 348 — Create the notice board catalog panel (lazy).
+    this.noticeBoardPanel?.destroy();
+    this.noticeBoardPanel = createNoticeBoardInteractionPanel((objectiveId: string) => {
+      if (this.room !== null) {
+        this.room.send("request_start_board_objective", {
+          type: "request_start_board_objective",
+          objectiveId,
+        });
+      }
+    });
+
+    registerInteractResponseListener(this.room, (message: string, objectId?: string, availableObjectives?: readonly AvailableObjectiveEntry[]) => {
+      // Task 348 — Notice board catalog: when available objectives are
+      // returned, show the catalog panel instead of the fallback notice.
+      if (objectId === "nightmarket_notice_board_01" && availableObjectives !== undefined && availableObjectives.length > 0) {
+        this.noticeBoardPanel?.show(message, availableObjectives);
+        return;
+      }
+      if (objectId === "nightmarket_notice_board_01" && availableObjectives !== undefined && availableObjectives.length === 0) {
+        this.noticeBoardPanel?.hide();
+        this.feedbackView?.showNotice(message);
+        return;
+      }
+      if (objectId === "nightmarket_notice_board_01") {
+        this.noticeBoardPanel?.hide();
+      }
       if (objectId === "nightmarket_vendor_01") {
         const character = this.account !== null && this.characterId !== null
           ? this.account.characters.find((c) => c.id === this.characterId) ?? null
@@ -271,26 +312,38 @@ export class WorldSessionScene extends Phaser.Scene {
       }
       this.feedbackView?.showNotice(message);
     }, (message: ObjectiveUpdatedServerMessage) => {
-      // Clear stale completion notice when a new (non-completed) objective arrives
-      if (!message.completed) {
+      // Clear stale completion/ready-to-turn-in notice when a new in-progress objective arrives.
+      if (!message.completed || message.readyToTurnIn !== true) {
         this.lastObjectiveCompletionNotice = null;
-      }
-      if (message.completed) {
-        const xp = Number.isFinite(message.xpReward) ? Math.max(0, message.xpReward ?? 0) : 0;
-        const copper = Number.isFinite(message.copperReward) ? Math.max(0, message.copperReward ?? 0) : 0;
-        const hasXp = xp > 0;
-        const hasCopper = copper > 0;
-        const completionText = hasXp && hasCopper
-          ? t("objective.complete_reward", { xpReward: xp, copperReward: copper })
-          : hasXp
-            ? t("objective.complete_reward_xp_only", { xpReward: xp })
-            : "Objective complete";
-        if (this.lastObjectiveCompletionNotice !== completionText) {
-          this.lastObjectiveCompletionNotice = completionText;
-          this.feedbackView?.showNotice(completionText);
-          this.showAttackFeedback(completionText);
+        if (!message.completed) {
+          this.lastObjectiveReadyToTurnInId = null;
         }
       }
+      if (message.completed && message.readyToTurnIn === true) {
+        const xp = Number.isFinite(message.xpReward) ? Math.max(0, message.xpReward ?? 0) : 0;
+        const copper = Number.isFinite(message.copperReward) ? Math.max(0, message.copperReward ?? 0) : 0;
+        const roomState = this.room?.state as { roomKind?: unknown } | undefined;
+        const roomKind = typeof roomState?.roomKind === "string" ? roomState.roomKind : "town";
+        const readyText = roomKind === "combat"
+          ? t("objective.ready_to_turn_in_return_nightmarket" as never, { title: message.label })
+          : t("objective.ready_to_turn_in_notice_board" as never, { title: message.label });
+        const rewardText = xp > 0 && copper > 0
+          ? t("objective.complete_reward", { xpReward: xp, copperReward: copper })
+          : xp > 0
+            ? t("objective.complete_reward_xp_only", { xpReward: xp })
+            : copper > 0
+              ? t("objective.complete_reward_copper_only", { copperReward: copper })
+              : t("objective.complete_generic" as never);
+        const completionText = `${rewardText} ${readyText}`;
+        if (this.lastObjectiveReadyToTurnInId !== message.objectiveId || this.lastObjectiveCompletionNotice !== completionText) {
+          this.lastObjectiveReadyToTurnInId = message.objectiveId;
+          this.lastObjectiveCompletionNotice = completionText;
+          this.feedbackView?.showNotice(completionText);
+          this.showAttackFeedback(readyText);
+        }
+      }
+      // Task 348 — Hide notice board catalog when objective state updates.
+      this.noticeBoardPanel?.hide();
       this.renderOverlay();
     });
 
@@ -677,6 +730,22 @@ export class WorldSessionScene extends Phaser.Scene {
       this.feedbackView?.showNotice(t("world_area.corpse_composure_restored"));
     });
 
+    // Task 348 — Handle notice board objective start rejection.
+    this.room.onMessage("request_start_board_objective_rejected", (message: { reason?: unknown }) => {
+      const reason = typeof message?.reason === "string" ? message.reason : "invalid_request";
+      const feedback =
+        reason === "already_has_active_objective"
+          ? "You already have an active objective."
+          : reason === "objective_already_completed"
+            ? "That objective is already completed."
+          : reason === "objective_not_found"
+            ? "Objective not available."
+            : reason === "objective_not_available"
+              ? "Objective not available."
+              : "Could not start objective.";
+      this.feedbackView?.showNotice(feedback);
+    });
+
     this.dodgeInput?.destroy();
     this.dodgeInput = null;
     this.healingFlaskInput?.destroy();
@@ -882,9 +951,7 @@ export class WorldSessionScene extends Phaser.Scene {
       () => {
         void this.handleLeaveWorld();
       },
-      () => {
-        this.handleRequestReturnToTown();
-      },
+      undefined,
       () => this.utilityPanelOpenState,
       (nextState: WorldSessionUtilityPanelOpenState) => {
         this.utilityPanelOpenState = nextState;
@@ -1001,6 +1068,7 @@ export class WorldSessionScene extends Phaser.Scene {
     this.stashPanel = null;
     this.waypointPanel?.destroy();
     this.waypointPanel = null;
+    this.noticeBoardPanel?.destroy();
     this.areaBanner?.destroy();
     this.areaBanner = null;
     if (this.travelOverlayTimeout !== null) {
@@ -1085,9 +1153,7 @@ export class WorldSessionScene extends Phaser.Scene {
         room: nextRoom,
       });
     } catch {
-      this.pendingRoomHandoff = false;
-      this.finishTravelOverlay(false);
-      this.feedbackView?.showNotice("Could not enter world.");
+      await this.recoverFromInterruptedRoomHandoff("Could not enter combat. Recovering to a safe state.");
     }
   }
 
@@ -1120,9 +1186,53 @@ export class WorldSessionScene extends Phaser.Scene {
         room: nextRoom,
       });
     } catch {
-      this.pendingRoomHandoff = false;
-      this.finishTravelOverlay(false);
+      await this.recoverFromInterruptedRoomHandoff("Could not return immediately. Recovering to a safe state.");
+    }
+  }
+
+  private async recoverFromInterruptedRoomHandoff(message: string): Promise<void> {
+    this.pendingRoomHandoff = false;
+    this.finishTravelOverlay(false);
+    this.feedbackView?.showNotice(message);
+
+    const sessionToken = window.localStorage.getItem("doomscrolls.sessionToken");
+    if (this.characterId === null || typeof sessionToken !== "string" || sessionToken.length === 0) {
       this.feedbackView?.showNotice("Could not enter world.");
+      return;
+    }
+
+    try {
+      await this.refreshAccountStateFromMe();
+      const latestCharacter = this.account?.characters.find((character) => character.id === this.characterId) ?? null;
+      const nextClient = createRealtimeClient();
+      const recoveredRoom = await joinResolvedCharacterRoom(
+        nextClient,
+        sessionToken as never,
+        this.characterId,
+        latestCharacter?.currentZoneId,
+      );
+      this.room = recoveredRoom;
+      this.scene.restart({
+        account: this.account,
+        characterId: this.characterId,
+        room: recoveredRoom,
+      });
+      return;
+    } catch {
+      try {
+        const nextClient = createRealtimeClient();
+        const fallbackRoom = await joinTownRoom(nextClient, sessionToken as never, this.characterId, "nightmarket" as never);
+        this.room = fallbackRoom;
+        this.feedbackView?.showNotice("Recovered to Nightmarket.");
+        this.scene.restart({
+          account: this.account,
+          characterId: this.characterId,
+          room: fallbackRoom,
+        });
+        return;
+      } catch {
+        this.feedbackView?.showNotice("Could not enter world.");
+      }
     }
   }
 

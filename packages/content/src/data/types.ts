@@ -18,7 +18,7 @@ export type SkillId = "heavy_strike";
 export type EnemyId = "trashboar_runt" | "trashboar_brute" | "trashboar_skitter";
 export type LootTableId = "sewer_starter_loot" | "sewer_brute_loot";
 export type LevelTableId = "level_1_to_10";
-export type ObjectiveId = "cull_trashboars" | "break_the_brute";
+export type ObjectiveId = "cull_trashboars" | "break_the_brute" | "sewer_cleanup";
 export type ZoneContentId = "nightmarket" | "blackwire_sewers";
 export type ItemRarity = "common" | "rare";
 export type SkillTargetingMode = "target";
@@ -28,8 +28,9 @@ export type SpawnPointContentId =
   | "nightmarket_spawn"
   | "nightmarket_blackwire_combat_entry"
   | "nightmarket_services_return";
+export type CombatInteractableId = "combat_return_to_nightmarket";
 export type EquipmentSlotCategory = "weapon" | "armor" | "accessory" | "belt" | "flask";
-export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken" | "loot_container" | "vendor" | "town_service" | "waypoint" | "combat_edge" | "area_label" | "path_marker" | "boundary_marker" | "safe_area_marker" | "rest_area_marker";
+export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken" | "loot_container" | "vendor" | "town_service" | "waypoint" | "combat_edge" | "combat_return_gate" | "area_label" | "path_marker" | "boundary_marker" | "safe_area_marker" | "rest_area_marker";
 export type VendorId = "nightmarket_suspicious_vendor";
 export type TownServiceId = "nightmarket_stash_keeper" | "nightmarket_trainer" | "nightmarket_waypoint" | "nightmarket_suspicious_vendor";
 export type TownServiceKind = "vendor" | "stash" | "trainer" | "waypoint";
@@ -196,6 +197,13 @@ export interface ObjectiveContentDefinition {
   readonly id: ObjectiveId;
   readonly titleKey: ContentLocalizationKey;
   readonly descriptionKey: ContentLocalizationKey;
+  /**
+   * Optional repeatability flag for future objective types.
+   *
+   * Core 0.4 does not implement repeatable objectives yet. When omitted,
+   * objectives are treated as non-repeatable by default.
+   */
+  readonly repeatable?: boolean;
   readonly targetEnemyIds: readonly EnemyId[];
   readonly requiredKills: number;
   readonly xpReward: number;

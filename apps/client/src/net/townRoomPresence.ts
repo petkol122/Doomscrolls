@@ -85,6 +85,11 @@ export interface PlayerPresenceEntry {
   };
   readonly hasObjective?: boolean;
   readonly objectiveRewardGranted?: boolean;
+  readonly completedObjectives?: readonly {
+    readonly id: string;
+    readonly title: string;
+    readonly completed: true;
+  }[];
   readonly hasCorpse?: boolean;
   readonly corpsePosition?: PlayerPosition;
 }
@@ -131,7 +136,8 @@ export function getTownRoomPresence(
     const withFlask = applyOptionalFlaskState(withMovementSpeed, value);
     const withSkillSlot = applyOptionalSkillSlotCooldown(withFlask, value);
     const withObjective = applyOptionalObjective(withSkillSlot, value);
-    const withCorpse = applyOptionalCorpse(withObjective, value);
+    const withCompletedObjectives = applyOptionalCompletedObjectives(withObjective, value);
+    const withCorpse = applyOptionalCorpse(withCompletedObjectives, value);
     players.push(withCorpse);
   }
 
@@ -441,5 +447,34 @@ function applyOptionalObjective(
       ...(copperReward !== undefined && { copperReward }),
       targetEnemyLabel,
     },
+  };
+}
+
+function applyOptionalCompletedObjectives(
+  entry: PlayerPresenceEntry,
+  value: Record<string, unknown>,
+): PlayerPresenceEntry {
+  const rawIds = value.completedObjectiveIds;
+  const rawTitles = value.completedObjectiveTitles;
+  if (typeof rawIds !== "string" || rawIds.length === 0) {
+    return entry;
+  }
+
+  const ids = rawIds.split(",").map((part) => part.trim()).filter((part) => part.length > 0);
+  if (ids.length === 0) {
+    return entry;
+  }
+
+  const titles = typeof rawTitles === "string"
+    ? rawTitles.split(",")
+    : [];
+
+  return {
+    ...entry,
+    completedObjectives: ids.map((id, index) => ({
+      id,
+      title: titles[index]?.trim() || id,
+      completed: true as const,
+    })),
   };
 }

@@ -1,16 +1,24 @@
 import { EnemyPresence, type ZoneId } from "@doomscrolls/shared";
 import { contentRegistry } from "@doomscrolls/content";
 import type { CombatRoomState } from "./CombatRoomState";
+import { createRng } from "./serverRng";
+
+function hashSeed(str: string): number {
+  let seed = 0;
+  for (let i = 0; i < str.length; i++) {
+    seed = (seed * 31 + str.charCodeAt(i)) | 0;
+  }
+  return seed >>> 0;
+}
 
 /**
  * CombatRoom enemy set initialiser.
  *
  * Task 268 — CombatRoom minimal real combat wiring.
  *
- * Core 0.1 ships a small fixed combat enemy set (3 × Trashboar Runt)
- * on a single hard-coded combat spawn box. The Blackwire Sewers
- * zone has no `spawnZones` content yet, so this helper uses an
- * in-file box instead of looping over `contentRegistry.spawnZones`.
+ * Core 0.4 Task 353 switches Blackwire Sewers onto the same content-driven
+ * spawn-zone pipeline shape used by TownRoom. CombatRoom still stays thin;
+ * it simply populates EnemyPresence from combat-zone spawn content.
  *
  * Enemy ids are deterministic so reconnecting clients see the same
  * instance ids across joins. The exact box is intentionally
@@ -24,49 +32,51 @@ import type { CombatRoomState } from "./CombatRoomState";
  * enemies and reuse the shared `validateAttackIntent` /
  * `applyEnemyDamage` / `enemyAiHelpers` modules.
  */
-export const COMBAT_ENEMY_CONTENT_ID = "trashboar_runt";
 export const COMBAT_SPAWN_BOX = {
-  minX: 900,
-  maxX: 1200,
-  minY: 900,
-  maxY: 1200,
+  minX: 96,
+  maxX: 180,
+  minY: 420,
+  maxY: 520,
 } as const;
-export const COMBAT_ENEMY_COUNT = 3;
 
 export function initializeCombatEnemies(
   state: CombatRoomState,
-  _zoneId: ZoneId,
+  zoneId: ZoneId,
 ): void {
-  const enemyContent = contentRegistry.enemies.require(COMBAT_ENEMY_CONTENT_ID as never);
-  const { minX, maxX, minY, maxY } = COMBAT_SPAWN_BOX;
+  const rng = createRng(hashSeed(zoneId));
 
-  for (let i = 0; i < COMBAT_ENEMY_COUNT; i++) {
-    // Even spread along the X axis inside the box; the Y axis stays
-    // at the midpoint. Deterministic, so the layout is identical
-    // every time the room is created.
-    const x = Math.round(minX + ((maxX - minX) * i) / Math.max(1, COMBAT_ENEMY_COUNT - 1));
-    const y = Math.round((minY + maxY) / 2);
-    const id = `combat_${COMBAT_ENEMY_CONTENT_ID}_${i}`;
+  for (const zone of contentRegistry.spawnZones) {
+    if (zone.zoneId !== zoneId) {
+      continue;
+    }
 
-    const enemy = new EnemyPresence();
-    enemy.id = id;
-    enemy.enemyId = enemyContent.id;
-    enemy.label = enemyContent.nameKey;
-    enemy.spawnX = x;
-    enemy.spawnY = y;
-    enemy.x = x;
-    enemy.y = y;
-    enemy.state = "idle";
-    enemy.targetPlayerSessionId = "";
-    enemy.hp = enemyContent.maxHp;
-    enemy.maxHp = enemyContent.maxHp;
-    enemy.defeated = false;
-    enemy.nextAttackAtMs = 0;
-    enemy.respawnAtMs = 0;
-    enemy.attackLandingAtMs = 0;
-    enemy.attackKind = "normal";
-    enemy.nextHeavyAttackAtMs = 0;
+    const enemyContent = contentRegistry.enemies.require(zone.enemyId);
 
-    state.enemies.set(enemy.id, enemy);
+    for (let i = 0; i < zone.count; i++) {
+      const x = rng.nextInt(zone.minX, zone.maxX + 1);
+      const y = rng.nextInt(zone.minY, zone.maxY + 1);
+      const id = `${zone.id}_${i}`;
+
+      const enemy = new EnemyPresence();
+      enemy.id = id;
+      enemy.enemyId = enemyContent.id;
+      enemy.label = enemyContent.nameKey;
+      enemy.spawnX = x;
+      enemy.spawnY = y;
+      enemy.x = x;
+      enemy.y = y;
+      enemy.state = "idle";
+      enemy.targetPlayerSessionId = "";
+      enemy.hp = enemyContent.maxHp;
+      enemy.maxHp = enemyContent.maxHp;
+      enemy.defeated = false;
+      enemy.nextAttackAtMs = 0;
+      enemy.respawnAtMs = 0;
+      enemy.attackLandingAtMs = 0;
+      enemy.attackKind = "normal";
+      enemy.nextHeavyAttackAtMs = 0;
+
+      state.enemies.set(enemy.id, enemy);
+    }
   }
 }

@@ -124,4 +124,7 @@ export const worldProps = [
   { id: "nightmarket_rest_se", zoneId: "nightmarket", kind: "rest_area_marker", label: "Rest Area", labelKey: "world_prop.rest_area.label", x: 780, y: 600 },
   { id: "nightmarket_rest_sw", zoneId: "nightmarket", kind: "rest_area_marker", label: "Rest Area", labelKey: "world_prop.rest_area.label", x: 90,  y: 600 },
   { id: "nightmarket_rest_label", zoneId: "nightmarket", kind: "rest_area_marker", label: "Rest Area", labelKey: "world_prop.rest_area.label", x: 435, y: 335 },
+
+  // ── CombatRoom physical return trigger ──
+  { id: "combat_return_to_nightmarket", zoneId: "blackwire_sewers", kind: "combat_return_gate", label: "← Return to Nightmarket", labelKey: "world_prop.combat_return_gate.label" as never, x: 96, y: 520 },
 ] as const satisfies readonly WorldPropContentDefinition[];

@@ -1,6 +1,6 @@
 import { Client, Room } from "@colyseus/sdk";
 
-import type { CharacterId, SessionToken, ZoneId } from "@doomscrolls/shared";
+import type { CharacterId, CharacterRuntimeRoomKind, SessionToken, ZoneId } from "@doomscrolls/shared";
 import type { RoomJoinAuthPayload, RoomState } from "@doomscrolls/shared";
 import { clientEnv } from "../config/env";
 
@@ -48,6 +48,32 @@ export async function joinCombatRoom(
   };
 
   return client.joinOrCreate("combat", payload);
+}
+
+export function resolveRoomKindForZoneId(zoneId?: ZoneId | null): CharacterRuntimeRoomKind | null {
+  if (zoneId === "blackwire_sewers") {
+    return "combat";
+  }
+
+  if (zoneId === undefined || zoneId === null || zoneId.length === 0 || zoneId === "nightmarket") {
+    return "town";
+  }
+
+  return null;
+}
+
+export async function joinResolvedCharacterRoom(
+  client: RealtimeClient,
+  sessionToken: SessionToken,
+  characterId: CharacterId,
+  requestedZoneId?: ZoneId,
+): Promise<Room<RoomState>> {
+  const roomKind = resolveRoomKindForZoneId(requestedZoneId);
+  if (roomKind === "combat") {
+    return joinCombatRoom(client, sessionToken, characterId, requestedZoneId);
+  }
+
+  return joinTownRoom(client, sessionToken, characterId, requestedZoneId);
 }
 
 /**

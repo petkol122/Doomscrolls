@@ -142,7 +142,7 @@ type ContentEnemyId = Parameters<typeof contentRegistry.enemies.get>[0];
  * not yet been granted, or `undefined` if the player has completed the
  * entire sequence.
  */
-function findNextNoticeBoardObjective(player: {
+function _findNextNoticeBoardObjective(player: {
   objectiveRewardGranted: boolean;
   objectiveCompleted: boolean;
   objectiveId: string;
@@ -178,6 +178,56 @@ function findNextNoticeBoardObjective(player: {
   return undefined;
 }
 
+function parseCompletedObjectiveIds(player: {
+  completedObjectiveIds?: string;
+}): readonly string[] {
+  if (typeof player.completedObjectiveIds !== "string" || player.completedObjectiveIds.length === 0) {
+    return [];
+  }
+  return player.completedObjectiveIds.split(",").filter((value) => value.length > 0);
+}
+
+function isObjectiveRepeatable(
+  objective: import("@doomscrolls/content").ObjectiveContentDefinition,
+): boolean {
+  return objective.repeatable === true;
+}
+
+function isObjectiveStartBlockedByCompletion(
+  player: { completedObjectiveIds?: string },
+  objective: import("@doomscrolls/content").ObjectiveContentDefinition,
+): boolean {
+  if (isObjectiveRepeatable(objective)) {
+    return false;
+  }
+  return parseCompletedObjectiveIds(player).includes(objective.id);
+}
+
+function buildAvailableNoticeBoardObjectives(player: {
+  completedObjectiveIds?: string;
+}): readonly {
+  readonly objectiveId: string;
+  readonly titleKey: string;
+  readonly descriptionKey: string;
+}[] {
+  const availableEntries: { objectiveId: string; titleKey: string; descriptionKey: string }[] = [];
+  for (const candidateId of NOTICE_BOARD_OBJECTIVE_SEQUENCE) {
+    const candidate = contentRegistry.objectives.get(candidateId as ObjectiveId);
+    if (candidate === undefined) {
+      continue;
+    }
+    if (isObjectiveStartBlockedByCompletion(player, candidate)) {
+      continue;
+    }
+    availableEntries.push({
+      objectiveId: candidate.id,
+      titleKey: candidate.titleKey,
+      descriptionKey: candidate.descriptionKey,
+    });
+  }
+  return availableEntries;
+}
+
 function buildObjectiveUpdatedMessage(
   player: {
     objectiveId: string;
@@ -200,6 +250,7 @@ function buildObjectiveUpdatedMessage(
     current: player.objectiveCurrent,
     target: player.objectiveTarget,
     completed: player.objectiveCompleted,
+    ...(player.objectiveCompleted ? { readyToTurnIn: true } : {}),
     ...(reward !== undefined ? { xpReward: reward.xpReward, copperReward: reward.copperReward } : {}),
   };
 }
@@ -589,6 +640,7 @@ export class TownRoom extends Room {
   private interactHandlerRegistered = false;
   private attackHandlerRegistered = false;
   private resetObjectiveHandlerRegistered = false;
+  private startBoardObjectiveHandlerRegistered = false;
   private pickupWorldLootHandlerRegistered = false;
   private respawnHandlerRegistered = false;
   private corpseInteractHandlerRegistered = false;
@@ -627,6 +679,7 @@ export class TownRoom extends Room {
     this.registerVendorBuyHandler(log);
     this.registerVendorSellHandler(log);
     this.registerStashTransferHandler(log);
+    this.registerStartBoardObjectiveHandler(log);
     this.setSimulationInterval((deltaMs: number) => {
       const state = this.state as TownRoomState;
       stepTownRoomMovement(state, deltaMs, {
@@ -789,6 +842,7 @@ export class TownRoom extends Room {
       completed: boolean;
       rewardGranted: boolean;
     } | undefined;
+    const completedObjectives = await objectiveRepo.findCompletedByCharacter(characterId.toString());
     for (const candidateId of NOTICE_BOARD_OBJECTIVE_SEQUENCE) {
       const objectiveRow = await objectiveRepo.findByCharacterAndObjective(characterId.toString(), candidateId);
       if (objectiveRow !== null && !objectiveRow.rewardGranted) {
@@ -828,6 +882,7 @@ export class TownRoom extends Room {
       restoredLocationX: result.character.lastLocationX ?? undefined,
       restoredLocationY: result.character.lastLocationY ?? undefined,
       objectiveState: persistedObjective,
+      completedObjectives,
     });
 
     // Task 299 — Town Rest Refill: restore HP and flask charges to
@@ -873,6 +928,12 @@ export class TownRoom extends Room {
       },
       "TownRoom join accepted, player presence added with resolved spawn point and initial world position.",
     );
+
+    try {
+      await new CharacterService().updateCharacterCurrentZone(characterId, resolvedZoneId);
+    } catch {
+      // Keep join successful; reconnect recovery may repair zone intent later.
+    }
   }
 
   public override async onLeave(_client: Client): Promise<void> {
@@ -1228,6 +1289,21 @@ export class TownRoom extends Room {
               return;
             }
 
+            const xpReward = activeObjective.xpReward;
+
+            const completedIds = player.completedObjectiveIds.length > 0
+              ? player.completedObjectiveIds.split(",").filter((value) => value.length > 0)
+              : [];
+            const completedTitles = player.completedObjectiveTitles.length > 0
+              ? player.completedObjectiveTitles.split(",")
+              : [];
+            if (!completedIds.includes(turnInObjId)) {
+              completedIds.push(turnInObjId);
+              completedTitles.push(turnInLabel);
+              player.completedObjectiveIds = completedIds.join(",");
+              player.completedObjectiveTitles = completedTitles.join(",");
+            }
+
             // Grant copper reward (awaited, not fire-and-forget).
             if (Number.isFinite(copperReward) && copperReward > 0) {
               const rep = new CharacterRepository();
@@ -1243,6 +1319,16 @@ export class TownRoom extends Room {
               }
             }
 
+            // Task 349 — Grant XP reward through server-authoritative
+            // progression path. rewardGranted is already persisted
+            // above, so a crash/reconnect between here and persistence
+            // cannot double-award XP.
+            await grantFlatXpReward(
+              { characterId: turnInCharId, xp: player.xp, level: player.level, maxHp: player.maxHp, hp: player.hp },
+              xpReward,
+              (type, payload) => { try { client.send(type, payload); } catch {} },
+            );
+
             // Clear HUD display fields but keep objectiveId and
             // objectiveRewardGranted so findNextNoticeBoardObjective
             // can properly skip completed objectives on re-interact.
@@ -1253,9 +1339,15 @@ export class TownRoom extends Room {
             player.objectiveCompleted = false;
 
             // Send interact_response with localized turn-in feedback.
-            const turnInText = copperReward > 0
-              ? t("objective.turn_in_complete_reward_copper_only" as never, { copperReward } as never)
-              : t("objective.ready_to_turn_in" as never, { title: turnInLabel } as never);
+            const hasXp = Number.isFinite(xpReward) && xpReward > 0;
+            const hasCopper = Number.isFinite(copperReward) && copperReward > 0;
+            const turnInText = hasXp && hasCopper
+              ? t("objective.turn_in_complete_reward" as never, { xpReward, copperReward } as never)
+              : hasXp
+                ? t("objective.turn_in_complete_reward_xp_only" as never, { xpReward } as never)
+                : hasCopper
+                  ? t("objective.turn_in_complete_reward_copper_only" as never, { copperReward } as never)
+                  : t("objective.ready_to_turn_in" as never, { title: turnInLabel } as never);
             const turnInMessage: import("@doomscrolls/shared").InteractResponseServerMessage = {
               type: "interact_response",
               objectId: message.objectId,
@@ -1283,56 +1375,20 @@ export class TownRoom extends Room {
           const reSend = buildObjectiveUpdatedMessage(player, player.objectiveId);
           try { client.send("objective_updated", reSend); } catch {}
         } else {
-          // No active objective — find the next available one in the
-          // sequence (skips already-completed ones where reward was
-          // granted).
-          const next = findNextNoticeBoardObjective(player);
-          if (next !== undefined) {
-            const objectiveUpdate = startNoticeBoardObjective(player, next.objective);
-            // Task 333E — Persist objective start immediately so
-            // progress = 0 survives reconnect without waiting for
-            // the first kill.
-            void new ObjectiveRepository().create(
-              player.characterId.toString(),
-              next.objective.id,
-              next.objective.requiredKills,
-            ).catch(() => {});
-
-            // Send objective_updated to sync schema state
-            try { client.send("objective_updated", objectiveUpdate); } catch {}
-
-            // Task 337: Send interact_response with improved start feedback
-            // mentioning the route/waypoint destination.
-            const startEnemyNames = next.objective.targetEnemyIds.map((eid) => {
-              const enemyDef = contentRegistry.enemies.get(eid);
-              return enemyDef !== undefined ? t(enemyDef.nameKey) : eid;
-            });
-            const targetEnemyLabel = startEnemyNames.length === 1
-              ? startEnemyNames[0]
-              : startEnemyNames.join(" / ");
-            const startFeedback = t("objective.accepted_with_route" as never, {
-              title: objectiveUpdate.label,
-              targetEnemy: targetEnemyLabel,
-            } as never);
-            const startMessage: import("@doomscrolls/shared").InteractResponseServerMessage = {
-              type: "interact_response",
-              objectId: message.objectId,
-              message: startFeedback,
-            };
-            try { client.send("interact_response", startMessage); } catch {}
-          } else {
-            // All objectives completed – clear hasObjective so the
-            // tracker does not show stale completed data, but keep the
-            // reward-granted state so findNextNoticeBoardObjective can
-            // properly skip all completed objectives on re-interact.
-            player.hasObjective = false;
-            const doneMessage: import("@doomscrolls/shared").InteractResponseServerMessage = {
-              type: "interact_response",
-              objectId: message.objectId,
-              message: t("objective.no_more_notices" as never),
-            };
-            try { client.send("interact_response", doneMessage); } catch {}
-          }
+          // No active objective — show available objectives the player
+          // can choose from. This replaces the old auto-start-next
+          // behavior with a selectable catalog. Only one objective may
+          // be active at a time.
+          const availableEntries = buildAvailableNoticeBoardObjectives(player);
+          const catalogMessage: import("@doomscrolls/shared").InteractResponseServerMessage = {
+            type: "interact_response",
+            objectId: message.objectId,
+            message: availableEntries.length > 0
+              ? t("objective.choose_objective" as never)
+              : t("objective.no_more_notices" as never),
+            ...(availableEntries.length > 0 ? { availableObjectives: availableEntries } : {}),
+          };
+          try { client.send("interact_response", catalogMessage); } catch {}
         }
       }
 
@@ -3023,6 +3079,125 @@ export class TownRoom extends Room {
     });
   }
 
+  /**
+   * Task 348 — Register the `request_start_board_objective` message handler.
+   *
+   * Validates the requested objective ID, checks the player has no
+   * active objective, and starts the selected objective including
+   * DB persistence. Sends the objective_updated confirmation or a
+   * safe rejection reason.
+   */
+  private registerStartBoardObjectiveHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.startBoardObjectiveHandlerRegistered) {
+      return;
+    }
+    this.startBoardObjectiveHandlerRegistered = true;
+
+    this.onMessage("request_start_board_objective", async (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+      if (player === undefined) {
+        return;
+      }
+
+      const message = raw as { objectiveId?: unknown } | null;
+      if (!message || typeof message.objectiveId !== "string" || message.objectiveId.length === 0) {
+        try {
+          client.send("request_start_board_objective_rejected", {
+            type: "request_start_board_objective_rejected",
+            reason: "invalid_request",
+          });
+        } catch {}
+        return;
+      }
+
+      // Already has an active objective
+      if (player.hasObjective) {
+        try {
+          client.send("request_start_board_objective_rejected", {
+            type: "request_start_board_objective_rejected",
+            reason: "already_has_active_objective",
+          });
+        } catch {}
+        return;
+      }
+
+      // Objective must exist in content registry
+      const objectiveDef = contentRegistry.objectives.get(message.objectiveId as ObjectiveId);
+      if (objectiveDef === undefined) {
+        try {
+          client.send("request_start_board_objective_rejected", {
+            type: "request_start_board_objective_rejected",
+            reason: "objective_not_found",
+          });
+        } catch {}
+        return;
+      }
+
+      // Objective must be in the notice board sequence
+      if (!NOTICE_BOARD_OBJECTIVE_SEQUENCE.includes(message.objectiveId)) {
+        try {
+          client.send("request_start_board_objective_rejected", {
+            type: "request_start_board_objective_rejected",
+            reason: "objective_not_available",
+          });
+        } catch {}
+        return;
+      }
+
+      if (isObjectiveStartBlockedByCompletion(player, objectiveDef)) {
+        try {
+          client.send("request_start_board_objective_rejected", {
+            type: "request_start_board_objective_rejected",
+            reason: "objective_already_completed",
+          });
+        } catch {}
+        return;
+      }
+
+      const availableObjectiveIds = buildAvailableNoticeBoardObjectives(player).map((entry) => entry.objectiveId);
+      if (!availableObjectiveIds.includes(objectiveDef.id)) {
+        try {
+          client.send("request_start_board_objective_rejected", {
+            type: "request_start_board_objective_rejected",
+            reason: "objective_not_available",
+          });
+        } catch {}
+        return;
+      }
+
+      // Start the objective in server state
+      const updated = startNoticeBoardObjective(player, objectiveDef);
+
+      // Persist to DB
+      try {
+        await new ObjectiveRepository().create(player.characterId.toString(), objectiveDef.id, objectiveDef.requiredKills);
+      } catch {
+        // Persistence failed — revert server state
+        resetNoticeBoardObjective(player);
+        try {
+          client.send("request_start_board_objective_rejected", {
+            type: "request_start_board_objective_rejected",
+            reason: "invalid_request",
+          });
+        } catch {}
+        return;
+      }
+
+      // Send objective confirmation to client
+      try {
+        client.send("objective_updated", updated);
+      } catch {}
+
+      log.debug?.(
+        { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, characterId: player.characterId, objectiveId: objectiveDef.id },
+        "TownRoom request_start_board_objective accepted: objective started.",
+      );
+    });
+  }
+
   private applyEnemyAggroDamage(now: number, deltaMs: number): void {
     const state = this.state as TownRoomState;
 
@@ -3313,6 +3488,10 @@ export class TownRoom extends Room {
     });
   }
 }
+
+
+
+
 
 
 

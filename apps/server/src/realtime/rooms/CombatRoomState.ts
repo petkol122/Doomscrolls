@@ -1,6 +1,8 @@
 import { Schema, type, MapSchema } from "@colyseus/schema";
 import { EnemyPresence, type ZoneId } from "@doomscrolls/shared";
 import { PlayerPresence } from "./PlayerPresence";
+import { Interactable } from "./Interactable";
+import { WorldLoot } from "./WorldLoot";
 
 /**
  * Colyseus schema/state for CombatRoom.
@@ -19,6 +21,7 @@ import { PlayerPresence } from "./PlayerPresence";
  *  - playerPresence (MapSchema keyed by sessionId)
  *  - connectedPlayerCount (reflecting playerPresence.size)
  *  - enemies (MapSchema keyed by enemy instance id)
+ *  - interactables (MapSchema keyed by interactable id)
  */
 export class CombatRoomState extends Schema {
   @type("string") public roomKind: string = "combat";
@@ -26,6 +29,8 @@ export class CombatRoomState extends Schema {
   @type({ map: PlayerPresence }) public playerPresence = new MapSchema<PlayerPresence>();
   @type("number") public connectedPlayerCount: number = 0;
   @type({ map: EnemyPresence }) public enemies = new MapSchema<EnemyPresence>();
+  @type({ map: Interactable }) public interactables = new MapSchema<Interactable>();
+  @type({ map: WorldLoot }) public worldLoot = new MapSchema<WorldLoot>();
 
   constructor(zoneId: ZoneId) {
     super();

@@ -4,7 +4,7 @@ const MIN_CHARACTER_NAME_LENGTH = 2;
 const MAX_CHARACTER_NAME_LENGTH = 24;
 
 // Allows Unicode letters/numbers, regular spaces, apostrophes and hyphens only.
-const ALLOWED_CHARACTER_NAME_PATTERN = /^[\p{L}\p{N} '\-]+$/u;
+const ALLOWED_CHARACTER_NAME_PATTERN = /^[\p{L}\p{N} '-]+$/u;
 
 // Explicitly reject C0/C1 controls and DEL, including tabs/newlines.
  

@@ -73,6 +73,9 @@ export const en = {
   "objective.break_the_brute.title": "Break the Brute",
   "objective.break_the_brute.description":
     "The trashboar brute is the pack's backbone. Put it down and watch the rest scatter.",
+  "objective.sewer_cleanup.title": "Sewer Cleanup",
+  "objective.sewer_cleanup.description":
+    "The Blackwire Sewers are getting crowded — clear out enough trashboars to keep the tunnels passable.",
 
   // Feedback shown when a new objective starts
   "objective.accepted_with_route": "[ {title} ] Use the Blackwire gate or waypoint to reach the sewers and hunt {targetEnemy}.",
@@ -80,6 +83,8 @@ export const en = {
   "objective.progress_feedback": "[ {title} ] {current}/{target} {targetEnemy} killed.",
   // Feedback shown when the objective kill target is met
   "objective.ready_to_turn_in": "All {targetEnemy} eliminated! Return to the Notice Board in Nightmarket Services to collect your reward.",
+  "objective.ready_to_turn_in_return_nightmarket": "[ {title} ] Objective complete. Return to Nightmarket and claim your reward at the Notice Board.",
+  "objective.ready_to_turn_in_notice_board": "[ {title} ] Objective complete. Interact with the Notice Board to claim your reward.",
   // Turn-in reward feedback uses the same keys but the text is clearer now
   "objective.turn_in_complete_reward": "Turned in! +{xpReward} XP, +{copperReward} copper",
   "objective.turn_in_complete_reward_xp_only": "Turned in! +{xpReward} XP",
@@ -96,12 +101,23 @@ export const en = {
   "objective.complete_reward": "Objective complete! +{xpReward} XP, +{copperReward} copper",
   "objective.complete_reward_xp_only": "Objective complete! +{xpReward} XP",
   "objective.complete_reward_copper_only": "Objective complete! +{copperReward} copper",
+  "objective.complete_generic": "Objective complete!",
   "objective.reset_hint": "Restart this objective (progress will be lost)",
+  "objective.choose_objective": "Choose an available objective.",
   "objective.no_more_notices": "No more notices for now.",
   "objective.clear": "Clear",
   "objective.clear_hint": "Clear current objective progress (will need to re-interact to continue)",
   "objective.reset_chain": "Reset Chain",
   "objective.reset_chain_hint": "Restart the whole Notice Board sequence (all progress will be lost)",
+  "objective.panel.title": "Objective Book",
+  "objective.panel.active_section": "Current Objective",
+  "objective.panel.completed_section": "Completed Objectives",
+  "objective.panel.completed_empty": "No completed objectives yet.",
+  "objective.panel.empty": "No active objective.",
+  "objective.panel.state": "State",
+  "objective.panel.progress": "Progress",
+  "objective.panel.turn_in": "Turn-in",
+  "objective.panel.ready_to_turn_in_hint": "Ready to turn in at the Nightmarket Notice Board.",
 
   "auth.username": "Username",
   "auth.password": "Password",
@@ -131,6 +147,8 @@ export const en = {
   "character.origin": "Origin",
   "character.class": "Class",
   "character.level": "Level",
+  "character.xp": "XP",
+  "world_session.level_xp_format": "{level} • {xp} XP",
   "character.create_success": "Character created.",
 
   "money.money_label": "Money",
@@ -372,6 +390,8 @@ export const en = {
   "town_service.waypoint.discovered": "Waypoint discovered.",
   "town_service.waypoint.already_discovered": "Waypoint already discovered.",
   "town_service.waypoint.empty": "No waypoint destinations available.",
+  "town_service.waypoint.progress": "Waypoints discovered: {discovered}/{total}",
+  "town_service.waypoint.undiscovered": "Not yet discovered",
   "town_service.waypoint.travel_action": "Travel",
   "town_service.waypoint.travel_success": "Travel complete.",
   "town_service.waypoint.rejected.waypoint_unavailable": "Waypoint unavailable.",
@@ -409,6 +429,7 @@ export const en = {
   "world_prop.waypoint.label": "Waypoint",
   "world_prop.blackwire_waypoint.label": "Blackwire Waypoint",
   "world_prop.blackwire_gate.label": "Blackwire Gate",
+  "world_prop.combat_return_gate.label": "← Return to Nightmarket",
   "world_prop.market_crates.label": "Market Crates",
   "world_prop.rest_area.label": "Rest Area",
   "world_prop.crate.label": "Crate",

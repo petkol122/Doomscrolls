@@ -151,6 +151,7 @@ export class ObjectiveRepository {
 
   /**
    * Mark the reward as granted for an objective.
+   * Sets `rewardGranted = true` and records `completedAt` if not already set.
    * Returns the updated record, or `null` if the record no longer exists.
    */
   public async markRewardGranted(
@@ -172,5 +173,21 @@ export class ObjectiveRepository {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Find all completed-and-rewarded objectives for a character.
+   * Returns objectives in NOTICE_BOARD_OBJECTIVE_SEQUENCE order for
+   * display in the objective history / quest book.
+   */
+  public async findCompletedByCharacter(
+    characterId: string,
+  ): Promise<readonly {
+    readonly objectiveId: string;
+  }[]> {
+    return this.db.characterObjective.findMany({
+      where: { characterId, completed: true, rewardGranted: true },
+      select: { objectiveId: true },
+    });
   }
 }

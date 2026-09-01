@@ -66,8 +66,12 @@ function resolveWaypointFromObjectId(objectId: string): {
   return null;
 }
 
+// Task 355 — the panel now presents the full waypoint catalog (not just
+// activated entries) so players can see undiscovered destinations and
+// overall discovery progress instead of only ever seeing what they already
+// unlocked.
 function buildWaypointDestinations(activeIds: ReadonlySet<string>): WaypointDestinationEntry[] {
-  const allDestinations: readonly WaypointDestinationEntry[] = [
+  const allDestinations: readonly Omit<WaypointDestinationEntry, "discovered">[] = [
     {
       waypointId: NIGHTMARKET_WAYPOINT_ID,
       zoneId: "nightmarket" as ZoneId,
@@ -80,7 +84,10 @@ function buildWaypointDestinations(activeIds: ReadonlySet<string>): WaypointDest
     },
   ];
 
-  return allDestinations.filter((entry) => activeIds.has(entry.waypointId));
+  return allDestinations.map((entry) => ({
+    ...entry,
+    discovered: activeIds.has(entry.waypointId),
+  }));
 }
 
 export async function activateAndBuildWaypointPanel(

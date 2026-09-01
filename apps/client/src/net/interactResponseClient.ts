@@ -6,6 +6,12 @@ import type {
   ObjectiveUpdatedServerMessage,
 } from "@doomscrolls/shared";
 
+export type AvailableObjectiveEntry = {
+  readonly objectiveId: string;
+  readonly titleKey: string;
+  readonly descriptionKey: string;
+};
+
 /**
  * Task 057 — Interactable Object Foundation Batch
  *
@@ -14,7 +20,7 @@ import type {
  */
 export function registerInteractResponseListener(
   room: Room<RoomState>,
-  onResponse: (message: string, objectId?: string) => void,
+  onResponse: (message: string, objectId?: string, availableObjectives?: readonly AvailableObjectiveEntry[]) => void,
   onObjectiveUpdated?: (message: ObjectiveUpdatedServerMessage) => void,
 ): void {
   room.onMessage("interact_response", (raw: unknown) => {
@@ -22,7 +28,10 @@ export function registerInteractResponseListener(
     if (!msg || typeof msg.message !== "string") {
       return;
     }
-    onResponse(msg.message, msg.objectId);
+    const availableObjectives = Array.isArray(msg.availableObjectives)
+      ? (msg.availableObjectives as readonly AvailableObjectiveEntry[])
+      : undefined;
+    onResponse(msg.message, msg.objectId, availableObjectives);
   });
 
   room.onMessage("deferred_action_queued", (raw: unknown) => {
@@ -56,6 +65,15 @@ export function registerInteractResponseListener(
       current: msg.current,
       target: msg.target,
       completed: msg.completed,
+      ...(typeof msg.readyToTurnIn === "boolean"
+        ? { readyToTurnIn: msg.readyToTurnIn }
+        : {}),
+      ...(typeof msg.xpReward === "number"
+        ? { xpReward: msg.xpReward }
+        : {}),
+      ...(typeof msg.copperReward === "number"
+        ? { copperReward: msg.copperReward }
+        : {}),
     });
   });
 }

@@ -1,5 +1,6 @@
 import { contentRegistry } from "@doomscrolls/content";
 import type { SpawnPointContentDefinition, SpawnPointContentId } from "@doomscrolls/content";
+import { t } from "@doomscrolls/localization";
 import type { CharacterId, ZoneId } from "@doomscrolls/shared";
 import { PlayerPresence } from "./PlayerPresence";
 import { NIGHTMARKET_DEFAULT_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
@@ -36,6 +37,14 @@ export interface BuildTownPlayerPresenceInput {
    * survive reconnects. Undefined means no objective is in progress.
    */
   readonly objectiveState?: PersistedObjectiveState | undefined;
+  /**
+   * Task 351 — Completed-and-rewarded objective history for the quest book.
+   * Populated from DB on join so completed objectives survive reconnect
+   * and room handoff.
+   */
+  readonly completedObjectives?: readonly {
+    readonly objectiveId: string;
+  }[];
 }
 
 /**
@@ -103,6 +112,22 @@ export function buildTownPlayerPresence(
       presence.objectiveCompleted = input.objectiveState.completed;
       presence.objectiveRewardGranted = input.objectiveState.rewardGranted;
     }
+  }
+
+  // Task 351 — Populate completed objective history from persisted data.
+  // The client resolves titles from content; this builds comma-separated
+  // ID and title strings so the quest book section can display history
+  // after reconnect and room handoff.
+  if (input.completedObjectives !== undefined && input.completedObjectives.length > 0) {
+    const ids: string[] = [];
+    const titles: string[] = [];
+    for (const entry of input.completedObjectives) {
+      const contentDef = contentRegistry.objectives.get(entry.objectiveId as never);
+      ids.push(entry.objectiveId);
+      titles.push(contentDef !== undefined ? t(contentDef.titleKey) : entry.objectiveId);
+    }
+    presence.completedObjectiveIds = ids.join(",");
+    presence.completedObjectiveTitles = titles.join(",");
   }
 
   return presence;

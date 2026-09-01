@@ -11,7 +11,6 @@ import type { WorldSessionDebugState, WorldSessionSkillTargetingState } from "./
 import {
   createEmptyEquipmentLoadout,
   createEquipmentPanelSection,
-  updateEquipmentPanelSection,
 } from "./worldSessionEquipmentView";
 import { makeInteractive, makePassive } from "./worldSessionPointerEvents";
 import type { EquipmentLoadout } from "@doomscrolls/shared";
@@ -26,6 +25,7 @@ const COMMON_ITEM_ACCENT_COLOR = "#a88d63";
 
 export interface WorldSessionUtilityPanelOpenState {
   readonly controls: boolean;
+  readonly objectives: boolean;
   readonly equipment: boolean;
   readonly inventory: boolean;
   readonly debug: boolean;
@@ -33,6 +33,7 @@ export interface WorldSessionUtilityPanelOpenState {
 
 export const DEFAULT_WORLD_SESSION_UTILITY_PANEL_OPEN_STATE: WorldSessionUtilityPanelOpenState = {
   controls: false,
+  objectives: false,
   equipment: false,
   inventory: false,
   debug: false,
@@ -60,6 +61,7 @@ interface ObjectiveTrackerViewModel {
   readonly current: number;
   readonly target: number;
   readonly completed: boolean;
+  readonly readyToTurnIn?: boolean;
   readonly location?: string;
   readonly xpReward?: number;
   readonly copperReward?: number;
@@ -88,8 +90,8 @@ function formatSkillCooldownSeconds(nextSkillSlotAt?: number): string | null {
 
 interface UtilityViewRefs {
   readonly root: HTMLElement;
-  readonly equipmentSection: HTMLElement;
-  readonly inventorySection: HTMLElement;
+  equipmentSection: HTMLElement;
+  inventorySection: HTMLElement;
   debugSection: HTMLElement;
 }
 
@@ -116,7 +118,7 @@ export function createWorldSessionOverlayView(
   let currentStatusPanel: HTMLElement | null = null;
 
   const statusRefs = character !== null
-    ? createCharacterChip(character, character.characterName, character.level, onLeaveWorld, onReturnToTown)
+    ? createCharacterChip(character, character.characterName, character.level, character.xp ?? 0, onLeaveWorld, onReturnToTown)
     : null;
   const utilityRefs = createStableUtilityContent(
     character,
@@ -201,6 +203,7 @@ function createCharacterChip(
   character: CharacterSummary,
   displayName: string,
   level: number,
+  xp: number,
   onLeaveWorld: () => void,
   onReturnToTown?: () => void,
 ): StatusViewRefs {
@@ -217,11 +220,11 @@ function createCharacterChip(
   panel.style.justifyContent = "space-between";
   panel.style.gap = "10px";
   panel.style.width = "min(220px, calc(100vw - 28px))";
-  panel.style.padding = "5px 8px";
+  panel.style.padding = "8px 10px";
 
   const textBlock = document.createElement("div");
   textBlock.style.display = "grid";
-  textBlock.style.gap = "1px";
+  textBlock.style.gap = "3px";
 
   const zoneLine = document.createElement("div");
   zoneLine.textContent = "The Nightmarket";
@@ -244,7 +247,7 @@ function createCharacterChip(
   textBlock.appendChild(nameLine);
 
   const subLine = document.createElement("div");
-  subLine.textContent = `${displayName} • ${t("character.level")} ${level}`;
+  subLine.textContent = `${displayName} • ${t("world_session.level_xp_format", { level, xp })}`;
   subLine.style.fontSize = "10px";
   subLine.style.color = "#b9d49a";
   textBlock.appendChild(subLine);
@@ -303,7 +306,7 @@ function syncStatusView(
   refs.zoneLine.textContent = "The Nightmarket";
   refs.testCombatLine.textContent = "Temporary test combat zone";
   refs.nameLine.textContent = character.characterName;
-  refs.subLine.textContent = `${selfDisplayName} • ${t("character.level")} ${selfPresence?.level ?? character.level}`;
+  refs.subLine.textContent = `${selfDisplayName} • ${t("world_session.level_xp_format", { level: selfPresence?.level ?? character.level, xp: selfPresence?.xp ?? character.xp ?? 0 })}`;
 }
 
 function createStableHudContent(
@@ -425,6 +428,15 @@ function createStableUtilityContent(
   const controlsSection = createControlsSection(utilityState.controls, (open) => {
     onUtilityStateChange?.({ ...getUtilityState(), controls: open });
   });
+  const objectivesSection = createObjectivesSection(
+    getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.objective ?? null,
+    getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.objectiveRewardGranted,
+    getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.completedObjectives ?? [],
+    utilityState.objectives,
+    (open) => {
+      onUtilityStateChange?.({ ...getUtilityState(), objectives: open });
+    },
+  );
   const equipmentSection = createEquipmentPanelSection(
     getEquipmentLoadout,
     () => character?.inventorySummaryItems ?? [],
@@ -460,7 +472,7 @@ function createStableUtilityContent(
     },
   );
 
-  root.append(controlsSection, equipmentSection, derivedStatsSection, inventorySection, debugSection);
+  root.append(controlsSection, objectivesSection, equipmentSection, derivedStatsSection, inventorySection, debugSection);
   return { root, equipmentSection, inventorySection, debugSection };
 }
 
@@ -479,24 +491,41 @@ function syncUtilityView(
   onProjectionModeChange: (mode: WorldProjectionMode) => void,
 ): void {
   const utilityState = getUtilityState();
-  updateEquipmentPanelSection(
-    refs.equipmentSection,
+  const controlsSection = createControlsSection(utilityState.controls, (open) => {
+    onUtilityStateChange?.({ ...getUtilityState(), controls: open });
+  });
+  const objectivesSection = createObjectivesSection(
+    getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.objective ?? null,
+    getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.objectiveRewardGranted,
+    getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.completedObjectives ?? [],
+    utilityState.objectives,
+    (open) => {
+      onUtilityStateChange?.({ ...getUtilityState(), objectives: open });
+    },
+  );
+  const equipmentSection = createEquipmentPanelSection(
     getEquipmentLoadout,
     () => character?.inventorySummaryItems ?? [],
     utilityState.equipment,
+    (open) => {
+      onUtilityStateChange?.({ ...getUtilityState(), equipment: open });
+    },
     character?.id !== undefined && onUnequipItem !== undefined
       ? (slot) => onUnequipItem(character.id, slot)
       : undefined,
     () => character,
   );
-  updateInventoryPanelSection(
-    refs.inventorySection,
+  const derivedStatsSection = createDerivedStatsSection(character);
+  const inventorySection = createInventoryPanelSection(
     character,
     { getSelectedItemId, onSelectItem },
     getEquipmentLoadout(),
     character?.id ?? null,
     onEquipItem,
     utilityState.inventory,
+    (open) => {
+      onUtilityStateChange?.({ ...getUtilityState(), inventory: open });
+    },
   );
   const nextDebugSection = createDebugPanel(
     room,
@@ -508,7 +537,16 @@ function syncUtilityView(
       onUtilityStateChange?.({ ...getUtilityState(), debug: open });
     },
   );
-  refs.debugSection.replaceWith(nextDebugSection);
+  refs.root.replaceChildren(
+    controlsSection,
+    objectivesSection,
+    equipmentSection,
+    derivedStatsSection,
+    inventorySection,
+    nextDebugSection,
+  );
+  refs.equipmentSection = equipmentSection;
+  refs.inventorySection = inventorySection;
   refs.debugSection = nextDebugSection;
 }
 
@@ -578,6 +616,146 @@ function createControlsSection(isOpen: boolean, onOpenChange: (open: boolean) =>
   }
 
   details.appendChild(controls);
+  return details;
+}
+
+function createObjectivesSection(
+  objective: {
+    readonly id: string;
+    readonly label: string;
+    readonly descriptionKey?: string;
+    readonly current: number;
+    readonly target: number;
+    readonly completed: boolean;
+    readonly readyToTurnIn?: boolean;
+    readonly xpReward?: number;
+    readonly copperReward?: number;
+    readonly targetEnemyLabel?: string | undefined;
+  } | null,
+  objectiveRewardGranted: boolean | undefined,
+  completedObjectives: readonly {
+    readonly id: string;
+    readonly title: string;
+    readonly completed: true;
+  }[],
+  isOpen: boolean,
+  onOpenChange: (open: boolean) => void,
+): HTMLElement {
+  const details = document.createElement("details");
+  details.open = isOpen;
+  details.addEventListener("toggle", () => {
+    onOpenChange(details.open);
+  });
+  details.style.border = "1px solid #31271c";
+  details.style.borderRadius = "8px";
+  details.style.background = "rgba(12, 10, 8, 0.72)";
+  makeInteractive(details);
+
+  const summary = document.createElement("summary");
+  summary.textContent = `${t("objective.panel.title" as never)} [J]`;
+  summary.style.cursor = "pointer";
+  summary.style.listStyle = "none";
+  summary.style.padding = "8px";
+  summary.style.fontSize = "12px";
+  summary.style.color = "#d8c6a3";
+  summary.style.fontWeight = "bold";
+  makeInteractive(summary);
+  details.appendChild(summary);
+
+  const content = document.createElement("div");
+  content.style.padding = "0 8px 8px";
+  content.style.display = "grid";
+  content.style.gap = "8px";
+
+  const viewModel = resolveObjectiveTrackerViewModel(objective, objectiveRewardGranted);
+  const activeSectionTitle = document.createElement("div");
+  activeSectionTitle.textContent = t("objective.panel.active_section" as never);
+  activeSectionTitle.style.fontSize = "11px";
+  activeSectionTitle.style.fontWeight = "bold";
+  activeSectionTitle.style.color = "#d8c6a3";
+  content.appendChild(activeSectionTitle);
+
+  if (viewModel === null) {
+    content.appendChild(createMutedText(t("objective.panel.empty" as never)));
+  } else {
+    const card = createObjectiveTrackerCard(viewModel);
+    content.appendChild(card);
+
+    const stateLine = createInfoLine(t("objective.panel.state" as never), viewModel.stateLabel);
+    content.appendChild(stateLine);
+
+    const progressLine = createInfoLine(
+      t("objective.panel.progress" as never),
+      `${viewModel.current}/${viewModel.target}`,
+    );
+    content.appendChild(progressLine);
+
+    if (viewModel.description !== undefined) {
+      const description = createMutedText(viewModel.description);
+      description.style.color = "#cdb892";
+      content.appendChild(description);
+    }
+
+    if (viewModel.completed) {
+      const turnInState = createInfoLine(
+        t("objective.panel.turn_in" as never),
+        objectiveRewardGranted === true
+          ? t("objective.state.completed")
+          : t("objective.state.ready_to_turn_in"),
+      );
+      content.appendChild(turnInState);
+    }
+  }
+
+  const divider = document.createElement("div");
+  divider.style.height = "1px";
+  divider.style.background = "rgba(88, 68, 45, 0.6)";
+  divider.style.margin = "2px 0";
+  content.appendChild(divider);
+
+  const completedTitle = document.createElement("div");
+  completedTitle.textContent = t("objective.panel.completed_section" as never);
+  completedTitle.style.fontSize = "11px";
+  completedTitle.style.fontWeight = "bold";
+  completedTitle.style.color = "#d8c6a3";
+  content.appendChild(completedTitle);
+
+  if (completedObjectives.length === 0) {
+    content.appendChild(createMutedText(t("objective.panel.completed_empty" as never)));
+  } else {
+    const completedList = document.createElement("div");
+    completedList.style.display = "grid";
+    completedList.style.gap = "6px";
+
+    for (const completedObjective of completedObjectives) {
+      const row = document.createElement("div");
+      row.style.display = "grid";
+      row.style.gap = "2px";
+      row.style.padding = "6px 8px";
+      row.style.border = "1px solid #4f6b3d";
+      row.style.borderRadius = "8px";
+      row.style.background = "rgba(20, 34, 18, 0.56)";
+
+      const rowTitle = document.createElement("div");
+      rowTitle.textContent = completedObjective.title;
+      rowTitle.style.fontSize = "12px";
+      rowTitle.style.fontWeight = "bold";
+      rowTitle.style.color = "#d8f0c8";
+      row.appendChild(rowTitle);
+
+      const rowState = document.createElement("div");
+      rowState.textContent = t("objective.state.completed" as never);
+      rowState.style.fontSize = "10px";
+      rowState.style.color = "#9fca8b";
+      row.appendChild(rowState);
+
+      completedList.appendChild(row);
+    }
+
+    content.appendChild(completedList);
+  }
+
+  details.appendChild(content);
   return details;
 }
 
@@ -845,7 +1023,7 @@ function createHudSection(
     wrapper.appendChild(createObjectiveTrackerCard(objectiveTrackerViewModel, onResetObjective));
   }
 
-  wrapper.appendChild(createMiniHudStat(`${t("character.level")} ${String(level ?? 1)}`, `XP ${String(xp ?? 0)}`));
+  wrapper.appendChild(createMiniHudStat(`${t("character.level")} ${String(level ?? 1)}`, `${t("character.xp")} ${String(xp ?? 0)}`));
 
   return wrapper;
 }
@@ -961,14 +1139,19 @@ function createObjectiveTrackerCard(objective: ObjectiveTrackerViewModel, onRese
   card.style.display = "grid";
   card.style.gap = "4px";
   card.style.padding = "8px 10px";
+  const isReadyToTurnIn = objective.readyToTurnIn === true;
 
-  card.style.border = objective.completed
-    ? "1px solid #4f6b3d"
-    : "1px solid #5a4727";
+  card.style.border = isReadyToTurnIn
+    ? "1px solid #85733a"
+    : objective.completed
+      ? "1px solid #4f6b3d"
+      : "1px solid #5a4727";
   card.style.borderRadius = "12px";
-  card.style.background = objective.completed
-    ? "linear-gradient(180deg, rgba(20, 34, 18, 0.92) 0%, rgba(14, 22, 12, 0.92) 100%)"
-    : "linear-gradient(180deg, rgba(32, 24, 14, 0.92) 0%, rgba(18, 14, 10, 0.92) 100%)";
+  card.style.background = isReadyToTurnIn
+    ? "linear-gradient(180deg, rgba(36, 30, 12, 0.92) 0%, rgba(20, 16, 8, 0.92) 100%)"
+    : objective.completed
+      ? "linear-gradient(180deg, rgba(20, 34, 18, 0.92) 0%, rgba(14, 22, 12, 0.92) 100%)"
+      : "linear-gradient(180deg, rgba(32, 24, 14, 0.92) 0%, rgba(18, 14, 10, 0.92) 100%)";
   card.style.minWidth = "176px";
 
   const topRow = document.createElement("div");
@@ -980,7 +1163,7 @@ function createObjectiveTrackerCard(objective: ObjectiveTrackerViewModel, onRese
   const title = document.createElement("div");
   title.textContent = "Objective";
   title.style.fontSize = "10px";
-  title.style.color = objective.completed ? "#9fca8b" : "#c5a874";
+  title.style.color = isReadyToTurnIn ? "#f0dd9b" : objective.completed ? "#9fca8b" : "#c5a874";
   topRow.appendChild(title);
 
   const state = document.createElement("div");
@@ -988,7 +1171,7 @@ function createObjectiveTrackerCard(objective: ObjectiveTrackerViewModel, onRese
   state.style.fontSize = "10px";
   state.style.fontWeight = "bold";
   state.style.textTransform = "uppercase";
-  state.style.color = objective.completed ? "#b9e5a8" : "#e0c88a";
+  state.style.color = isReadyToTurnIn ? "#f3dd8a" : objective.completed ? "#b9e5a8" : "#e0c88a";
   topRow.appendChild(state);
 
   card.appendChild(topRow);
@@ -1006,7 +1189,7 @@ function createObjectiveTrackerCard(objective: ObjectiveTrackerViewModel, onRese
   trackerLine.textContent = `${objective.title}: ${objective.current}/${objective.target}`;
   trackerLine.style.fontSize = "12px";
   trackerLine.style.fontWeight = "bold";
-  trackerLine.style.color = objective.completed ? "#d8f0c8" : "#f0ddbb";
+  trackerLine.style.color = isReadyToTurnIn ? "#f7e8b9" : objective.completed ? "#d8f0c8" : "#f0ddbb";
   card.appendChild(trackerLine);
 
   const subtitleLine = document.createElement("div");
@@ -1018,7 +1201,7 @@ function createObjectiveTrackerCard(objective: ObjectiveTrackerViewModel, onRese
   const progressFrame = document.createElement("div");
   progressFrame.style.width = "100%";
   progressFrame.style.height = "8px";
-  progressFrame.style.border = objective.completed ? "1px solid #567546" : "1px solid #5f4a2f";
+  progressFrame.style.border = isReadyToTurnIn ? "1px solid #8f7a3e" : objective.completed ? "1px solid #567546" : "1px solid #5f4a2f";
   progressFrame.style.borderRadius = "999px";
   progressFrame.style.background = "rgba(10, 10, 10, 0.45)";
   progressFrame.style.overflow = "hidden";
@@ -1028,11 +1211,22 @@ function createObjectiveTrackerCard(objective: ObjectiveTrackerViewModel, onRese
   progressFill.style.width = `${ratio * 100}%`;
   progressFill.style.height = "100%";
   progressFill.style.borderRadius = "999px";
-  progressFill.style.background = objective.completed
-    ? "linear-gradient(90deg, #4c7e42 0%, #9fd27e 100%)"
-    : "linear-gradient(90deg, #8c6131 0%, #d6a45a 100%)";
+  progressFill.style.background = isReadyToTurnIn
+    ? "linear-gradient(90deg, #8b6a2c 0%, #e3c56f 100%)"
+    : objective.completed
+      ? "linear-gradient(90deg, #4c7e42 0%, #9fd27e 100%)"
+      : "linear-gradient(90deg, #8c6131 0%, #d6a45a 100%)";
   progressFrame.appendChild(progressFill);
   card.appendChild(progressFrame);
+
+  if (isReadyToTurnIn) {
+    const hintLine = document.createElement("div");
+    hintLine.textContent = t("objective.panel.ready_to_turn_in_hint" as never);
+    hintLine.style.fontSize = "11px";
+    hintLine.style.color = "#f0dd9b";
+    hintLine.style.fontWeight = "bold";
+    card.appendChild(hintLine);
+  }
 
   // Show reward info for completed objectives (only if not already granted)
   if (objective.completed && objective.xpReward !== undefined && objective.copperReward !== undefined) {
@@ -1086,6 +1280,7 @@ function resolveObjectiveTrackerViewModel(
     readonly current: number;
     readonly target: number;
     readonly completed: boolean;
+    readonly readyToTurnIn?: boolean;
     readonly xpReward?: number;
     readonly copperReward?: number;
     readonly targetEnemyLabel?: string | undefined;
@@ -1105,16 +1300,15 @@ function resolveObjectiveTrackerViewModel(
     : undefined;
 
   // State label: "Return to Board" when completed, "Active" otherwise
-  const stateLabel = objective.completed
+  const isReadyToTurnIn = objective.readyToTurnIn === true || objective.completed;
+  const stateLabel = isReadyToTurnIn
     ? t("objective.state.ready_to_turn_in")
     : t("objective.state.active");
 
   // Build actionable subtitle: show target enemy when active, return hint when ready
   let subtitle: string | undefined;
-  if (objective.completed) {
-    subtitle = t("objective.ready_to_turn_in", {
-      targetEnemy: objective.targetEnemyLabel ?? "targets",
-    });
+  if (isReadyToTurnIn) {
+    subtitle = t("objective.panel.ready_to_turn_in_hint" as never);
   } else if (objective.targetEnemyLabel !== undefined) {
     subtitle = `${objective.targetEnemyLabel} — ${objective.current}/${objective.target}`;
   }
@@ -1126,6 +1320,7 @@ function resolveObjectiveTrackerViewModel(
     current: objective.current,
     target: objective.target,
     completed: objective.completed,
+    ...(isReadyToTurnIn ? { readyToTurnIn: true } : {}),
     location: subtitle ?? "The Nightmarket",
     ...(objective.xpReward !== undefined && { xpReward: objective.xpReward }),
     ...(objective.copperReward !== undefined && { copperReward: objective.copperReward }),
@@ -1407,45 +1602,6 @@ function computeInventoryVersion(
   return hash;
 }
 
-function updateInventoryPanelSection(
-  wrapper: HTMLElement,
-  character: CharacterSummary | null,
-  selection: {
-    readonly getSelectedItemId: () => InventorySummaryItem["itemInstanceId"] | null;
-    readonly onSelectItem: (itemId: InventorySummaryItem["itemInstanceId"]) => void;
-  },
-  equipmentLoadout: EquipmentLoadout,
-  characterId: string | null,
-  onEquipItem?: (characterId: string, itemInstanceId: string, slot: string) => Promise<void>,
-  isOpen: boolean = false,
-): void {
-  if (!(wrapper instanceof HTMLDetailsElement)) {
-    return;
-  }
-
-  wrapper.open = isOpen;
-  const items = character?.inventorySummaryItems ?? [];
-  const summary = wrapper.querySelector("summary");
-  if (summary instanceof HTMLElement) {
-    summary.textContent = `Inventory (${items.length})`;
-  }
-
-  const content = wrapper.querySelector("[data-world-session-inventory-content]");
-  if (!(content instanceof HTMLElement)) {
-    return;
-  }
-
-  // Task 275 — Skip full rebuild when inventory data + selection are unchanged.
-  // Full rebuild destroys and recreates DOM, which resets scroll position,
-  // button hover states and any transient browser state. On every overlay
-  // update (e.g. player movement) this was causing the panel to visually
-  // flash/reset. Now we only rebuild when items or selected item actually change.
-  const nextVersion = computeInventoryVersion(items, selection.getSelectedItemId());
-  if (nextVersion !== _inventoryContentVersion) {
-    fullRebuildInventoryContent(content, items, selection, equipmentLoadout, characterId, onEquipItem);
-  }
-}
-
 function createDebugPanel(
   room: Room<DoomscrollsRoomState>,
   roomState: ReturnType<typeof formatTownRoomState>,
@@ -1566,7 +1722,6 @@ function createInventorySummarySection(
     button.style.textAlign = "left";
     button.style.fontSize = "12px";
     button.style.padding = "6px 8px";
-    button.style.border = isSelected ? "1px solid #b9d49a" : "1px solid #5f4a2f";
     button.style.background = isSelected ? "rgba(63, 83, 49, 0.9)" : "rgba(31, 24, 18, 0.95)";
     button.style.color = getItemRarityColor(item.rarity);
     button.setAttribute("aria-pressed", isSelected ? "true" : "false");

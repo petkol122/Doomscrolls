@@ -43,6 +43,17 @@ export function createWaypointInteractionPanel(options: {
     subtitle.style.cssText = "color: #8fb5cc; font-size: 12px;";
     card.appendChild(subtitle);
 
+    // Task 355 — surface overall waypoint discovery progress so the panel
+    // doubles as lightweight world-progression presentation.
+    const discoveredCount = destinations.filter((destination) => destination.discovered).length;
+    const progress = document.createElement("div");
+    progress.textContent = t("town_service.waypoint.progress" as never, {
+      discovered: discoveredCount,
+      total: destinations.length,
+    });
+    progress.style.cssText = "color: #c8d8a8; font-size: 11px; font-weight: bold;";
+    card.appendChild(progress);
+
     if (destinations.length === 0) {
       const empty = document.createElement("div");
       empty.textContent = t("town_service.waypoint.empty" as never);
@@ -51,19 +62,31 @@ export function createWaypointInteractionPanel(options: {
     } else {
       for (const destination of destinations) {
         const row = document.createElement("div");
-        row.style.cssText = "display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 8px; border: 1px solid #29414f; border-radius: 6px; background: rgba(19,27,32,0.9);";
+        row.style.cssText = destination.discovered
+          ? "display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 9px 10px; border: 1px solid #29414f; border-radius: 6px; background: rgba(19,27,32,0.9);"
+          : "display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 9px 10px; border: 1px dashed #3a3a3a; border-radius: 6px; background: rgba(16,16,16,0.6);";
 
         const info = document.createElement("div");
-        info.textContent = t(destination.labelKey as never);
-        info.style.cssText = "color: #d8e2ea; font-size: 12px;";
+        info.textContent = destination.discovered ? t(destination.labelKey as never) : "???";
+        info.style.cssText = destination.discovered
+          ? "color: #d8e2ea; font-size: 12px;"
+          : "color: #6b6b6b; font-size: 12px; font-style: italic;";
         row.appendChild(info);
 
-        const button = document.createElement("button");
-        button.type = "button";
-        button.textContent = t("town_service.waypoint.travel_action" as never);
-        button.style.cssText = "padding: 6px 12px; font-size: 12px; background: #1d2d36; border: 1px solid #41657a; border-radius: 6px; color: #d3e5f3; cursor: pointer;";
-        button.addEventListener("click", () => options.onTravel(destination.waypointId));
-        row.appendChild(button);
+        if (destination.discovered) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.textContent = t("town_service.waypoint.travel_action" as never);
+          button.style.cssText = "padding: 6px 12px; font-size: 12px; background: #1d2d36; border: 1px solid #41657a; border-radius: 6px; color: #d3e5f3; cursor: pointer;";
+          button.addEventListener("click", () => options.onTravel(destination.waypointId));
+          row.appendChild(button);
+        } else {
+          const lockedLabel = document.createElement("div");
+          lockedLabel.textContent = t("town_service.waypoint.undiscovered" as never);
+          lockedLabel.style.cssText = "color: #6b6b6b; font-size: 11px;";
+          row.appendChild(lockedLabel);
+        }
+
         card.appendChild(row);
       }
     }

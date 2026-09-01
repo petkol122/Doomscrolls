@@ -181,4 +181,19 @@ export class CharacterService {
       throw new CharacterError(CharacterErrorCode.INTERNAL_ERROR);
     }
   }
+
+  public async updateCharacterCurrentZone(
+    characterId: CharacterId | string,
+    zoneId: string,
+  ): Promise<void> {
+    try {
+      const characterRepository = new CharacterRepository(this.db);
+      await characterRepository.updateCurrentZone(characterId.toString(), zoneId);
+    } catch (error: unknown) {
+      if (error instanceof CharacterError) {
+        throw error;
+      }
+      throw new CharacterError(CharacterErrorCode.INTERNAL_ERROR);
+    }
+  }
 }

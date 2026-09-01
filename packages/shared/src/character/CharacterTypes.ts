@@ -51,6 +51,8 @@ export interface CharacterSummary {
   readonly updatedAt: IsoDateTimeString;
 }
 
+export type CharacterRuntimeRoomKind = "town" | "combat";
+
 export interface CharacterDetails extends CharacterSummary {
   readonly passiveKeys: readonly PassiveKey[];
   readonly stats: CharacterStats;
