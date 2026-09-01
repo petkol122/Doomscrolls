@@ -266,6 +266,10 @@ function formatEquippedItemLabel(item: { readonly label: string; readonly rarity
 }
 
 function getItemRarityColor(rarity?: string | undefined): string {
+  if (rarity === "epic") {
+    return "#c77dff";
+  }
+
   if (rarity === "rare") {
     return "#8fc7ff";
   }

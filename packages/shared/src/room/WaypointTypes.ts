@@ -11,6 +11,7 @@ export interface WaypointDestinationEntry {
   readonly waypointId: string;
   readonly zoneId: ZoneId;
   readonly labelKey: string;
+  readonly discovered: boolean;
 }
 
 export interface WaypointActivationRecord {

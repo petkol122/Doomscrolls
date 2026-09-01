@@ -1,6 +1,7 @@
 import { contentRegistry } from "@doomscrolls/content";
 import type { SpawnPointContentDefinition, SpawnPointContentId } from "@doomscrolls/content";
-import type { CharacterId, ZoneId } from "@doomscrolls/shared";
+import { t } from "@doomscrolls/localization";
+import type { CharacterClassKey, CharacterId, ZoneId } from "@doomscrolls/shared";
 import { PlayerPresence } from "./PlayerPresence";
 import { NIGHTMARKET_DEFAULT_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
 import { resolvePlayerInitialPosition } from "./validateCharacterLocation";
@@ -18,6 +19,7 @@ export interface BuildTownPlayerPresenceInput {
   readonly sessionId: string;
   readonly characterId: CharacterId;
   readonly displayName: string;
+  readonly classKey: CharacterClassKey;
   readonly level: number;
   readonly xp: number;
   readonly resolvedZoneId: ZoneId;
@@ -36,6 +38,14 @@ export interface BuildTownPlayerPresenceInput {
    * survive reconnects. Undefined means no objective is in progress.
    */
   readonly objectiveState?: PersistedObjectiveState | undefined;
+  /**
+   * Task 351 — Completed-and-rewarded objective history for the quest book.
+   * Populated from DB on join so completed objectives survive reconnect
+   * and room handoff.
+   */
+  readonly completedObjectives?: readonly {
+    readonly objectiveId: string;
+  }[];
 }
 
 /**
@@ -60,6 +70,7 @@ export function buildTownPlayerPresence(
     input.sessionId,
     input.characterId,
     input.displayName,
+    input.classKey,
     input.level,
     input.xp,
     spawnPoint.spawnPointId,
@@ -103,6 +114,22 @@ export function buildTownPlayerPresence(
       presence.objectiveCompleted = input.objectiveState.completed;
       presence.objectiveRewardGranted = input.objectiveState.rewardGranted;
     }
+  }
+
+  // Task 351 — Populate completed objective history from persisted data.
+  // The client resolves titles from content; this builds comma-separated
+  // ID and title strings so the quest book section can display history
+  // after reconnect and room handoff.
+  if (input.completedObjectives !== undefined && input.completedObjectives.length > 0) {
+    const ids: string[] = [];
+    const titles: string[] = [];
+    for (const entry of input.completedObjectives) {
+      const contentDef = contentRegistry.objectives.get(entry.objectiveId as never);
+      ids.push(entry.objectiveId);
+      titles.push(contentDef !== undefined ? t(contentDef.titleKey) : entry.objectiveId);
+    }
+    presence.completedObjectiveIds = ids.join(",");
+    presence.completedObjectiveTitles = titles.join(",");
   }
 
   return presence;

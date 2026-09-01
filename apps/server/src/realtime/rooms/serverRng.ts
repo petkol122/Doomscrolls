@@ -102,7 +102,10 @@ export function createRng(seed: number): Rng {
 
     // Fallback to last entry (handles floating point edge case)
     // entries is guaranteed non-empty due to the check above
-    const last = entries[entries.length - 1]!;
+    const last = entries[entries.length - 1];
+    if (last === undefined) {
+      throw new Error("pickWeighted: missing fallback entry");
+    }
     return { id: last.id, weight: last.weight };
   }
 

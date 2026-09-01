@@ -13,6 +13,10 @@ export const en = {
   "class.gravewalker.description":
     "A grim close-range survivor who treats grave dirt as a professional networking tool.",
 
+  "class.ironclad.name": "Ironclad",
+  "class.ironclad.description":
+    "A slab of scavenged plating that solves most disagreements by standing closer than the other side is comfortable with.",
+
   "enemy.trashboar_runt.name": "Trashboar Runt",
   "enemy.trashboar_runt.description":
     "A sewer-fed mutant with a bad temper, worse hygiene and enough tusk to ruin your evening.",
@@ -22,6 +26,9 @@ export const en = {
   "enemy.trashboar_skitter.name": "Trashboar Skitter",
   "enemy.trashboar_skitter.description":
     "A nervous runt cousin — all twitch and tusk, faster than it has any right to be and gone before you finish the swing.",
+  "enemy.static_wretch.name": "Static Wretch",
+  "enemy.static_wretch.description":
+    "A scavenger left twitchy and hyper-alert by too many nights sleeping against live cable. Notices you before you notice it.",
 
   "zone.nightmarket.name": "The Nightmarket",
   "zone.nightmarket.description":
@@ -30,6 +37,10 @@ export const en = {
   "zone.blackwire_sewers.name": "Blackwire Sewers",
   "zone.blackwire_sewers.description":
     "Maintenance tunnels tangled with illegal cabling, occult runoff and hungry things in the dark.",
+
+  "zone.static_yard.name": "Static Yard",
+  "zone.static_yard.description":
+    "A derelict tram yard where snapped overhead cable still spits current into the dark, and what lives there has adjusted.",
 
   "item.starter_pipe.name": "Starter Pipe",
   "item.starter_pipe.description":
@@ -56,12 +67,57 @@ export const en = {
   "item.tarnished_coin.description":
     "A corroded coin stamped with a face nobody remembers. Still clinks when dropped.",
 
+  "item.scavenged_hood.name": "Scavenged Hood",
+  "item.scavenged_hood.description":
+    "Stitched together from whatever kept the rain off someone else first.",
+  "item.wraptape_gloves.name": "Wraptape Gloves",
+  "item.wraptape_gloves.description":
+    "Cheap tape wound tight enough to make every swing a little faster.",
+  "item.sewer_treads.name": "Sewer Treads",
+  "item.sewer_treads.description":
+    "Boots that have learned exactly where not to step.",
+  "item.scrapcord_belt.name": "Scrapcord Belt",
+  "item.scrapcord_belt.description":
+    "Braided cable and scrap, cinched tight enough to hold a person together.",
+  "item.signal_scarred_amulet.name": "Signal-Scarred Amulet",
+  "item.signal_scarred_amulet.description":
+    "It picks up something that isn't a signal. Wearing it helps you think anyway.",
+
+  // ── Core 0.7 — epic tier, weapon/armor ──
+  "item.condemned_cleaver.name": "Condemned Cleaver",
+  "item.condemned_cleaver.description":
+    "Heavy enough that every swing feels like a decision you can't take back.",
+  "item.warden_plate.name": "Warden Plate",
+  "item.warden_plate.description":
+    "Cast for someone who was supposed to guard something. It still remembers how.",
+  "item.scavenger_king_helm.name": "Scavenger King's Helm",
+  "item.scavenger_king_helm.description":
+    "Whoever wore this first is gone. The helm didn't come with them.",
+  "item.livewire_lance.name": "Livewire Lance",
+  "item.livewire_lance.description":
+    "Strikes faster than it should, like it's still trying to complete a circuit.",
+  "item.chargeplate_vest.name": "Chargeplate Vest",
+  "item.chargeplate_vest.description":
+    "Wired plating that keeps your head clear and your feet quick, at the cost of a little static in your teeth.",
+  "item.static_wraps.name": "Static Wraps",
+  "item.static_wraps.description":
+    "Bound tight enough that your hands move before you've finished deciding to.",
+
   "skill.heavy_strike.name": "Heavy Strike",
   "skill.heavy_strike.description":
     "A deliberate attack that solves immediate problems through blunt force.",
   "skill.grave_spark.name": "Grave Spark",
   "skill.grave_spark.description":
     "A crackling burst of grave-charged energy that sears a single target.",
+  "skill.bone_splinter.name": "Bone Splinter",
+  "skill.bone_splinter.description":
+    "A jagged shard hurled from further out, hitting harder than Grave Spark but slower to recharge.",
+  "skill.shatter_blow.name": "Shatter Blow",
+  "skill.shatter_blow.description":
+    "A close-range haymaker that hits harder than any ranged trick, if you're willing to get close enough to land it.",
+  "skill.groundbreaker.name": "Groundbreaker",
+  "skill.groundbreaker.description":
+    "The heaviest single hit available to anyone, at the cost of the longest recharge in the game.",
 
   // ── Notice Board Objective Flow ──
   // Task 337: Improved feedback clarity — start message mentions the
@@ -73,6 +129,9 @@ export const en = {
   "objective.break_the_brute.title": "Break the Brute",
   "objective.break_the_brute.description":
     "The trashboar brute is the pack's backbone. Put it down and watch the rest scatter.",
+  "objective.sewer_cleanup.title": "Sewer Cleanup",
+  "objective.sewer_cleanup.description":
+    "The Blackwire Sewers are getting crowded — clear out enough trashboars to keep the tunnels passable.",
 
   // Feedback shown when a new objective starts
   "objective.accepted_with_route": "[ {title} ] Use the Blackwire gate or waypoint to reach the sewers and hunt {targetEnemy}.",
@@ -80,6 +139,8 @@ export const en = {
   "objective.progress_feedback": "[ {title} ] {current}/{target} {targetEnemy} killed.",
   // Feedback shown when the objective kill target is met
   "objective.ready_to_turn_in": "All {targetEnemy} eliminated! Return to the Notice Board in Nightmarket Services to collect your reward.",
+  "objective.ready_to_turn_in_return_nightmarket": "[ {title} ] Objective complete. Return to Nightmarket and claim your reward at the Notice Board.",
+  "objective.ready_to_turn_in_notice_board": "[ {title} ] Objective complete. Interact with the Notice Board to claim your reward.",
   // Turn-in reward feedback uses the same keys but the text is clearer now
   "objective.turn_in_complete_reward": "Turned in! +{xpReward} XP, +{copperReward} copper",
   "objective.turn_in_complete_reward_xp_only": "Turned in! +{xpReward} XP",
@@ -96,12 +157,23 @@ export const en = {
   "objective.complete_reward": "Objective complete! +{xpReward} XP, +{copperReward} copper",
   "objective.complete_reward_xp_only": "Objective complete! +{xpReward} XP",
   "objective.complete_reward_copper_only": "Objective complete! +{copperReward} copper",
+  "objective.complete_generic": "Objective complete!",
   "objective.reset_hint": "Restart this objective (progress will be lost)",
+  "objective.choose_objective": "Choose an available objective.",
   "objective.no_more_notices": "No more notices for now.",
   "objective.clear": "Clear",
   "objective.clear_hint": "Clear current objective progress (will need to re-interact to continue)",
   "objective.reset_chain": "Reset Chain",
   "objective.reset_chain_hint": "Restart the whole Notice Board sequence (all progress will be lost)",
+  "objective.panel.title": "Objective Book",
+  "objective.panel.active_section": "Current Objective",
+  "objective.panel.completed_section": "Completed Objectives",
+  "objective.panel.completed_empty": "No completed objectives yet.",
+  "objective.panel.empty": "No active objective.",
+  "objective.panel.state": "State",
+  "objective.panel.progress": "Progress",
+  "objective.panel.turn_in": "Turn-in",
+  "objective.panel.ready_to_turn_in_hint": "Ready to turn in at the Nightmarket Notice Board.",
 
   "auth.username": "Username",
   "auth.password": "Password",
@@ -131,6 +203,8 @@ export const en = {
   "character.origin": "Origin",
   "character.class": "Class",
   "character.level": "Level",
+  "character.xp": "XP",
+  "world_session.level_xp_format": "{level} • {xp} XP",
   "character.create_success": "Character created.",
 
   "money.money_label": "Money",
@@ -190,6 +264,7 @@ export const en = {
   "world_session.control_move": "Click ground: move",
   "world_session.control_attack": "Click enemy: attack / approach",
   "world_session.control_skill_secondary": "Right click: Grave Spark",
+  "world_session.control_skill_tertiary": "E: Bone Splinter",
   "world_session.control_dodge": "Space: dodge",
   "world_session.control_flask": "Q: healing flask",
   "world_session.skill_slot_secondary": "Right Click",
@@ -233,6 +308,13 @@ export const en = {
   "world_area.skill_hit_label": "Spark {damage}",
   "world_area.skill_target_missing": "Grave Spark target missing.",
   "world_area.skill_target_dead": "Grave Spark target already dead.",
+  "world_area.skill_tertiary_hit": "Bone Splinter hits for {damage}.",
+  "world_area.skill_tertiary_hit_label": "Splinter {damage}",
+  "world_area.skill_tertiary_target_missing": "Bone Splinter target missing.",
+  "world_area.skill_tertiary_target_dead": "Bone Splinter target already dead.",
+  "world_area.skill_tertiary_sent": "Bone Splinter sent.",
+  "world_area.skill_tertiary_too_far": "Bone Splinter target too far.",
+  "world_area.skill_tertiary_on_cooldown": "Bone Splinter is on cooldown.",
   "world_area.pickup_sent": "Pickup request sent.",
   "world_area.pickup_too_far": "Too far away to pick that up.",
   "world_area.pickup_moving_closer": "Moving closer to pick that up.",
@@ -314,6 +396,7 @@ export const en = {
   "spawn.nightmarket.default": "Nightmarket Arrival",
   "spawn.nightmarket.blackwire_combat_entry": "Blackwire Combat Entry",
   "spawn.nightmarket.services_return": "Nightmarket Services Return",
+  "spawn.nightmarket.static_yard_combat_entry": "Static Yard Combat Entry",
 
   "world_prop.loot_container.name": "Loot Container",
   "world_prop.loot_container.description": "A shared container that may hold valuable finds.",
@@ -372,6 +455,8 @@ export const en = {
   "town_service.waypoint.discovered": "Waypoint discovered.",
   "town_service.waypoint.already_discovered": "Waypoint already discovered.",
   "town_service.waypoint.empty": "No waypoint destinations available.",
+  "town_service.waypoint.progress": "Waypoints discovered: {discovered}/{total}",
+  "town_service.waypoint.undiscovered": "Not yet discovered",
   "town_service.waypoint.travel_action": "Travel",
   "town_service.waypoint.travel_success": "Travel complete.",
   "town_service.waypoint.rejected.waypoint_unavailable": "Waypoint unavailable.",
@@ -381,9 +466,11 @@ export const en = {
   "town_service.waypoint.rejected.travel_failed": "Travel failed.",
   "waypoint.destination.nightmarket_arrival": "Nightmarket Arrival",
   "waypoint.destination.nightmarket_blackwire_combat_edge": "Blackwire Combat Edge",
+  "waypoint.destination.nightmarket_static_yard_combat_edge": "Static Yard Combat Edge",
 
   "town_service.route.blackwire_gate.prompt": "The Blackwire gate leads toward a hostile sewer edge.",
   "town_service.route.blackwire_return.prompt": "Return to the Nightmarket service hub.",
+  "town_service.route.static_yard_gate.prompt": "The Static Yard gate leads toward a live-wired tram depot.",
   "town_service.route.travel_success.generic": "Route travel complete.",
   "town_service.route.travel_success.to_combat": "You push toward",
   "town_service.route.travel_success.to_hub": "You return to",
@@ -402,6 +489,7 @@ export const en = {
   "world_prop.area.skitter_warren.label": "Skitter Warren",
   "world_prop.area.blackwire_sewer_edge.label": "Blackwire Sewer Edge",
   "world_prop.area.deep_sewer_edge.label": "Deep Sewer Edge",
+  "world_prop.area.static_yard_edge.label": "Static Yard Edge",
   "world_prop.notice_board.label": "Notice Board",
   "world_prop.suspicious_vendor.label": "Suspicious Vendor",
   "world_prop.stash_keeper.label": "Stash Keeper",
@@ -409,6 +497,9 @@ export const en = {
   "world_prop.waypoint.label": "Waypoint",
   "world_prop.blackwire_waypoint.label": "Blackwire Waypoint",
   "world_prop.blackwire_gate.label": "Blackwire Gate",
+  "world_prop.static_yard_waypoint.label": "Static Yard Waypoint",
+  "world_prop.static_yard_gate.label": "Static Yard Gate",
+  "world_prop.combat_return_gate.label": "← Return to Nightmarket",
   "world_prop.market_crates.label": "Market Crates",
   "world_prop.rest_area.label": "Rest Area",
   "world_prop.crate.label": "Crate",

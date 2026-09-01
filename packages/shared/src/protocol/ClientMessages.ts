@@ -124,7 +124,7 @@ export interface RequestUseHealingFlaskClientMessage {
  */
 export interface RequestUseSkillSlotClientMessage {
   readonly type: "request_use_skill_slot";
-  readonly slot: "secondary";
+  readonly slot: "secondary" | "tertiary";
   readonly targetEnemyId?: string;
 }
 
@@ -171,6 +171,19 @@ export interface RequestInteractClientMessage {
 
 export interface RequestResetObjectiveClientMessage {
   readonly type: "request_reset_objective";
+}
+
+/**
+ * Task 348 — Notice board objective catalog foundation.
+ *
+ * The client sends the desired objective ID to start when the player
+ * selects an available objective from the notice board catalog.
+ * The server validates that the objective exists, is available, and
+ * that the player does not already have an incompatible active objective.
+ */
+export interface RequestStartBoardObjectiveClientMessage {
+  readonly type: "request_start_board_objective";
+  readonly objectiveId: string;
 }
 
 /**
@@ -251,6 +264,7 @@ export type ClientRoomMessage =
   | DropInventoryItemClientMessage
   | RequestInteractClientMessage
   | RequestResetObjectiveClientMessage
+  | RequestStartBoardObjectiveClientMessage
   | RequestDodgeClientMessage
   | RequestUseHealingFlaskClientMessage
   | RequestUseSkillSlotClientMessage

@@ -1,5 +1,6 @@
 import type { Room } from "@colyseus/sdk";
 import { t } from "@doomscrolls/localization";
+import { contentRegistry } from "@doomscrolls/content";
 import type { RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
 import Phaser from "phaser";
 
@@ -238,7 +239,11 @@ export function createWorldSessionAreaView(
   onDebugStateChange?: () => void,
   onRareDrop?: (itemLabel: string) => void,
 ): WorldSessionAreaView {
-  const graveSparkRange = 96;
+  // Core 0.7 -- read from content instead of a hardcoded duplicate of
+  // the server's skill range, so this display-only value can't drift
+  // from skills.ts (this is a client-side hint only; the server is
+  // still authoritative for the actual range check).
+  const graveSparkRange = contentRegistry.skills.get("grave_spark")?.range ?? 96;
   const movementHoldThrottleMs = 125;
   // Task 327 — client visibility guardrail:
   // - the server may still know/simulate enemies outside the camera,

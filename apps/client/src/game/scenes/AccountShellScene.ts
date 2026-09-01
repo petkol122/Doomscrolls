@@ -13,7 +13,7 @@ import { clientEnv } from "../../config/env";
 import { ApiClient, ApiClientError, type AccountState, type ApiErrorCode } from "../../net/ApiClient";
 import {
   createRealtimeClient,
-  joinTownRoom
+  joinResolvedCharacterRoom
 } from "../../net/RealtimeClient";
 
 import { createAccountHeader } from "./accountShell/accountShellAccountHeader";
@@ -175,7 +175,13 @@ export class AccountShellScene extends Phaser.Scene {
 
     try {
       const client = createRealtimeClient();
-      const joinedRoom = await joinTownRoom(client, sessionToken as SessionToken, this.selectedCharacterId);
+      const selectedCharacter = this.account?.characters.find((character) => character.id === this.selectedCharacterId) ?? null;
+      const joinedRoom = await joinResolvedCharacterRoom(
+        client,
+        sessionToken as SessionToken,
+        this.selectedCharacterId,
+        selectedCharacter?.currentZoneId,
+      );
 
       if (this.account !== null) {
         this.destroyOverlay();

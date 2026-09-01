@@ -1,5 +1,5 @@
 import { Schema, type } from "@colyseus/schema";
-import type { CharacterId, SpawnPointId } from "@doomscrolls/shared";
+import type { CharacterClassKey, CharacterId, SpawnPointId } from "@doomscrolls/shared";
 
 /**
  * Minimal player presence entry for TownRoom.
@@ -30,6 +30,10 @@ export class PlayerPresence extends Schema {
   @type("string") public sessionId: string;
   @type("string") public characterId: CharacterId;
   @type("string") public displayName: string;
+  // Core 0.9 -- the joined character's class, used by
+  // `resolveSkillSlotDefinition` so a player's secondary/tertiary skill
+  // slots resolve to their own class's skills, not a hardcoded default.
+  @type("string") public classKey: CharacterClassKey;
   @type("number") public level: number;
   @type("number") public xp: number;
   @type("string") public spawnPointId: SpawnPointId;
@@ -64,6 +68,9 @@ export class PlayerPresence extends Schema {
   @type("number") public maxFlaskCharges: number;
   @type("number") public nextFlaskAt: number;
   @type("number") public nextSkillSlotAt: number;
+  // Core 0.7 -- independent cooldown for the new tertiary skill slot
+  // (Bone Splinter), separate from nextSkillSlotAt (secondary/Grave Spark).
+  @type("number") public nextTertiarySkillSlotAt: number;
   @type("boolean") public hasObjective: boolean;
   @type("string") public objectiveId: string;
   @type("string") public objectiveLabel: string;
@@ -72,6 +79,8 @@ export class PlayerPresence extends Schema {
   @type("number") public objectiveTarget: number;
   @type("boolean") public objectiveCompleted: boolean;
   @type("boolean") public objectiveRewardGranted: boolean;
+  @type("string") public completedObjectiveIds: string;
+  @type("string") public completedObjectiveTitles: string;
   @type("boolean") public hasCorpse: boolean;
   @type("number") public corpseX: number;
   @type("number") public corpseY: number;
@@ -80,6 +89,7 @@ export class PlayerPresence extends Schema {
     sessionId: string,
     characterId: CharacterId,
     displayName: string,
+    classKey: CharacterClassKey,
     level: number,
     xp: number,
     spawnPointId: SpawnPointId,
@@ -94,6 +104,7 @@ export class PlayerPresence extends Schema {
     this.sessionId = sessionId;
     this.characterId = characterId;
     this.displayName = displayName;
+    this.classKey = classKey;
     this.level = level;
     this.xp = xp;
     this.spawnPointId = spawnPointId;
@@ -123,6 +134,7 @@ export class PlayerPresence extends Schema {
     this.maxFlaskCharges = 0;
     this.nextFlaskAt = 0;
     this.nextSkillSlotAt = 0;
+    this.nextTertiarySkillSlotAt = 0;
     this.hasObjective = false;
     this.objectiveId = "";
     this.objectiveLabel = "";
@@ -131,6 +143,8 @@ export class PlayerPresence extends Schema {
     this.objectiveTarget = 0;
     this.objectiveCompleted = false;
     this.objectiveRewardGranted = false;
+    this.completedObjectiveIds = "";
+    this.completedObjectiveTitles = "";
     this.hasCorpse = false;
     this.corpseX = 0;
     this.corpseY = 0;

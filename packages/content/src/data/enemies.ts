@@ -64,8 +64,33 @@ export const enemies = [
     aggroRange: 7.0,
     leashRange: 9.5,
     xp: 3,
-    lootTableId: "sewer_starter_loot",
+    // Task 357 (Core 0.5): Skitter now uses its own loot table instead of
+    // sharing Runt's, so the three enemy archetypes each feel distinct.
+    lootTableId: "sewer_skitter_loot",
     currencyDrop: { min: 1, max: 4 },
     spriteKey: "enemy_trashboar_runt_placeholder"
+  },
+  {
+    // Core 0.6 — Static Wretch, Static Yard's own enemy. A scavenger left
+    // twitchy and hyper-alert by constant exposure to live cabling.
+    // Reuses the exact existing AI-state shape (idle/aggro/chase/attack/
+    // leash/defeat/respawn) and content schema; only stats/behavior
+    // numbers are new, distinguishing it from every Trashboar variant.
+    id: "static_wretch",
+    nameKey: "enemy.static_wretch.name" as ContentLocalizationKey,
+    descriptionKey: "enemy.static_wretch.description" as ContentLocalizationKey,
+    level: 1,
+    maxHp: 10,
+    damage: 2,
+    armor: 0,
+    moveSpeed: 1.0,
+    attackRange: 1.1,
+    attackCooldownMs: 900,
+    aggroRange: 8.0,
+    leashRange: 10.5,
+    xp: 6,
+    lootTableId: "static_yard_loot",
+    currencyDrop: { min: 2, max: 8 },
+    spriteKey: "enemy_static_wretch_placeholder"
   }
 ] as const satisfies readonly EnemyContentDefinition[];

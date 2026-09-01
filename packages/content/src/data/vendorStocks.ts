@@ -28,5 +28,37 @@ export const vendorStocks = [
     vendorId: vendorId("nightmarket_suspicious_vendor"),
     itemId: itemId("scrap_cloth"),
     priceCopper: 15
+  },
+  // Task 356 (Core 0.5) — give the new equipment-slot-coverage items a
+  // guaranteed obtainability path alongside loot table RNG.
+  {
+    id: "nightmarket_suspicious_vendor_stock_04",
+    vendorId: vendorId("nightmarket_suspicious_vendor"),
+    itemId: itemId("scavenged_hood"),
+    priceCopper: 90
+  },
+  {
+    id: "nightmarket_suspicious_vendor_stock_05",
+    vendorId: vendorId("nightmarket_suspicious_vendor"),
+    itemId: itemId("wraptape_gloves"),
+    priceCopper: 90
+  },
+  {
+    id: "nightmarket_suspicious_vendor_stock_06",
+    vendorId: vendorId("nightmarket_suspicious_vendor"),
+    itemId: itemId("sewer_treads"),
+    priceCopper: 100
+  },
+  {
+    id: "nightmarket_suspicious_vendor_stock_07",
+    vendorId: vendorId("nightmarket_suspicious_vendor"),
+    itemId: itemId("scrapcord_belt"),
+    priceCopper: 80
+  },
+  {
+    id: "nightmarket_suspicious_vendor_stock_08",
+    vendorId: vendorId("nightmarket_suspicious_vendor"),
+    itemId: itemId("signal_scarred_amulet"),
+    priceCopper: 220
   }
 ] as const satisfies readonly VendorStockEntryDefinition[];

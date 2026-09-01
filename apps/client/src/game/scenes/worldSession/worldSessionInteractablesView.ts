@@ -100,6 +100,15 @@ export function createWorldSessionInteractablesView(
       graphic.strokeRect(pixelX - 12, pixelY - 16, 24, 32);
       return;
     }
+    if (objectType === "combat_return_gate") {
+      graphic.fillStyle(0x5f8fda, 0.92);
+      graphic.fillCircle(pixelX, pixelY, 15);
+      graphic.lineStyle(3, 0xd6ecff, 0.95);
+      graphic.strokeCircle(pixelX, pixelY, 19);
+      graphic.lineStyle(2, 0x284f7d, 0.95);
+      graphic.strokeCircle(pixelX, pixelY, 11);
+      return;
+    }
     if (objectType === "loot_container") {
       if (opened) {
         graphic.fillStyle(0x5a4a3a, 0.8);

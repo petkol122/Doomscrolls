@@ -9,7 +9,7 @@ export type CharacterName = string;
 
 export type OriginKey = "sewer_dweller";
 export type PassiveKey = "nightvision";
-export type CharacterClassKey = "gravewalker";
+export type CharacterClassKey = "gravewalker" | "ironclad";
 
 export interface CreateCharacterPayload {
   readonly characterName: CharacterName;
@@ -50,6 +50,8 @@ export interface CharacterSummary {
   readonly createdAt: IsoDateTimeString;
   readonly updatedAt: IsoDateTimeString;
 }
+
+export type CharacterRuntimeRoomKind = "town" | "combat";
 
 export interface CharacterDetails extends CharacterSummary {
   readonly passiveKeys: readonly PassiveKey[];

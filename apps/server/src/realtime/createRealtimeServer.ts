@@ -126,7 +126,18 @@ export async function createRealtimeServer({ app, httpServer, logger }: CreateRe
   // combat, no loot, no client message handlers. Future dedicated
   // tasks (Task 264+) must reuse shared helpers, not duplicate
   // TownRoom gameplay.
-  realtimeServer.define(COMBAT_ROOM_NAME, CombatRoom);
+  //
+  // Hotfix (found during Core 0.7 verification): without `.filterBy`,
+  // Colyseus's default `joinOrCreate` matches ANY existing unlocked
+  // "combat" room regardless of the requested zone -- a join for
+  // Static Yard could silently land in an already-open Blackwire
+  // Sewers room. `requestedZoneId` is the same join-option field name
+  // already used end-to-end for zone resolution (CombatRoom.onCreate,
+  // RoomJoinValidationService, RealtimeClient.ts); filtering by it
+  // makes the matchmaker only reuse a room whose metadata.requestedZoneId
+  // matches, and create a fresh room (with correct metadata, set
+  // automatically from this same option) when none does.
+  realtimeServer.define(COMBAT_ROOM_NAME, CombatRoom).filterBy(["requestedZoneId"]);
   await matchMaker.accept();
   await registerMatchmakingRoute(app);
 

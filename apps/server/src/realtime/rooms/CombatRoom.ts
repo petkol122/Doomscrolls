@@ -9,6 +9,10 @@ import {
   type RequestAttackClientMessage,
   type RequestAttackRejectedServerMessage,
   type RequestMoveRejectedServerMessage,
+  type RequestPickupWorldLootAcceptedServerMessage,
+  type RequestPickupWorldLootClientMessage,
+  type RequestPickupWorldLootRejectedServerMessage,
+  type XpGainedServerMessage,
   type UserId,
   type ZoneId,
 } from "@doomscrolls/shared";
@@ -20,6 +24,8 @@ import { buildCombatPlayerPresence } from "./buildCombatPlayerPresence";
 import { initializeCombatEnemies, COMBAT_SPAWN_BOX } from "./initializeCombatEnemies";
 import { validateMovementIntent } from "./movementIntentValidation";
 import { applyMovementIntent } from "./applyMovementIntent";
+import { resolvePlayerMovementSpeed } from "./resolvePlayerMovementSpeed";
+import { resolveAttackCooldownMs } from "./attackCooldown";
 import { stepTownRoomMovement, TOWN_MOVEMENT_TICK_RATE_MS } from "./stepTownRoomMovement";
 import { validateAttackIntent } from "./attackIntentValidation";
 import { consumeAttackCooldown } from "./attackCooldown";
@@ -35,6 +41,28 @@ import { contentRegistry } from "@doomscrolls/content";
 import { CharacterService } from "../../character/CharacterService";
 import { contentRegistry as roomContentRegistry } from "@doomscrolls/content";
 import { isPositionInsideZoneBounds } from "./validateCharacterLocation";
+import { initializeCombatInteractables } from "./initializeCombatInteractables";
+import { CharacterRepository, ItemRepository, ObjectiveRepository } from "../../persistence/repositories";
+import { NOTICE_BOARD_OBJECTIVE_SEQUENCE } from "@doomscrolls/content";
+import { spawnWorldLootOnEnemyDefeat } from "./spawnWorldLootOnEnemyDefeat";
+import { dispatchPickedUpWorldLoot } from "./pickupWorldLootDispatcher";
+import { validatePickupWorldLootIntent } from "./pickupWorldLootValidation";
+import { tryResolveLevelProgression } from "./levelProgression";
+import { CharacterStatsService } from "../../character/CharacterStatsService";
+import { advanceObjectiveProgress } from "./advanceObjectiveProgress";
+import { resolveCombatZoneReturnSpawnId } from "./waypointService";
+import {
+  getSkillSlotCooldownAt,
+  resolveSkillSlotDefinition,
+  setSkillSlotCooldownAt,
+} from "./skillSlotContent";
+import type {
+  RequestUseSkillSlotAcceptedServerMessage,
+  RequestUseSkillSlotClientMessage,
+  RequestUseSkillSlotRejectedServerMessage,
+} from "@doomscrolls/shared";
+
+const characterStatsService = new CharacterStatsService();
 
 // Task 227 -- enemy movement speed is authored in the same per-second
 // stat space as the player's derived `moveSpeed`. The runtime
@@ -46,6 +74,117 @@ const ENEMY_MOVEMENT_SPEED_UNITS_PER_SECOND_MULTIPLIER = 220;
 const ENEMY_ATTACK_WINDUP_MS = 300;
 
 type ContentEnemyId = Parameters<typeof contentRegistry.enemies.get>[0];
+
+type ProgressionUpdateResult =
+  | { readonly ok: true; readonly maxHp: number; readonly hp: number; readonly gainedMaxHp: number }
+  | { readonly ok: false };
+
+async function applyProgressionUpdate(
+  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number },
+  progression: { readonly xp: number; readonly level: number; readonly leveledUp: boolean },
+): Promise<ProgressionUpdateResult> {
+  const characterRepository = new CharacterRepository();
+  const character = await characterRepository.findProgressionContext(player.characterId);
+  if (character === null) {
+    return { ok: false };
+  }
+
+  const origin = contentRegistry.origins.get(character.originId as never);
+  const characterClass = contentRegistry.classes.get(character.classId as never);
+  if (origin === undefined || characterClass === undefined) {
+    throw new Error("Character progression content missing");
+  }
+
+  const equippedItems = await new ItemRepository().listEquippedItems(player.characterId);
+  const modifiers = equippedItems.flatMap((equippedItem) => {
+    const definition = contentRegistry.items.get(equippedItem.definitionId as never);
+    return definition?.statModifiers ?? [];
+  });
+
+  const previousMaxHp = Number.isFinite(player.maxHp) ? Math.max(0, player.maxHp ?? 0) : 0;
+  const previousHp = Number.isFinite(player.hp) ? Math.max(0, player.hp ?? 0) : character.currentHp;
+  const recalculated = characterStatsService.calculateEquippedStats(
+    characterStatsService.calculateLevelScaledStats(origin.baseStats, characterClass.baseStats, progression.level).primary,
+    modifiers,
+    progression.level,
+  );
+  const nextMaxHp = Math.max(1, Math.floor(recalculated.derived.maxHp));
+  const gainedMaxHp = Math.max(0, nextMaxHp - previousMaxHp);
+  const nextHp = Math.min(nextMaxHp, previousHp + gainedMaxHp);
+
+  try {
+    await characterRepository.updateProgressionState(player.characterId, {
+      xp: progression.xp,
+      level: progression.level,
+      currentHp: nextHp,
+      stats: {
+        ...recalculated.primary,
+        ...recalculated.derived,
+      },
+    });
+  } catch {
+    return { ok: false };
+  }
+
+  player.xp = progression.xp;
+  player.level = progression.level;
+  if ("maxHp" in player) {
+    player.maxHp = nextMaxHp;
+  }
+  if ("hp" in player) {
+    player.hp = nextHp;
+  }
+
+  return { ok: true, maxHp: nextMaxHp, hp: nextHp, gainedMaxHp };
+}
+
+async function grantFlatXpReward(
+  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number },
+  xpReward: number,
+  sendToClient: (type: string, payload: unknown) => void,
+): Promise<void> {
+  if (!Number.isFinite(xpReward) || xpReward <= 0) {
+    return;
+  }
+
+  const nextXp = player.xp + xpReward;
+  const progressionResult = tryResolveLevelProgression(player.level, nextXp);
+  if (!progressionResult.ok) {
+    return;
+  }
+
+  const progression = progressionResult.progression;
+  const progressionUpdate = await applyProgressionUpdate(player, progression);
+  if (!progressionUpdate.ok) {
+    return;
+  }
+
+  const xpGained: XpGainedServerMessage = {
+    type: "xp_gained",
+    characterId: player.characterId,
+    amount: xpReward,
+    totalXp: progression.xp,
+    level: progression.level,
+    leveledUp: progression.leveledUp,
+    hp: progressionUpdate.hp,
+    maxHp: progressionUpdate.maxHp,
+    gainedMaxHp: progressionUpdate.gainedMaxHp,
+  };
+  sendToClient("xp_gained", xpGained);
+}
+
+async function grantEnemyDefeatXp(
+  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number },
+  enemyId: string,
+  sendToClient: (type: string, payload: unknown) => void,
+): Promise<void> {
+  const enemyDefinition = contentRegistry.enemies.get(enemyId as ContentEnemyId);
+  if (enemyDefinition === undefined || !Number.isFinite(enemyDefinition.xp) || enemyDefinition.xp <= 0) {
+    return;
+  }
+
+  await grantFlatXpReward(player, enemyDefinition.xp, sendToClient);
+}
 
 function toWorldUnits(contentUnits: number, fallback: number): number {
   if (!Number.isFinite(contentUnits) || contentUnits <= 0) {
@@ -138,6 +277,8 @@ export class CombatRoom extends Room {
   private attackHandlerRegistered = false;
   private respawnHandlerRegistered = false;
   private combatReturnHandlerRegistered = false;
+  private pickupWorldLootHandlerRegistered = false;
+  private skillSlotHandlerRegistered = false;
 
   public override async onCreate(options: CombatRoomJoinOptions): Promise<void> {
     const log = createRoomLogger(
@@ -156,11 +297,14 @@ export class CombatRoom extends Room {
     // box lives in `initializeCombatEnemies` and is documented as
     // temporary.
     initializeCombatEnemies(state, zoneId);
+    initializeCombatInteractables(state, zoneId);
 
     this.registerMovementIntentHandler(log);
     this.registerAttackHandler(log);
     this.registerRespawnHandler(log);
     this.registerCombatReturnHandler(log);
+     this.registerPickupWorldLootHandler(log);
+    this.registerSkillSlotHandler(log);
 
     this.setSimulationInterval((deltaMs: number) => {
       // The CombatRoomState has the same `playerPresence` shape
@@ -184,7 +328,7 @@ export class CombatRoom extends Room {
         roomKind: "combat",
         enemyCount: state.enemies.size,
       },
-      "CombatRoom created with real combat wiring (request_move, request_attack, simulation tick, 3×Trashboar Runt spawn set).",
+      "CombatRoom created with combat-content wiring (content-driven enemy pockets, defeat XP/loot/objectives, pickup loot, return gate).",
     );
   }
 
@@ -265,22 +409,61 @@ export class CombatRoom extends Room {
     const characterId = result.character.id;
     const characterName = result.character.characterName;
     const resolvedZoneId = result.resolvedZoneId;
+    // Pre-existing gap found during Core 0.7 verification: this join
+    // previously hardcoded hp/maxHp/movementSpeed/attackCooldownMs to 0
+    // instead of reading the character's persisted stats (unlike
+    // TownRoom.onJoin, which already does this correctly). That left
+    // every fresh CombatRoom join permanently "downed" with 0 max HP
+    // and unable to move -- silently blocking attack, dodge, and skill
+    // casts alike. Mirrors TownRoom.ts's resolution exactly.
+    const movementSpeed = resolvePlayerMovementSpeed(result.character);
+    const attackCooldownMs = resolveAttackCooldownMs(
+      result.character.stats?.derived.attackCooldownMs,
+    );
+    const maxHp = Math.max(0, result.character.stats?.derived.maxHp ?? 0);
+    const currentHp = Math.min(maxHp, Math.max(0, result.character.stats?.currentHp ?? maxHp));
+
+    const objectiveRepo = new ObjectiveRepository();
+    let persistedObjective: {
+      objectiveId: string;
+      currentProgress: number;
+      requiredProgress: number;
+      completed: boolean;
+      rewardGranted: boolean;
+    } | undefined;
+    const completedObjectives = await objectiveRepo.findCompletedByCharacter(characterId.toString());
+    for (const candidateId of NOTICE_BOARD_OBJECTIVE_SEQUENCE) {
+      const objectiveRow = await objectiveRepo.findByCharacterAndObjective(characterId.toString(), candidateId);
+      if (objectiveRow !== null && !objectiveRow.rewardGranted) {
+        persistedObjective = {
+          objectiveId: objectiveRow.objectiveId,
+          currentProgress: objectiveRow.currentProgress,
+          requiredProgress: objectiveRow.requiredProgress,
+          completed: objectiveRow.completed,
+          rewardGranted: objectiveRow.rewardGranted,
+        };
+        break;
+      }
+    }
 
     const presence = buildCombatPlayerPresence({
       sessionId,
       characterId,
       displayName: characterName,
+      classKey: result.character.classKey,
       level: result.character.level,
       xp: result.character.xp,
       resolvedZoneId,
-      hp: 0,
-      maxHp: 0,
+      hp: currentHp,
+      maxHp,
       restoredFlaskCharges: undefined,
-      movementSpeed: 0,
-      attackCooldownMs: 0,
+      movementSpeed,
+      attackCooldownMs,
       restoredLocationZoneId: result.character.lastLocationZoneId ?? undefined,
       restoredLocationX: result.character.lastLocationX ?? undefined,
       restoredLocationY: result.character.lastLocationY ?? undefined,
+      objectiveState: persistedObjective,
+      completedObjectives,
     });
 
     state.playerPresence.set(sessionId, presence);
@@ -298,6 +481,12 @@ export class CombatRoom extends Room {
       },
       "CombatRoom join accepted, minimal presence added.",
     );
+
+    try {
+      await new CharacterService().updateCharacterCurrentZone(characterId, resolvedZoneId);
+    } catch {
+      // Keep join successful; reconnect recovery may repair zone intent later.
+    }
   }
 
   public override async onLeave(_client: Client): Promise<void> {
@@ -452,6 +641,40 @@ export class CombatRoom extends Room {
         client.send("request_attack_accepted", accepted);
       } catch {}
 
+      const spawnedLootList = damageResult.defeated
+        ? spawnWorldLootOnEnemyDefeat(state as never, validation.enemy, now)
+        : [];
+
+      if (damageResult.defeated) {
+        void grantEnemyDefeatXp(player, validation.enemy.enemyId, (type, payload) => {
+          try {
+            client.send(type, payload);
+          } catch {}
+        });
+
+        const progressResult = advanceObjectiveProgress(player, validation.enemy.enemyId, (updated) => {
+          void new ObjectiveRepository().updateProgress(
+            updated.characterId.toString(),
+            updated.objectiveId,
+            updated.currentProgress,
+          );
+        });
+        if (progressResult !== undefined && progressResult.changed) {
+          try {
+            client.send("objective_updated", {
+              type: "objective_updated",
+              objectiveId: progressResult.objectiveId,
+              label: progressResult.label,
+              descriptionKey: progressResult.descriptionKey,
+              current: progressResult.current,
+              target: progressResult.target,
+              completed: progressResult.completed,
+              ...(progressResult.completed ? { readyToTurnIn: true } : {}),
+            });
+          } catch {}
+        }
+      }
+
       log.debug?.(
         {
           roomId: this.roomId,
@@ -462,9 +685,246 @@ export class CombatRoom extends Room {
           appliedDamage: damageResult.appliedDamage,
           defeated: damageResult.defeated,
           respawnAtMs: damageResult.respawnAtMs,
+          worldLootCount: spawnedLootList.length,
+          worldLootFirstId: spawnedLootList[0]?.id,
           nextAttackAt: player.nextAttackAt,
         },
-        "CombatRoom request_attack accepted and enemy state synced (no loot/XP/objective yet).",
+        "CombatRoom request_attack accepted and synced enemy defeat combat rewards/state.",
+      );
+    });
+  }
+
+  /**
+   * Core 0.7 -- `request_use_skill_slot` handler for CombatRoom.
+   *
+   * Audit finding: `request_use_skill_slot` was previously registered
+   * only in TownRoom.ts, so neither skill slot (Grave Spark nor the new
+   * Bone Splinter tertiary slot) could be cast in Blackwire Sewers or
+   * Static Yard -- the game's only real combat zones. This mirrors
+   * `registerAttackHandler` above: an immediate accept/reject with no
+   * deferred move-closer queue, matching how basic attack already
+   * behaves in CombatRoom (unlike TownRoom, which auto-approaches).
+   */
+  private registerSkillSlotHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.skillSlotHandlerRegistered) {
+      return;
+    }
+    this.skillSlotHandlerRegistered = true;
+
+    this.onMessage("request_use_skill_slot", (client: Client, raw: unknown) => {
+      const state = this.state as CombatRoomState;
+      const message = raw as Partial<RequestUseSkillSlotClientMessage> | null;
+      const player = state.playerPresence.get(client.sessionId);
+
+      const slot = message?.slot === "secondary" || message?.slot === "tertiary" ? message.slot : undefined;
+
+      if (slot === undefined) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          type: "request_use_skill_slot_rejected",
+          slot: "secondary",
+          reason: "skill_unavailable",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      const rejectionBase = { type: "request_use_skill_slot_rejected" as const, slot };
+
+      if (player === undefined || player.lifeState !== "alive" || player.hp <= 0) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "player_downed",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      const skillDefinition = resolveSkillSlotDefinition(slot, player.classKey);
+      const now = Date.now();
+      const nextSkillSlotAt = getSkillSlotCooldownAt(player, slot);
+      if (now < nextSkillSlotAt) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "skill_on_cooldown",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      const targetEnemyId = typeof message?.targetEnemyId === "string" && message.targetEnemyId.length > 0
+        ? message.targetEnemyId
+        : undefined;
+
+      if (targetEnemyId === undefined) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "skill_unavailable",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      const enemy = state.enemies.get(targetEnemyId);
+      if (enemy === undefined) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "enemy_not_found",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      if (enemy.defeated || enemy.hp <= 0) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "enemy_defeated",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+      if (distance > skillDefinition.range) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "out_of_range",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      setSkillSlotCooldownAt(player, slot, now + skillDefinition.cooldownMs);
+      const damageResult = applyEnemyDamage(enemy, skillDefinition.damage);
+
+      const spawnedLootList = damageResult.defeated
+        ? spawnWorldLootOnEnemyDefeat(state as never, enemy, now)
+        : [];
+
+      if (damageResult.defeated) {
+        void grantEnemyDefeatXp(player, enemy.enemyId, (type, payload) => {
+          try { client.send(type, payload); } catch {}
+        });
+
+        const progressResult = advanceObjectiveProgress(player, enemy.enemyId, (updated) => {
+          void new ObjectiveRepository().updateProgress(
+            updated.characterId.toString(),
+            updated.objectiveId,
+            updated.currentProgress,
+          );
+        });
+        if (progressResult !== undefined && progressResult.changed) {
+          try {
+            client.send("objective_updated", {
+              type: "objective_updated",
+              objectiveId: progressResult.objectiveId,
+              label: progressResult.label,
+              descriptionKey: progressResult.descriptionKey,
+              current: progressResult.current,
+              target: progressResult.target,
+              completed: progressResult.completed,
+              ...(progressResult.completed ? { readyToTurnIn: true } : {}),
+            });
+          } catch {}
+        }
+      }
+
+      const nextReadyAt = getSkillSlotCooldownAt(player, slot);
+      const accepted: RequestUseSkillSlotAcceptedServerMessage = {
+        type: "request_use_skill_slot_accepted",
+        slot,
+        targetEnemyId: enemy.id,
+        damage: skillDefinition.damage,
+        remainingHp: damageResult.remainingHp,
+        defeated: damageResult.defeated,
+        nextReadyAt,
+      };
+      try { client.send(accepted.type, accepted); } catch {}
+
+      log.debug?.(
+        {
+          roomId: this.roomId,
+          roomName: this.roomName,
+          sessionId: client.sessionId,
+          slot,
+          targetEnemyId: enemy.id,
+          remainingHp: damageResult.remainingHp,
+          appliedDamage: damageResult.appliedDamage,
+          defeated: damageResult.defeated,
+          respawnAtMs: damageResult.respawnAtMs,
+          worldLootCount: spawnedLootList.length,
+          nextReadyAt,
+        },
+        "CombatRoom request_use_skill_slot accepted and synced skill combat rewards/state.",
+      );
+    });
+  }
+
+  private registerPickupWorldLootHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.pickupWorldLootHandlerRegistered) {
+      return;
+    }
+    this.pickupWorldLootHandlerRegistered = true;
+
+    this.onMessage("request_pickup_world_loot", async (client: Client, raw: unknown) => {
+      const state = this.state as CombatRoomState;
+      const message = raw as Partial<RequestPickupWorldLootClientMessage> | null;
+      const worldLootId = typeof message?.worldLootId === "string" ? message.worldLootId : "";
+      const player = state.playerPresence.get(client.sessionId);
+      const validation = validatePickupWorldLootIntent(state as never, player, worldLootId);
+
+      if (!validation.ok) {
+        const rejection: RequestPickupWorldLootRejectedServerMessage = {
+          type: "request_pickup_world_loot_rejected",
+          reason: validation.reason,
+          ...(worldLootId.length > 0 ? { worldLootId } : {}),
+        };
+        try {
+          client.send("request_pickup_world_loot_rejected", rejection);
+        } catch {}
+        return;
+      }
+
+      if (player === undefined) {
+        return;
+      }
+
+      const dispatchResult = await dispatchPickedUpWorldLoot({
+        characterId: player.characterId,
+        worldLoot: validation.worldLoot,
+      });
+
+      if (!dispatchResult.ok) {
+        try {
+          client.send("request_pickup_world_loot_rejected", dispatchResult.rejected);
+        } catch {}
+        return;
+      }
+
+      state.worldLoot.delete(validation.worldLoot.id);
+
+      const accepted: RequestPickupWorldLootAcceptedServerMessage = dispatchResult.accepted;
+      try {
+        client.send("request_pickup_world_loot_accepted", accepted);
+      } catch {}
+      if (dispatchResult.currencyMessage !== null) {
+        try {
+          client.send("currency_picked_up", dispatchResult.currencyMessage);
+        } catch {}
+      }
+
+      log.debug?.(
+        {
+          roomId: this.roomId,
+          roomName: this.roomName,
+          sessionId: client.sessionId,
+          characterId: player.characterId,
+          worldLootId: validation.worldLoot.id,
+        },
+        "CombatRoom request_pickup_world_loot accepted and synced loot removed from room state.",
       );
     });
   }
@@ -562,12 +1022,14 @@ export class CombatRoom extends Room {
         return;
       }
 
-      if (objectId !== "combat_return_to_nightmarket") {
+      const returnInteractable = state.interactables.get(objectId);
+      if (returnInteractable === undefined || returnInteractable.type !== "combat_return_gate") {
         reject("transition_unavailable");
         return;
       }
 
-      const returnSpawn = roomContentRegistry.spawnPoints.get("nightmarket_blackwire_combat_entry" as never);
+      const returnSpawnId = resolveCombatZoneReturnSpawnId(state.zoneId);
+      const returnSpawn = roomContentRegistry.spawnPoints.get(returnSpawnId as never);
       if (
         returnSpawn === undefined
         || returnSpawn.zoneId !== "nightmarket"
@@ -600,7 +1062,7 @@ export class CombatRoom extends Room {
           fromRoomKind: "combat",
           toRoomKind: "town",
           targetZoneId: "nightmarket" as ZoneId,
-          targetSpawnKey: "nightmarket_blackwire_combat_entry",
+          targetSpawnKey: returnSpawnId,
           message: "Returning to Nightmarket.",
         };
         try { client.send("combat_town_return_approved", approved); } catch {}
@@ -618,7 +1080,7 @@ export class CombatRoom extends Room {
           characterId: player.characterId,
           objectId,
           targetZoneId: "nightmarket",
-          targetSpawnKey: "nightmarket_blackwire_combat_entry",
+          targetSpawnKey: returnSpawnId,
         },
         "CombatRoom request_combat_return approved for conservative leave-and-join handoff back to TownRoom.",
       );

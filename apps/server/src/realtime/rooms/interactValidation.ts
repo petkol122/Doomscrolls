@@ -171,6 +171,9 @@ export function getInteractableResponseMessage(objectId: string): string {
   if (objectId === "nightmarket_blackwire_return_01") {
     return t("town_service.route.blackwire_return.prompt");
   }
+  if (objectId === "nightmarket_static_yard_gate_01") {
+    return t("town_service.route.static_yard_gate.prompt");
+  }
   if (objectId === "nightmarket_stash_keeper_01") {
     const service = contentRegistry.townServices.get("nightmarket_stash_keeper");
     if (service !== undefined) {
@@ -193,7 +196,7 @@ export function getInteractableResponseMessage(objectId: string): string {
   if (objectId === "nightmarket_vendor_01") {
     const vendorService = contentRegistry.townServices.get("nightmarket_suspicious_vendor");
     if (vendorService !== undefined) {
-      return `${t(vendorService.labelKey)}: \"What're you buyin'?\"`;
+      return `${t(vendorService.labelKey)}: "What're you buyin'?"`;
     }
     return '"What\'re you buyin\'?"';
   }

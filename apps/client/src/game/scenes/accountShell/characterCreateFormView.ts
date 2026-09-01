@@ -1,9 +1,15 @@
 import { t } from "@doomscrolls/localization";
-import type { OriginKey, CharacterClassKey } from "@doomscrolls/shared";
-import { createInput, createFixedOptionSelect, createButton as makeButton } from "./accountShellDom";
+import type { OriginKey } from "@doomscrolls/shared";
+import { createInput, createFixedOptionSelect, createOptionSelect, createButton as makeButton } from "./accountShellDom";
 
 const CORE_0_1_ORIGIN_ID = "sewer_dweller" satisfies OriginKey;
-const CORE_0_1_CLASS_ID = "gravewalker" satisfies CharacterClassKey;
+
+// Core 0.9 -- both classes available under sewer_dweller today; a second
+// origin is out of scope for this build (see docs/CORE_BUILD_0_9_PLAN.md).
+const CLASS_OPTIONS = [
+  { value: "gravewalker", label: t("class.gravewalker.name") },
+  { value: "ironclad", label: t("class.ironclad.name") }
+];
 
 export interface CharacterCreateFormElements {
   readonly status: HTMLParagraphElement;
@@ -37,11 +43,10 @@ export function createCharacterCreateForm(
     CORE_0_1_ORIGIN_ID,
     t("origin.sewer_dweller.name")
   );
-  const characterClass = createFixedOptionSelect(
+  const characterClass = createOptionSelect(
     t("character.class"),
     "doomscrolls-character-class",
-    CORE_0_1_CLASS_ID,
-    t("class.gravewalker.name")
+    CLASS_OPTIONS
   );
   const createButton = makeButton(t("character.create"));
 

@@ -216,6 +216,18 @@ export interface RequestMoveRejectedServerMessage {
   readonly clientTime?: number;
 }
 
+export type RequestStartBoardObjectiveRejectedReason =
+  | "invalid_request"
+  | "already_has_active_objective"
+  | "objective_not_found"
+  | "objective_not_available"
+  | "objective_already_completed";
+
+export interface RequestStartBoardObjectiveRejectedServerMessage {
+  readonly type: "request_start_board_objective_rejected";
+  readonly reason: RequestStartBoardObjectiveRejectedReason;
+}
+
 export type RequestAttackRejectedReason =
   | "player_not_ready"
   | "player_downed"
@@ -295,7 +307,7 @@ export type RequestUseSkillSlotRejectedReason =
 
 export interface RequestUseSkillSlotAcceptedServerMessage {
   readonly type: "request_use_skill_slot_accepted";
-  readonly slot: "secondary";
+  readonly slot: "secondary" | "tertiary";
   readonly targetEnemyId: string;
   readonly damage: number;
   readonly remainingHp: number;
@@ -305,7 +317,7 @@ export interface RequestUseSkillSlotAcceptedServerMessage {
 
 export interface RequestUseSkillSlotRejectedServerMessage {
   readonly type: "request_use_skill_slot_rejected";
-  readonly slot: "secondary";
+  readonly slot: "secondary" | "tertiary";
   readonly reason: RequestUseSkillSlotRejectedReason;
 }
 
@@ -374,6 +386,18 @@ export interface InteractResponseServerMessage {
   readonly type: "interact_response";
   readonly objectId: string;
   readonly message: string;
+  /**
+   * Task 348 — Notice board objective catalog foundation.
+   * When the notice board responds with available objectives (player has
+   * no active objective), this field contains the list of objectives the
+   * player can start. Each entry includes the objective id and the
+   * localization key for the title.
+   */
+  readonly availableObjectives?: readonly {
+    readonly objectiveId: string;
+    readonly titleKey: string;
+    readonly descriptionKey: string;
+  }[];
 }
 
 export interface ObjectiveUpdatedServerMessage {
@@ -600,4 +624,5 @@ export type ServerRoomMessage =
   | RequestWaypointTravelRejectedServerMessage
   | RequestRouteTravelAcceptedServerMessage
   | RequestRouteTravelRejectedServerMessage
+  | RequestStartBoardObjectiveRejectedServerMessage
   | ErrorServerMessage;

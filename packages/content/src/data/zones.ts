@@ -15,7 +15,7 @@ export const zones = [
     classification: "test_hybrid",
     maxPlayers: 30,
     enemyIds: ["trashboar_runt", "trashboar_brute", "trashboar_skitter"],
-    transitionZoneIds: ["blackwire_sewers"],
+    transitionZoneIds: ["blackwire_sewers", "static_yard"],
     mapKey: "map_nightmarket_placeholder",
     bounds: { minX: 0, maxX: 5000, minY: 0, maxY: 3600 },
     // Task 303 / Task 328 — Physical town rest area: enlarged to match the
@@ -33,9 +33,27 @@ export const zones = [
     roomType: "combat",
     classification: "combat",
     maxPlayers: 4,
-    enemyIds: ["trashboar_runt"],
+    enemyIds: ["trashboar_runt", "trashboar_skitter", "trashboar_brute"],
     transitionZoneIds: ["nightmarket"],
     mapKey: "map_blackwire_sewers_placeholder",
+    bounds: { minX: 0, maxX: 800, minY: 0, maxY: 600 }
+  },
+  {
+    // Core 0.6 — Static Yard: the second combat zone. A derelict tram/rail
+    // yard adjoining Blackwire's cabling network, reachable from
+    // Nightmarket's previously-unused far corner. Bounds intentionally
+    // match Blackwire Sewers' shape so the existing CombatRoom entry-box
+    // logic (COMBAT_SPAWN_BOX) works unchanged for any combat zone.
+    id: "static_yard",
+    zoneId: zoneId("static_yard"),
+    nameKey: "zone.static_yard.name",
+    descriptionKey: "zone.static_yard.description",
+    roomType: "combat",
+    classification: "combat",
+    maxPlayers: 4,
+    enemyIds: ["static_wretch", "trashboar_brute"],
+    transitionZoneIds: ["nightmarket"],
+    mapKey: "map_static_yard_placeholder",
     bounds: { minX: 0, maxX: 800, minY: 0, maxY: 600 }
   }
 ] as const satisfies readonly ZoneContentDefinition[];

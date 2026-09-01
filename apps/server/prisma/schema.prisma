@@ -217,15 +217,16 @@ model ItemInstance {
 }
 
 model CharacterObjective {
-  id               String   @id @default(uuid())
+  id               String    @id @default(uuid())
   characterId      String
   objectiveId      String
-  currentProgress  Int      @default(0)
-  requiredProgress Int      @default(0)
-  completed        Boolean  @default(false)
-  rewardGranted    Boolean  @default(false)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  currentProgress  Int       @default(0)
+  requiredProgress Int       @default(0)
+  completed        Boolean   @default(false)
+  rewardGranted    Boolean   @default(false)
+  completedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
 

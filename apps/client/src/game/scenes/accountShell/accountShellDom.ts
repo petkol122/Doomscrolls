@@ -69,6 +69,45 @@ export function createFixedOptionSelect(
   return { wrapper, select };
 }
 
+/**
+ * Core 0.9 -- a real multi-option select, for fields that now have more
+ * than one choice (e.g. character class). `createFixedOptionSelect`
+ * above stays as-is for fields that genuinely have exactly one choice
+ * today (e.g. origin).
+ */
+export function createOptionSelect(
+  labelText: string,
+  id: string,
+  options: readonly { readonly value: string; readonly label: string }[]
+): { readonly wrapper: HTMLElement; readonly select: HTMLSelectElement } {
+  const wrapper = document.createElement("label");
+  wrapper.style.display = "flex";
+  wrapper.style.flexDirection = "column";
+  wrapper.style.gap = "6px";
+  wrapper.style.fontSize = "14px";
+  wrapper.setAttribute("for", id);
+  wrapper.textContent = labelText;
+
+  const select = document.createElement("select");
+  select.id = id;
+  select.style.padding = "10px 12px";
+  select.style.border = "1px solid #5f4a2f";
+  select.style.borderRadius = "8px";
+  select.style.background = "#130f0c";
+  select.style.color = "#f0dec0";
+  select.style.font = "inherit";
+
+  for (const optionDefinition of options) {
+    const option = document.createElement("option");
+    option.value = optionDefinition.value;
+    option.textContent = optionDefinition.label;
+    select.appendChild(option);
+  }
+  wrapper.appendChild(select);
+
+  return { wrapper, select };
+}
+
 export function createButton(label: string): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button";

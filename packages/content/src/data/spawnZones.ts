@@ -2,6 +2,54 @@ import type { EnemyId, SpawnZoneDefinition } from "./types";
 
 export const spawnZones = [
   {
+    // Core 0.4 Task 353 — conservative Blackwire Sewers entrance pocket.
+    // Keeps the first contact readable after the room handoff and leaves
+    // space around the return gate.
+    id: "blackwire_sewers_runt_pocket_west",
+    zoneId: "blackwire_sewers",
+    enemyId: "trashboar_runt" as EnemyId,
+    count: 2,
+    minX: 180,
+    maxX: 290,
+    minY: 170,
+    maxY: 280,
+  },
+  {
+    // Mid-room mixed pressure stays modest: one skitter in its own pocket
+    // so the area gains variety without becoming noisy.
+    id: "blackwire_sewers_skitter_pocket_mid",
+    zoneId: "blackwire_sewers",
+    enemyId: "trashboar_skitter" as EnemyId,
+    count: 1,
+    minX: 350,
+    maxX: 460,
+    minY: 210,
+    maxY: 320,
+  },
+  {
+    // Small deeper runt pair to make the room feel inhabited without adding
+    // a dense swarm.
+    id: "blackwire_sewers_runt_pocket_east",
+    zoneId: "blackwire_sewers",
+    enemyId: "trashboar_runt" as EnemyId,
+    count: 2,
+    minX: 520,
+    maxX: 650,
+    minY: 180,
+    maxY: 300,
+  },
+  {
+    // Single deeper brute anchor. Reuses existing heavy enemy content only.
+    id: "blackwire_sewers_brute_anchor",
+    zoneId: "blackwire_sewers",
+    enemyId: "trashboar_brute" as EnemyId,
+    count: 1,
+    minX: 560,
+    maxX: 700,
+    minY: 340,
+    maxY: 470,
+  },
+  {
     // First combat pocket around sewer edge marker 01, pushed farther from the
     // enlarged town hub so hostile enemies do not visually crowd services.
     id: "sewer_edge_trashboar_runt_zone",
@@ -36,5 +84,42 @@ export const spawnZones = [
     maxX: 4380,
     minY: 2740,
     maxY: 3240,
+  },
+  // ── Core 0.6 — Static Yard combat zone pockets ──
+  {
+    // Entry-side wretch cluster. Kept clear of the COMBAT_SPAWN_BOX
+    // entry area (x 96-180, y 420-520) and the return gate.
+    id: "static_yard_wretch_pocket_north",
+    zoneId: "static_yard",
+    enemyId: "static_wretch" as EnemyId,
+    count: 3,
+    minX: 150,
+    maxX: 300,
+    minY: 120,
+    maxY: 240,
+  },
+  {
+    // Second wretch pocket, mid-room, distinct from the north pocket so
+    // the room reads as inhabited without matching Blackwire's layout.
+    id: "static_yard_wretch_pocket_south",
+    zoneId: "static_yard",
+    enemyId: "static_wretch" as EnemyId,
+    count: 2,
+    minX: 480,
+    maxX: 620,
+    minY: 380,
+    maxY: 500,
+  },
+  {
+    // Single heavy anchor reusing the existing Trashboar Brute, mirroring
+    // Blackwire's own single-brute-anchor pattern.
+    id: "static_yard_brute_anchor",
+    zoneId: "static_yard",
+    enemyId: "trashboar_brute" as EnemyId,
+    count: 1,
+    minX: 620,
+    maxX: 740,
+    minY: 150,
+    maxY: 260,
   },
 ] as const satisfies readonly SpawnZoneDefinition[];

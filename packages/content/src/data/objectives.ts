@@ -21,15 +21,25 @@ export const objectives: readonly ObjectiveContentDefinition[] = [
     copperReward: 6,
     zoneId: "nightmarket",
   },
+  {
+    id: "sewer_cleanup",
+    titleKey: "objective.sewer_cleanup.title" as ContentLocalizationKey,
+    descriptionKey: "objective.sewer_cleanup.description" as ContentLocalizationKey,
+    targetEnemyIds: ["trashboar_runt", "trashboar_brute"],
+    requiredKills: 5,
+    xpReward: 8,
+    copperReward: 5,
+    zoneId: "nightmarket",
+  },
 ] as const satisfies readonly ObjectiveContentDefinition[];
 
 /**
  * Ordered sequence of objective IDs offered by the Notice Board.
- * The first uncompleted objective is shown; after completion and reward
- * grant, the player re-interacts to advance to the next in the sequence.
- * Only one objective is active at a time.
+ * When the player has no active objective, all uncompleted objectives are
+ * shown as available. Only one objective may be active at a time.
  */
 export const NOTICE_BOARD_OBJECTIVE_SEQUENCE: readonly string[] = [
   "cull_trashboars",
   "break_the_brute",
+  "sewer_cleanup",
 ] as const;

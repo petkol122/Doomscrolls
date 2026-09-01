@@ -1,7 +1,8 @@
 import { Client, Room } from "@colyseus/sdk";
 
-import type { CharacterId, SessionToken, ZoneId } from "@doomscrolls/shared";
+import type { CharacterId, CharacterRuntimeRoomKind, SessionToken, ZoneId } from "@doomscrolls/shared";
 import type { RoomJoinAuthPayload, RoomState } from "@doomscrolls/shared";
+import { contentRegistry } from "@doomscrolls/content";
 import { clientEnv } from "../config/env";
 
 export type RealtimeClient = Client;
@@ -48,6 +49,39 @@ export async function joinCombatRoom(
   };
 
   return client.joinOrCreate("combat", payload);
+}
+
+/**
+ * Core 0.6 Wave 2 — resolves a zone's room kind from the content registry
+ * instead of a hardcoded `zoneId === "blackwire_sewers"` check, so a new
+ * combat zone (e.g. Static Yard) is routed correctly on reconnect/resume
+ * without a client code change per zone.
+ */
+export function resolveRoomKindForZoneId(zoneId?: ZoneId | null): CharacterRuntimeRoomKind | null {
+  if (zoneId === undefined || zoneId === null || zoneId.length === 0) {
+    return "town";
+  }
+
+  const zone = contentRegistry.zones.get(zoneId as never);
+  if (zone === undefined) {
+    return null;
+  }
+
+  return zone.roomType;
+}
+
+export async function joinResolvedCharacterRoom(
+  client: RealtimeClient,
+  sessionToken: SessionToken,
+  characterId: CharacterId,
+  requestedZoneId?: ZoneId,
+): Promise<Room<RoomState>> {
+  const roomKind = resolveRoomKindForZoneId(requestedZoneId);
+  if (roomKind === "combat") {
+    return joinCombatRoom(client, sessionToken, characterId, requestedZoneId);
+  }
+
+  return joinTownRoom(client, sessionToken, characterId, requestedZoneId);
 }
 
 /**
