@@ -149,6 +149,17 @@ Task 277 (0.3) moved equipped items out of `inventorySummaryItems` into a dedica
 
 ---
 
+## Core 0.5 RC Closure
+
+**Date:** 2026-09-01
+**Status:** RC / bugfix-only
+
+Waves 2-4 shipped as Tasks 356-358: equipment slot coverage (5 new items filling every previously-dead slot), loot table differentiation per enemy archetype plus a considered-and-declined third rarity tier, and a fix to the previously-dead gear comparison affordance. The Wave 5 hardening audit was explicitly skipped by product decision, mirroring the same call made to close 0.4, in order to move faster into further gameplay work.
+
+**Core Build 0.5 is now RC / bugfix-only.**
+
+---
+
 ### Build-state note
 
 Core Build 0.5 should be understood as a **controlled depth pass**, not a system rewrite. It fills gaps that already exist in the schema (empty slots, flat rarity, shared loot tables) rather than introducing new item mechanics. The existing 0.3/0.4 playable loop remains the baseline that 0.5 must preserve while making loot feel like real progression.

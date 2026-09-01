@@ -7,7 +7,7 @@
 **Date:** 2026-09-01
 **Build:** Core Build 0.5
 **Theme:** Itemization and Loot Depth
-**Status:** Planning opened. Core Build 0.4 is RC / bugfix-only.
+**Status:** Waves 1-4 shipped (Tasks 356-358). Wave 5 hardening audit explicitly skipped by product decision (2026-09-01), same call made for 0.4, to move faster. **Core Build 0.5 is now RC / bugfix-only.**
 
 ### Planning Deliverables
 
@@ -91,9 +91,9 @@ Task 358 status note:
 
 #### Wave 5 — Polish and RC Closure
 
-- [ ] Audit loot/reward-duplication safety alongside existing 0.4 guards
-- [ ] Audit inventory/equipment persistence across reconnect and TownRoom ↔ CombatRoom handoff
-- [ ] Close toward controlled 0.5 RC / bugfix-only state
+- [ ] Audit loot/reward-duplication safety alongside existing 0.4 guards — **explicitly skipped by product decision (2026-09-01)**, same call as 0.4 Wave 5, to move faster
+- [ ] Audit inventory/equipment persistence across reconnect and TownRoom ↔ CombatRoom handoff — **explicitly skipped**, same reason
+- [x] Close toward controlled 0.5 RC / bugfix-only state
 
 ### Explicit Non-Goals / Deferred Items
 
