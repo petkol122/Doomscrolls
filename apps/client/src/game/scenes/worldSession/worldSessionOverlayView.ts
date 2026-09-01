@@ -103,6 +103,7 @@ export function createWorldSessionOverlayView(
   onRespawn: () => void,
   onResetObjective: () => void,
   onLeaveWorld: () => void,
+  onReturnToTown?: () => void,
   getUtilityState: () => WorldSessionUtilityPanelOpenState = () =>
     DEFAULT_WORLD_SESSION_UTILITY_PANEL_OPEN_STATE,
   onUtilityStateChange?: (next: WorldSessionUtilityPanelOpenState) => void,
@@ -114,7 +115,9 @@ export function createWorldSessionOverlayView(
   let selectedInventoryItemId: InventorySummaryItem["itemInstanceId"] | null = character?.inventorySummaryItems?.[0]?.itemInstanceId ?? null;
   let currentStatusPanel: HTMLElement | null = null;
 
-  const statusRefs = character !== null ? createCharacterChip(character, character.characterName, character.level, onLeaveWorld) : null;
+  const statusRefs = character !== null
+    ? createCharacterChip(character, character.characterName, character.level, onLeaveWorld, onReturnToTown)
+    : null;
   const utilityRefs = createStableUtilityContent(
     character,
     room,
@@ -199,6 +202,7 @@ function createCharacterChip(
   displayName: string,
   level: number,
   onLeaveWorld: () => void,
+  onReturnToTown?: () => void,
 ): StatusViewRefs {
   // Task 242 — the chip is a visible interactive panel root. We
   // intentionally do NOT call `makePassive(panel)` here; the panel
@@ -248,6 +252,23 @@ function createCharacterChip(
   makePassive(textBlock);
   panel.appendChild(textBlock);
 
+  const buttonColumn = document.createElement("div");
+  buttonColumn.style.display = "grid";
+  buttonColumn.style.gap = "6px";
+
+  if (onReturnToTown !== undefined) {
+    const returnButton = createButton("Return to Town");
+    returnButton.style.width = "auto";
+    returnButton.style.flex = "0 0 auto";
+    returnButton.style.padding = "4px 8px";
+    returnButton.style.fontSize = "10px";
+    returnButton.addEventListener("click", () => {
+      onReturnToTown();
+    });
+    makeInteractive(returnButton);
+    buttonColumn.appendChild(returnButton);
+  }
+
   const leaveButton = createButton(t("world_entry.leave_world"));
   leaveButton.style.width = "auto";
   leaveButton.style.flex = "0 0 auto";
@@ -257,7 +278,8 @@ function createCharacterChip(
     onLeaveWorld();
   });
   makeInteractive(leaveButton);
-  panel.appendChild(leaveButton);
+  buttonColumn.appendChild(leaveButton);
+  panel.appendChild(buttonColumn);
 
   return {
     root: panel,

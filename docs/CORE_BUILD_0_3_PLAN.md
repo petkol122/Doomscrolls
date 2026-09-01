@@ -2,7 +2,9 @@
 
 ## Status
 
-**Planning phase.** Core Build 0.2 is frozen for RC/bugfix-only. Core Build 0.3 planning begins now. No runtime code changes, no gameplay implementation, no schema changes until the first 0.3 implementation task starts.
+**Core Build 0.3 is now Release Candidate / bugfix-only.** This document remains the historical 0.3 planning record. The planned 0.3 playable-loop foundation shipped at checkpoint level, and new scope should move to Core Build 0.4 planning unless a confirmed 0.3 regression or broken shipped flow requires a minimal bug fix.
+
+No new feature scope should be added under Core Build 0.3. Only regressions, broken shipped flows, or focused hardening fixes are allowed, and each such fix must stay within the existing 0.3 playable-loop surface.
 
 ---
 

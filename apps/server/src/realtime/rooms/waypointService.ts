@@ -31,6 +31,8 @@ export interface RouteTravelSuccess {
   readonly y: number;
   readonly messageKey: string;
   readonly areaKey: string;
+  readonly handoffRoomKind?: "combat";
+  readonly targetSpawnKey?: string;
 }
 
 export interface RouteTravelFailure {
@@ -205,11 +207,13 @@ export async function resolveRouteTravel(
     return {
       ok: true,
       objectId,
-      zoneId: "nightmarket" as ZoneId,
+      zoneId: "blackwire_sewers" as ZoneId,
       x: spawn.x,
       y: spawn.y,
       messageKey: "town_service.route.travel_success.to_combat",
       areaKey: "world_prop.area.blackwire_sewer_edge.label",
+      handoffRoomKind: "combat",
+      targetSpawnKey: "blackwire_entry",
     };
   }
 

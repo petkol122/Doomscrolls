@@ -34,6 +34,22 @@ export async function joinTownRoom(
   return client.joinOrCreate("town", payload);
 }
 
+export async function joinCombatRoom(
+  client: RealtimeClient,
+  sessionToken: SessionToken,
+  characterId: CharacterId,
+  requestedZoneId?: ZoneId,
+): Promise<Room<RoomState>> {
+  const payload: RoomJoinAuthPayload = {
+    sessionToken,
+    characterId,
+    requestedRoomKind: "combat",
+    ...(requestedZoneId !== undefined ? { requestedZoneId } : {}),
+  };
+
+  return client.joinOrCreate("combat", payload);
+}
+
 /**
  * Formats town room state for display/logging purposes.
  * Extracts and formats key town room information.
