@@ -44,6 +44,20 @@ export class PlayerPresence extends Schema {
   @type("number") public y: number;
   @type("number") public movementSpeed: number;
   @type("number") public attackCooldownMs: number;
+  // Core 0.10 -- the joined character's real derived combat damage
+  // (base + power stat + equipped weapon statModifiers), so basic
+  // attacks and skill casts deal a real, character-derived number
+  // instead of a hardcoded literal. Populated identically to
+  // `movementSpeed`/`attackCooldownMs`: at join, and again whenever
+  // progression recalculates equipped stats (level-up, equip change).
+  @type("number") public damage: number;
+  // Core 0.11 -- the joined character's real derived armor (base 0 +
+  // equipped statModifiers), consulted when an enemy attack lands so a
+  // hit is mitigated by a real, character-derived number instead of
+  // being applied to `hp` at its raw content value. Populated
+  // identically to `damage`: at join, and again whenever progression
+  // recalculates equipped stats (level-up, equip change).
+  @type("number") public armor: number;
   @type("number") public lastAttackAt: number;
   @type("number") public nextAttackAt: number;
   @type("boolean") public hasMovementTarget: boolean;
@@ -99,6 +113,8 @@ export class PlayerPresence extends Schema {
     y: number,
     movementSpeed: number,
     attackCooldownMs: number,
+    damage: number,
+    armor: number,
   ) {
     super();
     this.sessionId = sessionId;
@@ -115,6 +131,8 @@ export class PlayerPresence extends Schema {
     this.y = y;
     this.movementSpeed = movementSpeed;
     this.attackCooldownMs = attackCooldownMs;
+    this.damage = damage;
+    this.armor = armor;
     this.lastAttackAt = 0;
     this.nextAttackAt = 0;
     this.hasMovementTarget = false;

@@ -12,6 +12,10 @@ import {
   type RequestPickupWorldLootAcceptedServerMessage,
   type RequestPickupWorldLootClientMessage,
   type RequestPickupWorldLootRejectedServerMessage,
+  type RequestDodgeAcceptedServerMessage,
+  type RequestDodgeRejectedServerMessage,
+  type RequestUseHealingFlaskAcceptedServerMessage,
+  type RequestUseHealingFlaskRejectedServerMessage,
   type XpGainedServerMessage,
   type UserId,
   type ZoneId,
@@ -25,12 +29,21 @@ import { initializeCombatEnemies, COMBAT_SPAWN_BOX } from "./initializeCombatEne
 import { validateMovementIntent } from "./movementIntentValidation";
 import { applyMovementIntent } from "./applyMovementIntent";
 import { resolvePlayerMovementSpeed } from "./resolvePlayerMovementSpeed";
+import { resolvePlayerDamage } from "./resolvePlayerDamage";
+import { resolvePlayerArmor } from "./resolvePlayerArmor";
+import { mitigateIncomingDamage } from "./incomingDamageMitigation";
 import { resolveAttackCooldownMs } from "./attackCooldown";
 import { stepTownRoomMovement, TOWN_MOVEMENT_TICK_RATE_MS } from "./stepTownRoomMovement";
 import { validateAttackIntent } from "./attackIntentValidation";
 import { consumeAttackCooldown } from "./attackCooldown";
 import { applyEnemyDamage } from "./applyEnemyDamage";
 import { restoreFlaskToFull } from "./healingFlaskConfig";
+import { validateDodgeIntent } from "./dodgeIntentValidation";
+import { applyDodgeIntent } from "./applyDodgeIntent";
+import { consumeDodgeCooldown, isDodgeReady } from "./dodgeCooldown";
+import { validateHealingFlaskIntent } from "./healingFlaskValidation";
+import { applyHealingFlaskIntent } from "./applyHealingFlaskIntent";
+import type { TownRoomState } from "./TownRoomState";
 import { clearPendingAction, setPendingAction } from "./pendingActionState";
 import {
   ENEMY_ATTACK_RANGE,
@@ -53,6 +66,7 @@ import { advanceObjectiveProgress } from "./advanceObjectiveProgress";
 import { resolveCombatZoneReturnSpawnId } from "./waypointService";
 import {
   getSkillSlotCooldownAt,
+  resolveSkillCastDamage,
   resolveSkillSlotDefinition,
   setSkillSlotCooldownAt,
 } from "./skillSlotContent";
@@ -80,7 +94,7 @@ type ProgressionUpdateResult =
   | { readonly ok: false };
 
 async function applyProgressionUpdate(
-  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number },
+  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number; damage?: number; armor?: number },
   progression: { readonly xp: number; readonly level: number; readonly leveledUp: boolean },
 ): Promise<ProgressionUpdateResult> {
   const characterRepository = new CharacterRepository();
@@ -133,6 +147,12 @@ async function applyProgressionUpdate(
   }
   if ("hp" in player) {
     player.hp = nextHp;
+  }
+  if ("damage" in player) {
+    player.damage = recalculated.derived.damage;
+  }
+  if ("armor" in player) {
+    player.armor = recalculated.derived.armor;
   }
 
   return { ok: true, maxHp: nextMaxHp, hp: nextHp, gainedMaxHp };
@@ -279,6 +299,8 @@ export class CombatRoom extends Room {
   private combatReturnHandlerRegistered = false;
   private pickupWorldLootHandlerRegistered = false;
   private skillSlotHandlerRegistered = false;
+  private dodgeHandlerRegistered = false;
+  private healingFlaskHandlerRegistered = false;
 
   public override async onCreate(options: CombatRoomJoinOptions): Promise<void> {
     const log = createRoomLogger(
@@ -305,6 +327,8 @@ export class CombatRoom extends Room {
     this.registerCombatReturnHandler(log);
      this.registerPickupWorldLootHandler(log);
     this.registerSkillSlotHandler(log);
+    this.registerDodgeHandler(log);
+    this.registerHealingFlaskHandler(log);
 
     this.setSimulationInterval((deltaMs: number) => {
       // The CombatRoomState has the same `playerPresence` shape
@@ -422,6 +446,8 @@ export class CombatRoom extends Room {
     );
     const maxHp = Math.max(0, result.character.stats?.derived.maxHp ?? 0);
     const currentHp = Math.min(maxHp, Math.max(0, result.character.stats?.currentHp ?? maxHp));
+    const damage = resolvePlayerDamage(result.character.stats?.derived.damage);
+    const armor = resolvePlayerArmor(result.character.stats?.derived.armor);
 
     const objectiveRepo = new ObjectiveRepository();
     let persistedObjective: {
@@ -459,6 +485,8 @@ export class CombatRoom extends Room {
       restoredFlaskCharges: undefined,
       movementSpeed,
       attackCooldownMs,
+      damage,
+      armor,
       restoredLocationZoneId: result.character.lastLocationZoneId ?? undefined,
       restoredLocationX: result.character.lastLocationX ?? undefined,
       restoredLocationY: result.character.lastLocationY ?? undefined,
@@ -631,7 +659,7 @@ export class CombatRoom extends Room {
       }
 
       consumeAttackCooldown(player, now);
-      const damageResult = applyEnemyDamage(validation.enemy, 1);
+      const damageResult = applyEnemyDamage(validation.enemy, player.damage);
 
       const accepted: RequestAttackAcceptedServerMessage = {
         type: "request_attack_accepted",
@@ -690,6 +718,201 @@ export class CombatRoom extends Room {
           nextAttackAt: player.nextAttackAt,
         },
         "CombatRoom request_attack accepted and synced enemy defeat combat rewards/state.",
+      );
+    });
+  }
+
+  /**
+   * Core 0.12 -- `request_dodge` handler for CombatRoom.
+   *
+   * Audit finding: `request_dodge` was previously registered only in
+   * TownRoom.ts, so a player could not dodge at all in Blackwire
+   * Sewers or Static Yard -- the game's only real combat zones. This
+   * is a direct port of TownRoom's handler, reusing the same
+   * `validateDodgeIntent`/`applyDodgeIntent`/`isDodgeReady`/
+   * `consumeDodgeCooldown` helpers unchanged. `applyDodgeIntent`
+   * expects a `TownRoomState`-shaped `state`; `CombatRoomState` has
+   * the same `zoneId`/`playerPresence` shape `resolveZoneBounds`
+   * actually needs, so it is safe to reuse via the same
+   * `as unknown as` cast `registerAttackHandler` above already uses
+   * for `validateAttackIntent`.
+   */
+  private registerDodgeHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.dodgeHandlerRegistered) {
+      return;
+    }
+    this.dodgeHandlerRegistered = true;
+
+    this.onMessage("request_dodge", (client: Client, raw: unknown) => {
+      const state = this.state as CombatRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+
+      if (player === undefined) {
+        log.warn?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+          },
+          "CombatRoom request_dodge rejected: player not found.",
+        );
+        return;
+      }
+
+      if (player.lifeState !== "alive") {
+        const rejection: RequestDodgeRejectedServerMessage = {
+          type: "request_dodge_rejected",
+          reason: "player_downed",
+        };
+        try {
+          client.send("request_dodge_rejected", rejection);
+        } catch {}
+        return;
+      }
+
+      const validation = validateDodgeIntent({ message: raw });
+      if (!validation.ok) {
+        const rejection: RequestDodgeRejectedServerMessage = {
+          type: "request_dodge_rejected",
+          reason: validation.reason,
+        };
+        try {
+          client.send("request_dodge_rejected", rejection);
+        } catch {}
+        return;
+      }
+
+      const now = Date.now();
+      if (!isDodgeReady(player, now)) {
+        const rejection: RequestDodgeRejectedServerMessage = {
+          type: "request_dodge_rejected",
+          reason: "dodge_on_cooldown",
+        };
+        try {
+          client.send("request_dodge_rejected", rejection);
+        } catch {}
+        return;
+      }
+
+      const applied = applyDodgeIntent({
+        state: state as unknown as TownRoomState,
+        player,
+        dirX: validation.dirX,
+        dirY: validation.dirY,
+        now,
+      });
+      consumeDodgeCooldown(player, now);
+
+      const accepted: RequestDodgeAcceptedServerMessage = {
+        type: "request_dodge_accepted",
+      };
+      try {
+        client.send("request_dodge_accepted", accepted);
+      } catch {}
+
+      log.debug?.(
+        {
+          roomId: this.roomId,
+          roomName: this.roomName,
+          sessionId: client.sessionId,
+          dirX: validation.dirX,
+          dirY: validation.dirY,
+          newX: applied.newX,
+          newY: applied.newY,
+          nextDodgeAt: player.nextDodgeAt,
+        },
+        "CombatRoom request_dodge accepted and player position updated.",
+      );
+    });
+  }
+
+  /**
+   * Core 0.12 -- `request_use_healing_flask` handler for CombatRoom.
+   *
+   * Audit finding: `request_use_healing_flask` was previously
+   * registered only in TownRoom.ts, so a player could not use their
+   * healing flask at all in Blackwire Sewers or Static Yard, despite
+   * CombatRoom already tracking and persisting flask charges
+   * end-to-end (join restoration, respawn restoration, onLeave
+   * persistence). This is a direct port of TownRoom's handler,
+   * reusing `validateHealingFlaskIntent`/`applyHealingFlaskIntent`
+   * unchanged -- no new heal logic, no itemization wiring (flask
+   * heal-amount itemization is explicitly cut from this build; see
+   * docs/CORE_BUILD_0_12_PLAN.md).
+   */
+  private registerHealingFlaskHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.healingFlaskHandlerRegistered) {
+      return;
+    }
+    this.healingFlaskHandlerRegistered = true;
+
+    this.onMessage("request_use_healing_flask", (client: Client, raw: unknown) => {
+      const state = this.state as CombatRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+
+      if (player === undefined) {
+        log.warn?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+          },
+          "CombatRoom request_use_healing_flask rejected: player not found.",
+        );
+        return;
+      }
+
+      const validation = validateHealingFlaskIntent({ message: raw });
+      if (!validation.ok) {
+        const rejection: RequestUseHealingFlaskRejectedServerMessage = {
+          type: "request_use_healing_flask_rejected",
+          reason: validation.reason,
+        };
+        try {
+          client.send("request_use_healing_flask_rejected", rejection);
+        } catch {}
+        return;
+      }
+
+      const now = Date.now();
+      const result = applyHealingFlaskIntent({ player, now });
+      if (!result.ok) {
+        const rejection: RequestUseHealingFlaskRejectedServerMessage = {
+          type: "request_use_healing_flask_rejected",
+          reason: result.reason,
+        };
+        try {
+          client.send("request_use_healing_flask_rejected", rejection);
+        } catch {}
+        return;
+      }
+
+      const accepted: RequestUseHealingFlaskAcceptedServerMessage = {
+        type: "request_use_healing_flask_accepted",
+        healedAmount: result.healedAmount,
+        remainingHp: result.remainingHp,
+        flaskCharges: result.flaskCharges,
+        nextFlaskAt: result.nextFlaskAt,
+      };
+      try {
+        client.send("request_use_healing_flask_accepted", accepted);
+      } catch {}
+
+      log.debug?.(
+        {
+          roomId: this.roomId,
+          roomName: this.roomName,
+          sessionId: client.sessionId,
+          healedAmount: result.healedAmount,
+          remainingHp: result.remainingHp,
+          flaskCharges: result.flaskCharges,
+          nextFlaskAt: result.nextFlaskAt,
+        },
+        "CombatRoom request_use_healing_flask accepted and HP / charges synced.",
       );
     });
   }
@@ -796,7 +1019,8 @@ export class CombatRoom extends Room {
       }
 
       setSkillSlotCooldownAt(player, slot, now + skillDefinition.cooldownMs);
-      const damageResult = applyEnemyDamage(enemy, skillDefinition.damage);
+      const castDamage = resolveSkillCastDamage(skillDefinition, player.damage);
+      const damageResult = applyEnemyDamage(enemy, castDamage);
 
       const spawnedLootList = damageResult.defeated
         ? spawnWorldLootOnEnemyDefeat(state as never, enemy, now)
@@ -835,7 +1059,7 @@ export class CombatRoom extends Room {
         type: "request_use_skill_slot_accepted",
         slot,
         targetEnemyId: enemy.id,
-        damage: skillDefinition.damage,
+        damage: castDamage,
         remainingHp: damageResult.remainingHp,
         defeated: damageResult.defeated,
         nextReadyAt,
@@ -1209,7 +1433,8 @@ export class CombatRoom extends Room {
             targetPlayer.y - enemy.y,
           ) <= ENEMY_ATTACK_RANGE
         ) {
-          const damage = Math.max(1, Math.floor(enemyDefinition?.damage ?? 1));
+          const rawDamage = Math.max(1, Math.floor(enemyDefinition?.damage ?? 1));
+          const damage = mitigateIncomingDamage(rawDamage, targetPlayer.armor);
           const previousHp = Math.max(0, targetPlayer.hp);
           const nextHp = Math.max(0, previousHp - damage);
           targetPlayer.hp = nextHp;

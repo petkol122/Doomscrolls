@@ -28,6 +28,8 @@ export interface BuildTownPlayerPresenceInput {
   readonly restoredFlaskCharges: number | undefined;
   readonly movementSpeed: number;
   readonly attackCooldownMs: number;
+  readonly damage: number;
+  readonly armor: number;
   readonly restoredLocationZoneId: string | undefined;
   readonly restoredLocationX: number | undefined;
   readonly restoredLocationY: number | undefined;
@@ -80,6 +82,8 @@ export function buildTownPlayerPresence(
     initialPosition.y,
     input.movementSpeed,
     input.attackCooldownMs,
+    input.damage,
+    input.armor,
   );
   // Restore the flask baseline before applying persisted state.
   // `restoreFlaskToFull` intentionally sets `maxFlaskCharges` (3) and

@@ -38,6 +38,9 @@ import { validateMovementIntent } from "./movementIntentValidation";
 import { applyMovementIntent } from "./applyMovementIntent";
 import { resolveZoneBounds } from "./resolveZoneBounds";
 import { resolvePlayerMovementSpeed } from "./resolvePlayerMovementSpeed";
+import { resolvePlayerDamage } from "./resolvePlayerDamage";
+import { resolvePlayerArmor } from "./resolvePlayerArmor";
+import { mitigateIncomingDamage } from "./incomingDamageMitigation";
 import {
   stepTownRoomMovement,
   TOWN_MOVEMENT_TICK_RATE_MS,
@@ -97,6 +100,7 @@ import {
 import {
   getSkillSlotCooldownAt,
   pendingActionTypeForSkillSlot,
+  resolveSkillCastDamage,
   resolveSkillSlotDefinition,
   setSkillSlotCooldownAt,
   type SkillSlotId,
@@ -313,7 +317,7 @@ function getActiveObjectiveContent(
 }
 
 async function grantFlatXpReward(
-  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number },
+  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number; damage?: number; armor?: number },
   xpReward: number,
   sendToClient: (type: string, payload: unknown) => void,
 ): Promise<void> {
@@ -356,7 +360,7 @@ type ProgressionUpdateResult =
   | { readonly ok: false };
 
 async function applyProgressionUpdate(
-  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number },
+  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number; damage?: number; armor?: number },
   progression: { readonly xp: number; readonly level: number; readonly leveledUp: boolean },
 ): Promise<ProgressionUpdateResult> {
   const characterRepository = new CharacterRepository();
@@ -422,6 +426,12 @@ async function applyProgressionUpdate(
   }
   if ("hp" in player) {
     player.hp = nextHp;
+  }
+  if ("damage" in player) {
+    player.damage = recalculated.derived.damage;
+  }
+  if ("armor" in player) {
+    player.armor = recalculated.derived.armor;
   }
 
   return { ok: true, maxHp: nextMaxHp, hp: nextHp, gainedMaxHp };
@@ -830,6 +840,8 @@ export class TownRoom extends Room {
     );
     const maxHp = Math.max(0, result.character.stats?.derived.maxHp ?? 0);
     const currentHp = Math.min(maxHp, Math.max(0, result.character.stats?.currentHp ?? maxHp));
+    const damage = resolvePlayerDamage(result.character.stats?.derived.damage);
+    const armor = resolvePlayerArmor(result.character.stats?.derived.armor);
     const persistedFlaskState = await new CharacterRepository().findCurrentFlaskChargesForUser(
       characterId,
       resolvedUserId,
@@ -885,6 +897,8 @@ export class TownRoom extends Room {
       restoredFlaskCharges: persistedFlaskState?.currentFlaskCharges,
       movementSpeed,
       attackCooldownMs,
+      damage,
+      armor,
       restoredLocationZoneId: result.character.lastLocationZoneId ?? undefined,
       restoredLocationX: result.character.lastLocationX ?? undefined,
       restoredLocationY: result.character.lastLocationY ?? undefined,
@@ -1331,7 +1345,7 @@ export class TownRoom extends Room {
             // above, so a crash/reconnect between here and persistence
             // cannot double-award XP.
             await grantFlatXpReward(
-              { characterId: turnInCharId, xp: player.xp, level: player.level, maxHp: player.maxHp, hp: player.hp },
+              { characterId: turnInCharId, xp: player.xp, level: player.level, maxHp: player.maxHp, hp: player.hp, damage: player.damage, armor: player.armor },
               xpReward,
               (type, payload) => { try { client.send(type, payload); } catch {} },
             );
@@ -1879,7 +1893,7 @@ export class TownRoom extends Room {
 
       clearPendingAction(player);
       consumeAttackCooldown(player, now);
-      const damageResult = applyEnemyDamage(validation.enemy, 1);
+      const damageResult = applyEnemyDamage(validation.enemy, player.damage);
       const spawnedLootList = damageResult.defeated
         ? spawnWorldLootOnEnemyDefeat(state, validation.enemy, now)
         : [];
@@ -2676,7 +2690,8 @@ export class TownRoom extends Room {
       clearPendingAction(player);
       setSkillSlotCooldownAt(player, slot, now + skillDefinition.cooldownMs);
 
-      const damageResult = applyEnemyDamage(enemy, skillDefinition.damage);
+      const castDamage = resolveSkillCastDamage(skillDefinition, player.damage);
+      const damageResult = applyEnemyDamage(enemy, castDamage);
 
       if (damageResult.defeated) {
         spawnWorldLootOnEnemyDefeat(state, enemy, now);
@@ -2711,7 +2726,7 @@ export class TownRoom extends Room {
         type: "request_use_skill_slot_accepted",
         slot,
         targetEnemyId: enemy.id,
-        damage: skillDefinition.damage,
+        damage: castDamage,
         remainingHp: damageResult.remainingHp,
         defeated: damageResult.defeated,
         nextReadyAt,
@@ -3405,7 +3420,8 @@ export class TownRoom extends Room {
         const landingKind = enemy.attackKind === "heavy" && heavyAttackEligible
           ? "heavy"
           : "normal";
-        const landingDamage = landingKind === "heavy" ? heavyDamage : enemyAttackDamage;
+        const rawLandingDamage = landingKind === "heavy" ? heavyDamage : enemyAttackDamage;
+        const landingDamage = mitigateIncomingDamage(rawLandingDamage, landingTarget.armor);
         const landingCooldownMs = landingKind === "heavy" ? heavyCooldownMs : enemyAttackCooldownMs;
         const nextHp = Math.max(0, landingTarget.hp - landingDamage);
         landingTarget.hp = nextHp;

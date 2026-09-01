@@ -26,6 +26,7 @@ import { tryResolveLevelProgression } from "./levelProgression";
 import { createRoomLogger } from "./roomLogger";
 import {
   getSkillSlotCooldownAt,
+  resolveSkillCastDamage,
   resolveSkillSlotDefinition,
   setSkillSlotCooldownAt,
   skillSlotForPendingActionType,
@@ -108,6 +109,8 @@ async function applyProgressionUpdate(
   player.level = progression.level;
   player.maxHp = nextMaxHp;
   player.hp = nextHp;
+  player.damage = recalculated.derived.damage;
+  player.armor = recalculated.derived.armor;
 
   return { ok: true, maxHp: nextMaxHp, hp: nextHp, gainedMaxHp };
 }
@@ -243,7 +246,7 @@ export async function tryExecutePendingAction(context: DeferredActionExecutionCo
     }
 
     consumeAttackCooldown(player, now);
-    const damageResult = applyEnemyDamage(validation.enemy, 1);
+    const damageResult = applyEnemyDamage(validation.enemy, player.damage);
     if (damageResult.defeated) {
       spawnWorldLootOnEnemyDefeat(state, validation.enemy, now);
       await grantEnemyDefeatXp(player, validation.enemy.enemyId, sendToClient);
@@ -340,7 +343,8 @@ export async function tryExecutePendingAction(context: DeferredActionExecutionCo
     }
 
     setSkillSlotCooldownAt(player, executeSlot, now + skillDefinition.cooldownMs);
-    const damageResult = applyEnemyDamage(enemy, skillDefinition.damage);
+    const castDamage = resolveSkillCastDamage(skillDefinition, player.damage);
+    const damageResult = applyEnemyDamage(enemy, castDamage);
     if (damageResult.defeated) {
       spawnWorldLootOnEnemyDefeat(state, enemy, now);
       await grantEnemyDefeatXp(player, enemy.enemyId, sendToClient);
@@ -350,7 +354,7 @@ export async function tryExecutePendingAction(context: DeferredActionExecutionCo
       type: "request_use_skill_slot_accepted",
       slot: executeSlot,
       targetEnemyId: enemy.id,
-      damage: skillDefinition.damage,
+      damage: castDamage,
       remainingHp: damageResult.remainingHp,
       defeated: damageResult.defeated,
       nextReadyAt: getSkillSlotCooldownAt(player, executeSlot),

@@ -51,6 +51,27 @@ export function resolveSkillSlotDefinition(
   };
 }
 
+/**
+ * Core 0.10 -- combines a skill's own flat `baseDamage` with the caster's
+ * power/equipment-derived damage bonus, so weapon choice and the power
+ * stat matter for skill casts too, not just basic attacks.
+ *
+ * `CharacterStatsService.calculateDerivedStats` treats `1` as the
+ * universal per-hit floor shared by every damage source
+ * (`damage = 1 + power`); everything above that floor is the
+ * power-stat/equipment contribution. Subtracting it back out here
+ * isolates that bonus so it can be layered onto a skill's own numbers
+ * without double-counting the floor, and without skills losing their
+ * own identity as the dominant, distinguishing factor between them.
+ */
+export function resolveSkillCastDamage(
+  skillDefinition: Pick<SkillSlotDefinition, "damage">,
+  playerDamage: number,
+): number {
+  const damageBonus = Math.max(0, playerDamage - 1);
+  return skillDefinition.damage + damageBonus;
+}
+
 export function getSkillSlotCooldownAt(player: PlayerPresence, slot: SkillSlotId): number {
   const value = slot === "secondary" ? player.nextSkillSlotAt : player.nextTertiarySkillSlotAt;
   return Number.isFinite(value) ? value : 0;

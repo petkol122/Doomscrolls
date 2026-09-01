@@ -19,6 +19,8 @@ export interface BuildCombatPlayerPresenceInput {
   readonly restoredFlaskCharges: number | undefined;
   readonly movementSpeed: number;
   readonly attackCooldownMs: number;
+  readonly damage: number;
+  readonly armor: number;
   readonly restoredLocationZoneId: string | undefined;
   readonly restoredLocationX: number | undefined;
   readonly restoredLocationY: number | undefined;
@@ -82,6 +84,8 @@ export function buildCombatPlayerPresence(
     initialY,
     input.movementSpeed,
     input.attackCooldownMs,
+    input.damage,
+    input.armor,
   );
   restoreFlaskToFull(presence);
   const restoredFlaskCharges = Number.isFinite(input.restoredFlaskCharges)
