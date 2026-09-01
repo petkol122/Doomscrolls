@@ -87,6 +87,39 @@ Filled the 5 equipment slots (`head`, `hands`, `feet`, `amulet`, `belt`) that we
 
 ---
 
+---
+
+## Task 357 — Loot table differentiation and rarity-tier evaluation
+
+**Date:** 2026-09-01
+**Status:** Implemented
+
+### Summary
+
+Gave Trashboar Skitter its own loot table instead of sharing Runt's, so the three enemy archetypes each have a distinct drop identity. Evaluated adding a third rarity tier and deliberately did not add one yet — with only 9 items in the game, a new tier would launch empty.
+
+### What changed
+
+- **`packages/content/src/data/types.ts`**: Added `sewer_skitter_loot` to `LootTableId`.
+- **`packages/content/src/data/lootTables.ts`**: Added the `sewer_skitter_loot` table — same material baseline as Runt's pool, but skewed toward `wraptape_gloves`/`sewer_treads` (the speed-flavored items from Task 356) instead of heavy armor, matching Skitter's "fast cousin" identity.
+- **`packages/content/src/data/enemies.ts`**: `trashboar_skitter.lootTableId` now points at `sewer_skitter_loot` instead of `sewer_starter_loot`.
+
+### Decision: no third rarity tier yet
+
+A third tier (e.g. `uncommon`) was evaluated per the 0.5 plan but not added. Reasoning: only 9 items exist total (2 already `rare`), so a new mid tier would have little to no population — the same "dead content" failure mode Task 356 just fixed for equipment slots. The client's rarity color-coding (3 separate `getItemRarityColor`-style functions) also currently special-cases only `"rare"` vs. everything else, so adding a tier now would mean a half-wired UI. Revisit once the item catalog is bigger.
+
+### Constraints preserved
+
+- No changes to the loot-roll mechanism (`rollLoot.ts` / `lootRoller.ts`) — both already operate generically over any registered table ID.
+- Pre-0.5 starter items (`starter_pipe`, `sewer_jacket`, `rustbound_ring`) were left unchanged rather than rebalanced for "variety."
+- No rarity schema change, no UI rarity-tier work (deferred alongside the tier decision itself).
+
+### Verification
+
+- `pnpm typecheck` — 0 errors.
+
+---
+
 ### Build-state note
 
 Core Build 0.5 should be understood as a **controlled depth pass**, not a system rewrite. It fills gaps that already exist in the schema (empty slots, flat rarity, shared loot tables) rather than introducing new item mechanics. The existing 0.3/0.4 playable loop remains the baseline that 0.5 must preserve while making loot feel like real progression.

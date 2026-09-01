@@ -64,7 +64,9 @@ export const enemies = [
     aggroRange: 7.0,
     leashRange: 9.5,
     xp: 3,
-    lootTableId: "sewer_starter_loot",
+    // Task 357 (Core 0.5): Skitter now uses its own loot table instead of
+    // sharing Runt's, so the three enemy archetypes each feel distinct.
+    lootTableId: "sewer_skitter_loot",
     currencyDrop: { min: 1, max: 4 },
     spriteKey: "enemy_trashboar_runt_placeholder"
   }

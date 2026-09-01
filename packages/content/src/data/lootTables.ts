@@ -40,5 +40,20 @@ export const lootTables = [
       { itemId: itemId("scrapcord_belt"), rarity: "common", weight: 6 },
       { itemId: itemId("signal_scarred_amulet"), rarity: "rare", weight: 2 }
     ]
+  },
+  {
+    // Task 357 (Core 0.5) — Skitter gets its own table instead of sharing
+    // Runt's pool. Skitter is the fast/low-value cousin, so its table
+    // skews away from heavy armor (pipe/jacket/hood/belt) toward the two
+    // speed-flavored pieces, keeping the overall drop pool lighter.
+    id: "sewer_skitter_loot",
+    entries: [
+      { itemId: itemId("blackwire_scrap"), rarity: "common", weight: 55 },
+      { itemId: itemId("scrap_cloth"), rarity: "common", weight: 16 },
+      { itemId: itemId("wraptape_gloves"), rarity: "common", weight: 12 },
+      { itemId: itemId("sewer_treads"), rarity: "common", weight: 12 },
+      { itemId: itemId("tarnished_coin"), rarity: "common", weight: 8 },
+      { itemId: itemId("rustbound_ring"), rarity: "rare", weight: 1 }
+    ]
   }
 ] as const satisfies readonly LootTableDefinition[];

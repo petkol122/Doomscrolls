@@ -64,9 +64,17 @@ Task 356 status note:
 
 #### Wave 3 — Rarity and Loot Table Depth
 
-- [ ] Evaluate whether a third rarity tier is warranted; add it if so
-- [ ] Differentiate loot tables per enemy archetype (runt/skitter/brute) instead of the current shared pool
-- [ ] Expand stat-modifier variety on new/existing items beyond armor/maxHp/damage
+- [x] Evaluate whether a third rarity tier is warranted; add it if so
+- [x] Differentiate loot tables per enemy archetype (runt/skitter/brute) instead of the current shared pool
+- [x] Expand stat-modifier variety on new/existing items beyond armor/maxHp/damage
+
+Task 357 status note:
+
+- [x] Gave Trashboar Skitter its own loot table (`sewer_skitter_loot`) instead of sharing Runt's `sewer_starter_loot`. All three enemy archetypes (runt/skitter/brute) now have distinct pools; Skitter's table skews away from heavy armor toward the two speed-flavored items (`wraptape_gloves`, `sewer_treads`) added in Task 356, tying loot identity to the enemy's "fast cousin" theme.
+- [x] Added `sewer_skitter_loot` to the `LootTableId` union in `types.ts`; no changes needed to `ContentValidation.ts` or the loot-roll mechanism (`rollLoot.ts`/`lootRoller.ts`) — both already work generically over any registered table.
+- [x] Evaluated a third rarity tier (e.g. `uncommon`) and decided **not** to add one yet: with only 9 items total and 2 already `rare`, a new tier would launch empty or near-empty, which is the same "dead content" problem Task 356 just fixed for equipment slots. Revisit once item count grows further (more enemy-specific tables, more slot variety) so a mid tier has enough population to matter. Rarity color-coding on the client (`getItemRarityColor`/`getItemRarityAccentColor`/`getItemRarityStrokeColor` across 3 files) currently special-cases only `"rare"`, so this also avoids a half-done 3-tier UI.
+- [x] Expanded stat-modifier variety beyond armor/maxHp/damage via the 5 Task 356 items (`attackCooldownMs`, `moveSpeed`, `toughness`, `mind`). Left the pre-0.5 starter items (`starter_pipe`, `sewer_jacket`, `rustbound_ring`) unchanged — those are day-1 starting-adjacent gear and rebalancing them isn't needed to satisfy "variety," so it stays out of scope rather than churning established numbers.
+- [x] `pnpm typecheck` — 0 errors.
 
 #### Wave 4 — Inventory/Equipment UX
 
