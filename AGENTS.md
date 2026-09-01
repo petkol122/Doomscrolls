@@ -142,7 +142,9 @@ Forbidden fake implementation examples:
 
 ## Core 0.1 Game Scope
 
-Included:
+This is a point-in-time historical snapshot of Core Build 0.1's launch scope, not living/current scope — later builds (see each `docs/CORE_BUILD_0_X_RELEASE_NOTES.md`) have shipped well beyond it (a second combat zone, a third loot rarity tier, a second skill, a persistent test harness, a second class). Kept here for the "Included" baseline and the still-current parts of the "Excluded" list below; don't treat either list as exhaustive of what exists today.
+
+Included (as of Core 0.1):
 
 ```text
 username/password registration
@@ -178,7 +180,7 @@ email verification
 password reset
 full Czech Republic map
 multiple countries
-multiple origins/classes
+a second origin (Core 0.9 shipped a second class, Ironclad, under the existing Sewer Dweller origin — see docs/CORE_BUILD_0_9_RELEASE_NOTES.md)
 quests
 bosses
 guilds
@@ -235,3 +237,15 @@ A task is done only when:
 - CI passes
 
 If a feature only appears to work, it is not done.
+
+---
+
+## Verification Must Be Permanent
+
+Live verification (joining a room with a scripted client, hitting an HTTP route, exercising a message handler end-to-end) is required for server-authoritative logic, but a throwaway script that is deleted after the check proves the code once and nothing after that.
+
+Any task that involves live-verifying a bug fix, a room message handler, or another piece of server-authoritative logic must add or extend a real test in `apps/server`'s test suite (`apps/server/test`, run via `pnpm --filter @doomscrolls/server test`), not a one-off scripted-client file that gets discarded afterward.
+
+`apps/server/test` uses vitest with `@colyseus/testing` for in-process Colyseus room instances — no real server process, no manual port juggling, no throwaway DB accounts. `CharacterService` and `ObjectiveRepository` are mocked at the module boundary (see `apps/server/test/setup.ts`) so room join/message flows run for real without a live database.
+
+This makes verification compound across builds instead of resetting every time: a bug found during build N's live check becomes build N+1's regression guard, not a paragraph in a release note that nobody re-runs.

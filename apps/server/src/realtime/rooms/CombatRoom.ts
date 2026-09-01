@@ -24,6 +24,8 @@ import { buildCombatPlayerPresence } from "./buildCombatPlayerPresence";
 import { initializeCombatEnemies, COMBAT_SPAWN_BOX } from "./initializeCombatEnemies";
 import { validateMovementIntent } from "./movementIntentValidation";
 import { applyMovementIntent } from "./applyMovementIntent";
+import { resolvePlayerMovementSpeed } from "./resolvePlayerMovementSpeed";
+import { resolveAttackCooldownMs } from "./attackCooldown";
 import { stepTownRoomMovement, TOWN_MOVEMENT_TICK_RATE_MS } from "./stepTownRoomMovement";
 import { validateAttackIntent } from "./attackIntentValidation";
 import { consumeAttackCooldown } from "./attackCooldown";
@@ -48,6 +50,17 @@ import { validatePickupWorldLootIntent } from "./pickupWorldLootValidation";
 import { tryResolveLevelProgression } from "./levelProgression";
 import { CharacterStatsService } from "../../character/CharacterStatsService";
 import { advanceObjectiveProgress } from "./advanceObjectiveProgress";
+import { resolveCombatZoneReturnSpawnId } from "./waypointService";
+import {
+  getSkillSlotCooldownAt,
+  resolveSkillSlotDefinition,
+  setSkillSlotCooldownAt,
+} from "./skillSlotContent";
+import type {
+  RequestUseSkillSlotAcceptedServerMessage,
+  RequestUseSkillSlotClientMessage,
+  RequestUseSkillSlotRejectedServerMessage,
+} from "@doomscrolls/shared";
 
 const characterStatsService = new CharacterStatsService();
 
@@ -265,6 +278,7 @@ export class CombatRoom extends Room {
   private respawnHandlerRegistered = false;
   private combatReturnHandlerRegistered = false;
   private pickupWorldLootHandlerRegistered = false;
+  private skillSlotHandlerRegistered = false;
 
   public override async onCreate(options: CombatRoomJoinOptions): Promise<void> {
     const log = createRoomLogger(
@@ -290,6 +304,7 @@ export class CombatRoom extends Room {
     this.registerRespawnHandler(log);
     this.registerCombatReturnHandler(log);
      this.registerPickupWorldLootHandler(log);
+    this.registerSkillSlotHandler(log);
 
     this.setSimulationInterval((deltaMs: number) => {
       // The CombatRoomState has the same `playerPresence` shape
@@ -394,6 +409,19 @@ export class CombatRoom extends Room {
     const characterId = result.character.id;
     const characterName = result.character.characterName;
     const resolvedZoneId = result.resolvedZoneId;
+    // Pre-existing gap found during Core 0.7 verification: this join
+    // previously hardcoded hp/maxHp/movementSpeed/attackCooldownMs to 0
+    // instead of reading the character's persisted stats (unlike
+    // TownRoom.onJoin, which already does this correctly). That left
+    // every fresh CombatRoom join permanently "downed" with 0 max HP
+    // and unable to move -- silently blocking attack, dodge, and skill
+    // casts alike. Mirrors TownRoom.ts's resolution exactly.
+    const movementSpeed = resolvePlayerMovementSpeed(result.character);
+    const attackCooldownMs = resolveAttackCooldownMs(
+      result.character.stats?.derived.attackCooldownMs,
+    );
+    const maxHp = Math.max(0, result.character.stats?.derived.maxHp ?? 0);
+    const currentHp = Math.min(maxHp, Math.max(0, result.character.stats?.currentHp ?? maxHp));
 
     const objectiveRepo = new ObjectiveRepository();
     let persistedObjective: {
@@ -422,14 +450,15 @@ export class CombatRoom extends Room {
       sessionId,
       characterId,
       displayName: characterName,
+      classKey: result.character.classKey,
       level: result.character.level,
       xp: result.character.xp,
       resolvedZoneId,
-      hp: 0,
-      maxHp: 0,
+      hp: currentHp,
+      maxHp,
       restoredFlaskCharges: undefined,
-      movementSpeed: 0,
-      attackCooldownMs: 0,
+      movementSpeed,
+      attackCooldownMs,
       restoredLocationZoneId: result.character.lastLocationZoneId ?? undefined,
       restoredLocationX: result.character.lastLocationX ?? undefined,
       restoredLocationY: result.character.lastLocationY ?? undefined,
@@ -665,6 +694,173 @@ export class CombatRoom extends Room {
     });
   }
 
+  /**
+   * Core 0.7 -- `request_use_skill_slot` handler for CombatRoom.
+   *
+   * Audit finding: `request_use_skill_slot` was previously registered
+   * only in TownRoom.ts, so neither skill slot (Grave Spark nor the new
+   * Bone Splinter tertiary slot) could be cast in Blackwire Sewers or
+   * Static Yard -- the game's only real combat zones. This mirrors
+   * `registerAttackHandler` above: an immediate accept/reject with no
+   * deferred move-closer queue, matching how basic attack already
+   * behaves in CombatRoom (unlike TownRoom, which auto-approaches).
+   */
+  private registerSkillSlotHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.skillSlotHandlerRegistered) {
+      return;
+    }
+    this.skillSlotHandlerRegistered = true;
+
+    this.onMessage("request_use_skill_slot", (client: Client, raw: unknown) => {
+      const state = this.state as CombatRoomState;
+      const message = raw as Partial<RequestUseSkillSlotClientMessage> | null;
+      const player = state.playerPresence.get(client.sessionId);
+
+      const slot = message?.slot === "secondary" || message?.slot === "tertiary" ? message.slot : undefined;
+
+      if (slot === undefined) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          type: "request_use_skill_slot_rejected",
+          slot: "secondary",
+          reason: "skill_unavailable",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      const rejectionBase = { type: "request_use_skill_slot_rejected" as const, slot };
+
+      if (player === undefined || player.lifeState !== "alive" || player.hp <= 0) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "player_downed",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      const skillDefinition = resolveSkillSlotDefinition(slot, player.classKey);
+      const now = Date.now();
+      const nextSkillSlotAt = getSkillSlotCooldownAt(player, slot);
+      if (now < nextSkillSlotAt) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "skill_on_cooldown",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      const targetEnemyId = typeof message?.targetEnemyId === "string" && message.targetEnemyId.length > 0
+        ? message.targetEnemyId
+        : undefined;
+
+      if (targetEnemyId === undefined) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "skill_unavailable",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      const enemy = state.enemies.get(targetEnemyId);
+      if (enemy === undefined) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "enemy_not_found",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      if (enemy.defeated || enemy.hp <= 0) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "enemy_defeated",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+      if (distance > skillDefinition.range) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "out_of_range",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      setSkillSlotCooldownAt(player, slot, now + skillDefinition.cooldownMs);
+      const damageResult = applyEnemyDamage(enemy, skillDefinition.damage);
+
+      const spawnedLootList = damageResult.defeated
+        ? spawnWorldLootOnEnemyDefeat(state as never, enemy, now)
+        : [];
+
+      if (damageResult.defeated) {
+        void grantEnemyDefeatXp(player, enemy.enemyId, (type, payload) => {
+          try { client.send(type, payload); } catch {}
+        });
+
+        const progressResult = advanceObjectiveProgress(player, enemy.enemyId, (updated) => {
+          void new ObjectiveRepository().updateProgress(
+            updated.characterId.toString(),
+            updated.objectiveId,
+            updated.currentProgress,
+          );
+        });
+        if (progressResult !== undefined && progressResult.changed) {
+          try {
+            client.send("objective_updated", {
+              type: "objective_updated",
+              objectiveId: progressResult.objectiveId,
+              label: progressResult.label,
+              descriptionKey: progressResult.descriptionKey,
+              current: progressResult.current,
+              target: progressResult.target,
+              completed: progressResult.completed,
+              ...(progressResult.completed ? { readyToTurnIn: true } : {}),
+            });
+          } catch {}
+        }
+      }
+
+      const nextReadyAt = getSkillSlotCooldownAt(player, slot);
+      const accepted: RequestUseSkillSlotAcceptedServerMessage = {
+        type: "request_use_skill_slot_accepted",
+        slot,
+        targetEnemyId: enemy.id,
+        damage: skillDefinition.damage,
+        remainingHp: damageResult.remainingHp,
+        defeated: damageResult.defeated,
+        nextReadyAt,
+      };
+      try { client.send(accepted.type, accepted); } catch {}
+
+      log.debug?.(
+        {
+          roomId: this.roomId,
+          roomName: this.roomName,
+          sessionId: client.sessionId,
+          slot,
+          targetEnemyId: enemy.id,
+          remainingHp: damageResult.remainingHp,
+          appliedDamage: damageResult.appliedDamage,
+          defeated: damageResult.defeated,
+          respawnAtMs: damageResult.respawnAtMs,
+          worldLootCount: spawnedLootList.length,
+          nextReadyAt,
+        },
+        "CombatRoom request_use_skill_slot accepted and synced skill combat rewards/state.",
+      );
+    });
+  }
+
   private registerPickupWorldLootHandler(
     log: ReturnType<typeof createRoomLogger>,
   ): void {
@@ -832,7 +1028,8 @@ export class CombatRoom extends Room {
         return;
       }
 
-      const returnSpawn = roomContentRegistry.spawnPoints.get("nightmarket_blackwire_combat_entry" as never);
+      const returnSpawnId = resolveCombatZoneReturnSpawnId(state.zoneId);
+      const returnSpawn = roomContentRegistry.spawnPoints.get(returnSpawnId as never);
       if (
         returnSpawn === undefined
         || returnSpawn.zoneId !== "nightmarket"
@@ -865,7 +1062,7 @@ export class CombatRoom extends Room {
           fromRoomKind: "combat",
           toRoomKind: "town",
           targetZoneId: "nightmarket" as ZoneId,
-          targetSpawnKey: "nightmarket_blackwire_combat_entry",
+          targetSpawnKey: returnSpawnId,
           message: "Returning to Nightmarket.",
         };
         try { client.send("combat_town_return_approved", approved); } catch {}
@@ -883,7 +1080,7 @@ export class CombatRoom extends Room {
           characterId: player.characterId,
           objectId,
           targetZoneId: "nightmarket",
-          targetSpawnKey: "nightmarket_blackwire_combat_entry",
+          targetSpawnKey: returnSpawnId,
         },
         "CombatRoom request_combat_return approved for conservative leave-and-join handoff back to TownRoom.",
       );

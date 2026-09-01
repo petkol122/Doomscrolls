@@ -1,6 +1,6 @@
 import { contentRegistry } from "@doomscrolls/content";
 import { t } from "@doomscrolls/localization";
-import type { CharacterId, SpawnPointId, ZoneId } from "@doomscrolls/shared";
+import type { CharacterClassKey, CharacterId, SpawnPointId, ZoneId } from "@doomscrolls/shared";
 import { PlayerPresence } from "./PlayerPresence";
 import { isPositionInsideZoneBounds } from "./validateCharacterLocation";
 import { restoreFlaskToFull } from "./healingFlaskConfig";
@@ -10,6 +10,7 @@ export interface BuildCombatPlayerPresenceInput {
   readonly sessionId: string;
   readonly characterId: CharacterId;
   readonly displayName: string;
+  readonly classKey: CharacterClassKey;
   readonly level: number;
   readonly xp: number;
   readonly resolvedZoneId: ZoneId;
@@ -71,6 +72,7 @@ export function buildCombatPlayerPresence(
     input.sessionId,
     input.characterId,
     input.displayName,
+    input.classKey,
     input.level,
     input.xp,
     EMPTY_SPAWN_POINT_ID,

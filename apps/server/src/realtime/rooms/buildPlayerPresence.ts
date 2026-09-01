@@ -1,7 +1,7 @@
 import { contentRegistry } from "@doomscrolls/content";
 import type { SpawnPointContentDefinition, SpawnPointContentId } from "@doomscrolls/content";
 import { t } from "@doomscrolls/localization";
-import type { CharacterId, ZoneId } from "@doomscrolls/shared";
+import type { CharacterClassKey, CharacterId, ZoneId } from "@doomscrolls/shared";
 import { PlayerPresence } from "./PlayerPresence";
 import { NIGHTMARKET_DEFAULT_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
 import { resolvePlayerInitialPosition } from "./validateCharacterLocation";
@@ -19,6 +19,7 @@ export interface BuildTownPlayerPresenceInput {
   readonly sessionId: string;
   readonly characterId: CharacterId;
   readonly displayName: string;
+  readonly classKey: CharacterClassKey;
   readonly level: number;
   readonly xp: number;
   readonly resolvedZoneId: ZoneId;
@@ -69,6 +70,7 @@ export function buildTownPlayerPresence(
     input.sessionId,
     input.characterId,
     input.displayName,
+    input.classKey,
     input.level,
     input.xp,
     spawnPoint.spawnPointId,

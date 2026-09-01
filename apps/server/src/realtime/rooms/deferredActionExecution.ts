@@ -24,6 +24,12 @@ import { spawnWorldLootOnEnemyDefeat } from "./spawnWorldLootOnEnemyDefeat";
 import type { TownRoomState } from "./TownRoomState";
 import { tryResolveLevelProgression } from "./levelProgression";
 import { createRoomLogger } from "./roomLogger";
+import {
+  getSkillSlotCooldownAt,
+  resolveSkillSlotDefinition,
+  setSkillSlotCooldownAt,
+  skillSlotForPendingActionType,
+} from "./skillSlotContent";
 
 export interface DeferredActionExecutionContext {
   readonly state: TownRoomState;
@@ -31,10 +37,6 @@ export interface DeferredActionExecutionContext {
   readonly now: number;
   readonly sendToClient: (type: string, payload: unknown) => void;
 }
-
-const GRAVE_SPARK_RANGE = 96;
-const GRAVE_SPARK_DAMAGE = 3;
-const GRAVE_SPARK_COOLDOWN_MS = 1500;
 
 const characterStatsService = new CharacterStatsService();
 const log = createRoomLogger(undefined);
@@ -206,13 +208,14 @@ export async function tryExecutePendingAction(context: DeferredActionExecutionCo
     }
   }
 
-  if (actionType === "skill_secondary") {
+  const guardSlot = skillSlotForPendingActionType(actionType);
+  if (guardSlot !== null) {
     const enemy = state.enemies.get(targetId);
     if (enemy === undefined) {
       clearPendingAction(player);
       const rejection: RequestUseSkillSlotRejectedServerMessage = {
         type: "request_use_skill_slot_rejected",
-        slot: "secondary",
+        slot: guardSlot,
         reason: "enemy_not_found",
       };
       sendToClient(rejection.type, rejection);
@@ -222,7 +225,7 @@ export async function tryExecutePendingAction(context: DeferredActionExecutionCo
       clearPendingAction(player);
       const rejection: RequestUseSkillSlotRejectedServerMessage = {
         type: "request_use_skill_slot_rejected",
-        slot: "secondary",
+        slot: guardSlot,
         reason: "enemy_defeated",
       };
       sendToClient(rejection.type, rejection);
@@ -303,13 +306,14 @@ export async function tryExecutePendingAction(context: DeferredActionExecutionCo
     return;
   }
 
-  if (actionType === "skill_secondary") {
+  const executeSlot = skillSlotForPendingActionType(actionType);
+  if (executeSlot !== null) {
     const enemy = state.enemies.get(targetId);
     if (enemy === undefined) {
       clearPendingAction(player);
       const rejection: RequestUseSkillSlotRejectedServerMessage = {
         type: "request_use_skill_slot_rejected",
-        slot: "secondary",
+        slot: executeSlot,
         reason: "enemy_not_found",
       };
       sendToClient(rejection.type, rejection);
@@ -319,23 +323,24 @@ export async function tryExecutePendingAction(context: DeferredActionExecutionCo
       clearPendingAction(player);
       const rejection: RequestUseSkillSlotRejectedServerMessage = {
         type: "request_use_skill_slot_rejected",
-        slot: "secondary",
+        slot: executeSlot,
         reason: "player_downed",
       };
       sendToClient(rejection.type, rejection);
       return;
     }
-    const nextSkillSlotAt = Number.isFinite(player.nextSkillSlotAt) ? player.nextSkillSlotAt : 0;
+    const nextSkillSlotAt = getSkillSlotCooldownAt(player, executeSlot);
     if (now < nextSkillSlotAt) {
       return;
     }
+    const skillDefinition = resolveSkillSlotDefinition(executeSlot, player.classKey);
     const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
-    if (distance > GRAVE_SPARK_RANGE) {
+    if (distance > skillDefinition.range) {
       return;
     }
 
-    player.nextSkillSlotAt = now + GRAVE_SPARK_COOLDOWN_MS;
-    const damageResult = applyEnemyDamage(enemy, GRAVE_SPARK_DAMAGE);
+    setSkillSlotCooldownAt(player, executeSlot, now + skillDefinition.cooldownMs);
+    const damageResult = applyEnemyDamage(enemy, skillDefinition.damage);
     if (damageResult.defeated) {
       spawnWorldLootOnEnemyDefeat(state, enemy, now);
       await grantEnemyDefeatXp(player, enemy.enemyId, sendToClient);
@@ -343,12 +348,12 @@ export async function tryExecutePendingAction(context: DeferredActionExecutionCo
 
     const accepted: RequestUseSkillSlotAcceptedServerMessage = {
       type: "request_use_skill_slot_accepted",
-      slot: "secondary",
+      slot: executeSlot,
       targetEnemyId: enemy.id,
-      damage: GRAVE_SPARK_DAMAGE,
+      damage: skillDefinition.damage,
       remainingHp: damageResult.remainingHp,
       defeated: damageResult.defeated,
-      nextReadyAt: player.nextSkillSlotAt,
+      nextReadyAt: getSkillSlotCooldownAt(player, executeSlot),
     };
     sendToClient(accepted.type, accepted);
     clearPendingAction(player);

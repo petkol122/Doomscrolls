@@ -89,9 +89,18 @@ import {
   activateAndBuildWaypointPanel,
   getRouteRejectedMessage,
   getWaypointRejectedMessage,
+  isCombatGateObjectId,
+  isWaypointObjectId,
   resolveRouteTravel,
   resolveWaypointTravel,
 } from "./waypointService";
+import {
+  getSkillSlotCooldownAt,
+  pendingActionTypeForSkillSlot,
+  resolveSkillSlotDefinition,
+  setSkillSlotCooldownAt,
+  type SkillSlotId,
+} from "./skillSlotContent";
 
 // Task 227 -- enemy movement speed is authored in the same
 // per-second stat space as the player's derived `moveSpeed` (see
@@ -109,7 +118,6 @@ const ENEMY_ATTACK_RANGE = 44;
 // (with a snap-to-stop buffer) so the player never overshoots into
 // the enemy center.
 const BASIC_ATTACK_RANGE = 64;
-const GRAVE_SPARK_RANGE = 96;
 // PICKUP_APPROACH_DISTANCE is a close-in radius well under the
 // WORLD_LOOT_PICKUP_RANGE (48) validator boundary, with a snap-to-stop
 // buffer so the queued pickup reliably executes once the player
@@ -121,8 +129,6 @@ const PICKUP_APPROACH_DISTANCE = 24;
 // interact reliably executes once the player arrives (notice board,
 // vendor, stash keeper, etc.).
 const INTERACT_APPROACH_DISTANCE = 38;
-const GRAVE_SPARK_COOLDOWN_MS = 1500;
-const GRAVE_SPARK_DAMAGE = 3;
 // Task 094 -- server-owned enemy attack windup. The server sends
 // `enemy_attack_telegraph` to the target client when the windup starts;
 // damage is applied after this many ms only if the target is still alive
@@ -870,6 +876,7 @@ export class TownRoom extends Room {
       sessionId,
       characterId,
       displayName: characterName,
+      classKey: result.character.classKey,
       level: result.character.level,
       xp: result.character.xp,
       resolvedZoneId,
@@ -1446,7 +1453,7 @@ export class TownRoom extends Room {
         }
       }
 
-      if (message.objectId === "nightmarket_waypoint_01" || message.objectId === "nightmarket_waypoint_blackwire_combat_edge") {
+      if (isWaypointObjectId(message.objectId)) {
         try {
           const waypointOpened = await activateAndBuildWaypointPanel(player.characterId, message.objectId);
           if (waypointOpened !== null) {
@@ -1468,11 +1475,11 @@ export class TownRoom extends Room {
       }
 
       if (
-        message.objectId === "nightmarket_blackwire_gate_01"
+        isCombatGateObjectId(message.objectId)
         || message.objectId === "nightmarket_blackwire_return_01"
       ) {
         try {
-          if (message.objectId === "nightmarket_blackwire_gate_01" && (player as { pendingRoomHandoff?: boolean }).pendingRoomHandoff === true) {
+          if (isCombatGateObjectId(message.objectId) && (player as { pendingRoomHandoff?: boolean }).pendingRoomHandoff === true) {
             const rejected: import("@doomscrolls/shared").TownCombatHandoffRejectedServerMessage = {
               type: "town_combat_handoff_rejected",
               objectId: message.objectId,
@@ -1484,7 +1491,7 @@ export class TownRoom extends Room {
 
           const result = await resolveRouteTravel(state.zoneId, message.objectId);
           if (!result.ok) {
-            if (message.objectId === "nightmarket_blackwire_gate_01") {
+            if (isCombatGateObjectId(message.objectId)) {
               const rejected: import("@doomscrolls/shared").TownCombatHandoffRejectedServerMessage = {
                 type: "town_combat_handoff_rejected",
                 objectId: message.objectId,
@@ -1576,7 +1583,7 @@ export class TownRoom extends Room {
           };
           try { client.send("request_route_travel_accepted", accepted); } catch {}
         } catch {
-          if (message.objectId === "nightmarket_blackwire_gate_01") {
+          if (isCombatGateObjectId(message.objectId)) {
             const rejected: import("@doomscrolls/shared").TownCombatHandoffRejectedServerMessage = {
               type: "town_combat_handoff_rejected",
               objectId: message.objectId,
@@ -2560,19 +2567,24 @@ export class TownRoom extends Room {
       const state = this.state as TownRoomState;
       const message = raw as Partial<RequestUseSkillSlotClientMessage> | null;
       const player = state.playerPresence.get(client.sessionId);
-      const rejectionBase = {
-        type: "request_use_skill_slot_rejected" as const,
-        slot: "secondary" as const,
-      };
 
-      if (message?.slot !== "secondary") {
+      const slot: SkillSlotId | undefined =
+        message?.slot === "secondary" || message?.slot === "tertiary" ? message.slot : undefined;
+
+      if (slot === undefined) {
         const rejection: RequestUseSkillSlotRejectedServerMessage = {
-          ...rejectionBase,
+          type: "request_use_skill_slot_rejected",
+          slot: "secondary",
           reason: "skill_unavailable",
         };
         try { client.send(rejection.type, rejection); } catch {}
         return;
       }
+
+      const rejectionBase = {
+        type: "request_use_skill_slot_rejected" as const,
+        slot,
+      };
 
       if (player === undefined || player.lifeState !== "alive" || player.hp <= 0) {
         const rejection: RequestUseSkillSlotRejectedServerMessage = {
@@ -2583,8 +2595,9 @@ export class TownRoom extends Room {
         return;
       }
 
+      const skillDefinition = resolveSkillSlotDefinition(slot, player.classKey);
       const now = Date.now();
-      const nextSkillSlotAt = Number.isFinite(player.nextSkillSlotAt) ? player.nextSkillSlotAt : 0;
+      const nextSkillSlotAt = getSkillSlotCooldownAt(player, slot);
       if (now < nextSkillSlotAt) {
         const rejection: RequestUseSkillSlotRejectedServerMessage = {
           ...rejectionBase,
@@ -2594,7 +2607,7 @@ export class TownRoom extends Room {
         return;
       }
 
-      // Task 217/219 — Grave Spark target validation.
+      // Task 217/219 — skill target validation (secondary/tertiary slot).
       const targetEnemyId = typeof message?.targetEnemyId === "string" && message.targetEnemyId.length > 0
         ? message.targetEnemyId
         : undefined;
@@ -2628,9 +2641,9 @@ export class TownRoom extends Room {
       }
 
       const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
-      if (distance > GRAVE_SPARK_RANGE) {
+      if (distance > skillDefinition.range) {
         setPendingAction(player, {
-          type: "skill_secondary",
+          type: pendingActionTypeForSkillSlot(slot),
           targetId: enemy.id,
           targetX: enemy.x,
           targetY: enemy.y,
@@ -2638,7 +2651,7 @@ export class TownRoom extends Room {
         const approach = resolveApproachTarget(
           player,
           { x: enemy.x, y: enemy.y },
-          GRAVE_SPARK_RANGE,
+          skillDefinition.range,
         );
         applyMovementIntent(state, client.sessionId, approach.x, approach.y);
         const queued: DeferredActionQueuedServerMessage = {
@@ -2661,9 +2674,9 @@ export class TownRoom extends Room {
       }
 
       clearPendingAction(player);
-      player.nextSkillSlotAt = now + GRAVE_SPARK_COOLDOWN_MS;
+      setSkillSlotCooldownAt(player, slot, now + skillDefinition.cooldownMs);
 
-      const damageResult = applyEnemyDamage(enemy, GRAVE_SPARK_DAMAGE);
+      const damageResult = applyEnemyDamage(enemy, skillDefinition.damage);
 
       if (damageResult.defeated) {
         spawnWorldLootOnEnemyDefeat(state, enemy, now);
@@ -2693,14 +2706,15 @@ export class TownRoom extends Room {
         }).catch(() => {});
       }
 
+      const nextReadyAt = getSkillSlotCooldownAt(player, slot);
       const accepted: RequestUseSkillSlotAcceptedServerMessage = {
         type: "request_use_skill_slot_accepted",
-        slot: "secondary",
+        slot,
         targetEnemyId: enemy.id,
-        damage: GRAVE_SPARK_DAMAGE,
+        damage: skillDefinition.damage,
         remainingHp: damageResult.remainingHp,
         defeated: damageResult.defeated,
-        nextReadyAt: player.nextSkillSlotAt,
+        nextReadyAt,
       };
       try { client.send(accepted.type, accepted); } catch {}
 
@@ -2714,9 +2728,9 @@ export class TownRoom extends Room {
           appliedDamage: damageResult.appliedDamage,
           defeated: damageResult.defeated,
           respawnAtMs: damageResult.respawnAtMs,
-          nextSkillSlotAt: player.nextSkillSlotAt,
+          nextSkillSlotAt: nextReadyAt,
         },
-        "TownRoom request_use_skill_slot accepted: Grave Spark hit target.",
+        "TownRoom request_use_skill_slot accepted: skill hit target.",
       );
     });
   }
