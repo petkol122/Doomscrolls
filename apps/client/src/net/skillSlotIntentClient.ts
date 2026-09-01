@@ -12,6 +12,7 @@ export type SendSkillSlotIntentResult =
 
 export function sendSkillSlotIntent(
   room: Room<RoomState> | null | undefined,
+  slot: "secondary" | "tertiary",
   targetEnemyId?: string,
 ): SendSkillSlotIntentResult {
   if (!room) {
@@ -26,7 +27,7 @@ export function sendSkillSlotIntent(
 
   const message: RequestUseSkillSlotClientMessage = {
     type: "request_use_skill_slot",
-    slot: "secondary",
+    slot,
     targetEnemyId,
   };
 
@@ -56,12 +57,16 @@ export function registerSkillSlotResponseListeners(
   });
 }
 
+function isSkillSlot(value: unknown): value is "secondary" | "tertiary" {
+  return value === "secondary" || value === "tertiary";
+}
+
 function isAccepted(value: unknown): value is RequestUseSkillSlotAcceptedServerMessage {
   if (typeof value !== "object" || value === null) {
     return false;
   }
   const candidate = value as Record<string, unknown>;
-  return candidate.type === "request_use_skill_slot_accepted" && candidate.slot === "secondary";
+  return candidate.type === "request_use_skill_slot_accepted" && isSkillSlot(candidate.slot);
 }
 
 function isRejected(value: unknown): value is RequestUseSkillSlotRejectedServerMessage {
@@ -70,6 +75,6 @@ function isRejected(value: unknown): value is RequestUseSkillSlotRejectedServerM
   }
   const candidate = value as Record<string, unknown>;
   return candidate.type === "request_use_skill_slot_rejected"
-    && candidate.slot === "secondary"
+    && isSkillSlot(candidate.slot)
     && typeof candidate.reason === "string";
 }

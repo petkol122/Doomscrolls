@@ -307,7 +307,7 @@ export type RequestUseSkillSlotRejectedReason =
 
 export interface RequestUseSkillSlotAcceptedServerMessage {
   readonly type: "request_use_skill_slot_accepted";
-  readonly slot: "secondary";
+  readonly slot: "secondary" | "tertiary";
   readonly targetEnemyId: string;
   readonly damage: number;
   readonly remainingHp: number;
@@ -317,7 +317,7 @@ export interface RequestUseSkillSlotAcceptedServerMessage {
 
 export interface RequestUseSkillSlotRejectedServerMessage {
   readonly type: "request_use_skill_slot_rejected";
-  readonly slot: "secondary";
+  readonly slot: "secondary" | "tertiary";
   readonly reason: RequestUseSkillSlotRejectedReason;
 }
 

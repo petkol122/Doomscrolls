@@ -582,6 +582,7 @@ function createControlsSection(isOpen: boolean, onOpenChange: (open: boolean) =>
     { key: "Click", action: t("world_session.control_move") },
     { key: "Click (enemy)", action: t("world_session.control_attack") },
     { key: "RMB (enemy)", action: t("skill.grave_spark.name") },
+    { key: "E (enemy)", action: t("skill.bone_splinter.name") },
     { key: "Click (loot)", action: "Pickup" },
     { key: "Click (object)", action: "Interact" },
     { key: "Space", action: t("world_session.control_dodge") },
@@ -1852,6 +1853,10 @@ function formatItemRarityLabel(rarity?: string): string {
 }
 
 function getItemRarityColor(rarity?: string): string {
+  if (rarity === "epic") {
+    return "#c77dff";
+  }
+
   if (rarity === "rare") {
     return "#8fc7ff";
   }
@@ -1860,6 +1865,10 @@ function getItemRarityColor(rarity?: string): string {
 }
 
 function getItemRarityAccentColor(rarity?: string): string {
+  if (rarity === "epic") {
+    return "#8b3fd6";
+  }
+
   if (rarity === "rare") {
     return "#4b86d8";
   }

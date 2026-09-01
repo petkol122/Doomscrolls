@@ -124,7 +124,7 @@ export interface RequestUseHealingFlaskClientMessage {
  */
 export interface RequestUseSkillSlotClientMessage {
   readonly type: "request_use_skill_slot";
-  readonly slot: "secondary";
+  readonly slot: "secondary" | "tertiary";
   readonly targetEnemyId?: string;
 }
 

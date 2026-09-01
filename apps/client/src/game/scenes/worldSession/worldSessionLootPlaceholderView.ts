@@ -39,6 +39,10 @@ export function getScatterOffset(id: string): { readonly x: number; readonly y: 
 }
 
 function getItemRarityColor(rarity?: string): string {
+  if (rarity === "epic") {
+    return "#c77dff";
+  }
+
   if (rarity === "rare") {
     return "#8fc7ff";
   }
@@ -47,6 +51,10 @@ function getItemRarityColor(rarity?: string): string {
 }
 
 function getItemRarityStrokeColor(rarity?: string): string {
+  if (rarity === "epic") {
+    return "#2e1a40";
+  }
+
   if (rarity === "rare") {
     return "#10233d";
   }
@@ -68,6 +76,16 @@ function getLootPlaceholderPalette(loot: TownRoomWorldLootSnapshot): {
       pingStroke: CURRENCY_LOOT_PING_STROKE,
       body: CURRENCY_LOOT_BODY_FILL,
       bodyStroke: CURRENCY_LOOT_BODY_STROKE,
+    };
+  }
+
+  if (loot.rarity === "epic") {
+    return {
+      glow: 0xa855f7,
+      ping: 0xc77dff,
+      pingStroke: 0xefd9ff,
+      body: 0x8b3fd6,
+      bodyStroke: 0xefd9ff,
     };
   }
 

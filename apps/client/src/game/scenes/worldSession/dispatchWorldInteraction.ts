@@ -133,7 +133,7 @@ export function dispatchWorldInteraction(
     }
 
     case "skill_enemy": {
-      const result = sendSkillSlotIntent(room, intent.enemyId);
+      const result = sendSkillSlotIntent(room, "secondary", intent.enemyId);
       return noPendingAttack(result.dispatched, null);
     }
 

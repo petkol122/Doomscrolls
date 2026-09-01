@@ -18,7 +18,13 @@ export const lootTables = [
       { itemId: itemId("wraptape_gloves"), rarity: "common", weight: 6 },
       { itemId: itemId("sewer_treads"), rarity: "common", weight: 6 },
       { itemId: itemId("scrapcord_belt"), rarity: "common", weight: 6 },
-      { itemId: itemId("signal_scarred_amulet"), rarity: "rare", weight: 1 }
+      { itemId: itemId("signal_scarred_amulet"), rarity: "rare", weight: 1 },
+      // Core 0.7 — epic tier, shared Blackwire-family pool (mirrors how
+      // rustbound_ring is already shared as the rare entry across all
+      // three sewer tables). Weight sits well below rare's weight of 1.
+      { itemId: itemId("condemned_cleaver"), rarity: "epic", weight: 0.4 },
+      { itemId: itemId("warden_plate"), rarity: "epic", weight: 0.4 },
+      { itemId: itemId("scavenger_king_helm"), rarity: "epic", weight: 0.4 }
     ]
   },
   {
@@ -38,7 +44,13 @@ export const lootTables = [
       { itemId: itemId("wraptape_gloves"), rarity: "common", weight: 6 },
       { itemId: itemId("sewer_treads"), rarity: "common", weight: 6 },
       { itemId: itemId("scrapcord_belt"), rarity: "common", weight: 6 },
-      { itemId: itemId("signal_scarred_amulet"), rarity: "rare", weight: 2 }
+      { itemId: itemId("signal_scarred_amulet"), rarity: "rare", weight: 2 },
+      // Core 0.7 — epic tier, same shared Blackwire-family pool as the
+      // other two sewer tables, with brute's modestly higher weight
+      // mirroring its existing rare-tier advantage (2 vs 1).
+      { itemId: itemId("condemned_cleaver"), rarity: "epic", weight: 0.6 },
+      { itemId: itemId("warden_plate"), rarity: "epic", weight: 0.6 },
+      { itemId: itemId("scavenger_king_helm"), rarity: "epic", weight: 0.6 }
     ]
   },
   {
@@ -53,7 +65,35 @@ export const lootTables = [
       { itemId: itemId("wraptape_gloves"), rarity: "common", weight: 12 },
       { itemId: itemId("sewer_treads"), rarity: "common", weight: 12 },
       { itemId: itemId("tarnished_coin"), rarity: "common", weight: 8 },
-      { itemId: itemId("rustbound_ring"), rarity: "rare", weight: 1 }
+      { itemId: itemId("rustbound_ring"), rarity: "rare", weight: 1 },
+      // Core 0.7 — same shared Blackwire-family epic pool as the other
+      // two sewer tables.
+      { itemId: itemId("condemned_cleaver"), rarity: "epic", weight: 0.4 },
+      { itemId: itemId("warden_plate"), rarity: "epic", weight: 0.4 },
+      { itemId: itemId("scavenger_king_helm"), rarity: "epic", weight: 0.4 }
+    ]
+  },
+  {
+    // Core 0.6 — Static Yard's own table. Reuses only existing items (no
+    // new items were required by the 0.6 plan); differentiates by weight
+    // the same way Task 357 differentiated Skitter's table. Drops entirely
+    // exclude the heavy-armor pipe/jacket/hood/belt/ring set and instead
+    // lean into the two speed/utility pieces plus the mind-focused
+    // amulet, matching the zone's "exposed live current" identity.
+    id: "static_yard_loot",
+    entries: [
+      { itemId: itemId("blackwire_scrap"), rarity: "common", weight: 50 },
+      { itemId: itemId("scrap_cloth"), rarity: "common", weight: 15 },
+      { itemId: itemId("wraptape_gloves"), rarity: "common", weight: 14 },
+      { itemId: itemId("sewer_treads"), rarity: "common", weight: 14 },
+      { itemId: itemId("tarnished_coin"), rarity: "common", weight: 8 },
+      { itemId: itemId("signal_scarred_amulet"), rarity: "rare", weight: 2 },
+      // Core 0.7 — Static Yard's own epic pool, distinct from the
+      // Blackwire-family items, matching how it already has its own
+      // distinct rare entry instead of sharing rustbound_ring.
+      { itemId: itemId("livewire_lance"), rarity: "epic", weight: 0.5 },
+      { itemId: itemId("chargeplate_vest"), rarity: "epic", weight: 0.5 },
+      { itemId: itemId("static_wraps"), rarity: "epic", weight: 0.5 }
     ]
   }
 ] as const satisfies readonly LootTableDefinition[];

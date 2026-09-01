@@ -118,6 +118,14 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
     if (!registry.skills.has(characterClass.startingSkillId)) {
       errors.push({ category: "class", id: characterClass.id, message: `Unknown starting skill id: ${characterClass.startingSkillId}` });
     }
+
+    if (!registry.skills.has(characterClass.secondarySkillId)) {
+      errors.push({ category: "class", id: characterClass.id, message: `Unknown secondary skill id: ${characterClass.secondarySkillId}` });
+    }
+
+    if (!registry.skills.has(characterClass.tertiarySkillId)) {
+      errors.push({ category: "class", id: characterClass.id, message: `Unknown tertiary skill id: ${characterClass.tertiarySkillId}` });
+    }
   }
 
   for (const skill of registry.skills.all) {
