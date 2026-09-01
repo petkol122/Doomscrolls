@@ -1,6 +1,6 @@
 import type { Room } from "@colyseus/sdk";
 import { t } from "@doomscrolls/localization";
-import type { CharacterSummary, InventorySummaryItem, RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
+import type { CharacterSummary, EquippedItemSummary, InventorySummaryItem, RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
 import type { StatModifier } from "@doomscrolls/shared";
 import type { EquipmentSlot } from "@doomscrolls/shared";
 
@@ -1523,6 +1523,7 @@ function createInventoryPanelSection(
   onOpenChange?: (open: boolean) => void,
 ): HTMLElement {
   const items = character?.inventorySummaryItems ?? [];
+  const equippedItems = character?.equippedItems ?? [];
   const wrapper = document.createElement("details");
   wrapper.open = isOpen;
   wrapper.addEventListener("click", (event) => {
@@ -1554,7 +1555,7 @@ function createInventoryPanelSection(
   makeInteractive(content);
   wrapper.appendChild(content);
   // Initial render
-  fullRebuildInventoryContent(content, items, selection, equipmentLoadout, characterId, onEquipItem);
+  fullRebuildInventoryContent(content, items, equippedItems, selection, equipmentLoadout, characterId, onEquipItem);
   return wrapper;
 }
 
@@ -1564,6 +1565,7 @@ let _inventoryContentVersion = -1;
 function fullRebuildInventoryContent(
   content: HTMLElement,
   items: readonly InventorySummaryItem[],
+  equippedItems: readonly EquippedItemSummary[],
   selection: {
     readonly getSelectedItemId: () => InventorySummaryItem["itemInstanceId"] | null;
     readonly onSelectItem: (itemId: InventorySummaryItem["itemInstanceId"]) => void;
@@ -1576,10 +1578,10 @@ function fullRebuildInventoryContent(
   const currentSelection = selection.getSelectedItemId();
   const summarySection = createInventorySummarySection(items, () => selection.getSelectedItemId(), (itemId) => {
     selection.onSelectItem(itemId);
-    fullRebuildInventoryContent(content, items, selection, equipmentLoadout, characterId, onEquipItem);
+    fullRebuildInventoryContent(content, items, equippedItems, selection, equipmentLoadout, characterId, onEquipItem);
   });
   const selectedItem = items.find((item) => item.itemInstanceId === currentSelection) ?? null;
-  const detailSection = createInventoryDetailSection(selectedItem, items, equipmentLoadout, characterId, onEquipItem);
+  const detailSection = createInventoryDetailSection(selectedItem, equippedItems, characterId, onEquipItem);
   content.append(summarySection, detailSection);
   _inventoryContentVersion = computeInventoryVersion(items, selection.getSelectedItemId());
 }
@@ -1740,8 +1742,7 @@ function createInventorySummarySection(
 
 function createInventoryDetailSection(
   item: InventorySummaryItem | null,
-  inventoryItems: readonly InventorySummaryItem[],
-  equipmentLoadout: EquipmentLoadout,
+  equippedItems: readonly EquippedItemSummary[],
   characterId: string | null,
   onEquipItem?: (characterId: string, itemInstanceId: string, slot: string) => Promise<void>,
 ): HTMLElement {
@@ -1792,7 +1793,7 @@ function createInventoryDetailSection(
 
   children.push(header);
 
-  const compareData = resolveEquippedComparisonItem(item, inventoryItems, equipmentLoadout);
+  const compareData = resolveEquippedComparisonItem(item, equippedItems);
   if (compareData !== null) {
     children.push(createInfoLine("Compare", `${formatEquipmentSlotLabel(compareData.slot)}: ${compareData.equippedItem.label}`));
     children.push(createModifierComparisonBlock(item, compareData.equippedItem));
@@ -1873,21 +1874,20 @@ function formatItemModifierText(modifier: StatModifier): string {
 
 function resolveEquippedComparisonItem(
   item: InventorySummaryItem,
-  inventoryItems: readonly InventorySummaryItem[],
-  equipmentLoadout: EquipmentLoadout,
-): { readonly slot: EquipmentSlot; readonly equippedItem: InventorySummaryItem } | null {
+  equippedItems: readonly EquippedItemSummary[],
+): { readonly slot: EquipmentSlot; readonly equippedItem: EquippedItemSummary } | null {
   const firstSlot = item.allowedEquipmentSlots?.[0];
   if (firstSlot === undefined) {
     return null;
   }
 
-  const equippedItemId = equipmentLoadout[firstSlot];
-  if (equippedItemId === null) {
-    return null;
-  }
-
-  const equippedItem = inventoryItems.find((candidate) => candidate.itemInstanceId === equippedItemId);
-  if (equippedItem === undefined) {
+  // Task 358 (Core 0.5) — equipped items live in `character.equippedItems`
+  // (Task 277), not in the unequipped-bag `inventorySummaryItems` list, so
+  // the comparison must look up by slot here rather than by instance ID
+  // against the bag. Looking the equipped item up in the bag never matched,
+  // silently disabling this comparison since Task 277.
+  const equippedItem = equippedItems.find((candidate) => candidate.slot === firstSlot);
+  if (equippedItem === undefined || equippedItem.itemInstanceId === item.itemInstanceId) {
     return null;
   }
 
@@ -1895,8 +1895,8 @@ function resolveEquippedComparisonItem(
 }
 
 function createModifierComparisonBlock(
-  selectedItem: InventorySummaryItem,
-  equippedItem: InventorySummaryItem,
+  selectedItem: { readonly statModifiers?: readonly StatModifier[] },
+  equippedItem: { readonly statModifiers?: readonly StatModifier[] },
 ): HTMLElement {
   const wrapper = document.createElement("div");
   wrapper.style.display = "grid";

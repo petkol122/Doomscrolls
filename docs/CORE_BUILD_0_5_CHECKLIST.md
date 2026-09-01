@@ -78,8 +78,16 @@ Task 357 status note:
 
 #### Wave 4 — Inventory/Equipment UX
 
-- [ ] Add a gear comparison affordance (equipped vs. selected item) to the existing equipment panel
-- [ ] Verify equip/unequip clarity across all 9 slots, including the newly-filled ones
+- [x] Add a gear comparison affordance (equipped vs. selected item) to the existing equipment panel
+- [x] Verify equip/unequip clarity across all 9 slots, including the newly-filled ones
+
+Task 358 status note:
+
+- [x] Found and fixed a real regression, not just "added a feature": a gear comparison affordance (`resolveEquippedComparisonItem` / `createModifierComparisonBlock` in `worldSessionOverlayView.ts`) already existed in the inventory item-detail panel, but had been silently dead since Task 277. Task 277 moved equipped items out of `character.inventorySummaryItems` into `character.equippedItems`, but the comparison lookup still searched `inventoryItems` by instance ID — a lookup that could never match once equipped items stopped living there, so the "Compare" block never rendered.
+- [x] Fixed the lookup to match by `slot` against `character.equippedItems` (the actual source of truth for what's equipped) instead of by instance ID against the unequipped bag. Also guards against comparing an equipped item against itself when it's the one selected.
+- [x] Threaded `equippedItems` through `createInventoryPanelSection` → `fullRebuildInventoryContent` → `createInventoryDetailSection`, replacing the dead `inventoryItems`-based lookup. Removed the now-unused `equipmentLoadout` parameter from `createInventoryDetailSection` (comparison no longer needs it now that it matches by slot on the authoritative equipped-items list).
+- [x] Verified equip/unequip is already fully slot-generic end-to-end: `EQUIPMENT_SLOTS` in `worldSessionEquipmentView.ts` iterates all 9 slots, and `EquipmentService.ts` server-side validation checks `definition.allowedEquipmentSlots.includes(requestedSlot)` with no hardcoded slot allowlist — so the 5 new Task 356 items equip/unequip through the exact same path as the original 4 items, no new slot-specific code was needed.
+- [x] `pnpm typecheck` — 0 errors.
 
 #### Wave 5 — Polish and RC Closure
 

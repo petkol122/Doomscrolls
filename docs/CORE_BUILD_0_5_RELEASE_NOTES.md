@@ -120,6 +120,35 @@ A third tier (e.g. `uncommon`) was evaluated per the 0.5 plan but not added. Rea
 
 ---
 
+---
+
+## Task 358 — Fix dead gear comparison affordance
+
+**Date:** 2026-09-01
+**Status:** Implemented
+
+### Summary
+
+While verifying Wave 4's "gear comparison" requirement, found that a comparison feature already existed in the inventory item-detail panel but had been silently broken since Task 277 (0.3-era). Fixed the lookup rather than building a duplicate feature.
+
+### What changed
+
+- **`apps/client/src/game/scenes/worldSession/worldSessionOverlayView.ts`**:
+  - `resolveEquippedComparisonItem` now matches the currently-equipped item by `slot` against `character.equippedItems` instead of by instance ID against `inventorySummaryItems` (the bag-only list that stopped containing equipped items after Task 277).
+  - `createModifierComparisonBlock` now takes a minimal structural type (`{ statModifiers? }`) so it works with both `InventorySummaryItem` and `EquippedItemSummary`.
+  - `equippedItems` is threaded from `CharacterSummary.equippedItems` through `createInventoryPanelSection` → `fullRebuildInventoryContent` → `createInventoryDetailSection`.
+
+### Why this was a real bug, not a gap
+
+Task 277 (0.3) moved equipped items out of `inventorySummaryItems` into a dedicated `character.equippedItems` list. The comparison code added earlier for the item-detail panel was never updated to follow — it kept searching the now-equipment-free bag array for the equipped item's instance ID, which could never succeed. The "Compare" section simply never rendered, silently, with no error.
+
+### Verification
+
+- Confirmed equip/unequip itself was already correct and fully slot-generic (`EquipmentService.ts` validates against each item's `allowedEquipmentSlots` with no hardcoded slot list), so the 5 new equipment items from Task 356 needed no additional wiring beyond this comparison fix.
+- `pnpm typecheck` — 0 errors.
+
+---
+
 ### Build-state note
 
 Core Build 0.5 should be understood as a **controlled depth pass**, not a system rewrite. It fills gaps that already exist in the schema (empty slots, flat rarity, shared loot tables) rather than introducing new item mechanics. The existing 0.3/0.4 playable loop remains the baseline that 0.5 must preserve while making loot feel like real progression.
