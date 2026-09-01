@@ -12,5 +12,5 @@
       "@doomscrolls/localization": ["../../packages/localization/src/index.ts"]
     }
   },
-  "include": ["src", "../../packages/content/src", "../../packages/shared/src", "../../packages/localization/src"]
+  "include": ["src", "test", "../../packages/content/src", "../../packages/shared/src", "../../packages/localization/src"]
 }
