@@ -248,5 +248,32 @@ export const enemies = [
     lootTableId: "saltmere_docks_loot",
     currencyDrop: { min: 4, max: 13 },
     spriteKey: "enemy_drowned_hauler_placeholder"
+  },
+  {
+    // Core 0.19 — Arc Sentinel, Static Yard's own heavy anchor. Static
+    // Yard was the last combat zone still reusing another zone's enemy
+    // for its heavy role (trashboar_brute); this closes that gap the
+    // same way foundry_warden and drowned_hauler already closed it for
+    // Cinderworks and Saltmere Docks. Same heavy-attack telegraph shape.
+    id: "arc_sentinel",
+    nameKey: "enemy.arc_sentinel.name" as ContentLocalizationKey,
+    descriptionKey: "enemy.arc_sentinel.description" as ContentLocalizationKey,
+    level: 2,
+    maxHp: 34,
+    damage: 4,
+    heavyAttackDamage: 7,
+    armor: 1,
+    moveSpeed: 0.85,
+    attackRange: 1.1,
+    attackCooldownMs: 900,
+    heavyAttackWindupMs: 1600,
+    heavyAttackCooldownMs: 2500,
+    heavyAttackChance: 0.35,
+    aggroRange: 7.5,
+    leashRange: 11,
+    xp: 18,
+    lootTableId: "static_yard_loot",
+    currencyDrop: { min: 4, max: 13 },
+    spriteKey: "enemy_arc_sentinel_placeholder"
   }
 ] as const satisfies readonly EnemyContentDefinition[];

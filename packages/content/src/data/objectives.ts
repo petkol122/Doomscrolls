@@ -154,6 +154,19 @@ export const objectives: readonly ObjectiveContentDefinition[] = [
     copperReward: 6,
     zoneId: "saltmere_docks",
   },
+  // Core 0.19 -- Static Yard never had a single-heavy-kill "purge"
+  // objective the way Cinderworks (foundry_purge) and Saltmere Docks
+  // (hauler_purge) do. Same shape, now that the zone has its own heavy.
+  {
+    id: "arc_purge",
+    titleKey: "objective.arc_purge.title" as ContentLocalizationKey,
+    descriptionKey: "objective.arc_purge.description" as ContentLocalizationKey,
+    targetEnemyIds: ["arc_sentinel"],
+    requiredKills: 1,
+    xpReward: 10,
+    copperReward: 6,
+    zoneId: "static_yard",
+  },
 ] as const satisfies readonly ObjectiveContentDefinition[];
 
 /**
@@ -177,4 +190,5 @@ export const NOTICE_BOARD_OBJECTIVE_SEQUENCE: readonly string[] = [
   "brine_cull",
   "tide_hunt",
   "hauler_purge",
+  "arc_purge",
 ] as const;

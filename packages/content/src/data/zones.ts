@@ -51,7 +51,10 @@ export const zones = [
     roomType: "combat",
     classification: "combat",
     maxPlayers: 4,
-    enemyIds: ["static_wretch", "trashboar_brute", "yard_drudge"],
+    // Core 0.19 — arc_sentinel replaces the reused trashboar_brute as
+    // Static Yard's own heavy anchor; the zone's roster is now fully
+    // its own, matching every other combat zone.
+    enemyIds: ["static_wretch", "arc_sentinel", "yard_drudge"],
     transitionZoneIds: ["nightmarket"],
     mapKey: "map_static_yard_placeholder",
     bounds: { minX: 0, maxX: 800, minY: 0, maxY: 600 }

@@ -80,4 +80,56 @@ describe("CombatRoom Static Yard objective coverage", () => {
     // server message to await here instead.
     await flushPendingDbWork();
   });
+
+  /**
+   * Core 0.19 -- Static Yard's heavy anchor swapped from a reused
+   * trashboar_brute to its own arc_sentinel. This proves the swap
+   * actually spawns the new enemy in the zone and that the new
+   * arc_purge objective's kill-tracking works, not just that the
+   * content data is well-formed.
+   */
+  it("advances arc_purge from an arc_sentinel kill in Static Yard", async () => {
+    const client = await colyseus.sdk.joinOrCreate("combat", {
+      userId: TEST_USER_ID,
+      characterId: TEST_CHARACTER_ID,
+      requestedZoneId: "static_yard" as ZoneId,
+    });
+
+    const room = colyseus.getRoomById<CombatRoomState>(client.roomId);
+    const player = room.state.playerPresence.get(client.sessionId);
+    expect(player).toBeDefined();
+    if (player === undefined) {
+      throw new Error("expected joined player to have a presence entry");
+    }
+
+    player.hasObjective = true;
+    player.objectiveId = "arc_purge";
+    player.objectiveLabel = "Arc Purge";
+    player.objectiveCurrent = 0;
+    player.objectiveTarget = 1;
+    player.objectiveCompleted = false;
+    player.objectiveRewardGranted = false;
+
+    const sentinel = [...room.state.enemies.values()].find((e) => e.enemyId === "arc_sentinel");
+    expect(sentinel).toBeDefined();
+    if (sentinel === undefined) {
+      throw new Error("expected CombatRoom to spawn an arc_sentinel in static_yard");
+    }
+
+    sentinel.hp = 1;
+    player.x = sentinel.x;
+    player.y = sentinel.y;
+
+    const acceptedPromise = waitForMessage<RequestAttackAcceptedServerMessage>(client, "request_attack_accepted");
+    const objectivePromise = waitForMessage<ObjectiveUpdatedServerMessage>(client, "objective_updated");
+    client.send("request_attack", { type: "request_attack", targetEnemyId: sentinel.id });
+    await acceptedPromise;
+
+    const progress = await objectivePromise;
+    expect(progress.slot).toBe(1);
+    expect(progress.objectiveId).toBe("arc_purge");
+    expect(progress.current).toBe(1);
+
+    await flushPendingDbWork();
+  });
 });

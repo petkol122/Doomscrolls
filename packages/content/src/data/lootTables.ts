@@ -24,7 +24,15 @@ export const lootTables = [
       // three sewer tables). Weight sits well below rare's weight of 1.
       { itemId: itemId("condemned_cleaver"), rarity: "epic", weight: 0.4 },
       { itemId: itemId("warden_plate"), rarity: "epic", weight: 0.4 },
-      { itemId: itemId("scavenger_king_helm"), rarity: "epic", weight: 0.4 }
+      { itemId: itemId("scavenger_king_helm"), rarity: "epic", weight: 0.4 },
+      // Core 0.19 — rarity matrix pass. Commons/epics for ring_1 and
+      // amulet, added alongside each slot's existing rare in the same
+      // tables; flask_1's epic joins the shared epic pool above.
+      { itemId: itemId("frayed_signet"), rarity: "common", weight: 6 },
+      { itemId: itemId("voidglass_band"), rarity: "epic", weight: 0.4 },
+      { itemId: itemId("scavenged_cord"), rarity: "common", weight: 6 },
+      { itemId: itemId("resonant_choker"), rarity: "epic", weight: 0.4 },
+      { itemId: itemId("vital_reserve_flask"), rarity: "epic", weight: 0.4 }
     ]
   },
   {
@@ -50,7 +58,13 @@ export const lootTables = [
       // mirroring its existing rare-tier advantage (2 vs 1).
       { itemId: itemId("condemned_cleaver"), rarity: "epic", weight: 0.6 },
       { itemId: itemId("warden_plate"), rarity: "epic", weight: 0.6 },
-      { itemId: itemId("scavenger_king_helm"), rarity: "epic", weight: 0.6 }
+      { itemId: itemId("scavenger_king_helm"), rarity: "epic", weight: 0.6 },
+      // Core 0.19 — rarity matrix pass, same additions as sewer_starter_loot.
+      { itemId: itemId("frayed_signet"), rarity: "common", weight: 6 },
+      { itemId: itemId("voidglass_band"), rarity: "epic", weight: 0.6 },
+      { itemId: itemId("scavenged_cord"), rarity: "common", weight: 6 },
+      { itemId: itemId("resonant_choker"), rarity: "epic", weight: 0.6 },
+      { itemId: itemId("vital_reserve_flask"), rarity: "epic", weight: 0.6 }
     ]
   },
   {
@@ -70,7 +84,14 @@ export const lootTables = [
       // two sewer tables.
       { itemId: itemId("condemned_cleaver"), rarity: "epic", weight: 0.4 },
       { itemId: itemId("warden_plate"), rarity: "epic", weight: 0.4 },
-      { itemId: itemId("scavenger_king_helm"), rarity: "epic", weight: 0.4 }
+      { itemId: itemId("scavenger_king_helm"), rarity: "epic", weight: 0.4 },
+      // Core 0.19 — ring_1's common/epic join the same table its rare
+      // already lives in; flask_1's epic joins the shared epic pool.
+      // No amulet items here -- signal_scarred_amulet was never in this
+      // table either, so this doesn't expand that item's footprint.
+      { itemId: itemId("frayed_signet"), rarity: "common", weight: 12 },
+      { itemId: itemId("voidglass_band"), rarity: "epic", weight: 0.4 },
+      { itemId: itemId("vital_reserve_flask"), rarity: "epic", weight: 0.4 }
     ]
   },
   {
@@ -99,7 +120,13 @@ export const lootTables = [
       // distinct rare entry instead of sharing rustbound_ring.
       { itemId: itemId("livewire_lance"), rarity: "epic", weight: 0.5 },
       { itemId: itemId("chargeplate_vest"), rarity: "epic", weight: 0.5 },
-      { itemId: itemId("static_wraps"), rarity: "epic", weight: 0.5 }
+      { itemId: itemId("static_wraps"), rarity: "epic", weight: 0.5 },
+      // Core 0.19 — amulet's common/epic join the same table its rare
+      // already lives in; feet's epic joins Static Yard's own epic pool,
+      // completing the slot the zone already claims via voltbound_treads.
+      { itemId: itemId("scavenged_cord"), rarity: "common", weight: 8 },
+      { itemId: itemId("resonant_choker"), rarity: "epic", weight: 0.5 },
+      { itemId: itemId("voltbound_greaves"), rarity: "epic", weight: 0.5 }
     ]
   },
   {
@@ -119,7 +146,10 @@ export const lootTables = [
       { itemId: itemId("slagbound_charm"), rarity: "rare", weight: 2 },
       { itemId: itemId("slagforged_maul"), rarity: "epic", weight: 0.5 },
       { itemId: itemId("cinderplate_hauberk"), rarity: "epic", weight: 0.5 },
-      { itemId: itemId("cinderfist_gauntlets"), rarity: "epic", weight: 0.5 }
+      { itemId: itemId("cinderfist_gauntlets"), rarity: "epic", weight: 0.5 },
+      // Core 0.19 — belt's epic joins Cinderworks' own epic pool,
+      // completing the slot the zone already claims via slagbound_charm.
+      { itemId: itemId("cinderbound_girdle"), rarity: "epic", weight: 0.5 }
     ]
   },
   {

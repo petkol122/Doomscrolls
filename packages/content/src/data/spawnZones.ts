@@ -111,11 +111,11 @@ export const spawnZones = [
     maxY: 500,
   },
   {
-    // Single heavy anchor reusing the existing Trashboar Brute, mirroring
-    // Blackwire's own single-brute-anchor pattern.
-    id: "static_yard_brute_anchor",
+    // Core 0.19 — single heavy anchor, Static Yard's own Arc Sentinel
+    // (replaces the reused Trashboar Brute).
+    id: "static_yard_sentinel_anchor",
     zoneId: "static_yard",
-    enemyId: "trashboar_brute" as EnemyId,
+    enemyId: "arc_sentinel" as EnemyId,
     count: 1,
     minX: 620,
     maxX: 740,

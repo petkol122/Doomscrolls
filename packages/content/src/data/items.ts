@@ -490,5 +490,151 @@ export const items = [
     statModifiers: [{ target: "attackCooldownMs", operation: "add", value: -55 }],
     durabilityMax: 20,
     iconKey: "item_brinewrap_gloves_placeholder"
+  },
+
+  // ── Core 0.19 — rarity matrix, fully closed. Every remaining slot
+  // below full common/rare/epic coverage gets its missing tier(s):
+  // ring_1 and amulet (rare-only) get a common and an epic; flask_1
+  // (common-only, a gap 0.18's own notes understated as "no epic" when
+  // it actually has no rare either) gets a rare and an epic; feet and
+  // belt (common+rare) each get their epic. No item here is added for
+  // its own sake -- each plugs one named cell in the matrix. ──
+  {
+    id: itemId("frayed_signet"),
+    nameKey: "item.frayed_signet.name" as ContentLocalizationKey,
+    descriptionKey: "item.frayed_signet.description" as ContentLocalizationKey,
+    category: "accessory",
+    rarity: "common",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: ["ring_1"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [{ target: "armor", operation: "add", value: 1 }],
+    durabilityMax: 20,
+    iconKey: "item_frayed_signet_placeholder"
+  },
+  {
+    // ring_1 epic: rustbound_ring (rare) is armor+1/maxHp+8; this steps
+    // up from both stats, same pattern as every other rare-to-epic step.
+    id: itemId("voidglass_band"),
+    nameKey: "item.voidglass_band.name" as ContentLocalizationKey,
+    descriptionKey: "item.voidglass_band.description" as ContentLocalizationKey,
+    category: "accessory",
+    rarity: "epic",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: ["ring_1"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [
+      { target: "armor", operation: "add", value: 2 },
+      { target: "maxHp", operation: "add", value: 14 }
+    ],
+    durabilityMax: 20,
+    iconKey: "item_voidglass_band_placeholder"
+  },
+  {
+    id: itemId("scavenged_cord"),
+    nameKey: "item.scavenged_cord.name" as ContentLocalizationKey,
+    descriptionKey: "item.scavenged_cord.description" as ContentLocalizationKey,
+    category: "accessory",
+    rarity: "common",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: ["amulet"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [{ target: "mind", operation: "add", value: 1 }],
+    durabilityMax: 20,
+    iconKey: "item_scavenged_cord_placeholder"
+  },
+  {
+    // amulet epic: signal_scarred_amulet (rare) is mind+2; mirrors
+    // chargeplate_vest's mind+moveSpeed epic combo shape.
+    id: itemId("resonant_choker"),
+    nameKey: "item.resonant_choker.name" as ContentLocalizationKey,
+    descriptionKey: "item.resonant_choker.description" as ContentLocalizationKey,
+    category: "accessory",
+    rarity: "epic",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: ["amulet"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [
+      { target: "mind", operation: "add", value: 4 },
+      { target: "moveSpeed", operation: "add", value: 0.1 }
+    ],
+    durabilityMax: 20,
+    iconKey: "item_resonant_choker_placeholder"
+  },
+  {
+    // flask_1 rare: starter_blood_flask is restoreHpInstant 25/3
+    // charges -- this is a straight upgrade, vendor-obtainable like
+    // signal_scarred_amulet already is at rare.
+    id: itemId("sealed_blood_flask"),
+    nameKey: "item.sealed_blood_flask.name" as ContentLocalizationKey,
+    descriptionKey: "item.sealed_blood_flask.description" as ContentLocalizationKey,
+    category: "flask",
+    rarity: "rare",
+    size: { width: 1, height: 2 },
+    allowedEquipmentSlots: ["flask_1"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [],
+    useEffect: { type: "restoreHpInstant", value: 35, charges: 3 },
+    iconKey: "item_sealed_blood_flask_placeholder"
+  },
+  {
+    // flask_1 epic: follows the 0.7 "epics are drop-only" rule instead
+    // of the vendor path the two lower flask tiers use -- placed in the
+    // shared Blackwire-family epic pool alongside the other epics there.
+    id: itemId("vital_reserve_flask"),
+    nameKey: "item.vital_reserve_flask.name" as ContentLocalizationKey,
+    descriptionKey: "item.vital_reserve_flask.description" as ContentLocalizationKey,
+    category: "flask",
+    rarity: "epic",
+    size: { width: 1, height: 2 },
+    allowedEquipmentSlots: ["flask_1"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [],
+    useEffect: { type: "restoreHpInstant", value: 45, charges: 4 },
+    iconKey: "item_vital_reserve_flask_placeholder"
+  },
+  {
+    // feet epic: voltbound_treads (rare) is moveSpeed+0.22/armor+1;
+    // completes the slot Static Yard already claims via that rare.
+    id: itemId("voltbound_greaves"),
+    nameKey: "item.voltbound_greaves.name" as ContentLocalizationKey,
+    descriptionKey: "item.voltbound_greaves.description" as ContentLocalizationKey,
+    category: "armor",
+    rarity: "epic",
+    size: { width: 1, height: 2 },
+    allowedEquipmentSlots: ["feet"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [
+      { target: "moveSpeed", operation: "add", value: 0.28 },
+      { target: "armor", operation: "add", value: 2 }
+    ],
+    durabilityMax: 20,
+    iconKey: "item_voltbound_greaves_placeholder"
+  },
+  {
+    // belt epic: slagbound_charm (rare) is toughness+2/armor+1;
+    // completes the slot Cinderworks already claims via that rare.
+    id: itemId("cinderbound_girdle"),
+    nameKey: "item.cinderbound_girdle.name" as ContentLocalizationKey,
+    descriptionKey: "item.cinderbound_girdle.description" as ContentLocalizationKey,
+    category: "belt",
+    rarity: "epic",
+    size: { width: 2, height: 1 },
+    allowedEquipmentSlots: ["belt"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [
+      { target: "toughness", operation: "add", value: 3 },
+      { target: "armor", operation: "add", value: 2 }
+    ],
+    durabilityMax: 20,
+    iconKey: "item_cinderbound_girdle_placeholder"
   }
 ] as const satisfies readonly ItemContentDefinition[];

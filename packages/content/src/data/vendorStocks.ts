@@ -60,5 +60,28 @@ export const vendorStocks = [
     vendorId: vendorId("nightmarket_suspicious_vendor"),
     itemId: itemId("signal_scarred_amulet"),
     priceCopper: 220
+  },
+  // Core 0.19 — rarity matrix pass. New commons get a guaranteed
+  // obtainability path, matching the 0.5 precedent above. Flask_1's new
+  // rare tier follows starter_blood_flask's own vendor-only path
+  // (flasks have never appeared in a loot table), same as how
+  // signal_scarred_amulet is already vendor-sold at rare.
+  {
+    id: "nightmarket_suspicious_vendor_stock_09",
+    vendorId: vendorId("nightmarket_suspicious_vendor"),
+    itemId: itemId("frayed_signet"),
+    priceCopper: 70
+  },
+  {
+    id: "nightmarket_suspicious_vendor_stock_10",
+    vendorId: vendorId("nightmarket_suspicious_vendor"),
+    itemId: itemId("scavenged_cord"),
+    priceCopper: 70
+  },
+  {
+    id: "nightmarket_suspicious_vendor_stock_11",
+    vendorId: vendorId("nightmarket_suspicious_vendor"),
+    itemId: itemId("sealed_blood_flask"),
+    priceCopper: 160
   }
 ] as const satisfies readonly VendorStockEntryDefinition[];
