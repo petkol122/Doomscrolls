@@ -135,4 +135,12 @@ export const worldProps = [
 
   // ── Core 0.6: Static Yard CombatRoom physical return trigger ──
   { id: "static_yard_return_to_nightmarket", zoneId: "static_yard", kind: "combat_return_gate", label: "← Return to Nightmarket", labelKey: "world_prop.combat_return_gate.label" as never, x: 90, y: 460 },
+
+  // ── Core 0.16: Cinderworks gate/waypoint (Nightmarket's previously-unused north stretch) ──
+  { id: "nightmarket_label_cinderworks_edge", zoneId: "nightmarket", kind: "area_label", label: "Cinderworks Edge", labelKey: "world_prop.area.cinderworks_edge.label" as never, x: 4300, y: 340 },
+  { id: "nightmarket_cinderworks_gate_01", zoneId: "nightmarket", kind: "town_service", label: "Cinderworks Gate", labelKey: "world_prop.cinderworks_gate.label" as never, x: 4300, y: 300 },
+  { id: "nightmarket_waypoint_cinderworks_combat_edge", zoneId: "nightmarket", kind: "waypoint", label: "Cinderworks Waypoint", labelKey: "world_prop.cinderworks_waypoint.label" as never, x: 4260, y: 260 },
+
+  // ── Core 0.16: Cinderworks CombatRoom physical return trigger ──
+  { id: "cinderworks_return_to_nightmarket", zoneId: "cinderworks", kind: "combat_return_gate", label: "← Return to Nightmarket", labelKey: "world_prop.combat_return_gate.label" as never, x: 100, y: 440 },
 ] as const satisfies readonly WorldPropContentDefinition[];

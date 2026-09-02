@@ -15,7 +15,7 @@ export const zones = [
     classification: "test_hybrid",
     maxPlayers: 30,
     enemyIds: ["trashboar_runt", "trashboar_brute", "trashboar_skitter"],
-    transitionZoneIds: ["blackwire_sewers", "static_yard"],
+    transitionZoneIds: ["blackwire_sewers", "static_yard", "cinderworks"],
     mapKey: "map_nightmarket_placeholder",
     bounds: { minX: 0, maxX: 5000, minY: 0, maxY: 3600 },
     // Task 303 / Task 328 — Physical town rest area: enlarged to match the
@@ -54,6 +54,24 @@ export const zones = [
     enemyIds: ["static_wretch", "trashboar_brute"],
     transitionZoneIds: ["nightmarket"],
     mapKey: "map_static_yard_placeholder",
+    bounds: { minX: 0, maxX: 800, minY: 0, maxY: 600 }
+  },
+  {
+    // Core 0.16 — Cinderworks: the third combat zone. A scrap-smelting
+    // foundry yard reachable from a previously-unused stretch of
+    // Nightmarket, north of the existing hub-sewer-yard diagonal. Bounds
+    // intentionally match the other two combat zones so the existing
+    // CombatRoom entry-box logic (COMBAT_SPAWN_BOX) works unchanged.
+    id: "cinderworks",
+    zoneId: zoneId("cinderworks"),
+    nameKey: "zone.cinderworks.name",
+    descriptionKey: "zone.cinderworks.description",
+    roomType: "combat",
+    classification: "combat",
+    maxPlayers: 4,
+    enemyIds: ["slag_hound", "foundry_warden"],
+    transitionZoneIds: ["nightmarket"],
+    mapKey: "map_cinderworks_placeholder",
     bounds: { minX: 0, maxX: 800, minY: 0, maxY: 600 }
   }
 ] as const satisfies readonly ZoneContentDefinition[];

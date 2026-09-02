@@ -92,5 +92,52 @@ export const enemies = [
     lootTableId: "static_yard_loot",
     currencyDrop: { min: 2, max: 8 },
     spriteKey: "enemy_static_wretch_placeholder"
+  },
+  {
+    // Core 0.16 — Slag Hound, Cinderworks' fast skirmisher. Same role
+    // Skitter/Wretch play in their own zones: low HP, high move speed,
+    // long aggro range, low individual threat but relentless.
+    id: "slag_hound",
+    nameKey: "enemy.slag_hound.name" as ContentLocalizationKey,
+    descriptionKey: "enemy.slag_hound.description" as ContentLocalizationKey,
+    level: 1,
+    maxHp: 9,
+    damage: 2,
+    armor: 0,
+    moveSpeed: 1.3,
+    attackRange: 1.1,
+    attackCooldownMs: 900,
+    aggroRange: 8.5,
+    leashRange: 11,
+    xp: 6,
+    lootTableId: "cinderworks_loot",
+    currencyDrop: { min: 2, max: 8 },
+    spriteKey: "enemy_slag_hound_placeholder"
+  },
+  {
+    // Core 0.16 — Foundry Warden, Cinderworks' own heavy anchor (a new
+    // enemy, not a reused Trashboar Brute, so the zone has two real
+    // enemy types instead of one new + one reskin). Same heavy-attack
+    // telegraph shape Trashboar Brute already uses.
+    id: "foundry_warden",
+    nameKey: "enemy.foundry_warden.name" as ContentLocalizationKey,
+    descriptionKey: "enemy.foundry_warden.description" as ContentLocalizationKey,
+    level: 2,
+    maxHp: 34,
+    damage: 4,
+    heavyAttackDamage: 7,
+    armor: 1,
+    moveSpeed: 0.85,
+    attackRange: 1.1,
+    attackCooldownMs: 900,
+    heavyAttackWindupMs: 1600,
+    heavyAttackCooldownMs: 2500,
+    heavyAttackChance: 0.35,
+    aggroRange: 7.5,
+    leashRange: 11,
+    xp: 18,
+    lootTableId: "cinderworks_loot",
+    currencyDrop: { min: 4, max: 13 },
+    spriteKey: "enemy_foundry_warden_placeholder"
   }
 ] as const satisfies readonly EnemyContentDefinition[];

@@ -39,5 +39,16 @@ export const spawnPoints = [
     x: 4900,
     y: 3460,
     labelKey: "spawn.nightmarket.static_yard_combat_entry" as never
+  },
+  {
+    // Core 0.16 — Cinderworks' nightmarket-side landing point, in the
+    // previously-unused north stretch of the map, away from the existing
+    // hub-sewer-yard diagonal.
+    id: "nightmarket_cinderworks_combat_entry",
+    spawnPointId: spawnPointId("nightmarket_cinderworks_combat_entry"),
+    zoneId: "nightmarket",
+    x: 4300,
+    y: 300,
+    labelKey: "spawn.nightmarket.cinderworks_combat_entry" as never
   }
 ] as const satisfies readonly SpawnPointContentDefinition[];

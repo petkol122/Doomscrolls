@@ -292,5 +292,92 @@ export const items = [
     ],
     durabilityMax: 20,
     iconKey: "item_static_wraps_placeholder"
+  },
+
+  // ── Core 0.16 — Cinderworks' own item family: one common material,
+  // one rare (belt slot, which had no rare option until now), and a
+  // 3-item epic family pool matching the Blackwire/Static Yard
+  // precedent (weapon + chest + one utility piece). ──
+  {
+    id: itemId("cinder_ash"),
+    nameKey: "item.cinder_ash.name" as ContentLocalizationKey,
+    descriptionKey: "item.cinder_ash.description" as ContentLocalizationKey,
+    category: "material",
+    rarity: "common",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: [],
+    stackable: true,
+    maxStackSize: 99,
+    statModifiers: [],
+    iconKey: "item_cinder_ash_placeholder"
+  },
+  {
+    id: itemId("slagbound_charm"),
+    nameKey: "item.slagbound_charm.name" as ContentLocalizationKey,
+    descriptionKey: "item.slagbound_charm.description" as ContentLocalizationKey,
+    category: "belt",
+    rarity: "rare",
+    size: { width: 2, height: 1 },
+    allowedEquipmentSlots: ["belt"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [
+      { target: "toughness", operation: "add", value: 2 },
+      { target: "armor", operation: "add", value: 1 }
+    ],
+    durabilityMax: 20,
+    iconKey: "item_slagbound_charm_placeholder"
+  },
+  {
+    id: itemId("slagforged_maul"),
+    nameKey: "item.slagforged_maul.name" as ContentLocalizationKey,
+    descriptionKey: "item.slagforged_maul.description" as ContentLocalizationKey,
+    category: "weapon",
+    rarity: "epic",
+    size: { width: 1, height: 3 },
+    allowedEquipmentSlots: ["weapon"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [
+      { target: "damage", operation: "add", value: 8 },
+      { target: "attackCooldownMs", operation: "add", value: 90 }
+    ],
+    durabilityMax: 20,
+    iconKey: "item_slagforged_maul_placeholder"
+  },
+  {
+    id: itemId("cinderplate_hauberk"),
+    nameKey: "item.cinderplate_hauberk.name" as ContentLocalizationKey,
+    descriptionKey: "item.cinderplate_hauberk.description" as ContentLocalizationKey,
+    category: "armor",
+    rarity: "epic",
+    size: { width: 2, height: 3 },
+    allowedEquipmentSlots: ["chest"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [
+      { target: "armor", operation: "add", value: 4 },
+      { target: "maxHp", operation: "add", value: 12 },
+      { target: "toughness", operation: "add", value: 2 }
+    ],
+    durabilityMax: 20,
+    iconKey: "item_cinderplate_hauberk_placeholder"
+  },
+  {
+    id: itemId("cinderfist_gauntlets"),
+    nameKey: "item.cinderfist_gauntlets.name" as ContentLocalizationKey,
+    descriptionKey: "item.cinderfist_gauntlets.description" as ContentLocalizationKey,
+    category: "armor",
+    rarity: "epic",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: ["hands"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [
+      { target: "damage", operation: "add", value: 3 },
+      { target: "attackCooldownMs", operation: "add", value: -50 }
+    ],
+    durabilityMax: 20,
+    iconKey: "item_cinderfist_gauntlets_placeholder"
   }
 ] as const satisfies readonly ItemContentDefinition[];

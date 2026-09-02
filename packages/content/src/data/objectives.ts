@@ -77,6 +77,29 @@ export const objectives: readonly ObjectiveContentDefinition[] = [
     zoneId: "nightmarket",
     repeatable: true,
   },
+  // Core 0.16 -- Cinderworks zone coverage, same shape as 0.15's
+  // skitter_hunt/static_cleanup: closes the gap so kills of the zone's
+  // own new enemies actually advance something.
+  {
+    id: "slag_hunt",
+    titleKey: "objective.slag_hunt.title" as ContentLocalizationKey,
+    descriptionKey: "objective.slag_hunt.description" as ContentLocalizationKey,
+    targetEnemyIds: ["slag_hound"],
+    requiredKills: 4,
+    xpReward: 6,
+    copperReward: 4,
+    zoneId: "cinderworks",
+  },
+  {
+    id: "foundry_purge",
+    titleKey: "objective.foundry_purge.title" as ContentLocalizationKey,
+    descriptionKey: "objective.foundry_purge.description" as ContentLocalizationKey,
+    targetEnemyIds: ["foundry_warden"],
+    requiredKills: 1,
+    xpReward: 10,
+    copperReward: 6,
+    zoneId: "cinderworks",
+  },
 ] as const satisfies readonly ObjectiveContentDefinition[];
 
 /**
@@ -93,4 +116,6 @@ export const NOTICE_BOARD_OBJECTIVE_SEQUENCE: readonly string[] = [
   "skitter_hunt",
   "static_cleanup",
   "sewer_patrol",
+  "slag_hunt",
+  "foundry_purge",
 ] as const;

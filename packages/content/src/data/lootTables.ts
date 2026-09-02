@@ -95,5 +95,25 @@ export const lootTables = [
       { itemId: itemId("chargeplate_vest"), rarity: "epic", weight: 0.5 },
       { itemId: itemId("static_wraps"), rarity: "epic", weight: 0.5 }
     ]
+  },
+  {
+    // Core 0.16 — Cinderworks' own table, shared by both its enemies
+    // (matching Static Yard's own precedent of one zone-wide table
+    // rather than Blackwire's older three-way split). Leans on its own
+    // signature material (cinder_ash) over the generic blackwire_scrap,
+    // and its own rare/epic family instead of reusing another zone's.
+    id: "cinderworks_loot",
+    entries: [
+      { itemId: itemId("blackwire_scrap"), rarity: "common", weight: 45 },
+      { itemId: itemId("cinder_ash"), rarity: "common", weight: 20 },
+      { itemId: itemId("scrap_cloth"), rarity: "common", weight: 12 },
+      { itemId: itemId("scavenged_hood"), rarity: "common", weight: 8 },
+      { itemId: itemId("sewer_treads"), rarity: "common", weight: 8 },
+      { itemId: itemId("tarnished_coin"), rarity: "common", weight: 8 },
+      { itemId: itemId("slagbound_charm"), rarity: "rare", weight: 2 },
+      { itemId: itemId("slagforged_maul"), rarity: "epic", weight: 0.5 },
+      { itemId: itemId("cinderplate_hauberk"), rarity: "epic", weight: 0.5 },
+      { itemId: itemId("cinderfist_gauntlets"), rarity: "epic", weight: 0.5 }
+    ]
   }
 ] as const satisfies readonly LootTableDefinition[];
