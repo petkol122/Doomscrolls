@@ -301,6 +301,21 @@ export class CombatRoom extends Room {
   private dodgeHandlerRegistered = false;
   private healingFlaskHandlerRegistered = false;
 
+  /**
+   * Enemy-kill XP/objective-progress writes are fired without being
+   * awaited in the message handler (combat shouldn't block on a DB
+   * round-trip to feel responsive) -- but an unawaited write can still
+   * be in flight when the room itself closes (zone travel, disconnect,
+   * matchmaking routing away from this room). Tearing the room down
+   * while one of these is still in flight is the same
+   * write-not-awaited-before-teardown shape confirmed as a real
+   * mechanism (there, corrupting a native client under test) in
+   * docs/PRISMA_WINDOWS_TEARDOWN_CRASH_INVESTIGATION.md §10. This set
+   * tracks every such write so `onDispose` can wait for them all to
+   * settle before the room finishes closing -- see `trackPendingWrite`.
+   */
+  private readonly pendingWrites = new Set<Promise<void>>();
+
   public override async onCreate(options: CombatRoomJoinOptions): Promise<void> {
     const log = createRoomLogger(
       (this as unknown as { logger?: unknown }).logger,
@@ -577,6 +592,52 @@ export class CombatRoom extends Room {
     });
   }
 
+  /**
+   * Registers a fire-and-forget write (XP grant, objective progress)
+   * so `onDispose` can wait for it before the room finishes closing.
+   * The write is never re-thrown or left as an unhandled rejection --
+   * a failure is logged here (loudly, not silently dropped) and the
+   * tracked promise still resolves, so `onDispose` never hangs on a
+   * write that failed rather than merely being slow.
+   */
+  private trackPendingWrite(
+    promise: Promise<unknown>,
+    log: ReturnType<typeof createRoomLogger>,
+    description: string,
+  ): void {
+    const tracked = promise.then(
+      () => undefined,
+      (error: unknown) => {
+        log.error(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            write: description,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          "CombatRoom fire-and-forget write failed.",
+        );
+      },
+    );
+    this.pendingWrites.add(tracked);
+    void tracked.finally(() => {
+      this.pendingWrites.delete(tracked);
+    });
+  }
+
+  /**
+   * Colyseus awaits this before actually removing the room. Waiting
+   * for every tracked fire-and-forget write here (rather than letting
+   * them get orphaned when the room object goes away) is the fix for
+   * the race documented on `pendingWrites` above -- no write from an
+   * active room is abandoned mid-flight when that room closes.
+   */
+  public override async onDispose(): Promise<void> {
+    if (this.pendingWrites.size > 0) {
+      await Promise.all([...this.pendingWrites]);
+    }
+  }
+
   private registerMovementIntentHandler(
     log: ReturnType<typeof createRoomLogger>,
   ): void {
@@ -690,17 +751,25 @@ export class CombatRoom extends Room {
         : [];
 
       if (damageResult.defeated) {
-        void grantEnemyDefeatXp(player, validation.enemy.enemyId, (type, payload) => {
-          try {
-            client.send(type, payload);
-          } catch {}
-        });
+        this.trackPendingWrite(
+          grantEnemyDefeatXp(player, validation.enemy.enemyId, (type, payload) => {
+            try {
+              client.send(type, payload);
+            } catch {}
+          }),
+          log,
+          "grantEnemyDefeatXp",
+        );
 
         const progressResults = advanceObjectiveProgressAllSlots(player, validation.enemy.enemyId, (updated) => {
-          void new ObjectiveRepository().updateProgress(
-            updated.characterId.toString(),
-            updated.objectiveId,
-            updated.currentProgress,
+          this.trackPendingWrite(
+            new ObjectiveRepository().updateProgress(
+              updated.characterId.toString(),
+              updated.objectiveId,
+              updated.currentProgress,
+            ),
+            log,
+            "objectiveProgress.updateProgress",
           );
         });
         for (const progressResult of progressResults) {
@@ -1046,15 +1115,23 @@ export class CombatRoom extends Room {
         : [];
 
       if (damageResult.defeated) {
-        void grantEnemyDefeatXp(player, enemy.enemyId, (type, payload) => {
-          try { client.send(type, payload); } catch {}
-        });
+        this.trackPendingWrite(
+          grantEnemyDefeatXp(player, enemy.enemyId, (type, payload) => {
+            try { client.send(type, payload); } catch {}
+          }),
+          log,
+          "grantEnemyDefeatXp",
+        );
 
         const progressResults = advanceObjectiveProgressAllSlots(player, enemy.enemyId, (updated) => {
-          void new ObjectiveRepository().updateProgress(
-            updated.characterId.toString(),
-            updated.objectiveId,
-            updated.currentProgress,
+          this.trackPendingWrite(
+            new ObjectiveRepository().updateProgress(
+              updated.characterId.toString(),
+              updated.objectiveId,
+              updated.currentProgress,
+            ),
+            log,
+            "objectiveProgress.updateProgress",
           );
         });
         for (const progressResult of progressResults) {

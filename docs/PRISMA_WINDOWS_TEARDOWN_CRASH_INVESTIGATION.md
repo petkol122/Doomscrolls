@@ -940,5 +940,98 @@ Windows, §7.3) and never blocking a clean local run for long (every
 crash observed across all ten-plus sessions of this investigation
 resolved on retry). Treat a crash from here on as exactly that: rerun
 `pnpm --filter @doomscrolls/server test`. §10.5's production-side flag
-was the one open, deliberately-not-pursued thread -- named here, not
-yet fixed (see the separate production-hotfix follow-up).
+was the one open, deliberately-not-pursued thread — closed below.
+
+---
+
+## 11. Production hotfix: §10.5's flag, actually fixed (2026-09-02)
+
+§10.5 named, without fixing, that `CombatRoom.ts`'s `void
+grantEnemyDefeatXp(...)` and `void new
+ObjectiveRepository().updateProgress(...)` calls (enemy-kill XP and
+objective-progress writes, fired without being awaited) have the same
+write-not-settled-before-teardown shape §10 proved corrupts a native
+client under test — in production, a room closing (zone travel,
+disconnect, matchmaking routing) while one is still in flight can
+silently lose the write or throw an unhandled rejection. That gap is
+now closed.
+
+**Fix** (`CombatRoom.ts` only, nothing else touched): a
+`pendingWrites: Set<Promise<void>>` field plus a `trackPendingWrite()`
+helper wraps each of the 4 call sites (2x `grantEnemyDefeatXp`, 2x
+`ObjectiveRepository().updateProgress`, matching the basic-attack and
+skill-cast kill paths). The hot path is unchanged — still fire-and-forget,
+nothing newly awaited there. A failed write is logged (`log.error`,
+not swallowed) rather than left as an unhandled rejection, and the
+tracked promise still resolves either way so a failure can never hang
+disposal. A new `onDispose()` (Colyseus awaits its return value before
+finishing room teardown — confirmed by reading `@colyseus/core`'s
+`Room#_dispose`/`#disconnect`, not assumed) awaits every still-pending
+write before returning, so none is ever abandoned mid-flight.
+
+**Verified**, not just implemented: new
+`test/combat/pendingWriteFlushOnDispose.test.ts` mocks
+`ObjectiveRepository.updateProgress` with a real 200ms delay (same
+technique as `objectiveTurnInRace.test.ts`), triggers a kill, then
+calls `room.disconnect()` immediately — before the write resolves —
+and asserts the write had completed by the time `disconnect()`
+returned. Confirmed this is a real ordering guarantee, not a
+coincidence of timing, by reading `@colyseus/core`'s `Room.mjs`:
+`disconnect()`'s returned promise only resolves once `#_dispose()`
+does, and `#_dispose()` explicitly `await`s whatever `onDispose()`
+returns before it does. Regression-checked: temporarily disabled the
+`onDispose` wait, confirmed the test fails (`expected false to be
+true` — the write was still mid-flight when disconnect returned, and
+the reverted state also reproduced this investigation's own native
+crash on the same run, corroborating §9/§10's mechanism from the other
+side), restored, re-verified green. Two more things were checked at
+the time and only hand-verified, not kept as permanent tests — closed
+below in §11.1, per AGENTS.md's "Verification Must Be Permanent" rule.
+
+### 11.1 Two follow-up closes (2026-09-02)
+
+**1. The rejecting-write case, made permanent.** §11's own text above
+said a rejecting write was "confirmed by hand... not kept as a
+permanent test" — that gap is now closed. Added a second test to the
+same file, `logs a rejected write and still completes disposal without
+hanging`: mocks `updateProgress` to reject after a real 50ms delay,
+tears the room down mid-flight the same way as the first test, and
+asserts two things with real assertions rather than just "didn't
+hang" — `room.disconnect()` still resolves, and
+(spying on `createRoomLogger` via `vi.mock` + `vi.hoisted`, since the
+real logger safely no-ops with nothing attached in this harness, which
+would otherwise make "was it logged" unobservable) `log.error` was
+actually called with the failing write's description. Regression-checked:
+temporarily made `trackPendingWrite` swallow the rejection without
+logging, confirmed the new test fails (`Number of calls: 0`) while the
+other two tests in the file stay green, restored, re-verified all
+three pass.
+
+**2. Per-write pruning: already present, now proven, not just
+asserted.** Checked `trackPendingWrite` directly: `void
+tracked.finally(() => this.pendingWrites.delete(tracked))` already
+prunes each write from the Set the moment it settles — nothing needed
+fixing. But that claim wasn't actually exercised by any test (the
+first test only ever checked the Set indirectly, via one write, right
+before a dispose that would have cleared it either way). Added a
+third test, `prunes each tracked write from the pending set as it
+settles, not only in bulk at dispose`: kills 3 enemies in sequence in
+one long-lived room (no mocked delay — this is about the Set shrinking
+during normal operation, not a dispose race) and asserts
+`pendingWrites.size` (read directly off the room instance via a cast,
+`room as unknown as { pendingWrites: Set<...> }`) returns to exactly
+`0` after each kill's writes settle. If pruning were missing — only
+cleared in bulk at dispose — this would instead grow by 2 per kill (6
+by the end) and never shrink; the real failure mode this guards
+against for a room that stays open across many kills over a long
+session. No code change was needed here, only the test — confirming a
+correct design decision that had gone unverified rather than leaving
+it as an untested assumption.
+
+`pnpm -r typecheck` clean; full suite 25 files / 38 tests, all passing.
+
+**Status: closed.** This was the last open thread from §10.5, and
+these two closes are the last open threads from §11 itself. The
+investigation that started at §1 with an unexplained Windows-only test
+crash ends here having produced a real, verified production
+correctness fix, not just a local-dev workaround.
