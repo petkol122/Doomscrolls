@@ -16,8 +16,13 @@ import type { PlayerPresence } from "./PlayerPresence";
  * Core 0.9 -- now resolves per the joined character's own class (see
  * `resolveSkillSlotDefinition` below) instead of the single-class
  * hardcoded default this module originally shipped with.
+ *
+ * Core 0.14 -- added a third slot, "primary", resolving to the class's
+ * `startingSkillId` (`heavy_strike` for both current classes). This is
+ * the same content field every class definition already carried but
+ * that no input path had ever resolved.
  */
-export type SkillSlotId = "secondary" | "tertiary";
+export type SkillSlotId = "primary" | "secondary" | "tertiary";
 
 export interface SkillSlotDefinition {
   readonly skillId: string;
@@ -40,7 +45,11 @@ export function resolveSkillSlotDefinition(
   classKey: CharacterClassKey,
 ): SkillSlotDefinition {
   const characterClass = contentRegistry.classes.require(classKey);
-  const skillId = slot === "secondary" ? characterClass.secondarySkillId : characterClass.tertiarySkillId;
+  const skillId = slot === "primary"
+    ? characterClass.startingSkillId
+    : slot === "secondary"
+      ? characterClass.secondarySkillId
+      : characterClass.tertiarySkillId;
   const skill = contentRegistry.skills.require(skillId);
 
   return {
@@ -73,23 +82,32 @@ export function resolveSkillCastDamage(
 }
 
 export function getSkillSlotCooldownAt(player: PlayerPresence, slot: SkillSlotId): number {
-  const value = slot === "secondary" ? player.nextSkillSlotAt : player.nextTertiarySkillSlotAt;
+  const value = slot === "primary"
+    ? player.nextPrimarySkillSlotAt
+    : slot === "secondary"
+      ? player.nextSkillSlotAt
+      : player.nextTertiarySkillSlotAt;
   return Number.isFinite(value) ? value : 0;
 }
 
 export function setSkillSlotCooldownAt(player: PlayerPresence, slot: SkillSlotId, value: number): void {
-  if (slot === "secondary") {
+  if (slot === "primary") {
+    player.nextPrimarySkillSlotAt = value;
+  } else if (slot === "secondary") {
     player.nextSkillSlotAt = value;
   } else {
     player.nextTertiarySkillSlotAt = value;
   }
 }
 
-export function pendingActionTypeForSkillSlot(slot: SkillSlotId): "skill_secondary" | "skill_tertiary" {
-  return slot === "secondary" ? "skill_secondary" : "skill_tertiary";
+export function pendingActionTypeForSkillSlot(slot: SkillSlotId): "skill_primary" | "skill_secondary" | "skill_tertiary" {
+  return slot === "primary" ? "skill_primary" : slot === "secondary" ? "skill_secondary" : "skill_tertiary";
 }
 
 export function skillSlotForPendingActionType(actionType: string): SkillSlotId | null {
+  if (actionType === "skill_primary") {
+    return "primary";
+  }
   if (actionType === "skill_secondary") {
     return "secondary";
   }

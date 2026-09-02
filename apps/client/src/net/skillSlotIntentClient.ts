@@ -12,7 +12,7 @@ export type SendSkillSlotIntentResult =
 
 export function sendSkillSlotIntent(
   room: Room<RoomState> | null | undefined,
-  slot: "secondary" | "tertiary",
+  slot: "primary" | "secondary" | "tertiary",
   targetEnemyId?: string,
 ): SendSkillSlotIntentResult {
   if (!room) {
@@ -57,8 +57,8 @@ export function registerSkillSlotResponseListeners(
   });
 }
 
-function isSkillSlot(value: unknown): value is "secondary" | "tertiary" {
-  return value === "secondary" || value === "tertiary";
+function isSkillSlot(value: unknown): value is "primary" | "secondary" | "tertiary" {
+  return value === "primary" || value === "secondary" || value === "tertiary";
 }
 
 function isAccepted(value: unknown): value is RequestUseSkillSlotAcceptedServerMessage {
