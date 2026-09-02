@@ -15,11 +15,11 @@ import type { LocalizationKey } from "@doomscrolls/localization";
 export type ContentLocalizationKey = LocalizationKey;
 
 export type SkillId = "heavy_strike" | "grave_spark" | "bone_splinter" | "shatter_blow" | "groundbreaker";
-export type EnemyId = "trashboar_runt" | "trashboar_brute" | "trashboar_skitter" | "static_wretch" | "slag_hound" | "foundry_warden" | "yard_drudge" | "ash_rat";
-export type LootTableId = "sewer_starter_loot" | "sewer_brute_loot" | "sewer_skitter_loot" | "static_yard_loot" | "cinderworks_loot";
+export type EnemyId = "trashboar_runt" | "trashboar_brute" | "trashboar_skitter" | "static_wretch" | "slag_hound" | "foundry_warden" | "yard_drudge" | "ash_rat" | "brine_crawler" | "tide_stalker" | "drowned_hauler";
+export type LootTableId = "sewer_starter_loot" | "sewer_brute_loot" | "sewer_skitter_loot" | "static_yard_loot" | "cinderworks_loot" | "saltmere_docks_loot";
 export type LevelTableId = "level_1_to_10";
-export type ObjectiveId = "cull_trashboars" | "break_the_brute" | "sewer_cleanup" | "skitter_hunt" | "static_cleanup" | "sewer_patrol" | "slag_hunt" | "foundry_purge" | "drudge_patrol" | "ash_cull";
-export type ZoneContentId = "nightmarket" | "blackwire_sewers" | "static_yard" | "cinderworks";
+export type ObjectiveId = "cull_trashboars" | "break_the_brute" | "sewer_cleanup" | "skitter_hunt" | "static_cleanup" | "sewer_patrol" | "slag_hunt" | "foundry_purge" | "drudge_patrol" | "ash_cull" | "brine_cull" | "tide_hunt" | "hauler_purge";
+export type ZoneContentId = "nightmarket" | "blackwire_sewers" | "static_yard" | "cinderworks" | "saltmere_docks";
 export type ItemRarity = "common" | "rare" | "epic";
 export type SkillTargetingMode = "target";
 export type ZoneRoomType = "town" | "combat";
@@ -29,8 +29,9 @@ export type SpawnPointContentId =
   | "nightmarket_blackwire_combat_entry"
   | "nightmarket_services_return"
   | "nightmarket_static_yard_combat_entry"
-  | "nightmarket_cinderworks_combat_entry";
-export type CombatInteractableId = "combat_return_to_nightmarket" | "static_yard_return_to_nightmarket" | "cinderworks_return_to_nightmarket";
+  | "nightmarket_cinderworks_combat_entry"
+  | "nightmarket_saltmere_docks_combat_entry";
+export type CombatInteractableId = "combat_return_to_nightmarket" | "static_yard_return_to_nightmarket" | "cinderworks_return_to_nightmarket" | "saltmere_docks_return_to_nightmarket";
 export type EquipmentSlotCategory = "weapon" | "armor" | "accessory" | "belt" | "flask";
 export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken" | "loot_container" | "vendor" | "town_service" | "waypoint" | "combat_edge" | "combat_return_gate" | "area_label" | "path_marker" | "boundary_marker" | "safe_area_marker" | "rest_area_marker";
 export type VendorId = "nightmarket_suspicious_vendor";

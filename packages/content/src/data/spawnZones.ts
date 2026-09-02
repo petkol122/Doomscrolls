@@ -182,4 +182,39 @@ export const spawnZones = [
     minY: 300,
     maxY: 420,
   },
+  // ── Core 0.18 — Saltmere Docks combat zone pockets ──
+  {
+    // Entry-side crawler cluster. Kept clear of the COMBAT_SPAWN_BOX
+    // entry area (x 96-180, y 420-520) and the return gate.
+    id: "saltmere_docks_crawler_pocket_north",
+    zoneId: "saltmere_docks",
+    enemyId: "brine_crawler" as EnemyId,
+    count: 3,
+    minX: 150,
+    maxX: 300,
+    minY: 120,
+    maxY: 240,
+  },
+  {
+    // Skirmisher pocket, mid-room, distinct from the crawler pocket.
+    id: "saltmere_docks_stalker_pocket",
+    zoneId: "saltmere_docks",
+    enemyId: "tide_stalker" as EnemyId,
+    count: 2,
+    minX: 480,
+    maxX: 620,
+    minY: 380,
+    maxY: 500,
+  },
+  {
+    // Single heavy anchor, Saltmere Docks' own Drowned Hauler.
+    id: "saltmere_docks_hauler_anchor",
+    zoneId: "saltmere_docks",
+    enemyId: "drowned_hauler" as EnemyId,
+    count: 1,
+    minX: 620,
+    maxX: 740,
+    minY: 150,
+    maxY: 260,
+  },
 ] as const satisfies readonly SpawnZoneDefinition[];

@@ -121,5 +121,24 @@ export const lootTables = [
       { itemId: itemId("cinderplate_hauberk"), rarity: "epic", weight: 0.5 },
       { itemId: itemId("cinderfist_gauntlets"), rarity: "epic", weight: 0.5 }
     ]
+  },
+  {
+    // Core 0.18 — Saltmere Docks' own table, shared by all three
+    // enemies (one-zone-wide-table precedent). No epic entries here --
+    // this zone's itemization identity is entirely rare tier, closing
+    // the weapon/head/chest/hands gap (see items.ts).
+    id: "saltmere_docks_loot",
+    entries: [
+      { itemId: itemId("blackwire_scrap"), rarity: "common", weight: 45 },
+      { itemId: itemId("brine_salt"), rarity: "common", weight: 20 },
+      { itemId: itemId("scrap_cloth"), rarity: "common", weight: 12 },
+      { itemId: itemId("scavenged_hood"), rarity: "common", weight: 8 },
+      { itemId: itemId("sewer_treads"), rarity: "common", weight: 8 },
+      { itemId: itemId("tarnished_coin"), rarity: "common", weight: 8 },
+      { itemId: itemId("tideworn_cutlass"), rarity: "rare", weight: 1.5 },
+      { itemId: itemId("brinemask_visor"), rarity: "rare", weight: 1.5 },
+      { itemId: itemId("saltcrust_vest"), rarity: "rare", weight: 1.5 },
+      { itemId: itemId("brinewrap_gloves"), rarity: "rare", weight: 1.5 }
+    ]
   }
 ] as const satisfies readonly LootTableDefinition[];

@@ -122,6 +122,38 @@ export const objectives: readonly ObjectiveContentDefinition[] = [
     copperReward: 3,
     zoneId: "cinderworks",
   },
+  // Core 0.18 -- zone-coverage objectives for Saltmere Docks' three
+  // enemies, same targetEnemyIds pattern as above.
+  {
+    id: "brine_cull",
+    titleKey: "objective.brine_cull.title" as ContentLocalizationKey,
+    descriptionKey: "objective.brine_cull.description" as ContentLocalizationKey,
+    targetEnemyIds: ["brine_crawler"],
+    requiredKills: 4,
+    xpReward: 6,
+    copperReward: 4,
+    zoneId: "saltmere_docks",
+  },
+  {
+    id: "tide_hunt",
+    titleKey: "objective.tide_hunt.title" as ContentLocalizationKey,
+    descriptionKey: "objective.tide_hunt.description" as ContentLocalizationKey,
+    targetEnemyIds: ["tide_stalker"],
+    requiredKills: 4,
+    xpReward: 6,
+    copperReward: 4,
+    zoneId: "saltmere_docks",
+  },
+  {
+    id: "hauler_purge",
+    titleKey: "objective.hauler_purge.title" as ContentLocalizationKey,
+    descriptionKey: "objective.hauler_purge.description" as ContentLocalizationKey,
+    targetEnemyIds: ["drowned_hauler"],
+    requiredKills: 1,
+    xpReward: 10,
+    copperReward: 6,
+    zoneId: "saltmere_docks",
+  },
 ] as const satisfies readonly ObjectiveContentDefinition[];
 
 /**
@@ -142,4 +174,7 @@ export const NOTICE_BOARD_OBJECTIVE_SEQUENCE: readonly string[] = [
   "foundry_purge",
   "drudge_patrol",
   "ash_cull",
+  "brine_cull",
+  "tide_hunt",
+  "hauler_purge",
 ] as const;

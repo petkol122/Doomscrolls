@@ -15,7 +15,7 @@ export const zones = [
     classification: "test_hybrid",
     maxPlayers: 30,
     enemyIds: ["trashboar_runt", "trashboar_brute", "trashboar_skitter"],
-    transitionZoneIds: ["blackwire_sewers", "static_yard", "cinderworks"],
+    transitionZoneIds: ["blackwire_sewers", "static_yard", "cinderworks", "saltmere_docks"],
     mapKey: "map_nightmarket_placeholder",
     bounds: { minX: 0, maxX: 5000, minY: 0, maxY: 3600 },
     // Task 303 / Task 328 — Physical town rest area: enlarged to match the
@@ -72,6 +72,26 @@ export const zones = [
     enemyIds: ["slag_hound", "foundry_warden", "ash_rat"],
     transitionZoneIds: ["nightmarket"],
     mapKey: "map_cinderworks_placeholder",
+    bounds: { minX: 0, maxX: 800, minY: 0, maxY: 600 }
+  },
+  {
+    // Core 0.18 — Saltmere Docks: the fourth combat zone. A flooded,
+    // salt-corroded dockyard, thematically distinct from sewage
+    // (Blackwire), live current (Static Yard) and furnace heat
+    // (Cinderworks). Launches with all three enemy roles from day one
+    // (unlike Static Yard/Cinderworks, which needed a 0.17 follow-up to
+    // reach role parity). Bounds match every other combat zone so
+    // COMBAT_SPAWN_BOX works unchanged.
+    id: "saltmere_docks",
+    zoneId: zoneId("saltmere_docks"),
+    nameKey: "zone.saltmere_docks.name",
+    descriptionKey: "zone.saltmere_docks.description",
+    roomType: "combat",
+    classification: "combat",
+    maxPlayers: 4,
+    enemyIds: ["brine_crawler", "tide_stalker", "drowned_hauler"],
+    transitionZoneIds: ["nightmarket"],
+    mapKey: "map_saltmere_docks_placeholder",
     bounds: { minX: 0, maxX: 800, minY: 0, maxY: 600 }
   }
 ] as const satisfies readonly ZoneContentDefinition[];

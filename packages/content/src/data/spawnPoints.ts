@@ -50,5 +50,17 @@ export const spawnPoints = [
     x: 4300,
     y: 300,
     labelKey: "spawn.nightmarket.cinderworks_combat_entry" as never
+  },
+  {
+    // Core 0.18 — Saltmere Docks' nightmarket-side landing point, in the
+    // previously-unused west-central stretch of the map (checked
+    // directly against every existing worldProps.ts coordinate: nothing
+    // but two far-west boundary markers sit in x<1200, y>1000).
+    id: "nightmarket_saltmere_docks_combat_entry",
+    spawnPointId: spawnPointId("nightmarket_saltmere_docks_combat_entry"),
+    zoneId: "nightmarket",
+    x: 400,
+    y: 2200,
+    labelKey: "spawn.nightmarket.saltmere_docks_combat_entry" as never
   }
 ] as const satisfies readonly SpawnPointContentDefinition[];

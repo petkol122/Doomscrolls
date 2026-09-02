@@ -143,4 +143,12 @@ export const worldProps = [
 
   // ── Core 0.16: Cinderworks CombatRoom physical return trigger ──
   { id: "cinderworks_return_to_nightmarket", zoneId: "cinderworks", kind: "combat_return_gate", label: "← Return to Nightmarket", labelKey: "world_prop.combat_return_gate.label" as never, x: 100, y: 440 },
+
+  // ── Core 0.18: Saltmere Docks gate/waypoint (Nightmarket's previously-unused west-central stretch) ──
+  { id: "nightmarket_label_saltmere_docks_edge", zoneId: "nightmarket", kind: "area_label", label: "Saltmere Docks Edge", labelKey: "world_prop.area.saltmere_docks_edge.label" as never, x: 400, y: 2260 },
+  { id: "nightmarket_saltmere_docks_gate_01", zoneId: "nightmarket", kind: "town_service", label: "Saltmere Docks Gate", labelKey: "world_prop.saltmere_docks_gate.label" as never, x: 400, y: 2200 },
+  { id: "nightmarket_waypoint_saltmere_docks_combat_edge", zoneId: "nightmarket", kind: "waypoint", label: "Saltmere Docks Waypoint", labelKey: "world_prop.saltmere_docks_waypoint.label" as never, x: 360, y: 2160 },
+
+  // ── Core 0.18: Saltmere Docks CombatRoom physical return trigger ──
+  { id: "saltmere_docks_return_to_nightmarket", zoneId: "saltmere_docks", kind: "combat_return_gate", label: "← Return to Nightmarket", labelKey: "world_prop.combat_return_gate.label" as never, x: 100, y: 440 },
 ] as const satisfies readonly WorldPropContentDefinition[];

@@ -183,5 +183,70 @@ export const enemies = [
     lootTableId: "cinderworks_loot",
     currencyDrop: { min: 1, max: 5 },
     spriteKey: "enemy_ash_rat_placeholder"
+  },
+  {
+    // Core 0.18 — Brine Crawler, Saltmere Docks' common/starter-tier
+    // enemy. Unlike Static Yard/Cinderworks, this zone launches with
+    // its full common/skirmisher/heavy role set from day one.
+    id: "brine_crawler",
+    nameKey: "enemy.brine_crawler.name" as ContentLocalizationKey,
+    descriptionKey: "enemy.brine_crawler.description" as ContentLocalizationKey,
+    level: 1,
+    maxHp: 11,
+    damage: 2,
+    armor: 0,
+    moveSpeed: 0.9,
+    attackRange: 1.1,
+    attackCooldownMs: 1000,
+    aggroRange: 6.5,
+    leashRange: 9,
+    xp: 5,
+    lootTableId: "saltmere_docks_loot",
+    currencyDrop: { min: 2, max: 7 },
+    spriteKey: "enemy_brine_crawler_placeholder"
+  },
+  {
+    // Core 0.18 — Tide Stalker, Saltmere Docks' fast skirmisher.
+    id: "tide_stalker",
+    nameKey: "enemy.tide_stalker.name" as ContentLocalizationKey,
+    descriptionKey: "enemy.tide_stalker.description" as ContentLocalizationKey,
+    level: 1,
+    maxHp: 9,
+    damage: 2,
+    armor: 0,
+    moveSpeed: 1.3,
+    attackRange: 1.1,
+    attackCooldownMs: 900,
+    aggroRange: 8.5,
+    leashRange: 11,
+    xp: 6,
+    lootTableId: "saltmere_docks_loot",
+    currencyDrop: { min: 2, max: 8 },
+    spriteKey: "enemy_tide_stalker_placeholder"
+  },
+  {
+    // Core 0.18 — Drowned Hauler, Saltmere Docks' heavy anchor. Same
+    // heavy-attack telegraph shape every other zone's anchor already
+    // uses (Trashboar Brute / Foundry Warden).
+    id: "drowned_hauler",
+    nameKey: "enemy.drowned_hauler.name" as ContentLocalizationKey,
+    descriptionKey: "enemy.drowned_hauler.description" as ContentLocalizationKey,
+    level: 2,
+    maxHp: 34,
+    damage: 4,
+    heavyAttackDamage: 7,
+    armor: 1,
+    moveSpeed: 0.85,
+    attackRange: 1.1,
+    attackCooldownMs: 900,
+    heavyAttackWindupMs: 1600,
+    heavyAttackCooldownMs: 2500,
+    heavyAttackChance: 0.35,
+    aggroRange: 7.5,
+    leashRange: 11,
+    xp: 18,
+    lootTableId: "saltmere_docks_loot",
+    currencyDrop: { min: 4, max: 13 },
+    spriteKey: "enemy_drowned_hauler_placeholder"
   }
 ] as const satisfies readonly EnemyContentDefinition[];

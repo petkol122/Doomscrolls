@@ -9,6 +9,19 @@ import type {
 } from "@doomscrolls/shared";
 import { CharacterRepository } from "../../persistence/repositories";
 import { isPositionInsideZoneBounds } from "./validateCharacterLocation";
+import { COMBAT_SPAWN_BOX } from "./initializeCombatEnemies";
+
+/**
+ * Interior landing position for a fresh combat-zone entry, near the
+ * zone's own `combat_return_gate` (the same safe box `CombatRoom`
+ * already uses to center a player on respawn -- see
+ * `initializeCombatEnemies.ts`). Both combat zones share identical
+ * bounds today (0-800 x 0-600), so one shared entry point is
+ * consistent with that existing "same box works for any combat zone"
+ * precedent, not a new inconsistency.
+ */
+const COMBAT_ZONE_ENTRY_X = Math.round((COMBAT_SPAWN_BOX.minX + COMBAT_SPAWN_BOX.maxX) / 2);
+const COMBAT_ZONE_ENTRY_Y = Math.round((COMBAT_SPAWN_BOX.minY + COMBAT_SPAWN_BOX.maxY) / 2);
 
 const NIGHTMARKET_WAYPOINT_OBJECT_ID = "nightmarket_waypoint_01";
 const NIGHTMARKET_WAYPOINT_ID = "nightmarket_waypoint_01";
@@ -67,6 +80,30 @@ const COMBAT_ZONE_ROUTES: readonly CombatZoneRoute[] = [
     waypointObjectId: "nightmarket_waypoint_static_yard_combat_edge",
     waypointId: "nightmarket_waypoint_static_yard_combat_edge",
     waypointLabelKey: "waypoint.destination.nightmarket_static_yard_combat_edge",
+  },
+  {
+    // Core 0.16 — Cinderworks, the third combat zone.
+    gateObjectId: "nightmarket_cinderworks_gate_01",
+    combatZoneId: "cinderworks" as ZoneId,
+    entrySpawnId: "nightmarket_cinderworks_combat_entry",
+    targetSpawnKey: "cinderworks_entry",
+    messageKey: "town_service.route.travel_success.to_combat",
+    areaKey: "world_prop.area.cinderworks_edge.label",
+    waypointObjectId: "nightmarket_waypoint_cinderworks_combat_edge",
+    waypointId: "nightmarket_waypoint_cinderworks_combat_edge",
+    waypointLabelKey: "waypoint.destination.nightmarket_cinderworks_combat_edge",
+  },
+  {
+    // Core 0.18 — Saltmere Docks, the fourth combat zone.
+    gateObjectId: "nightmarket_saltmere_docks_gate_01",
+    combatZoneId: "saltmere_docks" as ZoneId,
+    entrySpawnId: "nightmarket_saltmere_docks_combat_entry",
+    targetSpawnKey: "saltmere_docks_entry",
+    messageKey: "town_service.route.travel_success.to_combat",
+    areaKey: "world_prop.area.saltmere_docks_edge.label",
+    waypointObjectId: "nightmarket_waypoint_saltmere_docks_combat_edge",
+    waypointId: "nightmarket_waypoint_saltmere_docks_combat_edge",
+    waypointLabelKey: "waypoint.destination.nightmarket_saltmere_docks_combat_edge",
   },
 ];
 
@@ -284,11 +321,23 @@ export async function resolveRouteTravel(
 
   const combatRoute = findRouteByGateObjectId(objectId);
   if (combatRoute !== undefined) {
-    const spawn = contentRegistry.spawnPoints.get(combatRoute.entrySpawnId as never);
-    if (spawn === undefined || spawn.zoneId !== "nightmarket") {
+    // Content-integrity check only: confirms the route's nightmarket-side
+    // spawn record is well-formed. Its x/y are nightmarket coordinates and
+    // must never be reused as the combat-zone landing position below --
+    // that was the bug (a player would land at nightmarket-scale
+    // coordinates like (2860, 2120) inside a zone whose bounds only run
+    // 0-800 x 0-600, i.e. numerically outside the combat zone entirely).
+    const nightmarketSideSpawn = contentRegistry.spawnPoints.get(combatRoute.entrySpawnId as never);
+    if (nightmarketSideSpawn === undefined || nightmarketSideSpawn.zoneId !== "nightmarket") {
       return { ok: false, reason: "invalid_destination" };
     }
-    if (!isPositionInsideZoneBounds("nightmarket" as ZoneId, spawn.x, spawn.y)) {
+    if (!isPositionInsideZoneBounds("nightmarket" as ZoneId, nightmarketSideSpawn.x, nightmarketSideSpawn.y)) {
+      return { ok: false, reason: "invalid_destination" };
+    }
+
+    // The actual landing position: an interior point inside the target
+    // combat zone's own bounds, near its `combat_return_gate`.
+    if (!isPositionInsideZoneBounds(combatRoute.combatZoneId, COMBAT_ZONE_ENTRY_X, COMBAT_ZONE_ENTRY_Y)) {
       return { ok: false, reason: "invalid_destination" };
     }
 
@@ -296,8 +345,8 @@ export async function resolveRouteTravel(
       ok: true,
       objectId,
       zoneId: combatRoute.combatZoneId,
-      x: spawn.x,
-      y: spawn.y,
+      x: COMBAT_ZONE_ENTRY_X,
+      y: COMBAT_ZONE_ENTRY_Y,
       messageKey: combatRoute.messageKey,
       areaKey: combatRoute.areaKey,
       handoffRoomKind: "combat",

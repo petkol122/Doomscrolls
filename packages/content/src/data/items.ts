@@ -404,5 +404,91 @@ export const items = [
     ],
     durabilityMax: 20,
     iconKey: "item_voltbound_treads_placeholder"
+  },
+
+  // ── Core 0.18 — Saltmere Docks' own item family. Unlike every prior
+  // zone, this one contributes no new epics -- its whole itemization
+  // job is closing the rare-tier gap: weapon/head/chest/hands each had
+  // zero rare items before this build (jumping straight from common to
+  // epic). One rare per slot, each a genuine middle step between that
+  // slot's existing common and epic numbers, not an arbitrary value. ──
+  {
+    id: itemId("brine_salt"),
+    nameKey: "item.brine_salt.name" as ContentLocalizationKey,
+    descriptionKey: "item.brine_salt.description" as ContentLocalizationKey,
+    category: "material",
+    rarity: "common",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: [],
+    stackable: true,
+    maxStackSize: 99,
+    statModifiers: [],
+    iconKey: "item_brine_salt_placeholder"
+  },
+  {
+    // Weapon: common starter_pipe is damage+3; epics run damage+4 to +8.
+    id: itemId("tideworn_cutlass"),
+    nameKey: "item.tideworn_cutlass.name" as ContentLocalizationKey,
+    descriptionKey: "item.tideworn_cutlass.description" as ContentLocalizationKey,
+    category: "weapon",
+    rarity: "rare",
+    size: { width: 1, height: 3 },
+    allowedEquipmentSlots: ["weapon"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [{ target: "damage", operation: "add", value: 5 }],
+    durabilityMax: 20,
+    iconKey: "item_tideworn_cutlass_placeholder"
+  },
+  {
+    // Head: common scavenged_hood is armor+1; epic scavenger_king_helm
+    // is armor+3/toughness+2.
+    id: itemId("brinemask_visor"),
+    nameKey: "item.brinemask_visor.name" as ContentLocalizationKey,
+    descriptionKey: "item.brinemask_visor.description" as ContentLocalizationKey,
+    category: "armor",
+    rarity: "rare",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: ["head"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [{ target: "armor", operation: "add", value: 2 }],
+    durabilityMax: 20,
+    iconKey: "item_brinemask_visor_placeholder"
+  },
+  {
+    // Chest: common sewer_jacket is armor+2/maxHp+5; epic warden_plate
+    // is armor+5/maxHp+15 -- this sits cleanly between both.
+    id: itemId("saltcrust_vest"),
+    nameKey: "item.saltcrust_vest.name" as ContentLocalizationKey,
+    descriptionKey: "item.saltcrust_vest.description" as ContentLocalizationKey,
+    category: "armor",
+    rarity: "rare",
+    size: { width: 2, height: 3 },
+    allowedEquipmentSlots: ["chest"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [
+      { target: "armor", operation: "add", value: 3 },
+      { target: "maxHp", operation: "add", value: 10 }
+    ],
+    durabilityMax: 20,
+    iconKey: "item_saltcrust_vest_placeholder"
+  },
+  {
+    // Hands: common wraptape_gloves is attackCooldownMs-40; epics run
+    // -50 to -70.
+    id: itemId("brinewrap_gloves"),
+    nameKey: "item.brinewrap_gloves.name" as ContentLocalizationKey,
+    descriptionKey: "item.brinewrap_gloves.description" as ContentLocalizationKey,
+    category: "armor",
+    rarity: "rare",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: ["hands"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [{ target: "attackCooldownMs", operation: "add", value: -55 }],
+    durabilityMax: 20,
+    iconKey: "item_brinewrap_gloves_placeholder"
   }
 ] as const satisfies readonly ItemContentDefinition[];

@@ -174,6 +174,12 @@ export function getInteractableResponseMessage(objectId: string): string {
   if (objectId === "nightmarket_static_yard_gate_01") {
     return t("town_service.route.static_yard_gate.prompt");
   }
+  if (objectId === "nightmarket_cinderworks_gate_01") {
+    return t("town_service.route.cinderworks_gate.prompt");
+  }
+  if (objectId === "nightmarket_saltmere_docks_gate_01") {
+    return t("town_service.route.saltmere_docks_gate.prompt");
+  }
   if (objectId === "nightmarket_stash_keeper_01") {
     const service = contentRegistry.townServices.get("nightmarket_stash_keeper");
     if (service !== undefined) {
