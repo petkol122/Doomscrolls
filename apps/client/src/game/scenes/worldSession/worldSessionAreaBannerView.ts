@@ -21,7 +21,7 @@ export interface WorldSessionAreaBannerView {
 /** Resolve a player-facing zone name from the content registry.
  *  Falls back to the raw zoneId when the content lookup or
  *  localization fails. */
-function resolveZoneDisplayName(zoneId: string): string {
+export function resolveZoneDisplayName(zoneId: string): string {
   try {
     const zone = contentRegistry.zones.get(zoneId as ZoneContentId);
     if (zone !== undefined && typeof zone.nameKey === "string") {

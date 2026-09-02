@@ -39,7 +39,7 @@ export interface WorldSessionInteractablesView {
   readonly findClickedInteractable: (
     pointerX: number,
     pointerY: number,
-  ) => { readonly objectId: string; readonly worldX: number; readonly worldY: number } | null;
+  ) => { readonly objectId: string; readonly objectType: string; readonly worldX: number; readonly worldY: number } | null;
   // Task 314 — set the hovered interactable object ID for highlight feedback.
   readonly setHoveredObject: (objectId: string | null) => void;
   readonly getHoveredObject: () => string | null;
@@ -260,7 +260,7 @@ export function createWorldSessionInteractablesView(
   const findClickedInteractable = (
     pointerX: number,
     pointerY: number,
-  ): { readonly objectId: string; readonly worldX: number; readonly worldY: number } | null => {
+  ): { readonly objectId: string; readonly objectType: string; readonly worldX: number; readonly worldY: number } | null => {
     const hitRadiusPx = 24;
     const hitRadiusSquared = hitRadiusPx * hitRadiusPx;
     let closestHit:
@@ -291,6 +291,7 @@ export function createWorldSessionInteractablesView(
 
     return {
       objectId: closestHit.objectId,
+      objectType: objectTypes.get(closestHit.objectId) ?? "",
       worldX: closestHit.worldX,
       worldY: closestHit.worldY,
     };

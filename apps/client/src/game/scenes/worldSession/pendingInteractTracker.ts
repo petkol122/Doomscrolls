@@ -18,6 +18,7 @@
 import type { Room } from "@colyseus/sdk";
 import type { RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
 import { sendInteractIntent } from "../../../net/interactIntentClient";
+import { sendCombatReturnIntent } from "../../../net/combatReturnIntentClient";
 
 /**
  * Server-side interact range used by the validator.
@@ -32,6 +33,14 @@ export interface PendingInteractState {
   readonly objectId: string;
   readonly targetWorldX: number;
   readonly targetWorldY: number;
+  /**
+   * Which network message to fire once in range. Defaults to the
+   * generic `request_interact` when omitted. `combat_return_gate`
+   * clicks must fire `request_combat_return` instead -- `CombatRoom`
+   * has no `request_interact` handler, so sending the generic message
+   * here would silently do nothing once the player arrives.
+   */
+  readonly kind?: "interact" | "combat_return";
 }
 
 export interface PendingInteractCheckResult {
@@ -67,7 +76,11 @@ export function checkPendingInteract(
 
   if (distance <= INTERACT_RANGE) {
     // In range — fire the interact
-    sendInteractIntent(room, state.objectId);
+    if (state.kind === "combat_return") {
+      sendCombatReturnIntent(room, state.objectId);
+    } else {
+      sendInteractIntent(room, state.objectId);
+    }
     return { interactSent: true };
   }
 

@@ -105,6 +105,25 @@ export interface InteractObjectIntent {
 }
 
 /**
+ * Combat-zone return gate — the player clicked the `combat_return_gate`
+ * interactable that returns them to Nightmarket. Kept distinct from
+ * `InteractObjectIntent` because it dispatches a different network
+ * message (`request_combat_return`, handled only by `CombatRoom`) --
+ * routing it through the generic `request_interact` message would send
+ * a message `CombatRoom` never registers a handler for, silently doing
+ * nothing.
+ */
+export interface CombatReturnIntent {
+  readonly kind: "combat_return";
+  /** Server-authoritative interactable object ID (the gate itself). */
+  readonly objectId: string;
+  /** World-space X of the gate at click time (for range check + movement target). */
+  readonly worldX: number;
+  /** World-space Y of the gate at click time (for range check + movement target). */
+  readonly worldY: number;
+}
+
+/**
  * Union of all possible world interaction intents.
  * The `kind` field is the discriminator.
  */
@@ -114,7 +133,8 @@ export type WorldInteractionIntent =
   | SkillEnemyIntent
   | PickupLootIntent
   | CorpseRecoverIntent
-  | InteractObjectIntent;
+  | InteractObjectIntent
+  | CombatReturnIntent;
 
 // ---------------------------------------------------------------------------
 // Hit-test result types (returned by screen-space hit-test helpers)
@@ -140,6 +160,7 @@ export interface HitTestCorpse {
 
 export interface HitTestInteractable {
   readonly objectId: string;
+  readonly objectType: string;
   readonly worldX: number;
   readonly worldY: number;
 }

@@ -570,7 +570,12 @@ export function createWorldSessionAreaView(
         ? { worldX: hitCorpse.worldX, worldY: hitCorpse.worldY, inRange: hitCorpse.inRange }
         : null,
       interactable: hitInteractable !== null
-        ? { objectId: hitInteractable.objectId, worldX: hitInteractable.worldX, worldY: hitInteractable.worldY }
+        ? {
+            objectId: hitInteractable.objectId,
+            objectType: hitInteractable.objectType,
+            worldX: hitInteractable.worldX,
+            worldY: hitInteractable.worldY,
+          }
         : null,
       groundTarget,
     };
@@ -708,6 +713,28 @@ export function createWorldSessionAreaView(
             objectId: intent.objectId,
             targetWorldX: hitInteractable.worldX,
             targetWorldY: hitInteractable.worldY,
+          };
+          onPickupFeedback?.(t("world_area.interact_moving_closer"));
+          lastClickTarget = { x: hitInteractable.worldX, y: hitInteractable.worldY };
+        }
+        break;
+      }
+      case "combat_return": {
+        const selfPos = selfWorldPosition;
+        const isInRange = selfPos !== null && hitInteractable !== null &&
+          Math.hypot(hitInteractable.worldX - selfPos.x, hitInteractable.worldY - selfPos.y) <= INTERACT_RANGE;
+
+        if (isInRange) {
+          if (hitInteractable !== null) {
+            lastClickTarget = { x: hitInteractable.worldX, y: hitInteractable.worldY };
+          }
+        } else if (hitInteractable !== null) {
+          sendMovementIntent(room, hitInteractable.worldX, hitInteractable.worldY);
+          pendingInteractTarget = {
+            objectId: intent.objectId,
+            targetWorldX: hitInteractable.worldX,
+            targetWorldY: hitInteractable.worldY,
+            kind: "combat_return",
           };
           onPickupFeedback?.(t("world_area.interact_moving_closer"));
           lastClickTarget = { x: hitInteractable.worldX, y: hitInteractable.worldY };
