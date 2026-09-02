@@ -7,7 +7,7 @@ import {
   type UserId,
 } from "@doomscrolls/shared";
 import { ItemLocationType, type PrismaClient } from "@prisma/client";
-import { prisma as defaultPrismaClient } from "../persistence/prisma";
+import { getSharedPrismaClient } from "../persistence/prisma";
 import { ItemRepository } from "../persistence/repositories/ItemRepository";
 import { InventoryRepository } from "../persistence/repositories/InventoryRepository";
 import { CharacterRepository } from "../persistence/repositories/CharacterRepository";
@@ -24,7 +24,7 @@ export class EquipmentService {
   private readonly characterStatsService = new CharacterStatsService();
 
   public constructor(
-    private readonly db: PrismaClient = defaultPrismaClient,
+    private readonly db: PrismaClient = getSharedPrismaClient(),
     private readonly content: ContentRegistry = defaultContentRegistry,
   ) {}
 

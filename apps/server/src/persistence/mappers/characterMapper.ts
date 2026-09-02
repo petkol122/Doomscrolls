@@ -19,7 +19,7 @@ import { t } from "@doomscrolls/localization";
 import { contentRegistry } from "@doomscrolls/content";
 import type { Character, CharacterPassive, CharacterStats as PrismaCharacterStats, Inventory, ItemInstance } from "@prisma/client";
 import { ItemRepository } from "../repositories/ItemRepository";
-import { prisma as defaultPrisma } from "../prisma";
+import { getSharedPrismaClient } from "../prisma";
 import { toIsoDateTimeString } from "./dateMapper";
 
 export function toCharacterStatsDto(character: Pick<Character, "currentHp">, stats: PrismaCharacterStats): CharacterStats {
@@ -59,7 +59,7 @@ export function toCharacterSummaryDto(character: Character): CharacterSummary {
 
 export async function toCharacterSummaryWithInventoryDto(
   character: Character & { stats: PrismaCharacterStats | null; inventory: Inventory | null; items: readonly ItemInstance[] },
-  itemRepository: ItemRepository = new ItemRepository(defaultPrisma),
+  itemRepository: ItemRepository = new ItemRepository(getSharedPrismaClient()),
 ): Promise<CharacterSummary> {
   const inventorySummaryItems: InventorySummaryItem[] = [];
 
@@ -105,7 +105,7 @@ export async function toCharacterSummaryWithInventoryDto(
 
 export async function buildEquippedItemSummaries(
   characterId: string,
-  itemRepository: ItemRepository = new ItemRepository(defaultPrisma),
+  itemRepository: ItemRepository = new ItemRepository(getSharedPrismaClient()),
 ): Promise<readonly EquippedItemSummary[]> {
   const equippedRows = await itemRepository.listEquippedItems(characterId);
   const summaries: EquippedItemSummary[] = [];

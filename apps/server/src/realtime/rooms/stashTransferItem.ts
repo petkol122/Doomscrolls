@@ -1,11 +1,11 @@
 import { contentRegistry } from "@doomscrolls/content";
 import type { ItemDefinitionId, ItemInstance } from "@doomscrolls/shared";
-import { ItemLocationType, Prisma } from "@prisma/client";
+import { ItemLocationType, Prisma, type PrismaClient } from "@prisma/client";
 
 import { toItemInstanceDto } from "../../persistence/mappers/itemMapper";
 import { InventoryRepository } from "../../persistence/repositories/InventoryRepository";
 import { ItemRepository } from "../../persistence/repositories/ItemRepository";
-import { prisma } from "../../persistence/prisma";
+import { getSharedPrismaClient } from "../../persistence/prisma";
 
 const STASH_SERVICE_ID = "nightmarket_stash_keeper";
 const STASH_PAGE_COUNT = 1;
@@ -106,12 +106,14 @@ export async function executeStoreInventoryItemInStash(input: {
   readonly pageIndex?: number;
   readonly x?: number;
   readonly y?: number;
+  readonly db?: PrismaClient;
 }): Promise<StoreInventoryItemInStashResult> {
   if (input.serviceId !== STASH_SERVICE_ID) {
     return { ok: false, reason: "stash_unavailable" };
   }
 
-  const itemRepo = new ItemRepository();
+  const db = input.db ?? getSharedPrismaClient();
+  const itemRepo = new ItemRepository(db);
   const item = await itemRepo.findByIdForCharacter(input.itemInstanceId, input.characterId);
   if (item === null) {
     return { ok: false, reason: "item_not_owned" };
@@ -129,7 +131,7 @@ export async function executeStoreInventoryItemInStash(input: {
   }
 
   try {
-    return await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    return await db.$transaction(async (tx: Prisma.TransactionClient) => {
       const txItemRepo = new ItemRepository(tx);
       const stashItems = await txItemRepo.listStashItems(input.characterId);
       const existingItems: PlacementItem[] = stashItems
@@ -199,12 +201,14 @@ export async function executeTakeStashItemToInventory(input: {
   readonly characterId: string;
   readonly serviceId: string;
   readonly itemInstanceId: string;
+  readonly db?: PrismaClient;
 }): Promise<TakeStashItemToInventoryResult> {
   if (input.serviceId !== STASH_SERVICE_ID) {
     return { ok: false, reason: "stash_unavailable" };
   }
 
-  const itemRepo = new ItemRepository();
+  const db = input.db ?? getSharedPrismaClient();
+  const itemRepo = new ItemRepository(db);
   const item = await itemRepo.findByIdForCharacter(input.itemInstanceId, input.characterId);
   if (item === null) {
     return { ok: false, reason: "item_not_owned" };
@@ -219,7 +223,7 @@ export async function executeTakeStashItemToInventory(input: {
   }
 
   try {
-    return await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    return await db.$transaction(async (tx: Prisma.TransactionClient) => {
       const txItemRepo = new ItemRepository(tx);
       const txInventoryRepo = new InventoryRepository(tx);
       const inventory = await txInventoryRepo.findByCharacterId(input.characterId);

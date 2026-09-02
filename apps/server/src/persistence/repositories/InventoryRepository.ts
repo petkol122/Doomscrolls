@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { prisma as defaultPrisma } from "../prisma";
+import { getSharedPrismaClient } from "../prisma";
 
 type InventoryRepositoryClient = PrismaClient | Prisma.TransactionClient;
 
@@ -10,7 +10,7 @@ export interface CreateInventoryConfig {
 }
 
 export class InventoryRepository {
-  public constructor(private readonly db: InventoryRepositoryClient = defaultPrisma) {}
+  public constructor(private readonly db: InventoryRepositoryClient = getSharedPrismaClient()) {}
 
   public findByCharacterId(characterId: string) {
     return this.db.inventory.findUnique({ where: { characterId } });

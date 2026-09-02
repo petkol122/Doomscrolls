@@ -1,5 +1,5 @@
 import { type Prisma, type PrismaClient } from "@prisma/client";
-import { prisma as defaultPrisma } from "../prisma";
+import { getSharedPrismaClient } from "../prisma";
 
 type ObjectiveRepositoryClient = PrismaClient | Prisma.TransactionClient;
 
@@ -13,7 +13,7 @@ type ObjectiveRepositoryClient = PrismaClient | Prisma.TransactionClient;
  * or extended to support multiple concurrent objectives.
  */
 export class ObjectiveRepository {
-  public constructor(private readonly db: ObjectiveRepositoryClient = defaultPrisma) {}
+  public constructor(private readonly db: ObjectiveRepositoryClient = getSharedPrismaClient()) {}
 
   /**
    * Get the persisted objective state for a character + objective.
@@ -69,6 +69,59 @@ export class ObjectiveRepository {
         requiredProgress,
         completed: false,
         rewardGranted: false,
+      },
+      select: {
+        id: true,
+        characterId: true,
+        objectiveId: true,
+        currentProgress: true,
+        requiredProgress: true,
+        completed: true,
+        rewardGranted: true,
+      },
+    });
+  }
+
+  /**
+   * Core 0.15 -- start an objective, or restart it fresh if a row
+   * already exists (the repeatable-objective case). `create()` above
+   * has a hard unique-constraint requirement on (characterId,
+   * objectiveId) and throws if a row already exists -- fine for a
+   * first-time start, but a repeatable objective's second cycle would
+   * always hit that constraint and fail. This uses the same
+   * `@@unique([characterId, objectiveId])` key via `upsert` so a
+   * restart resets progress/completed/rewardGranted instead of
+   * erroring.
+   */
+  public async startOrRestart(
+    characterId: string,
+    objectiveId: string,
+    requiredProgress: number,
+  ): Promise<{
+    readonly id: string;
+    readonly characterId: string;
+    readonly objectiveId: string;
+    readonly currentProgress: number;
+    readonly requiredProgress: number;
+    readonly completed: boolean;
+    readonly rewardGranted: boolean;
+  }> {
+    return this.db.characterObjective.upsert({
+      where: { characterId_objectiveId: { characterId, objectiveId } },
+      create: {
+        characterId,
+        objectiveId,
+        currentProgress: 0,
+        requiredProgress,
+        completed: false,
+        rewardGranted: false,
+      },
+      update: {
+        currentProgress: 0,
+        requiredProgress,
+        completed: false,
+        rewardGranted: false,
+        completedAt: null,
       },
       select: {
         id: true,

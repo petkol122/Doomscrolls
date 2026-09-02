@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { prisma as defaultPrisma } from "../prisma";
+import { getSharedPrismaClient } from "../prisma";
 
 type UserRepositoryClient = PrismaClient | Prisma.TransactionClient;
 
@@ -10,7 +10,7 @@ export interface CreateUserData {
 }
 
 export class UserRepository {
-  public constructor(private readonly db: UserRepositoryClient = defaultPrisma) {}
+  public constructor(private readonly db: UserRepositoryClient = getSharedPrismaClient()) {}
 
   public findById(id: string) {
     return this.db.user.findUnique({ where: { id } });

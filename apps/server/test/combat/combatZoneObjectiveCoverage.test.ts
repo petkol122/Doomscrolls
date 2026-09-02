@@ -9,18 +9,19 @@ import { flushPendingDbWork } from "../support/flushPendingDbWork";
 import { TEST_CHARACTER_ID, TEST_USER_ID } from "../support/fixtures";
 
 /**
- * Core 0.16 -- Cinderworks, the third combat zone. Proves the same
- * "kills in the game's own dedicated combat zone actually count toward
- * something" chain 0.15 verified for Blackwire Sewers (skitter_hunt) and
- * Static Yard (static_cleanup) also holds for a zone added after that
- * chain existed -- i.e. wiring a new zone into spawnZones/objectives
- * data is sufficient, no room-logic change required.
+ * Core 0.15 -- combat-zone objective coverage. Before this build, all
+ * three existing objectives targeted only trashboar_runt/trashboar_brute
+ * -- kill-progress tracking already fired in CombatRoom (the underlying
+ * mechanism was never the gap), but no objective's targetEnemyIds ever
+ * included trashboar_skitter or static_wretch, so a kill of either, in
+ * the game's own dedicated combat zones, advanced nothing. `skitter_hunt`
+ * closes that for Blackwire Sewers.
  */
-describe("CombatRoom Cinderworks objective coverage", () => {
+describe("CombatRoom combat-zone objective coverage", () => {
   let colyseus: ColyseusTestServer;
 
   beforeAll(async () => {
-    colyseus = await createTestRealtimeServer(2589);
+    colyseus = await createTestRealtimeServer(2586);
   });
 
   afterEach(async () => {
@@ -31,11 +32,11 @@ describe("CombatRoom Cinderworks objective coverage", () => {
     await colyseus.shutdown();
   });
 
-  it("advances slag_hunt from a slag_hound kill in Cinderworks", async () => {
+  it("advances skitter_hunt from a trashboar_skitter kill in Blackwire Sewers", async () => {
     const client = await colyseus.sdk.joinOrCreate("combat", {
       userId: TEST_USER_ID,
       characterId: TEST_CHARACTER_ID,
-      requestedZoneId: "cinderworks" as ZoneId,
+      requestedZoneId: "blackwire_sewers" as ZoneId,
     });
 
     const room = colyseus.getRoomById<CombatRoomState>(client.roomId);
@@ -45,32 +46,42 @@ describe("CombatRoom Cinderworks objective coverage", () => {
       throw new Error("expected joined player to have a presence entry");
     }
 
+    // Directly seed an active skitter_hunt objective into slot 1 --
+    // the notice board (and request_start_board_objective) only exists
+    // in TownRoom; this mirrors what join-time restoration would carry
+    // over for a character who started it in Nightmarket, without
+    // re-testing the start flow itself (already covered elsewhere).
     player.hasObjective = true;
-    player.objectiveId = "slag_hunt";
-    player.objectiveLabel = "Slag Hunt";
+    player.objectiveId = "skitter_hunt";
+    player.objectiveLabel = "Skitter Hunt";
     player.objectiveCurrent = 0;
     player.objectiveTarget = 4;
     player.objectiveCompleted = false;
     player.objectiveRewardGranted = false;
 
-    const hound = [...room.state.enemies.values()].find((e) => e.enemyId === "slag_hound");
-    expect(hound).toBeDefined();
-    if (hound === undefined) {
-      throw new Error("expected CombatRoom to spawn a slag_hound in cinderworks");
+    const skitter = [...room.state.enemies.values()].find((e) => e.enemyId === "trashboar_skitter");
+    expect(skitter).toBeDefined();
+    if (skitter === undefined) {
+      throw new Error("expected CombatRoom to spawn a trashboar_skitter in blackwire_sewers");
     }
 
-    hound.hp = 1;
-    player.x = hound.x;
-    player.y = hound.y;
+    skitter.hp = 1;
+    player.x = skitter.x;
+    player.y = skitter.y;
 
+    // request_attack_accepted and objective_updated are both sent
+    // synchronously, back-to-back, within the same message handler --
+    // both listeners must be registered before the send, or the
+    // second message can arrive (and be dropped) before its listener
+    // exists.
     const acceptedPromise = waitForMessage<RequestAttackAcceptedServerMessage>(client, "request_attack_accepted");
     const objectivePromise = waitForMessage<ObjectiveUpdatedServerMessage>(client, "objective_updated");
-    client.send("request_attack", { type: "request_attack", targetEnemyId: hound.id });
+    client.send("request_attack", { type: "request_attack", targetEnemyId: skitter.id });
     await acceptedPromise;
 
     const progress = await objectivePromise;
     expect(progress.slot).toBe(1);
-    expect(progress.objectiveId).toBe("slag_hunt");
+    expect(progress.objectiveId).toBe("skitter_hunt");
     expect(progress.current).toBe(1);
 
     // Core investigation §10 -- test-scope-only: let the fire-and-forget

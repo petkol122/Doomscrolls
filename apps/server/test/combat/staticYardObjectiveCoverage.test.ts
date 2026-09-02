@@ -5,6 +5,7 @@ import type { ObjectiveUpdatedServerMessage, RequestAttackAcceptedServerMessage 
 import type { CombatRoomState } from "../../src/realtime/rooms/CombatRoomState";
 import { createTestRealtimeServer } from "../support/testRealtimeServer";
 import { waitForMessage } from "../support/waitForMessage";
+import { flushPendingDbWork } from "../support/flushPendingDbWork";
 import { TEST_CHARACTER_ID, TEST_USER_ID } from "../support/fixtures";
 
 /**
@@ -71,5 +72,12 @@ describe("CombatRoom Static Yard objective coverage", () => {
     expect(progress.slot).toBe(1);
     expect(progress.objectiveId).toBe("drudge_patrol");
     expect(progress.current).toBe(1);
+
+    // Core investigation §10 -- test-scope-only: let the fire-and-forget
+    // XP-grant path's own background DB call (CombatRoom's `void
+    // grantEnemyDefeatXp(...)`) finish before this test's afterEach
+    // tears the room down. See flushPendingDbWork.ts for why there's no
+    // server message to await here instead.
+    await flushPendingDbWork();
   });
 });

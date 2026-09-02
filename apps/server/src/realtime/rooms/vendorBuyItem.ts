@@ -9,12 +9,12 @@
  */
 import { contentRegistry } from "@doomscrolls/content";
 import type { ItemDefinitionId, RequestBuyVendorItemRejectedReason } from "@doomscrolls/shared";
-import { ItemLocationType, Prisma } from "@prisma/client";
+import { ItemLocationType, Prisma, type PrismaClient } from "@prisma/client";
 
 import { CharacterRepository } from "../../persistence/repositories/CharacterRepository";
 import { InventoryRepository } from "../../persistence/repositories/InventoryRepository";
 import { ItemRepository } from "../../persistence/repositories/ItemRepository";
-import { prisma } from "../../persistence/prisma";
+import { getSharedPrismaClient } from "../../persistence/prisma";
 
 export type VendorBuyItemResult =
   | {
@@ -39,8 +39,10 @@ export async function executeVendorBuyItem(input: {
   readonly characterId: string;
   readonly vendorId: string;
   readonly stockEntryId: string;
+  readonly db?: PrismaClient;
 }): Promise<VendorBuyItemResult> {
   const { characterId, vendorId, stockEntryId } = input;
+  const db = input.db ?? getSharedPrismaClient();
 
   // 1. Validate vendor exists in town-service content
   const vendorService = contentRegistry.townServices.get(vendorId as never);
@@ -66,7 +68,7 @@ export async function executeVendorBuyItem(input: {
   }
 
   // 5. Read player copper (must have enough)
-  const characterRepo = new CharacterRepository();
+  const characterRepo = new CharacterRepository(db);
   const currentCopper = await characterRepo.getMoneyCopper(characterId);
   if (currentCopper === null || currentCopper < stockEntry.priceCopper) {
     return { ok: false, reason: "not_enough_currency" };
@@ -74,7 +76,7 @@ export async function executeVendorBuyItem(input: {
 
   // 6. Atomically: deduct copper + place item in inventory
   try {
-    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const result = await db.$transaction(async (tx: Prisma.TransactionClient) => {
       const txCharacterRepo = new CharacterRepository(tx);
       const txInventoryRepo = new InventoryRepository(tx);
       const txItemRepo = new ItemRepository(tx);

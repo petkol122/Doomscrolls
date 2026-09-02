@@ -6,7 +6,7 @@ import type {
 } from "@doomscrolls/shared";
 import { Prisma, type PrismaClient, type User as PrismaUser, type UserProfile as PrismaUserProfile, type UserSettings as PrismaUserSettings, type Session as PrismaSession } from "@prisma/client";
 import { SessionStatus } from "@prisma/client";
-import { prisma as defaultPrismaClient } from "../persistence/prisma";
+import { getSharedPrismaClient } from "../persistence/prisma";
 import { UserRepository } from "../persistence/repositories/UserRepository";
 import { SessionRepository } from "../persistence/repositories/SessionRepository";
 import { ProfileRepository } from "../persistence/repositories/ProfileRepository";
@@ -30,8 +30,6 @@ import type {
 } from "./AuthTypes";
 import { DEFAULT_AUTH_CONFIG } from "./AuthTypes";
 
-type AuthDbClient = PrismaClient | Prisma.TransactionClient;
-
 /**
  * Type guard to check if an error is a Prisma unique constraint violation (P2002).
  * Used to map race-condition unique violations to safe auth errors.
@@ -51,6 +49,7 @@ function isPrismaUniqueConstraintError(
  * Does not implement HTTP endpoints.
  */
 export class AuthService {
+  private readonly db: PrismaClient;
   private readonly userRepository: UserRepository;
   private readonly sessionRepository: SessionRepository;
   private readonly profileRepository: ProfileRepository;
@@ -63,9 +62,10 @@ export class AuthService {
 
   constructor(
     config: Partial<AuthServiceConfig> = {},
-    db?: AuthDbClient,
+    db: PrismaClient = getSharedPrismaClient(),
   ) {
     this.config = { ...DEFAULT_AUTH_CONFIG, ...config };
+    this.db = db;
     this.userRepository = new UserRepository(db);
     this.sessionRepository = new SessionRepository(db);
     this.profileRepository = new ProfileRepository(db);
@@ -130,7 +130,7 @@ export class AuthService {
     let session: PrismaSession;
 
     try {
-      ({ user, profile, settings, session } = await defaultPrismaClient.$transaction(
+      ({ user, profile, settings, session } = await this.db.$transaction(
         async (tx) => {
           const txUserRepo = new UserRepository(tx);
           const txProfileRepo = new ProfileRepository(tx);
