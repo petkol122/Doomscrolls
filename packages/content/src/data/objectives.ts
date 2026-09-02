@@ -167,6 +167,45 @@ export const objectives: readonly ObjectiveContentDefinition[] = [
     copperReward: 6,
     zoneId: "static_yard",
   },
+  // Core 0.20 -- "zone patrol" objectives, one per combat zone that has
+  // never had a repeatable objective (only sewer_patrol, 0.15, ever
+  // set the flag). Numbers copied exactly from sewer_patrol
+  // (requiredKills 2 / xpReward 3 / copperReward 2) rather than
+  // invented -- only the target pool changes, generalized from
+  // sewer_patrol's single enemy to each zone's full 3-enemy roster.
+  {
+    id: "yard_patrol",
+    titleKey: "objective.yard_patrol.title" as ContentLocalizationKey,
+    descriptionKey: "objective.yard_patrol.description" as ContentLocalizationKey,
+    targetEnemyIds: ["static_wretch", "yard_drudge", "arc_sentinel"],
+    requiredKills: 2,
+    xpReward: 3,
+    copperReward: 2,
+    zoneId: "static_yard",
+    repeatable: true,
+  },
+  {
+    id: "cinder_patrol",
+    titleKey: "objective.cinder_patrol.title" as ContentLocalizationKey,
+    descriptionKey: "objective.cinder_patrol.description" as ContentLocalizationKey,
+    targetEnemyIds: ["slag_hound", "ash_rat", "foundry_warden"],
+    requiredKills: 2,
+    xpReward: 3,
+    copperReward: 2,
+    zoneId: "cinderworks",
+    repeatable: true,
+  },
+  {
+    id: "dock_patrol",
+    titleKey: "objective.dock_patrol.title" as ContentLocalizationKey,
+    descriptionKey: "objective.dock_patrol.description" as ContentLocalizationKey,
+    targetEnemyIds: ["brine_crawler", "tide_stalker", "drowned_hauler"],
+    requiredKills: 2,
+    xpReward: 3,
+    copperReward: 2,
+    zoneId: "saltmere_docks",
+    repeatable: true,
+  },
 ] as const satisfies readonly ObjectiveContentDefinition[];
 
 /**
@@ -191,4 +230,7 @@ export const NOTICE_BOARD_OBJECTIVE_SEQUENCE: readonly string[] = [
   "tide_hunt",
   "hauler_purge",
   "arc_purge",
+  "yard_patrol",
+  "cinder_patrol",
+  "dock_patrol",
 ] as const;

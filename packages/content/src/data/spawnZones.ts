@@ -217,4 +217,19 @@ export const spawnZones = [
     minY: 150,
     maxY: 260,
   },
+  {
+    // Core 0.20 -- Saltmere Docks was the only post-0.16 combat zone
+    // without a second common-tier pocket (Static Yard has
+    // static_yard_drudge_pocket, Cinderworks has cinderworks_rat_pocket).
+    // Same mid-room coordinates those two already use for their own
+    // extra pocket.
+    id: "saltmere_docks_crawler_pocket_south",
+    zoneId: "saltmere_docks",
+    enemyId: "brine_crawler" as EnemyId,
+    count: 2,
+    minX: 300,
+    maxX: 440,
+    minY: 300,
+    maxY: 420,
+  },
 ] as const satisfies readonly SpawnZoneDefinition[];

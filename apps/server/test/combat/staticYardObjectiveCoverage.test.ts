@@ -132,4 +132,81 @@ describe("CombatRoom Static Yard objective coverage", () => {
 
     await flushPendingDbWork();
   });
+
+  /**
+   * Core 0.20 -- yard_patrol is a multi-target objective
+   * (targetEnemyIds: [static_wretch, yard_drudge, arc_sentinel]). No
+   * existing test has ever killed two *different* enemy types against
+   * the same multi-target objective and confirmed both advance it --
+   * cull_trashboars/sewer_cleanup have had a 2-enemy targetEnemyIds
+   * array since 0.4/0.15 with no test ever exercising it, and
+   * concurrentObjectiveSlots.test.ts kills a runt and a brute against
+   * two *disjoint single-target* objectives in two different slots, not
+   * one multi-target objective. This closes that gap directly.
+   */
+  it("advances yard_patrol from kills of two different target enemies", async () => {
+    const client = await colyseus.sdk.joinOrCreate("combat", {
+      userId: TEST_USER_ID,
+      characterId: TEST_CHARACTER_ID,
+      requestedZoneId: "static_yard" as ZoneId,
+    });
+
+    const room = colyseus.getRoomById<CombatRoomState>(client.roomId);
+    const player = room.state.playerPresence.get(client.sessionId);
+    expect(player).toBeDefined();
+    if (player === undefined) {
+      throw new Error("expected joined player to have a presence entry");
+    }
+
+    player.hasObjective = true;
+    player.objectiveId = "yard_patrol";
+    player.objectiveLabel = "Yard Patrol";
+    player.objectiveCurrent = 0;
+    player.objectiveTarget = 2;
+    player.objectiveCompleted = false;
+    player.objectiveRewardGranted = false;
+
+    const wretch = [...room.state.enemies.values()].find((e) => e.enemyId === "static_wretch");
+    const drudge = [...room.state.enemies.values()].find((e) => e.enemyId === "yard_drudge");
+    expect(wretch).toBeDefined();
+    expect(drudge).toBeDefined();
+    if (wretch === undefined || drudge === undefined) {
+      throw new Error("expected CombatRoom to spawn both a static_wretch and a yard_drudge in static_yard");
+    }
+
+    wretch.hp = 1;
+    player.x = wretch.x;
+    player.y = wretch.y;
+
+    const wretchAcceptedPromise = waitForMessage<RequestAttackAcceptedServerMessage>(client, "request_attack_accepted");
+    const wretchProgressPromise = waitForMessage<ObjectiveUpdatedServerMessage>(client, "objective_updated");
+    client.send("request_attack", { type: "request_attack", targetEnemyId: wretch.id });
+    await wretchAcceptedPromise;
+    const wretchProgress = await wretchProgressPromise;
+    expect(wretchProgress.slot).toBe(1);
+    expect(wretchProgress.objectiveId).toBe("yard_patrol");
+    expect(wretchProgress.current).toBe(1);
+    expect(wretchProgress.completed).toBe(false);
+
+    drudge.hp = 1;
+    player.x = drudge.x;
+    player.y = drudge.y;
+    // The wretch kill just above consumed the attack cooldown -- clear
+    // it directly so this second, different-enemy attack isn't rejected
+    // as attack_on_cooldown (same technique concurrentObjectiveSlots.test.ts
+    // uses; this test is about multi-target progress, not cooldown pacing).
+    player.nextAttackAt = 0;
+
+    const drudgeAcceptedPromise = waitForMessage<RequestAttackAcceptedServerMessage>(client, "request_attack_accepted");
+    const drudgeProgressPromise = waitForMessage<ObjectiveUpdatedServerMessage>(client, "objective_updated");
+    client.send("request_attack", { type: "request_attack", targetEnemyId: drudge.id });
+    await drudgeAcceptedPromise;
+    const drudgeProgress = await drudgeProgressPromise;
+    expect(drudgeProgress.slot).toBe(1);
+    expect(drudgeProgress.objectiveId).toBe("yard_patrol");
+    expect(drudgeProgress.current).toBe(2);
+    expect(drudgeProgress.completed).toBe(true);
+
+    await flushPendingDbWork();
+  });
 });
