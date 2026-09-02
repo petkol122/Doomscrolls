@@ -100,6 +100,28 @@ export const objectives: readonly ObjectiveContentDefinition[] = [
     copperReward: 6,
     zoneId: "cinderworks",
   },
+  // Core 0.17 -- zone-coverage objectives for this build's two new
+  // common/starter-tier enemies, same targetEnemyIds pattern as above.
+  {
+    id: "drudge_patrol",
+    titleKey: "objective.drudge_patrol.title" as ContentLocalizationKey,
+    descriptionKey: "objective.drudge_patrol.description" as ContentLocalizationKey,
+    targetEnemyIds: ["yard_drudge"],
+    requiredKills: 4,
+    xpReward: 6,
+    copperReward: 4,
+    zoneId: "static_yard",
+  },
+  {
+    id: "ash_cull",
+    titleKey: "objective.ash_cull.title" as ContentLocalizationKey,
+    descriptionKey: "objective.ash_cull.description" as ContentLocalizationKey,
+    targetEnemyIds: ["ash_rat"],
+    requiredKills: 5,
+    xpReward: 5,
+    copperReward: 3,
+    zoneId: "cinderworks",
+  },
 ] as const satisfies readonly ObjectiveContentDefinition[];
 
 /**
@@ -118,4 +140,6 @@ export const NOTICE_BOARD_OBJECTIVE_SEQUENCE: readonly string[] = [
   "sewer_patrol",
   "slag_hunt",
   "foundry_purge",
+  "drudge_patrol",
+  "ash_cull",
 ] as const;

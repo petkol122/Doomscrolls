@@ -379,5 +379,30 @@ export const items = [
     ],
     durabilityMax: 20,
     iconKey: "item_cinderfist_gauntlets_placeholder"
+  },
+
+  // ── Core 0.17 — Static Yard's own rare, in the feet slot. Closes two
+  // gaps at once: Static Yard previously had no rare item of its own
+  // (it only shared Blackwire's signal_scarred_amulet), and the feet
+  // slot previously had exactly one item in the whole game
+  // (sewer_treads, common) -- the only slot with no rare-or-above
+  // option. An upgrade over sewer_treads' moveSpeed-only shape, not a
+  // sewer_treads balance change. ──
+  {
+    id: itemId("voltbound_treads"),
+    nameKey: "item.voltbound_treads.name" as ContentLocalizationKey,
+    descriptionKey: "item.voltbound_treads.description" as ContentLocalizationKey,
+    category: "armor",
+    rarity: "rare",
+    size: { width: 1, height: 2 },
+    allowedEquipmentSlots: ["feet"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [
+      { target: "moveSpeed", operation: "add", value: 0.22 },
+      { target: "armor", operation: "add", value: 1 }
+    ],
+    durabilityMax: 20,
+    iconKey: "item_voltbound_treads_placeholder"
   }
 ] as const satisfies readonly ItemContentDefinition[];

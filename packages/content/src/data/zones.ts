@@ -51,7 +51,7 @@ export const zones = [
     roomType: "combat",
     classification: "combat",
     maxPlayers: 4,
-    enemyIds: ["static_wretch", "trashboar_brute"],
+    enemyIds: ["static_wretch", "trashboar_brute", "yard_drudge"],
     transitionZoneIds: ["nightmarket"],
     mapKey: "map_static_yard_placeholder",
     bounds: { minX: 0, maxX: 800, minY: 0, maxY: 600 }
@@ -69,7 +69,7 @@ export const zones = [
     roomType: "combat",
     classification: "combat",
     maxPlayers: 4,
-    enemyIds: ["slag_hound", "foundry_warden"],
+    enemyIds: ["slag_hound", "foundry_warden", "ash_rat"],
     transitionZoneIds: ["nightmarket"],
     mapKey: "map_cinderworks_placeholder",
     bounds: { minX: 0, maxX: 800, minY: 0, maxY: 600 }

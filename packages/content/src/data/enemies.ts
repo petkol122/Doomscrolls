@@ -139,5 +139,49 @@ export const enemies = [
     lootTableId: "cinderworks_loot",
     currencyDrop: { min: 4, max: 13 },
     spriteKey: "enemy_foundry_warden_placeholder"
+  },
+  {
+    // Core 0.17 — Yard Drudge, Static Yard's own common/starter-tier
+    // enemy. Static Yard previously had only static_wretch (skirmisher)
+    // and a reused trashboar_brute (heavy) -- no tier of its own to
+    // match Blackwire's common/skirmisher/heavy 3-role structure. Stats
+    // mirror trashboar_runt's own common-tier shape.
+    id: "yard_drudge",
+    nameKey: "enemy.yard_drudge.name" as ContentLocalizationKey,
+    descriptionKey: "enemy.yard_drudge.description" as ContentLocalizationKey,
+    level: 1,
+    maxHp: 11,
+    damage: 2,
+    armor: 0,
+    moveSpeed: 0.85,
+    attackRange: 1.1,
+    attackCooldownMs: 1000,
+    aggroRange: 6.5,
+    leashRange: 9,
+    xp: 5,
+    lootTableId: "static_yard_loot",
+    currencyDrop: { min: 2, max: 7 },
+    spriteKey: "enemy_yard_drudge_placeholder"
+  },
+  {
+    // Core 0.17 — Ash Rat, Cinderworks' own common/starter-tier enemy.
+    // Same gap-fill as Yard Drudge above: Cinderworks previously had
+    // only slag_hound (skirmisher) and foundry_warden (heavy).
+    id: "ash_rat",
+    nameKey: "enemy.ash_rat.name" as ContentLocalizationKey,
+    descriptionKey: "enemy.ash_rat.description" as ContentLocalizationKey,
+    level: 1,
+    maxHp: 8,
+    damage: 1,
+    armor: 0,
+    moveSpeed: 0.9,
+    attackRange: 1.1,
+    attackCooldownMs: 950,
+    aggroRange: 6.0,
+    leashRange: 8.5,
+    xp: 4,
+    lootTableId: "cinderworks_loot",
+    currencyDrop: { min: 1, max: 5 },
+    spriteKey: "enemy_ash_rat_placeholder"
   }
 ] as const satisfies readonly EnemyContentDefinition[];

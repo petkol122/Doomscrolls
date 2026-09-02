@@ -122,6 +122,18 @@ export const spawnZones = [
     minY: 150,
     maxY: 260,
   },
+  {
+    // Core 0.17 — Yard Drudge, Static Yard's own common/starter tier.
+    // Mid-room pocket, clear of the wretch pockets and the brute anchor.
+    id: "static_yard_drudge_pocket",
+    zoneId: "static_yard",
+    enemyId: "yard_drudge" as EnemyId,
+    count: 2,
+    minX: 300,
+    maxX: 440,
+    minY: 300,
+    maxY: 420,
+  },
   // ── Core 0.16 — Cinderworks combat zone pockets ──
   {
     // Entry-side hound cluster. Kept clear of the COMBAT_SPAWN_BOX entry
@@ -157,5 +169,17 @@ export const spawnZones = [
     maxX: 740,
     minY: 150,
     maxY: 260,
+  },
+  {
+    // Core 0.17 — Ash Rat, Cinderworks' own common/starter tier. Mid-room
+    // pocket, mirroring Static Yard's drudge pocket placement.
+    id: "cinderworks_rat_pocket",
+    zoneId: "cinderworks",
+    enemyId: "ash_rat" as EnemyId,
+    count: 3,
+    minX: 300,
+    maxX: 440,
+    minY: 300,
+    maxY: 420,
   },
 ] as const satisfies readonly SpawnZoneDefinition[];

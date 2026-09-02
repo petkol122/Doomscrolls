@@ -88,6 +88,12 @@ export const lootTables = [
       { itemId: itemId("sewer_treads"), rarity: "common", weight: 14 },
       { itemId: itemId("tarnished_coin"), rarity: "common", weight: 8 },
       { itemId: itemId("signal_scarred_amulet"), rarity: "rare", weight: 2 },
+      // Core 0.17 — voltbound_treads is Static Yard's first genuinely
+      // own rare (signal_scarred_amulet above is shared with Blackwire's
+      // sewer tables, despite the 0.7-era comment below claiming
+      // otherwise -- confirmed by reading item.ts's own item, not by
+      // trusting the comment).
+      { itemId: itemId("voltbound_treads"), rarity: "rare", weight: 2 },
       // Core 0.7 — Static Yard's own epic pool, distinct from the
       // Blackwire-family items, matching how it already has its own
       // distinct rare entry instead of sharing rustbound_ring.

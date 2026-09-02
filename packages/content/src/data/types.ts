@@ -15,10 +15,10 @@ import type { LocalizationKey } from "@doomscrolls/localization";
 export type ContentLocalizationKey = LocalizationKey;
 
 export type SkillId = "heavy_strike" | "grave_spark" | "bone_splinter" | "shatter_blow" | "groundbreaker";
-export type EnemyId = "trashboar_runt" | "trashboar_brute" | "trashboar_skitter" | "static_wretch" | "slag_hound" | "foundry_warden";
+export type EnemyId = "trashboar_runt" | "trashboar_brute" | "trashboar_skitter" | "static_wretch" | "slag_hound" | "foundry_warden" | "yard_drudge" | "ash_rat";
 export type LootTableId = "sewer_starter_loot" | "sewer_brute_loot" | "sewer_skitter_loot" | "static_yard_loot" | "cinderworks_loot";
 export type LevelTableId = "level_1_to_10";
-export type ObjectiveId = "cull_trashboars" | "break_the_brute" | "sewer_cleanup" | "skitter_hunt" | "static_cleanup" | "sewer_patrol" | "slag_hunt" | "foundry_purge";
+export type ObjectiveId = "cull_trashboars" | "break_the_brute" | "sewer_cleanup" | "skitter_hunt" | "static_cleanup" | "sewer_patrol" | "slag_hunt" | "foundry_purge" | "drudge_patrol" | "ash_cull";
 export type ZoneContentId = "nightmarket" | "blackwire_sewers" | "static_yard" | "cinderworks";
 export type ItemRarity = "common" | "rare" | "epic";
 export type SkillTargetingMode = "target";
