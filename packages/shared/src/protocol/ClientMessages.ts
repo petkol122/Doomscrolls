@@ -124,7 +124,7 @@ export interface RequestUseHealingFlaskClientMessage {
  */
 export interface RequestUseSkillSlotClientMessage {
   readonly type: "request_use_skill_slot";
-  readonly slot: "secondary" | "tertiary";
+  readonly slot: "primary" | "secondary" | "tertiary";
   readonly targetEnemyId?: string;
 }
 
@@ -171,6 +171,8 @@ export interface RequestInteractClientMessage {
 
 export interface RequestResetObjectiveClientMessage {
   readonly type: "request_reset_objective";
+  // Core 0.15 -- which of the two concurrent objective slots to reset.
+  readonly slot: 1 | 2;
 }
 
 /**

@@ -307,7 +307,7 @@ export type RequestUseSkillSlotRejectedReason =
 
 export interface RequestUseSkillSlotAcceptedServerMessage {
   readonly type: "request_use_skill_slot_accepted";
-  readonly slot: "secondary" | "tertiary";
+  readonly slot: "primary" | "secondary" | "tertiary";
   readonly targetEnemyId: string;
   readonly damage: number;
   readonly remainingHp: number;
@@ -317,7 +317,7 @@ export interface RequestUseSkillSlotAcceptedServerMessage {
 
 export interface RequestUseSkillSlotRejectedServerMessage {
   readonly type: "request_use_skill_slot_rejected";
-  readonly slot: "secondary" | "tertiary";
+  readonly slot: "primary" | "secondary" | "tertiary";
   readonly reason: RequestUseSkillSlotRejectedReason;
 }
 
@@ -402,6 +402,9 @@ export interface InteractResponseServerMessage {
 
 export interface ObjectiveUpdatedServerMessage {
   readonly type: "objective_updated";
+  // Core 0.15 -- which of the two concurrent objective slots this update
+  // is for. Required: every emitter in this build is updated to pass it.
+  readonly slot: 1 | 2;
   readonly objectiveId: string;
   readonly label: string;
   readonly descriptionKey?: string;

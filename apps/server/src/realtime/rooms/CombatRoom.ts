@@ -4,7 +4,6 @@ import {
   type EnemyAttackResolvedServerMessage,
   type EntityId,
   type EnemyAttackTelegraphServerMessage,
-  type PlayerRespawnedServerMessage,
   type RequestAttackAcceptedServerMessage,
   type RequestAttackClientMessage,
   type RequestAttackRejectedServerMessage,
@@ -25,7 +24,7 @@ import type { CombatRoomJoinOptions } from "./combatRoomTypes";
 import { CombatRoomState } from "./CombatRoomState";
 import { createRoomLogger } from "./roomLogger";
 import { buildCombatPlayerPresence } from "./buildCombatPlayerPresence";
-import { initializeCombatEnemies, COMBAT_SPAWN_BOX } from "./initializeCombatEnemies";
+import { initializeCombatEnemies } from "./initializeCombatEnemies";
 import { validateMovementIntent } from "./movementIntentValidation";
 import { applyMovementIntent } from "./applyMovementIntent";
 import { resolvePlayerMovementSpeed } from "./resolvePlayerMovementSpeed";
@@ -62,7 +61,7 @@ import { dispatchPickedUpWorldLoot } from "./pickupWorldLootDispatcher";
 import { validatePickupWorldLootIntent } from "./pickupWorldLootValidation";
 import { tryResolveLevelProgression } from "./levelProgression";
 import { CharacterStatsService } from "../../character/CharacterStatsService";
-import { advanceObjectiveProgress } from "./advanceObjectiveProgress";
+import { advanceObjectiveProgressAllSlots } from "./advanceObjectiveProgress";
 import { resolveCombatZoneReturnSpawnId } from "./waypointService";
 import {
   getSkillSlotCooldownAt,
@@ -450,25 +449,30 @@ export class CombatRoom extends Room {
     const armor = resolvePlayerArmor(result.character.stats?.derived.armor);
 
     const objectiveRepo = new ObjectiveRepository();
-    let persistedObjective: {
+    type PersistedObjectiveState = {
       objectiveId: string;
       currentProgress: number;
       requiredProgress: number;
       completed: boolean;
       rewardGranted: boolean;
-    } | undefined;
+    };
+    // Core 0.15 -- collect up to two not-yet-reward-granted objectives
+    // (one per concurrent slot), mirroring TownRoom's restore loop.
+    const persistedObjectiveSlots: PersistedObjectiveState[] = [];
     const completedObjectives = await objectiveRepo.findCompletedByCharacter(characterId.toString());
     for (const candidateId of NOTICE_BOARD_OBJECTIVE_SEQUENCE) {
+      if (persistedObjectiveSlots.length >= 2) {
+        break;
+      }
       const objectiveRow = await objectiveRepo.findByCharacterAndObjective(characterId.toString(), candidateId);
       if (objectiveRow !== null && !objectiveRow.rewardGranted) {
-        persistedObjective = {
+        persistedObjectiveSlots.push({
           objectiveId: objectiveRow.objectiveId,
           currentProgress: objectiveRow.currentProgress,
           requiredProgress: objectiveRow.requiredProgress,
           completed: objectiveRow.completed,
           rewardGranted: objectiveRow.rewardGranted,
-        };
-        break;
+        });
       }
     }
 
@@ -490,7 +494,8 @@ export class CombatRoom extends Room {
       restoredLocationZoneId: result.character.lastLocationZoneId ?? undefined,
       restoredLocationX: result.character.lastLocationX ?? undefined,
       restoredLocationY: result.character.lastLocationY ?? undefined,
-      objectiveState: persistedObjective,
+      objectiveState: persistedObjectiveSlots[0],
+      objectiveState2: persistedObjectiveSlots[1],
       completedObjectives,
     });
 
@@ -524,7 +529,18 @@ export class CombatRoom extends Room {
     const state = this.state as CombatRoomState;
     const presence = state.playerPresence.get(_client.sessionId);
 
-    if (presence !== undefined) {
+    // A `request_combat_return` handoff already persisted the correct
+    // destination (nightmarket) position via `updateCharacterRoomIntent`
+    // before approving the transition. Persisting here too, using this
+    // room's own zoneId and the player's stale in-room x/y, would race
+    // that write (the client legitimately calls `room.leave()` once it
+    // receives the approval) and could clobber a correct combat-zone
+    // position with a mismatched (zoneId, x, y) triple -- the same root
+    // cause found and fixed for the reverse direction in TownRoom.onLeave.
+    const hasApprovedZoneTransition = presence?.hasPendingAction === true
+      && presence.pendingActionType === "zone_transition";
+
+    if (presence !== undefined && !hasApprovedZoneTransition) {
       try {
         const characterService = new CharacterService();
         await characterService.updateCharacterLocation(
@@ -680,17 +696,18 @@ export class CombatRoom extends Room {
           } catch {}
         });
 
-        const progressResult = advanceObjectiveProgress(player, validation.enemy.enemyId, (updated) => {
+        const progressResults = advanceObjectiveProgressAllSlots(player, validation.enemy.enemyId, (updated) => {
           void new ObjectiveRepository().updateProgress(
             updated.characterId.toString(),
             updated.objectiveId,
             updated.currentProgress,
           );
         });
-        if (progressResult !== undefined && progressResult.changed) {
+        for (const progressResult of progressResults) {
           try {
             client.send("objective_updated", {
               type: "objective_updated",
+              slot: progressResult.slot,
               objectiveId: progressResult.objectiveId,
               label: progressResult.label,
               descriptionKey: progressResult.descriptionKey,
@@ -941,7 +958,9 @@ export class CombatRoom extends Room {
       const message = raw as Partial<RequestUseSkillSlotClientMessage> | null;
       const player = state.playerPresence.get(client.sessionId);
 
-      const slot = message?.slot === "secondary" || message?.slot === "tertiary" ? message.slot : undefined;
+      const slot = message?.slot === "primary" || message?.slot === "secondary" || message?.slot === "tertiary"
+        ? message.slot
+        : undefined;
 
       if (slot === undefined) {
         const rejection: RequestUseSkillSlotRejectedServerMessage = {
@@ -1031,17 +1050,18 @@ export class CombatRoom extends Room {
           try { client.send(type, payload); } catch {}
         });
 
-        const progressResult = advanceObjectiveProgress(player, enemy.enemyId, (updated) => {
+        const progressResults = advanceObjectiveProgressAllSlots(player, enemy.enemyId, (updated) => {
           void new ObjectiveRepository().updateProgress(
             updated.characterId.toString(),
             updated.objectiveId,
             updated.currentProgress,
           );
         });
-        if (progressResult !== undefined && progressResult.changed) {
+        for (const progressResult of progressResults) {
           try {
             client.send("objective_updated", {
               type: "objective_updated",
+              slot: progressResult.slot,
               objectiveId: progressResult.objectiveId,
               label: progressResult.label,
               descriptionKey: progressResult.descriptionKey,
@@ -1161,36 +1181,74 @@ export class CombatRoom extends Room {
     }
     this.respawnHandlerRegistered = true;
 
-    this.onMessage("request_respawn", (client: Client) => {
+    this.onMessage("request_respawn", async (client: Client) => {
       const state = this.state as CombatRoomState;
       const player = state.playerPresence.get(client.sessionId);
       if (player === undefined || player.lifeState === "alive") {
         return;
       }
 
-      // Minimal respawn: restore the player's HP to max and a
-      // ready flask set; teleport the player back to the centre of
-      // the combat spawn box (the same box `initializeCombatEnemies`
-      // uses). Heavy corpse / recovery UI is out of scope for the
-      // Task 268 minimal wiring.
-      player.hp = player.maxHp;
-      player.lifeState = "alive";
-      player.hasMovementTarget = false;
-      clearPendingAction(player);
-      const { minX, maxX, minY, maxY } = COMBAT_SPAWN_BOX;
-      player.x = Math.round((minX + maxX) / 2);
-      player.y = Math.round((minY + maxY) / 2);
-      restoreFlaskToFull(player);
+      // Core 0.14 -- death in a real combat zone now has a real
+      // consequence: instead of a free in-place respawn, defeat sends
+      // the player back to Nightmarket through the exact same handoff
+      // `request_combat_return` already uses for a voluntary gate-click
+      // return (resolveCombatZoneReturnSpawnId + updateCharacterRoomIntent
+      // + combat_town_return_approved). This is a structural consequence
+      // (leave the zone, travel back in), not a numeric one -- HP/flask
+      // are still fully restored on arrival, matching the old in-place
+      // respawn's own full-restore behavior.
+      if (player.hasPendingAction && player.pendingActionType === "zone_transition") {
+        return;
+      }
 
-      const respawned: PlayerRespawnedServerMessage = {
-        type: "player_respawned",
-        characterId: player.characterId,
-        zoneId: state.zoneId,
-        hp: player.hp,
-      };
+      const returnSpawnId = resolveCombatZoneReturnSpawnId(state.zoneId);
+      const returnSpawn = roomContentRegistry.spawnPoints.get(returnSpawnId as never);
+      if (
+        returnSpawn === undefined
+        || returnSpawn.zoneId !== "nightmarket"
+        || !isPositionInsideZoneBounds("nightmarket" as ZoneId, returnSpawn.x, returnSpawn.y)
+      ) {
+        return;
+      }
+
+      const objectId = "combat_death_return";
+
       try {
-        client.send("player_respawned", respawned);
-      } catch {}
+        setPendingAction(player, {
+          type: "zone_transition",
+          targetId: objectId,
+          targetX: returnSpawn.x,
+          targetY: returnSpawn.y,
+        });
+        await new CharacterService().updateCharacterRoomIntent(
+          player.characterId,
+          "nightmarket",
+          returnSpawn.x,
+          returnSpawn.y,
+          player.maxHp,
+          player.maxFlaskCharges,
+        );
+
+        player.hp = player.maxHp;
+        player.lifeState = "alive";
+        player.hasMovementTarget = false;
+        restoreFlaskToFull(player);
+
+        const approved: import("@doomscrolls/shared").CombatTownReturnApprovedServerMessage = {
+          type: "combat_town_return_approved",
+          characterId: player.characterId,
+          objectId,
+          fromRoomKind: "combat",
+          toRoomKind: "town",
+          targetZoneId: "nightmarket" as ZoneId,
+          targetSpawnKey: returnSpawnId,
+          message: "Defeated. Returning to Nightmarket.",
+        };
+        try { client.send("combat_town_return_approved", approved); } catch {}
+      } catch {
+        clearPendingAction(player);
+        return;
+      }
 
       log.info?.(
         {
@@ -1198,12 +1256,10 @@ export class CombatRoom extends Room {
           roomName: this.roomName,
           sessionId: client.sessionId,
           characterId: player.characterId,
-          hp: player.hp,
-          maxHp: player.maxHp,
-          x: player.x,
-          y: player.y,
+          targetZoneId: "nightmarket",
+          targetSpawnKey: returnSpawnId,
         },
-        "CombatRoom request_respawn accepted: player HP restored and teleported to combat spawn centre.",
+        "CombatRoom request_respawn accepted: death redirected to Nightmarket via combat-town handoff.",
       );
     });
   }

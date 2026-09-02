@@ -6,6 +6,7 @@ import { PlayerPresence } from "./PlayerPresence";
 import { NIGHTMARKET_DEFAULT_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
 import { resolvePlayerInitialPosition } from "./validateCharacterLocation";
 import { restoreFlaskToFull } from "./healingFlaskConfig";
+import { writeObjectiveSlot, type ObjectiveSlot } from "./advanceObjectiveProgress";
 
 export interface PersistedObjectiveState {
   readonly objectiveId: string;
@@ -40,6 +41,11 @@ export interface BuildTownPlayerPresenceInput {
    * survive reconnects. Undefined means no objective is in progress.
    */
   readonly objectiveState?: PersistedObjectiveState | undefined;
+  /**
+   * Core 0.15 -- persisted state for the second concurrent objective
+   * slot, restored the same way as `objectiveState` above.
+   */
+  readonly objectiveState2?: PersistedObjectiveState | undefined;
   /**
    * Task 351 — Completed-and-rewarded objective history for the quest book.
    * Populated from DB on join so completed objectives survive reconnect
@@ -100,25 +106,13 @@ export function buildTownPlayerPresence(
     Math.max(0, restoredFlaskCharges),
   );
 
-  // Task 333D — Restore persisted objective state onto the presence
-  // entry so progress, completion and reward-granted status survive
-  // reconnects. When no persisted state exists, the presence defaults
-  // to the no-objective state set by the PlayerPresence constructor.
-  if (input.objectiveState !== undefined) {
-    const contentDef = contentRegistry.objectives.get(
-      input.objectiveState.objectiveId as never,
-    );
-    if (contentDef !== undefined) {
-      presence.hasObjective = true;
-      presence.objectiveId = input.objectiveState.objectiveId;
-      presence.objectiveLabel = contentDef.titleKey; // key, resolved client-side
-      presence.objectiveDescriptionKey = contentDef.descriptionKey;
-      presence.objectiveCurrent = input.objectiveState.currentProgress;
-      presence.objectiveTarget = input.objectiveState.requiredProgress;
-      presence.objectiveCompleted = input.objectiveState.completed;
-      presence.objectiveRewardGranted = input.objectiveState.rewardGranted;
-    }
-  }
+  // Task 333D / Core 0.15 — Restore persisted objective state onto the
+  // presence entry (both concurrent slots) so progress, completion and
+  // reward-granted status survive reconnects. When no persisted state
+  // exists for a slot, it defaults to the no-objective state set by the
+  // PlayerPresence constructor.
+  applyPersistedObjectiveSlot(presence, 1, input.objectiveState);
+  applyPersistedObjectiveSlot(presence, 2, input.objectiveState2);
 
   // Task 351 — Populate completed objective history from persisted data.
   // The client resolves titles from content; this builds comma-separated
@@ -137,6 +131,37 @@ export function buildTownPlayerPresence(
   }
 
   return presence;
+}
+
+/**
+ * Core 0.15 -- shared by both objective slots. Writes persisted state
+ * (or leaves the slot at its constructor-default no-objective state
+ * when `persisted` is undefined) via the same `writeObjectiveSlot`
+ * helper the runtime handlers use, so restore and runtime writes stay
+ * in sync.
+ */
+export function applyPersistedObjectiveSlot(
+  presence: PlayerPresence,
+  slot: ObjectiveSlot,
+  persisted: PersistedObjectiveState | undefined,
+): void {
+  if (persisted === undefined) {
+    return;
+  }
+  const contentDef = contentRegistry.objectives.get(persisted.objectiveId as never);
+  if (contentDef === undefined) {
+    return;
+  }
+  writeObjectiveSlot(presence, slot, {
+    hasObjective: true,
+    objectiveId: persisted.objectiveId,
+    objectiveLabel: contentDef.titleKey, // key, resolved client-side
+    objectiveDescriptionKey: contentDef.descriptionKey,
+    objectiveCurrent: persisted.currentProgress,
+    objectiveTarget: persisted.requiredProgress,
+    objectiveCompleted: persisted.completed,
+    objectiveRewardGranted: persisted.rewardGranted,
+  });
 }
 
 function resolveTownSpawnPointDefinition(

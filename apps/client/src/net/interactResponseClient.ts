@@ -47,6 +47,7 @@ export function registerInteractResponseListener(
     if (
       !msg
       || msg.type !== "objective_updated"
+      || (msg.slot !== 1 && msg.slot !== 2)
       || typeof msg.objectiveId !== "string"
       || typeof msg.label !== "string"
       || typeof msg.current !== "number"
@@ -57,6 +58,7 @@ export function registerInteractResponseListener(
     }
     onObjectiveUpdated?.({
       type: "objective_updated",
+      slot: msg.slot,
       objectiveId: msg.objectiveId,
       label: msg.label,
       ...(typeof msg.descriptionKey === "string" && msg.descriptionKey.length > 0

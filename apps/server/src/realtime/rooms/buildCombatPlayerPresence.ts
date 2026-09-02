@@ -4,7 +4,8 @@ import type { CharacterClassKey, CharacterId, SpawnPointId, ZoneId } from "@doom
 import { PlayerPresence } from "./PlayerPresence";
 import { isPositionInsideZoneBounds } from "./validateCharacterLocation";
 import { restoreFlaskToFull } from "./healingFlaskConfig";
-import type { PersistedObjectiveState } from "./buildPlayerPresence";
+import { COMBAT_SPAWN_BOX } from "./initializeCombatEnemies";
+import { applyPersistedObjectiveSlot, type PersistedObjectiveState } from "./buildPlayerPresence";
 
 export interface BuildCombatPlayerPresenceInput {
   readonly sessionId: string;
@@ -25,6 +26,8 @@ export interface BuildCombatPlayerPresenceInput {
   readonly restoredLocationX: number | undefined;
   readonly restoredLocationY: number | undefined;
   readonly objectiveState?: PersistedObjectiveState | undefined;
+  /** Core 0.15 -- second concurrent objective slot, mirrors objectiveState. */
+  readonly objectiveState2?: PersistedObjectiveState | undefined;
   readonly completedObjectives?: readonly {
     readonly objectiveId: string;
   }[];
@@ -57,6 +60,16 @@ export function buildCombatPlayerPresence(
   const restoredZoneId = input.restoredLocationZoneId as ZoneId | undefined;
   const hasRestoredPosition =
     restoredZoneId !== undefined &&
+    // The restored position must belong to the zone actually being
+    // joined, not merely satisfy *some* zone's bounds. Without this,
+    // a stale/mismatched (zoneId, x, y) triple -- e.g. a nightmarket
+    // position left behind by a room the player has since left --
+    // could pass the bounds check below purely by numeric coincidence
+    // (nightmarket's bounds are far larger than any combat zone's) and
+    // be used as a combat-zone spawn point anyway. Mirrors the same
+    // zone-match guard `resolvePlayerInitialPosition` already applies
+    // for TownRoom's own restoration.
+    restoredZoneId === input.resolvedZoneId &&
     input.restoredLocationX !== undefined &&
     input.restoredLocationY !== undefined &&
     Number.isFinite(input.restoredLocationX) &&
@@ -67,8 +80,15 @@ export function buildCombatPlayerPresence(
       input.restoredLocationY,
     );
 
-  const initialX = hasRestoredPosition ? (input.restoredLocationX as number) : 0;
-  const initialY = hasRestoredPosition ? (input.restoredLocationY as number) : 0;
+  // Fallback lands inside the zone's own safe interior box (the same
+  // one respawn already uses), not the raw (0, 0) zone corner -- a
+  // bare corner has no guarantee of being real, walkable floor.
+  const initialX = hasRestoredPosition
+    ? (input.restoredLocationX as number)
+    : Math.round((COMBAT_SPAWN_BOX.minX + COMBAT_SPAWN_BOX.maxX) / 2);
+  const initialY = hasRestoredPosition
+    ? (input.restoredLocationY as number)
+    : Math.round((COMBAT_SPAWN_BOX.minY + COMBAT_SPAWN_BOX.maxY) / 2);
 
   const presence = new PlayerPresence(
     input.sessionId,
@@ -96,21 +116,8 @@ export function buildCombatPlayerPresence(
     Math.max(0, restoredFlaskCharges),
   );
 
-  if (input.objectiveState !== undefined) {
-    const contentDef = contentRegistry.objectives.get(
-      input.objectiveState.objectiveId as never,
-    );
-    if (contentDef !== undefined) {
-      presence.hasObjective = true;
-      presence.objectiveId = input.objectiveState.objectiveId;
-      presence.objectiveLabel = contentDef.titleKey;
-      presence.objectiveDescriptionKey = contentDef.descriptionKey;
-      presence.objectiveCurrent = input.objectiveState.currentProgress;
-      presence.objectiveTarget = input.objectiveState.requiredProgress;
-      presence.objectiveCompleted = input.objectiveState.completed;
-      presence.objectiveRewardGranted = input.objectiveState.rewardGranted;
-    }
-  }
+  applyPersistedObjectiveSlot(presence, 1, input.objectiveState);
+  applyPersistedObjectiveSlot(presence, 2, input.objectiveState2);
 
   if (input.completedObjectives !== undefined && input.completedObjectives.length > 0) {
     const ids: string[] = [];

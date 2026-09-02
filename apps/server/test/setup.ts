@@ -44,5 +44,11 @@ vi.mock("../src/persistence/repositories/ObjectiveRepository", () => ({
     findCompletedByCharacter: vi.fn().mockResolvedValue([]),
     updateProgress: vi.fn().mockResolvedValue(undefined),
     markRewardGranted: vi.fn().mockResolvedValue(undefined),
+    // Core 0.15 -- `request_start_board_objective` calls one of these
+    // to persist a newly (re)started objective; neither was previously
+    // exercised by any test.
+    create: vi.fn().mockResolvedValue(undefined),
+    startOrRestart: vi.fn().mockResolvedValue(undefined),
+    markCompleted: vi.fn().mockResolvedValue(undefined),
   })),
 }));

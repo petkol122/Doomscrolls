@@ -85,6 +85,10 @@ export interface PlayerPresenceEntry {
   };
   readonly hasObjective?: boolean;
   readonly objectiveRewardGranted?: boolean;
+  /** Core 0.15 -- second concurrent objective slot, mirrors `objective`/`hasObjective`/`objectiveRewardGranted` above. */
+  readonly objective2?: PlayerPresenceEntry["objective"];
+  readonly hasObjective2?: boolean;
+  readonly objectiveRewardGranted2?: boolean;
   readonly completedObjectives?: readonly {
     readonly id: string;
     readonly title: string;
@@ -135,8 +139,9 @@ export function getTownRoomPresence(
     const withMovementSpeed = applyOptionalMovementSpeed(withPosition, value);
     const withFlask = applyOptionalFlaskState(withMovementSpeed, value);
     const withSkillSlot = applyOptionalSkillSlotCooldown(withFlask, value);
-    const withObjective = applyOptionalObjective(withSkillSlot, value);
-    const withCompletedObjectives = applyOptionalCompletedObjectives(withObjective, value);
+    const withObjective = applyOptionalObjective(withSkillSlot, value, 1);
+    const withObjective2 = applyOptionalObjective(withObjective, value, 2);
+    const withCompletedObjectives = applyOptionalCompletedObjectives(withObjective2, value);
     const withCorpse = applyOptionalCorpse(withCompletedObjectives, value);
     players.push(withCorpse);
   }
@@ -364,27 +369,50 @@ function applyOptionalCorpse(
   return entry;
 }
 
+/**
+ * Core 0.15 -- reads either objective slot's raw schema fields
+ * (`objectiveId`/`objectiveLabel`/... for slot 1, the same names with
+ * a `2` suffix for slot 2) into the entry's `objective`/`objective2`
+ * and `hasObjective`/`hasObjective2` and
+ * `objectiveRewardGranted`/`objectiveRewardGranted2` fields.
+ */
 function applyOptionalObjective(
   entry: PlayerPresenceEntry,
   value: Record<string, unknown>,
+  slot: 1 | 2,
 ): PlayerPresenceEntry {
-  const hasObjective = value.hasObjective === true;
-  const objectiveRewardGranted = value.objectiveRewardGranted === true;
+  const suffix = slot === 1 ? "" : "2";
+
+  /** Builds the slot-specific patch with literal (not computed) keys, so it stays type-checked against `PlayerPresenceEntry`. */
+  const patch = (fields: {
+    hasObjective: boolean;
+    objectiveRewardGranted: boolean;
+    objective?: PlayerPresenceEntry["objective"];
+  }): Partial<PlayerPresenceEntry> => slot === 1
+    ? {
+      hasObjective: fields.hasObjective,
+      objectiveRewardGranted: fields.objectiveRewardGranted,
+      ...(fields.objective !== undefined ? { objective: fields.objective } : {}),
+    }
+    : {
+      hasObjective2: fields.hasObjective,
+      objectiveRewardGranted2: fields.objectiveRewardGranted,
+      ...(fields.objective !== undefined ? { objective2: fields.objective } : {}),
+    };
+
+  const hasObjective = value[`hasObjective${suffix}`] === true;
+  const objectiveRewardGranted = value[`objectiveRewardGranted${suffix}`] === true;
 
   if (!hasObjective) {
-    return {
-      ...entry,
-      hasObjective: false,
-      objectiveRewardGranted,
-    };
+    return { ...entry, ...patch({ hasObjective: false, objectiveRewardGranted }) };
   }
 
-  const rawId = value.objectiveId;
-  const rawLabel = value.objectiveLabel;
-  const rawDescriptionKey = value.objectiveDescriptionKey;
-  const rawCurrent = value.objectiveCurrent;
-  const rawTarget = value.objectiveTarget;
-  const rawCompleted = value.objectiveCompleted;
+  const rawId = value[`objectiveId${suffix}`];
+  const rawLabel = value[`objectiveLabel${suffix}`];
+  const rawDescriptionKey = value[`objectiveDescriptionKey${suffix}`];
+  const rawCurrent = value[`objectiveCurrent${suffix}`];
+  const rawTarget = value[`objectiveTarget${suffix}`];
+  const rawCompleted = value[`objectiveCompleted${suffix}`];
 
   if (
     typeof rawId !== "string" || rawId.length === 0
@@ -395,11 +423,7 @@ function applyOptionalObjective(
     || !Number.isFinite(rawCurrent)
     || !Number.isFinite(rawTarget)
   ) {
-    return {
-      ...entry,
-      hasObjective: true,
-      objectiveRewardGranted,
-    };
+    return { ...entry, ...patch({ hasObjective: true, objectiveRewardGranted }) };
   }
 
   // Look up content to get rewards (for completed objective display)
@@ -432,21 +456,23 @@ function applyOptionalObjective(
 
   return {
     ...entry,
-    hasObjective: true,
-    objectiveRewardGranted,
-    objective: {
-      id: rawId,
-      label: rawLabel,
-      ...(typeof rawDescriptionKey === "string" && rawDescriptionKey.length > 0
-        ? { descriptionKey: rawDescriptionKey }
-        : {}),
-      current: Math.max(0, Math.floor(rawCurrent)),
-      target: Math.max(1, Math.floor(rawTarget)),
-      completed: rawCompleted,
-      ...(xpReward !== undefined && { xpReward }),
-      ...(copperReward !== undefined && { copperReward }),
-      targetEnemyLabel,
-    },
+    ...patch({
+      hasObjective: true,
+      objectiveRewardGranted,
+      objective: {
+        id: rawId,
+        label: rawLabel,
+        ...(typeof rawDescriptionKey === "string" && rawDescriptionKey.length > 0
+          ? { descriptionKey: rawDescriptionKey }
+          : {}),
+        current: Math.max(0, Math.floor(rawCurrent)),
+        target: Math.max(1, Math.floor(rawTarget)),
+        completed: rawCompleted,
+        ...(xpReward !== undefined && { xpReward }),
+        ...(copperReward !== undefined && { copperReward }),
+        targetEnemyLabel,
+      },
+    }),
   };
 }
 

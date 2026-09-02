@@ -85,6 +85,10 @@ export class PlayerPresence extends Schema {
   // Core 0.7 -- independent cooldown for the new tertiary skill slot
   // (Bone Splinter), separate from nextSkillSlotAt (secondary/Grave Spark).
   @type("number") public nextTertiarySkillSlotAt: number;
+  // Core 0.14 -- independent cooldown for the primary skill slot
+  // (heavy_strike / startingSkillId), separate from the secondary and
+  // tertiary cooldowns above.
+  @type("number") public nextPrimarySkillSlotAt: number;
   @type("boolean") public hasObjective: boolean;
   @type("string") public objectiveId: string;
   @type("string") public objectiveLabel: string;
@@ -93,6 +97,17 @@ export class PlayerPresence extends Schema {
   @type("number") public objectiveTarget: number;
   @type("boolean") public objectiveCompleted: boolean;
   @type("boolean") public objectiveRewardGranted: boolean;
+  // Core 0.15 -- second concurrent objective slot, mirroring the 8
+  // fields above exactly (same duplicated-field pattern already used
+  // for the primary/secondary/tertiary skill-slot cooldowns).
+  @type("boolean") public hasObjective2: boolean;
+  @type("string") public objectiveId2: string;
+  @type("string") public objectiveLabel2: string;
+  @type("string") public objectiveDescriptionKey2: string;
+  @type("number") public objectiveCurrent2: number;
+  @type("number") public objectiveTarget2: number;
+  @type("boolean") public objectiveCompleted2: boolean;
+  @type("boolean") public objectiveRewardGranted2: boolean;
   @type("string") public completedObjectiveIds: string;
   @type("string") public completedObjectiveTitles: string;
   @type("boolean") public hasCorpse: boolean;
@@ -153,6 +168,7 @@ export class PlayerPresence extends Schema {
     this.nextFlaskAt = 0;
     this.nextSkillSlotAt = 0;
     this.nextTertiarySkillSlotAt = 0;
+    this.nextPrimarySkillSlotAt = 0;
     this.hasObjective = false;
     this.objectiveId = "";
     this.objectiveLabel = "";
@@ -161,6 +177,14 @@ export class PlayerPresence extends Schema {
     this.objectiveTarget = 0;
     this.objectiveCompleted = false;
     this.objectiveRewardGranted = false;
+    this.hasObjective2 = false;
+    this.objectiveId2 = "";
+    this.objectiveLabel2 = "";
+    this.objectiveDescriptionKey2 = "";
+    this.objectiveCurrent2 = 0;
+    this.objectiveTarget2 = 0;
+    this.objectiveCompleted2 = false;
+    this.objectiveRewardGranted2 = false;
     this.completedObjectiveIds = "";
     this.completedObjectiveTitles = "";
     this.hasCorpse = false;

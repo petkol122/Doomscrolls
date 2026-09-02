@@ -1,5 +1,7 @@
 import type { Room } from "@colyseus/sdk";
+import { contentRegistry, type ZoneContentId } from "@doomscrolls/content";
 import { t } from "@doomscrolls/localization";
+import { resolveZoneDisplayName } from "./worldSessionAreaBannerView";
 import type { CharacterSummary, EquippedItemSummary, InventorySummaryItem, RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
 import type { StatModifier } from "@doomscrolls/shared";
 import type { EquipmentSlot } from "@doomscrolls/shared";
@@ -103,7 +105,7 @@ export function createWorldSessionOverlayView(
   lastSkillRejectedReason: string | null,
   onProjectionModeChange: (mode: WorldProjectionMode) => void,
   onRespawn: () => void,
-  onResetObjective: () => void,
+  onResetObjective: (slot: 1 | 2) => void,
   onLeaveWorld: () => void,
   onReturnToTown?: () => void,
   getUtilityState: () => WorldSessionUtilityPanelOpenState = () =>
@@ -118,7 +120,7 @@ export function createWorldSessionOverlayView(
   let currentStatusPanel: HTMLElement | null = null;
 
   const statusRefs = character !== null
-    ? createCharacterChip(character, character.characterName, character.level, character.xp ?? 0, onLeaveWorld, onReturnToTown)
+    ? createCharacterChip(character, character.characterName, character.level, character.xp ?? 0, onLeaveWorld, onReturnToTown, resolveCurrentZoneId(room))
     : null;
   const utilityRefs = createStableUtilityContent(
     character,
@@ -199,13 +201,37 @@ export function createWorldSessionOverlayView(
   };
 }
 
+/** Reads the live room's current zone id off its synced state. */
+function resolveCurrentZoneId(room: Room<DoomscrollsRoomState>): string {
+  const state = room.state as unknown as Record<string, unknown>;
+  return typeof state.zoneId === "string" ? state.zoneId : "";
+}
+
+/** Short, at-a-glance subtitle for the character chip's zone line,
+ *  derived from the zone's own content (`roomType`), not hardcoded
+ *  per zone -- unlike the old "Temporary test combat zone" constant,
+ *  this stays correct as new zones/room kinds are added. */
+function resolveZoneKindLabel(zoneId: string): string {
+  try {
+    const zone = contentRegistry.zones.get(zoneId as ZoneContentId);
+    if (zone?.roomType === "combat") {
+      return "Combat Zone";
+    }
+    if (zone?.roomType === "town") {
+      return "Town";
+    }
+  } catch { /* fall through */ }
+  return "";
+}
+
 function createCharacterChip(
   character: CharacterSummary,
   displayName: string,
   level: number,
   xp: number,
   onLeaveWorld: () => void,
-  onReturnToTown?: () => void,
+  onReturnToTown: (() => void) | undefined,
+  zoneId: string,
 ): StatusViewRefs {
   // Task 242 — the chip is a visible interactive panel root. We
   // intentionally do NOT call `makePassive(panel)` here; the panel
@@ -227,14 +253,14 @@ function createCharacterChip(
   textBlock.style.gap = "3px";
 
   const zoneLine = document.createElement("div");
-  zoneLine.textContent = "The Nightmarket";
+  zoneLine.textContent = resolveZoneDisplayName(zoneId);
   zoneLine.style.fontSize = "11px";
   zoneLine.style.fontWeight = "bold";
   zoneLine.style.color = "#d8c6a3";
   textBlock.appendChild(zoneLine);
 
   const testCombatLine = document.createElement("div");
-  testCombatLine.textContent = "Temporary test combat zone";
+  testCombatLine.textContent = resolveZoneKindLabel(zoneId);
   testCombatLine.style.fontSize = "9px";
   testCombatLine.style.color = "#a88d63";
   textBlock.appendChild(testCombatLine);
@@ -303,8 +329,9 @@ function syncStatusView(
     room.sessionId,
   );
   const selfDisplayName = selfPresence?.displayName ?? character.characterName ?? t("world_session.selected_character");
-  refs.zoneLine.textContent = "The Nightmarket";
-  refs.testCombatLine.textContent = "Temporary test combat zone";
+  const currentZoneId = resolveCurrentZoneId(room);
+  refs.zoneLine.textContent = resolveZoneDisplayName(currentZoneId);
+  refs.testCombatLine.textContent = resolveZoneKindLabel(currentZoneId);
   refs.nameLine.textContent = character.characterName;
   refs.subLine.textContent = `${selfDisplayName} • ${t("world_session.level_xp_format", { level: selfPresence?.level ?? character.level, xp: selfPresence?.xp ?? character.xp ?? 0 })}`;
 }
@@ -314,7 +341,7 @@ function createStableHudContent(
   room: Room<DoomscrollsRoomState>,
   skillTargeting: WorldSessionSkillTargetingState,
   lastSkillRejectedReason: string | null,
-  onResetObjective: () => void,
+  onResetObjective: (slot: 1 | 2) => void,
   onRespawn: () => void,
 ): HudViewRefs {
   const root = document.createElement("div");
@@ -329,7 +356,7 @@ function syncHudView(
   room: Room<DoomscrollsRoomState>,
   skillTargeting: WorldSessionSkillTargetingState,
   lastSkillRejectedReason: string | null,
-  onResetObjective: () => void,
+  onResetObjective: (slot: 1 | 2) => void,
   onRespawn: () => void,
 ): void {
   // Task 229: HUD content is rebuilt on every update pass. This means
@@ -348,7 +375,7 @@ function renderHudContent(
   nextRoom: Room<DoomscrollsRoomState>,
   skillTargeting: WorldSessionSkillTargetingState,
   lastSkillRejectedReason: string | null,
-  onResetObjective: () => void,
+  onResetObjective: (slot: 1 | 2) => void,
   onRespawn: () => void,
 ): HTMLElement {
   const selfPresence = getCurrentPlayerPresence(
@@ -373,19 +400,31 @@ function renderHudContent(
     selfPresence?.objective ?? null,
     onResetObjective,
     selfPresence?.objectiveRewardGranted,
+    selfPresence?.objective2 ?? null,
+    selfPresence?.objectiveRewardGranted2,
   ));
   panel.appendChild(createSkillSlotPlaceholder(selfPresence?.nextSkillSlotAt, skillTargeting, lastSkillRejectedReason));
 
   if (selfPresence?.lifeState === "downed") {
+    // Core 0.14 -- CombatRoom's downed state now sends the player back
+    // to Nightmarket on respawn (a real death consequence) instead of
+    // healing them in place; the copy here reflects that so the button
+    // isn't describing a different mechanic than the one it triggers.
+    // TownRoom's downed state is unaffected (its own corpse-recovery
+    // flow), so this only changes copy for a combat-zone room.
+    const isCombatZoneRoom = resolveZoneKindLabel(resolveCurrentZoneId(nextRoom)) === "Combat Zone";
+
     const downedNotice = createMutedText(t("world_session.downed_notice"));
     downedNotice.style.color = "#e3a6a6";
     panel.appendChild(downedNotice);
 
-    const respawnHint = createMutedText(t("world_session.downed_respawn_hint"));
+    const respawnHint = createMutedText(
+      t(isCombatZoneRoom ? "world_session.downed_respawn_hint_combat" : "world_session.downed_respawn_hint"),
+    );
     respawnHint.style.color = "#a88d63";
     panel.appendChild(respawnHint);
 
-    const respawnButton = createButton(t("world_session.respawn"));
+    const respawnButton = createButton(t(isCombatZoneRoom ? "world_session.respawn_to_town" : "world_session.respawn"));
     respawnButton.style.marginTop = "4px";
     respawnButton.style.width = "220px";
     respawnButton.addEventListener("click", (event) => {
@@ -431,6 +470,8 @@ function createStableUtilityContent(
   const objectivesSection = createObjectivesSection(
     getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.objective ?? null,
     getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.objectiveRewardGranted,
+    getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.objective2 ?? null,
+    getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.objectiveRewardGranted2,
     getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.completedObjectives ?? [],
     utilityState.objectives,
     (open) => {
@@ -497,6 +538,8 @@ function syncUtilityView(
   const objectivesSection = createObjectivesSection(
     getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.objective ?? null,
     getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.objectiveRewardGranted,
+    getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.objective2 ?? null,
+    getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.objectiveRewardGranted2,
     getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.completedObjectives ?? [],
     utilityState.objectives,
     (open) => {
@@ -581,6 +624,7 @@ function createControlsSection(isOpen: boolean, onOpenChange: (open: boolean) =>
   const bindings: readonly { readonly key: string; readonly action: string }[] = [
     { key: "Click", action: t("world_session.control_move") },
     { key: "Click (enemy)", action: t("world_session.control_attack") },
+    { key: "1 (enemy)", action: t("skill.heavy_strike.name") },
     { key: "RMB (enemy)", action: t("skill.grave_spark.name") },
     { key: "E (enemy)", action: t("skill.bone_splinter.name") },
     { key: "Click (loot)", action: "Pickup" },
@@ -620,20 +664,26 @@ function createControlsSection(isOpen: boolean, onOpenChange: (open: boolean) =>
   return details;
 }
 
+type ObjectiveTrackerSource = {
+  readonly id: string;
+  readonly label: string;
+  readonly descriptionKey?: string;
+  readonly current: number;
+  readonly target: number;
+  readonly completed: boolean;
+  readonly readyToTurnIn?: boolean;
+  readonly xpReward?: number;
+  readonly copperReward?: number;
+  readonly targetEnemyLabel?: string | undefined;
+} | null;
+
 function createObjectivesSection(
-  objective: {
-    readonly id: string;
-    readonly label: string;
-    readonly descriptionKey?: string;
-    readonly current: number;
-    readonly target: number;
-    readonly completed: boolean;
-    readonly readyToTurnIn?: boolean;
-    readonly xpReward?: number;
-    readonly copperReward?: number;
-    readonly targetEnemyLabel?: string | undefined;
-  } | null,
-  objectiveRewardGranted: boolean | undefined,
+  // Core 0.15 -- two concurrent objective slots, rendered as two
+  // independent "Active" blocks under one shared "Completed" history.
+  objective1: ObjectiveTrackerSource,
+  objectiveRewardGranted1: boolean | undefined,
+  objective2: ObjectiveTrackerSource,
+  objectiveRewardGranted2: boolean | undefined,
   completedObjectives: readonly {
     readonly id: string;
     readonly title: string;
@@ -668,7 +718,6 @@ function createObjectivesSection(
   content.style.display = "grid";
   content.style.gap = "8px";
 
-  const viewModel = resolveObjectiveTrackerViewModel(objective, objectiveRewardGranted);
   const activeSectionTitle = document.createElement("div");
   activeSectionTitle.textContent = t("objective.panel.active_section" as never);
   activeSectionTitle.style.fontSize = "11px";
@@ -676,35 +725,48 @@ function createObjectivesSection(
   activeSectionTitle.style.color = "#d8c6a3";
   content.appendChild(activeSectionTitle);
 
-  if (viewModel === null) {
+  const slotSources: readonly [1 | 2, ObjectiveTrackerSource, boolean | undefined][] = [
+    [1, objective1, objectiveRewardGranted1],
+    [2, objective2, objectiveRewardGranted2],
+  ];
+  const activeSlots = slotSources.filter(([, objective]) => objective !== null);
+
+  if (activeSlots.length === 0) {
     content.appendChild(createMutedText(t("objective.panel.empty" as never)));
   } else {
-    const card = createObjectiveTrackerCard(viewModel);
-    content.appendChild(card);
+    for (const [slot, objective, objectiveRewardGranted] of activeSlots) {
+      const viewModel = resolveObjectiveTrackerViewModel(objective, objectiveRewardGranted);
+      if (viewModel === null) {
+        continue;
+      }
 
-    const stateLine = createInfoLine(t("objective.panel.state" as never), viewModel.stateLabel);
-    content.appendChild(stateLine);
+      const card = createObjectiveTrackerCard(viewModel, slot);
+      content.appendChild(card);
 
-    const progressLine = createInfoLine(
-      t("objective.panel.progress" as never),
-      `${viewModel.current}/${viewModel.target}`,
-    );
-    content.appendChild(progressLine);
+      const stateLine = createInfoLine(t("objective.panel.state" as never), viewModel.stateLabel);
+      content.appendChild(stateLine);
 
-    if (viewModel.description !== undefined) {
-      const description = createMutedText(viewModel.description);
-      description.style.color = "#cdb892";
-      content.appendChild(description);
-    }
-
-    if (viewModel.completed) {
-      const turnInState = createInfoLine(
-        t("objective.panel.turn_in" as never),
-        objectiveRewardGranted === true
-          ? t("objective.state.completed")
-          : t("objective.state.ready_to_turn_in"),
+      const progressLine = createInfoLine(
+        t("objective.panel.progress" as never),
+        `${viewModel.current}/${viewModel.target}`,
       );
-      content.appendChild(turnInState);
+      content.appendChild(progressLine);
+
+      if (viewModel.description !== undefined) {
+        const description = createMutedText(viewModel.description);
+        description.style.color = "#cdb892";
+        content.appendChild(description);
+      }
+
+      if (viewModel.completed) {
+        const turnInState = createInfoLine(
+          t("objective.panel.turn_in" as never),
+          objectiveRewardGranted === true
+            ? t("objective.state.completed")
+            : t("objective.state.ready_to_turn_in"),
+        );
+        content.appendChild(turnInState);
+      }
     }
   }
 
@@ -944,26 +1006,23 @@ function createHudSection(
   maxFlaskCharges?: number,
   level?: number,
   xp?: number,
-  objective?: {
-    readonly id: string;
-    readonly label: string;
-    readonly descriptionKey?: string;
-    readonly current: number;
-    readonly target: number;
-    readonly completed: boolean;
-    readonly xpReward?: number;
-    readonly copperReward?: number;
-    readonly targetEnemyLabel?: string | undefined;
-  } | null,
-  onResetObjective?: () => void,
+  objective?: ObjectiveTrackerSource,
+  onResetObjective?: (slot: 1 | 2) => void,
   objectiveRewardGranted?: boolean,
+  // Core 0.15 -- second concurrent objective slot, mirrors `objective`/`objectiveRewardGranted` above.
+  objective2?: ObjectiveTrackerSource,
+  objectiveRewardGranted2?: boolean,
 ): HTMLElement {
+  const activeSlotCount = (objective !== null && objective !== undefined ? 1 : 0)
+    + (objective2 !== null && objective2 !== undefined ? 1 : 0);
   const wrapper = document.createElement("section");
   wrapper.style.display = "grid";
   wrapper.style.gap = "8px";
-  wrapper.style.gridTemplateColumns = objective === null || objective === undefined
+  wrapper.style.gridTemplateColumns = activeSlotCount === 0
     ? "minmax(240px, 1.6fr) minmax(72px, auto)"
-    : "minmax(240px, 1.6fr) minmax(176px, auto) minmax(72px, auto)";
+    : activeSlotCount === 1
+      ? "minmax(240px, 1.6fr) minmax(176px, auto) minmax(72px, auto)"
+      : "minmax(240px, 1.6fr) minmax(176px, auto) minmax(176px, auto) minmax(72px, auto)";
   wrapper.style.alignItems = "center";
 
   const hpLine = document.createElement("div");
@@ -1021,7 +1080,11 @@ function createHudSection(
 
   const objectiveTrackerViewModel = resolveObjectiveTrackerViewModel(objective, objectiveRewardGranted);
   if (objectiveTrackerViewModel !== null) {
-    wrapper.appendChild(createObjectiveTrackerCard(objectiveTrackerViewModel, onResetObjective));
+    wrapper.appendChild(createObjectiveTrackerCard(objectiveTrackerViewModel, 1, onResetObjective));
+  }
+  const objectiveTrackerViewModel2 = resolveObjectiveTrackerViewModel(objective2, objectiveRewardGranted2);
+  if (objectiveTrackerViewModel2 !== null) {
+    wrapper.appendChild(createObjectiveTrackerCard(objectiveTrackerViewModel2, 2, onResetObjective));
   }
 
   wrapper.appendChild(createMiniHudStat(`${t("character.level")} ${String(level ?? 1)}`, `${t("character.xp")} ${String(xp ?? 0)}`));
@@ -1135,7 +1198,11 @@ function createMiniHudStat(labelText: string, valueText: string): HTMLElement {
   return card;
 }
 
-function createObjectiveTrackerCard(objective: ObjectiveTrackerViewModel, onResetObjective?: () => void): HTMLElement {
+function createObjectiveTrackerCard(
+  objective: ObjectiveTrackerViewModel,
+  slot: 1 | 2,
+  onResetObjective?: (slot: 1 | 2) => void,
+): HTMLElement {
   const card = document.createElement("div");
   card.style.display = "grid";
   card.style.gap = "4px";
@@ -1265,7 +1332,7 @@ function createObjectiveTrackerCard(objective: ObjectiveTrackerViewModel, onRese
   clearButton.style.fontSize = "11px";
   clearButton.addEventListener("click", (event) => {
     event.stopPropagation();
-    onResetObjective?.();
+    onResetObjective?.(slot);
   });
   makeInteractive(clearButton);
   card.appendChild(clearButton);
