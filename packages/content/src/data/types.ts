@@ -34,6 +34,7 @@ export type SpawnPointContentId =
 export type CombatInteractableId = "combat_return_to_nightmarket" | "static_yard_return_to_nightmarket" | "cinderworks_return_to_nightmarket" | "saltmere_docks_return_to_nightmarket";
 export type EquipmentSlotCategory = "weapon" | "armor" | "accessory" | "belt" | "flask";
 export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken" | "loot_container" | "vendor" | "town_service" | "waypoint" | "combat_edge" | "combat_return_gate" | "area_label" | "path_marker" | "boundary_marker" | "safe_area_marker" | "rest_area_marker";
+export type VisualAssetCategory = "ground_tile" | "enemy_sprite" | "player_sprite" | "prop_sprite";
 export type VendorId = "nightmarket_suspicious_vendor";
 export type TownServiceId = "nightmarket_stash_keeper" | "nightmarket_trainer" | "nightmarket_waypoint" | "nightmarket_suspicious_vendor";
 export type TownServiceKind = "vendor" | "stash" | "trainer" | "waypoint";
@@ -161,6 +162,14 @@ export interface ZoneContentDefinition extends LocalizedContentDefinition {
    * Absent = no physical rest area in this zone.
    */
   readonly restAreaBounds?: ZoneContentRestAreaBounds;
+  /**
+   * Core 0.22 — optional semantic key into `visualAssets` for this zone's
+   * ground/floor tile texture. Absent = the client renders its existing
+   * flat placeholder fill unchanged. Isometric art integration is being
+   * rolled out one zone at a time (see docs/CORE_BUILD_0_22_PLAN.md);
+   * this field is how a zone opts in once its tiles are mapped.
+   */
+  readonly groundTileKey?: string;
 }
 
 export interface ItemUseEffectDefinition {
@@ -251,4 +260,19 @@ export interface WorldPropContentDefinition {
   readonly labelKey?: ContentLocalizationKey;
   readonly x: number;
   readonly y: number;
+}
+
+/**
+ * Core 0.22 — maps a semantic key (e.g. "ground_stone") to an actual
+ * asset file, so rendering code can look up textures by key and never
+ * reference a specific file/pack directly. Swapping the underlying art
+ * pack later means editing this data, not any rendering code.
+ */
+export interface VisualAssetContentDefinition {
+  readonly id: string;
+  readonly category: VisualAssetCategory;
+  /** Path under the client's public/ directory, e.g. "/assets/isobricks.png". */
+  readonly path: string;
+  readonly sourceWidth: number;
+  readonly sourceHeight: number;
 }

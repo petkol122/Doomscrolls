@@ -36,7 +36,10 @@ export const zones = [
     enemyIds: ["trashboar_runt", "trashboar_skitter", "trashboar_brute"],
     transitionZoneIds: ["nightmarket"],
     mapKey: "map_blackwire_sewers_placeholder",
-    bounds: { minX: 0, maxX: 800, minY: 0, maxY: 600 }
+    bounds: { minX: 0, maxX: 800, minY: 0, maxY: 600 },
+    // Core 0.22 — Phase 1 of isometric art integration ships exactly one
+    // zone's ground tile; see docs/CORE_BUILD_0_22_PLAN.md.
+    groundTileKey: "ground_stone"
   },
   {
     // Core 0.6 — Static Yard: the second combat zone. A derelict tram/rail

@@ -82,6 +82,7 @@ import {
   registerEquipmentListener,
 } from "./worldSession/worldSessionEquipmentView";
 import type { WorldSessionUtilityPanelOpenState } from "./worldSession/worldSessionOverlayView";
+import { queueZoneGroundTileLoad } from "../visualAssetLoader";
 
 function formatItemRarityLabel(rarity?: string): string | null {
   if (rarity === undefined || rarity.length === 0) {
@@ -169,6 +170,23 @@ export class WorldSessionScene extends Phaser.Scene {
     this.account = data.account;
     this.characterId = data.characterId;
     this.room = data.room;
+  }
+
+  public preload(): void {
+    // Core 0.22 -- queue the current zone's ground-tile texture (if it
+    // has one) so it's loaded before create() builds the world view.
+    // The room is already joined and its state already synced by the
+    // time this scene starts (showAreaBanner() below relies on the same
+    // synchronous room.state.zoneId read in create()).
+    if (this.room === null) {
+      return;
+    }
+    const state = this.room.state as unknown as Record<string, unknown>;
+    const zoneId = typeof state.zoneId === "string" && state.zoneId.length > 0 ? state.zoneId : null;
+    if (zoneId === null) {
+      return;
+    }
+    queueZoneGroundTileLoad(this, zoneId);
   }
 
   public create(): void {

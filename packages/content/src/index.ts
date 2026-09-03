@@ -22,6 +22,7 @@ export { objectives, NOTICE_BOARD_OBJECTIVE_SEQUENCE } from "./data/objectives";
 export { zones } from "./data/zones";
 export { spawnPoints } from "./data/spawnPoints";
 export { worldProps } from "./data/worldProps";
+export { visualAssets } from "./data/visualAssets";
 export { spawnZones } from "./data/spawnZones";
 export { levelTables } from "./data/levelTables";
 export { equipmentSlots } from "./data/equipmentSlots";
@@ -55,6 +56,8 @@ export type {
   TownServiceKind,
   VendorId,
   VendorStockEntryDefinition,
+  VisualAssetCategory,
+  VisualAssetContentDefinition,
   WorldPropContentDefinition,
   WorldPropKind,
   ZoneClassification,

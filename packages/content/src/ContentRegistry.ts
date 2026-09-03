@@ -13,6 +13,7 @@ import { vendorStocks } from "./data/vendorStocks";
 import { townServices } from "./data/townServices";
 import { worldProps } from "./data/worldProps";
 import { spawnZones } from "./data/spawnZones";
+import { visualAssets } from "./data/visualAssets";
 import { zones } from "./data/zones";
 import type {
   CharacterClassContentDefinition,
@@ -29,6 +30,7 @@ import type {
   TownServiceContentDefinition,
   VendorStockEntryDefinition,
   WorldPropContentDefinition,
+  VisualAssetContentDefinition,
   SpawnZoneDefinition,
   ZoneContentDefinition
 } from "./data/types";
@@ -55,6 +57,7 @@ export interface ContentRegistryInput {
   readonly equipmentSlots: readonly EquipmentSlotContentDefinition[];
   readonly spawnPoints: readonly SpawnPointContentDefinition[];
   readonly worldProps: readonly WorldPropContentDefinition[];
+  readonly visualAssets: readonly VisualAssetContentDefinition[];
   readonly spawnZones: readonly SpawnZoneDefinition[];
   readonly vendorStocks: readonly VendorStockEntryDefinition[];
   readonly townServices: readonly TownServiceContentDefinition[];
@@ -105,6 +108,7 @@ export class ContentRegistry {
   public readonly equipmentSlots: ContentCollection<EquipmentSlotContentDefinition>;
   public readonly spawnPoints: ContentCollection<SpawnPointContentDefinition>;
   public readonly worldProps: ContentCollection<WorldPropContentDefinition>;
+  public readonly visualAssets: ContentCollection<VisualAssetContentDefinition>;
   public readonly spawnZones: readonly SpawnZoneDefinition[];
   public readonly vendorStocks: ContentCollection<VendorStockEntryDefinition>;
   public readonly townServices: ContentCollection<TownServiceContentDefinition>;
@@ -123,6 +127,7 @@ export class ContentRegistry {
     this.equipmentSlots = createCollection("equipment slot", input.equipmentSlots);
     this.spawnPoints = createCollection("spawn point", input.spawnPoints);
     this.worldProps = createCollection("world prop", input.worldProps);
+    this.visualAssets = createCollection("visual asset", input.visualAssets);
     this.spawnZones = input.spawnZones;
     this.vendorStocks = createCollection("vendor stock", input.vendorStocks);
     this.townServices = createCollection("town service", input.townServices);
@@ -143,6 +148,7 @@ export const contentRegistry = new ContentRegistry({
   equipmentSlots,
   spawnPoints,
   worldProps,
+  visualAssets,
   spawnZones,
   vendorStocks,
   townServices

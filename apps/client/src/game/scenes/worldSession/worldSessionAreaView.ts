@@ -41,6 +41,7 @@ import { createWorldSessionPlayerPlaceholderView } from "./worldSessionPlayerPla
 import { createWorldSessionInteractablesView } from "./worldSessionInteractablesView";
 import { createWorldSessionEnemyPlaceholderView } from "./worldSessionEnemyPlaceholderView";
 import { createWorldSessionStaticPropsView } from "./worldSessionStaticPropsView";
+import { createWorldSessionGroundTileView } from "./worldSessionGroundTileView";
 import {
   getTownRoomEnemies,
   type TownRoomEnemySnapshot,
@@ -261,6 +262,9 @@ export function createWorldSessionAreaView(
   const frame = scene.add.graphics();
   const worldFrame = scene.add.graphics();
 
+  // Ground tiles are added to worldContainer first so they render beneath
+  // static props / entities by child order alone -- no depth-sorting needed.
+  const groundTileView = createWorldSessionGroundTileView(scene, worldContainer);
   const staticPropsView = createWorldSessionStaticPropsView(scene, worldContainer);
   const playerPlaceholder = createWorldSessionPlayerPlaceholderView(scene, worldContainer);
   const interactablesView = createWorldSessionInteractablesView(scene, layout, (objectId: string) => {
@@ -889,6 +893,12 @@ export function createWorldSessionAreaView(
       viewport: worldProjection.viewport,
       projectionMode: worldProjection.projectionMode,
     });
+    groundTileView.updateProjection({
+      zoneId,
+      bounds: worldProjection.bounds,
+      viewport: worldProjection.viewport,
+      projectionMode: worldProjection.projectionMode,
+    });
     interactablesView.updateProjection(nextRoom, worldProjection);
 
     // [B] EXPENSIVE: Only when roomStateDirty. Destroys and recreates
@@ -903,6 +913,12 @@ export function createWorldSessionAreaView(
       );
 
       staticPropsView.refresh({
+        zoneId,
+        bounds: worldProjection.bounds,
+        viewport: worldProjection.viewport,
+        projectionMode: worldProjection.projectionMode,
+      });
+      groundTileView.refresh({
         zoneId,
         bounds: worldProjection.bounds,
         viewport: worldProjection.viewport,
@@ -1498,6 +1514,7 @@ export function createWorldSessionAreaView(
       // Task 307 — Remove input zone listeners registered once in setup.
       inputZone.removeAllListeners();
       staticPropsView.destroy();
+      groundTileView.destroy();
       playerPlaceholder.destroy();
       interactablesView.destroy();
       for (const view of enemyPlaceholders.values()) {

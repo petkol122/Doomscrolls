@@ -84,6 +84,7 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
   validateUniqueIds("spawnZone", registry.spawnZones, errors);
   validateUniqueIds("spawnPoint", registry.spawnPoints.all, errors);
   validateUniqueIds("worldProp", registry.worldProps.all, errors);
+  validateUniqueIds("visualAsset", registry.visualAssets.all, errors);
   validateUniqueIds("objective", registry.objectives.all, errors);
   validateUniqueIds("townService", registry.townServices.all, errors);
   validateUniqueIds("vendorStock", registry.vendorStocks.all, errors);
@@ -195,6 +196,15 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
           id: zone.id,
           message: `Rest area bounds (${restAreaBounds.minX}, ${restAreaBounds.minY}) - (${restAreaBounds.maxX}, ${restAreaBounds.maxY}) must be within zone bounds (${bounds.minX}, ${bounds.minY}) - (${bounds.maxX}, ${bounds.maxY}).`,
         });
+      }
+    }
+
+    if (zone.groundTileKey !== undefined) {
+      const asset = registry.visualAssets.get(zone.groundTileKey);
+      if (asset === undefined) {
+        errors.push({ category: "zone", id: zone.id, message: `Unknown ground tile key: ${zone.groundTileKey}` });
+      } else if (asset.category !== "ground_tile") {
+        errors.push({ category: "zone", id: zone.id, message: `groundTileKey "${zone.groundTileKey}" is not a ground_tile visual asset.` });
       }
     }
   }
@@ -347,6 +357,27 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
 
     if (prop.labelKey !== undefined && en[prop.labelKey] === undefined) {
       errors.push({ category: "worldProp", id: prop.id, message: `Missing English localization key: ${prop.labelKey}` });
+    }
+  }
+
+  // ── Visual asset validation ──
+  const VALID_VISUAL_ASSET_CATEGORIES = ["ground_tile", "enemy_sprite", "player_sprite", "prop_sprite"] as const;
+
+  for (const asset of registry.visualAssets.all) {
+    if (!(VALID_VISUAL_ASSET_CATEGORIES as readonly string[]).includes(asset.category)) {
+      errors.push({ category: "visualAsset", id: asset.id, message: `Unknown visual asset category: ${asset.category}` });
+    }
+
+    if (asset.path.length === 0) {
+      errors.push({ category: "visualAsset", id: asset.id, message: "path must not be empty." });
+    }
+
+    if (!asset.path.startsWith("/")) {
+      errors.push({ category: "visualAsset", id: asset.id, message: `path must be root-relative (start with "/"): ${asset.path}` });
+    }
+
+    if (!Number.isFinite(asset.sourceWidth) || asset.sourceWidth <= 0 || !Number.isFinite(asset.sourceHeight) || asset.sourceHeight <= 0) {
+      errors.push({ category: "visualAsset", id: asset.id, message: "sourceWidth/sourceHeight must be positive finite numbers." });
     }
   }
 
