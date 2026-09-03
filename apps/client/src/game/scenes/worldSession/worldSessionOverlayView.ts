@@ -21,6 +21,7 @@ import {
   applyWorldSessionOverlayScrollablePanelStyles,
 } from "./worldSessionOverlayLayout";
 import type { WorldProjectionMode } from "../../worldProjection";
+import { resolveItemIconUrl } from "../../itemIconResolver";
 
 const COMMON_ITEM_COLOR = "#d8c6a3";
 const COMMON_ITEM_ACCENT_COLOR = "#a88d63";
@@ -1963,7 +1964,29 @@ function createInventorySummarySection(
     button.dataset.inventoryItemId = item.itemInstanceId;
     const sizeText = item.size === undefined ? "" : ` • ${item.size.width}x${item.size.height}`;
     const rarityText = formatItemRarityLabel(item.rarity);
-    button.textContent = `${item.label} [${rarityText}]${sizeText}`;
+    const labelText = `${item.label} [${rarityText}]${sizeText}`;
+
+    // Real icon when the pack has a reasonable match for this item (see
+    // visualAssets.ts); otherwise the button stays text-only, same as
+    // before this build.
+    const iconUrl = resolveItemIconUrl(item.definitionId);
+    if (iconUrl === null) {
+      button.textContent = labelText;
+    } else {
+      button.style.display = "flex";
+      button.style.alignItems = "center";
+      button.style.gap = "6px";
+      const icon = document.createElement("img");
+      icon.src = iconUrl;
+      icon.alt = "";
+      icon.style.width = "18px";
+      icon.style.height = "18px";
+      icon.style.imageRendering = "pixelated";
+      icon.style.flex = "0 0 auto";
+      const textSpan = document.createElement("span");
+      textSpan.textContent = labelText;
+      button.append(icon, textSpan);
+    }
     makeInteractive(button);
     row.appendChild(button);
     list.appendChild(row);

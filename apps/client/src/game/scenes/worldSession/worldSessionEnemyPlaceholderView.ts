@@ -2,6 +2,23 @@
 import Phaser from "phaser";
 
 import type { TownRoomEnemySnapshot } from "../../../net/townRoomEnemies";
+import { ENEMY_HP_BAR_ASSET_ID } from "../../visualAssetLoader";
+
+// Core 0.23 -- bdragon1727's health-bar strip (see visualAssets.ts) has 8
+// frames, but only frames 0-5 share a consistent footprint; frames 6-7 are
+// a visibly smaller "critical" variant that would jump size if included in
+// the same gradient, so only the first 6 are ever selected here.
+const HP_BAR_USABLE_FRAMES = 6;
+const HP_BAR_DISPLAY_WIDTH = 28;
+const HP_BAR_DISPLAY_HEIGHT = 14;
+
+function resolveHpBarFrame(hpRatio: number): number {
+  return Phaser.Math.Clamp(
+    Math.round((1 - hpRatio) * (HP_BAR_USABLE_FRAMES - 1)),
+    0,
+    HP_BAR_USABLE_FRAMES - 1,
+  );
+}
 
 // Task 242 â€” Defensive enemy view lifecycle rule:
 //   * the server (TownRoom) is the only authority for spawn / chase /
@@ -194,9 +211,12 @@ export function createWorldSessionEnemyPlaceholderView(
     .setOrigin(0.5);
   aggroExclaim.setVisible(false);
 
-  const hpBarFrame = scene.add.rectangle(0, -31, 44, 8, 0x120707, 0.92);
-  hpBarFrame.setStrokeStyle(1, 0xf4d3d3, 0.45);
-  const hpBarFill = scene.add.rectangle(-21, -31, 42, 4, 0xcf3e3e, 0.98).setOrigin(0, 0.5);
+  // Core 0.23 -- real per-enemy HP/maxHp (already server-tracked and
+  // already driving `getHpRatio` below) restyled with bdragon1727's
+  // health-bar pack instead of a flat rectangle. One sprite, frame
+  // selected by HP ratio -- see resolveHpBarFrame above.
+  const hpBarSprite = scene.add.sprite(0, -31, ENEMY_HP_BAR_ASSET_ID, 0);
+  hpBarSprite.setDisplaySize(HP_BAR_DISPLAY_WIDTH, HP_BAR_DISPLAY_HEIGHT);
 
   const labelText = scene.add
     .text(0, 22, t(enemy.label), {
@@ -294,8 +314,7 @@ export function createWorldSessionEnemyPlaceholderView(
     ring,
     body,
     core,
-    hpBarFrame,
-    hpBarFill,
+    hpBarSprite,
     hpText,
     labelText,
     stateText,
@@ -336,9 +355,7 @@ export function createWorldSessionEnemyPlaceholderView(
     const nextVariant = getTrashboarVariant(nextEnemy);
     const visual = VARIANT_VISUALS[nextVariant];
     const hpRatio = getHpRatio(nextEnemy);
-    hpBarFill.setScale(hpRatio, 1);
-    hpBarFill.setFillStyle(nextVariant === "brute" ? 0xd88a2f : 0xcf3e3e, 0.98);
-    hpBarFrame.setStrokeStyle(1, nextVariant === "brute" ? 0xffdfad : 0xf4d3d3, nextEnemy.defeated ? 0.22 : 0.45);
+    hpBarSprite.setFrame(resolveHpBarFrame(hpRatio));
 
     if (nextVariant !== lastVariant) {
       shadow.setSize(visual.shadowWidth, visual.shadowHeight);
@@ -382,8 +399,7 @@ export function createWorldSessionEnemyPlaceholderView(
           seconds: remainingSeconds,
         }),
       );
-      hpBarFill.setVisible(false);
-      hpBarFrame.setVisible(false);
+      hpBarSprite.setVisible(false);
       aggroExclaim.setVisible(false);
       defeatedCrossOutline.setVisible(true);
       defeatedCrossOutline.setPosition(0, 2);
@@ -404,9 +420,7 @@ export function createWorldSessionEnemyPlaceholderView(
     defeatedCrossOutline.setVisible(false);
     defeatedCrossV.setVisible(false);
     defeatedCrossH.setVisible(false);
-    hpBarFrame.setVisible(true);
-
-    hpBarFill.setVisible(true);
+    hpBarSprite.setVisible(true);
     shadow.setFillStyle(0x000000, 0.28);
     if (nextEnemy.state === "chasing") {
       ring.setFillStyle(nextVariant === "brute" ? 0x7a1a05 : 0x6b0a0a, 0.55);

@@ -11,6 +11,7 @@ import type {
 import type { StatModifier } from "@doomscrolls/shared";
 import type { EquipmentUpdatedServerMessage } from "@doomscrolls/shared";
 import { makeInteractive } from "./worldSessionPointerEvents";
+import { resolveItemIconUrl } from "../../itemIconResolver";
 // Money formatting lives in @doomscrolls/shared (server-owned / shared contract).
 // The client must not reimplement gold/silver/copper breakdown ad hoc.
 import { formatMoneyCompact } from "@doomscrolls/shared";
@@ -218,6 +219,15 @@ export function updateEquipmentPanelSection(
         ? "Equipped"
         : formatEquippedItemLabel(equippedItem);
       valueLabel.style.color = equippedItem === null ? "#b9d49a" : getItemRarityColor(equippedItem.rarity);
+
+      // Real icon when the pack has a reasonable match for this item
+      // (see visualAssets.ts); otherwise the row stays text-only, same
+      // as before this build. Appended here (valueLabel is appended
+      // below) so it lands between the slot label and the value text.
+      const iconUrl = equippedItem === null ? null : resolveItemIconUrl(equippedItem.definitionId);
+      if (iconUrl !== null) {
+        row.appendChild(createItemIconImg(iconUrl));
+      }
     }
     valueLabel.style.fontWeight = "bold";
     valueLabel.style.fontSize = "11px";
@@ -258,6 +268,21 @@ export function updateEquipmentPanelSection(
 
     content.appendChild(row);
   }
+}
+
+/** A small pixelated icon `<img>` for an item row. Only ever called with a
+ *  URL already resolved through the content registry (see
+ *  itemIconResolver.ts) -- this function itself never sees a raw asset
+ *  path decision, just renders whatever URL it's given. */
+function createItemIconImg(url: string): HTMLImageElement {
+  const icon = document.createElement("img");
+  icon.src = url;
+  icon.alt = "";
+  icon.style.width = "18px";
+  icon.style.height = "18px";
+  icon.style.imageRendering = "pixelated";
+  icon.style.flex = "0 0 auto";
+  return icon;
 }
 
 function formatEquippedItemLabel(item: { readonly label: string; readonly rarity?: string; readonly statModifiers?: readonly StatModifier[] }): string {

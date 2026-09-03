@@ -34,7 +34,7 @@ export type SpawnPointContentId =
 export type CombatInteractableId = "combat_return_to_nightmarket" | "static_yard_return_to_nightmarket" | "cinderworks_return_to_nightmarket" | "saltmere_docks_return_to_nightmarket";
 export type EquipmentSlotCategory = "weapon" | "armor" | "accessory" | "belt" | "flask";
 export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken" | "loot_container" | "vendor" | "town_service" | "waypoint" | "combat_edge" | "combat_return_gate" | "area_label" | "path_marker" | "boundary_marker" | "safe_area_marker" | "rest_area_marker";
-export type VisualAssetCategory = "ground_tile" | "enemy_sprite" | "player_sprite" | "prop_sprite";
+export type VisualAssetCategory = "ground_tile" | "enemy_sprite" | "player_sprite" | "prop_sprite" | "item_icon" | "hp_bar";
 export type VendorId = "nightmarket_suspicious_vendor";
 export type TownServiceId = "nightmarket_stash_keeper" | "nightmarket_trainer" | "nightmarket_waypoint" | "nightmarket_suspicious_vendor";
 export type TownServiceKind = "vendor" | "stash" | "trainer" | "waypoint";
@@ -275,4 +275,13 @@ export interface VisualAssetContentDefinition {
   readonly path: string;
   readonly sourceWidth: number;
   readonly sourceHeight: number;
+  /**
+   * Core 0.23 — present only for a multi-frame sprite sheet (category
+   * "hp_bar" today). `frameWidth`/`frameHeight` describe one frame in
+   * the sheet at `path`; `frameCount` is how many frames it contains.
+   * Absent for a single-image asset.
+   */
+  readonly frameWidth?: number;
+  readonly frameHeight?: number;
+  readonly frameCount?: number;
 }

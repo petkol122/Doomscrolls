@@ -361,7 +361,7 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
   }
 
   // ── Visual asset validation ──
-  const VALID_VISUAL_ASSET_CATEGORIES = ["ground_tile", "enemy_sprite", "player_sprite", "prop_sprite"] as const;
+  const VALID_VISUAL_ASSET_CATEGORIES = ["ground_tile", "enemy_sprite", "player_sprite", "prop_sprite", "item_icon", "hp_bar"] as const;
 
   for (const asset of registry.visualAssets.all) {
     if (!(VALID_VISUAL_ASSET_CATEGORIES as readonly string[]).includes(asset.category)) {
@@ -378,6 +378,24 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
 
     if (!Number.isFinite(asset.sourceWidth) || asset.sourceWidth <= 0 || !Number.isFinite(asset.sourceHeight) || asset.sourceHeight <= 0) {
       errors.push({ category: "visualAsset", id: asset.id, message: "sourceWidth/sourceHeight must be positive finite numbers." });
+    }
+
+    if (asset.frameWidth !== undefined || asset.frameHeight !== undefined || asset.frameCount !== undefined) {
+      if (
+        asset.frameWidth === undefined || asset.frameWidth <= 0 ||
+        asset.frameHeight === undefined || asset.frameHeight <= 0 ||
+        asset.frameCount === undefined || asset.frameCount <= 0
+      ) {
+        errors.push({ category: "visualAsset", id: asset.id, message: "frameWidth/frameHeight/frameCount must all be set and positive when any one is set." });
+      } else if (asset.frameWidth * asset.frameCount !== asset.sourceWidth || asset.frameHeight !== asset.sourceHeight) {
+        errors.push({ category: "visualAsset", id: asset.id, message: "frameWidth * frameCount must equal sourceWidth, and frameHeight must equal sourceHeight." });
+      }
+    }
+
+    // An item_icon row that matches no item's iconKey is orphaned data
+    // (most likely a typo) -- it can never be looked up by real content.
+    if (asset.category === "item_icon" && !registry.items.all.some((item) => item.iconKey === asset.id)) {
+      errors.push({ category: "visualAsset", id: asset.id, message: `item_icon asset id does not match any item's iconKey: ${asset.id}` });
     }
   }
 

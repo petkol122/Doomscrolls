@@ -82,7 +82,7 @@ import {
   registerEquipmentListener,
 } from "./worldSession/worldSessionEquipmentView";
 import type { WorldSessionUtilityPanelOpenState } from "./worldSession/worldSessionOverlayView";
-import { queueZoneGroundTileLoad } from "../visualAssetLoader";
+import { queueZoneGroundTileLoad, queueEnemyHpBarLoad } from "../visualAssetLoader";
 
 function formatItemRarityLabel(rarity?: string): string | null {
   if (rarity === undefined || rarity.length === 0) {
@@ -173,6 +173,11 @@ export class WorldSessionScene extends Phaser.Scene {
   }
 
   public preload(): void {
+    // Core 0.23 -- the enemy HP bar spritesheet is used in every room
+    // kind (both TownRoom and CombatRoom enemies render through the same
+    // worldSessionEnemyPlaceholderView.ts), so it loads unconditionally.
+    queueEnemyHpBarLoad(this);
+
     // Core 0.22 -- queue the current zone's ground-tile texture (if it
     // has one) so it's loaded before create() builds the world view.
     // The room is already joined and its state already synced by the
