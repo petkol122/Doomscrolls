@@ -2,6 +2,7 @@ import { contentRegistry as defaultContentRegistry, type ContentRegistry } from 
 import {
   type CharacterId,
   type EquipmentSlot,
+  type EquipmentUpdatedServerMessage,
   type ItemDefinitionId,
   type ItemInstanceId,
   type UserId,
@@ -13,6 +14,8 @@ import { InventoryRepository } from "../persistence/repositories/InventoryReposi
 import { CharacterRepository } from "../persistence/repositories/CharacterRepository";
 import { EquipmentError, EquipmentErrorCode } from "./EquipmentErrors";
 import { CharacterStatsService } from "./CharacterStatsService";
+import { sendToConnectedPlayer } from "../realtime/rooms/connectedPlayerRegistry";
+import { buildEquipmentLoadout } from "./buildEquipmentLoadout";
 
 interface InventorySlotCoordinates {
   readonly pageIndex: number;
@@ -158,6 +161,8 @@ export class EquipmentService {
 
       await this.recalculateEquippedCharacterStats(characterIdStr, txItemRepo, txCharacterRepo);
     });
+
+    await this.notifyEquipmentUpdated(characterIdStr);
   }
 
   public async unequip(
@@ -212,6 +217,17 @@ export class EquipmentService {
 
       await this.recalculateEquippedCharacterStats(characterIdStr, txItemRepo, txCharacterRepo);
     });
+
+    await this.notifyEquipmentUpdated(characterIdStr);
+  }
+
+  private async notifyEquipmentUpdated(characterId: string): Promise<void> {
+    const loadout = await buildEquipmentLoadout(characterId, this.db);
+    const message: EquipmentUpdatedServerMessage = {
+      type: "equipment_updated",
+      equipment: loadout,
+    };
+    sendToConnectedPlayer(characterId, "equipment_updated", message);
   }
 
   private async recalculateEquippedCharacterStats(

@@ -118,6 +118,144 @@ in the plan doc.
   HP bar specifically going through the revert/confirm/restore
   discipline the task asked for.
 
+---
+
+## Follow-up — Equipment Panel Fix (the bug found above)
+
+**Date:** 2026-09-04
+**Status:** Fixed, live-verified, regression-tested. Working-tree only — nothing committed until this note.
+
+The "found, not fixed" bug from this same build's icon integration
+(above) is fixed: `equipment_updated` is now actually sent, and the
+equipment panel reliably reflects real equip/unequip state — labels and
+0.23's icons both. Three distinct defects had to be closed, not one;
+fixing only the first would have left the panel looking broken in the
+most common case (logging in).
+
+1. **The reported bug**: `EquipmentService.equip`/`unequip` (called from
+   the HTTP `/equip`/`/unequip` routes) mutated the database correctly
+   but never notified the connected client. Since equip/unequip run
+   entirely outside any Colyseus room's message loop, there was no
+   existing "the room already has this client" path to send through.
+   Added `connectedPlayerRegistry.ts` — `TownRoom`/`CombatRoom.onJoin`
+   register the joining client by `characterId`, `onLeave` unregisters —
+   so `EquipmentService` can look up the character's live session and
+   push `equipment_updated` (shape: `{ type, equipment: EquipmentLoadout }`,
+   matching the client's already-built, previously-unfed
+   `registerEquipmentListener`) after every equip/unequip, from outside
+   any room.
+
+2. **Found while live-verifying #1**: a character who joins with gear
+   already equipped (the ordinary "log in and play" case, not just
+   "equip something new this session") still saw every slot as empty,
+   because the client never learns the current loadout except through
+   this same message — and nothing sent it at join. Both rooms'
+   `onJoin` now also send `equipment_updated` (via a new shared
+   `buildEquipmentLoadout` helper, reused by `EquipmentService` too, so
+   the slot-mapping logic exists in exactly one place).
+
+3. **Found while live-verifying #2**: sending it on join didn't actually
+   fix anything at first — Playwright showed the panel still empty, with
+   the browser console logging `onMessage() not registered for type
+   'equipment_updated'`. The server's join-time send arrives before
+   `WorldSessionScene` exists to register a handler for it (there's a
+   real gap: the Phaser scene transition between the room join
+   resolving and the new scene's `create()` running), and Colyseus drops
+   a message with no handler registered for its type instead of queuing
+   it. Fixed with `equipmentUpdateBuffer.ts`: `joinTownRoom`/
+   `joinCombatRoom` register a capture-and-buffer handler immediately
+   after `joinOrCreate` resolves (the earliest point client code can
+   run), and `registerEquipmentListener` consumes whatever landed in the
+   buffer before wiring up the live handler for later updates.
+
+4. **Found while live-verifying #3**: with the message now reliably
+   delivered, the panel *still* intermittently went blank a second or
+   two after correctly showing the equipped item — not on every render,
+   but often enough to reproduce in a 10-sample/2.7s window every time.
+   Root cause: `updateEquipmentPanelSection`'s "skip rebuild if nothing
+   changed" version check (`worldSessionEquipmentView.ts`, originally
+   Task 275) compared against a single **module-level** version number,
+   but `syncUtilityView` rebuilds a brand-new equipment `<details>`
+   element from scratch on every overlay sync (movement ticks, any room
+   state patch). The very next sync after a correct render would create
+   a fresh, empty content `<div>`, compute the same version number
+   (nothing in the data had changed), see it match the stale
+   module-level value, and skip populating the new element — leaving it
+   permanently empty until the next actual equipment change. Fixed by
+   keying the version cache to the specific content element via a
+   `WeakMap<HTMLElement, number>` instead of one shared variable, so a
+   freshly created (always-empty) element is never mistaken for an
+   already-populated one.
+
+### Live verification
+
+Registered a real test account and character through the actual HTTP
+`/auth/register` + `/characters` routes, seeded one real `ItemInstance`
+row (`starter_pipe`, a real weapon from content) directly in the local
+Postgres container as fixture data (same category as 0.23's own
+icon-verification setup above — no started currency/loot path exists
+yet to buy or drop one), then drove the real client end-to-end with
+Playwright:
+
+- Equipped the item through the real Inventory panel "Equip" button:
+  Equipment panel updated live, `Weapon: Starter Pipe (+3 damage)` with
+  its real icon and an "Unequip" button. Inventory correctly dropped to
+  0 items.
+- Unequipped it: slot correctly reverted to "Empty", item returned to
+  inventory.
+- Logged out and back in (fresh room join) with the item already
+  equipped from the previous step: Equipment panel showed the real item
+  immediately on entering the world, and stayed correct across a 2-second
+  window of natural render churn (the exact condition that used to blank
+  it — see defect #4 above).
+- Zero console errors throughout any of the above.
+
+Regression-checked each of the three follow-on defects (#2–#4) by
+reproducing the broken state first (confirmed empty/dropped/blanking),
+then applying its fix and reconfirming — not just a single before/after
+look.
+
+Test account, character, and seeded item instance deleted from the
+database after verification.
+
+### Regression tests added
+
+- `apps/server/test/character/equipmentService.test.ts` — equip and
+  unequip each send `equipment_updated` with the correct per-slot
+  mapping (fake in-memory Prisma client, no live DB). Reverted the
+  `notifyEquipmentUpdated` call, confirmed both tests fail with "expected
+  spy to be called 1 times, but got 0 times", restored, confirmed green.
+- `apps/server/test/character/equipmentUpdatedOnJoin.test.ts` — both
+  `TownRoom` and `CombatRoom` send `equipment_updated` on join (via the
+  real in-process Colyseus test harness).
+
+The client-side fixes (#3's message buffer, #4's per-element version
+cache) have no automated coverage — this repo has no client rendering
+test infrastructure (see 0.23's HP bar section above for the same
+gap) — so the Playwright revert/confirm/restore sequence above is their
+verification artifact.
+
+### Verified
+
+- `pnpm typecheck` clean across all 5 workspace packages.
+- `apps/server` full test suite: 27 files / 44 tests passing (the 2 new
+  tests are additional; no existing test regressed).
+- Live Playwright checks as described above, including the
+  regression-check discipline for all three follow-on defects.
+
+### File footprint (this follow-up)
+
+Server: `apps/server/src/realtime/rooms/connectedPlayerRegistry.ts`
+(new), `apps/server/src/character/buildEquipmentLoadout.ts` (new),
+`EquipmentService.ts` (sends `equipment_updated` after equip/unequip),
+`TownRoom.ts`/`CombatRoom.ts` (register/unregister connected players,
+send `equipment_updated` on join). Client:
+`apps/client/src/net/equipmentUpdateBuffer.ts` (new), `RealtimeClient.ts`
+(buffers the join-time message), `worldSessionEquipmentView.ts`
+(consumes the buffer; per-element version cache instead of module-level).
+No protocol/shape changes — `EquipmentUpdatedServerMessage` and
+`EquipmentLoadout` already existed, unused, from the original build.
+
 ### File footprint
 
 `packages/content/src/data/types.ts` (`item_icon`/`hp_bar` categories,

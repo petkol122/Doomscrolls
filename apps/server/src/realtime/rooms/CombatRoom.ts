@@ -51,6 +51,8 @@ import {
 } from "./enemyAiHelpers";
 import { contentRegistry } from "@doomscrolls/content";
 import { CharacterService } from "../../character/CharacterService";
+import { registerConnectedPlayer, unregisterConnectedPlayer } from "./connectedPlayerRegistry";
+import { buildEquipmentLoadout } from "../../character/buildEquipmentLoadout";
 import { contentRegistry as roomContentRegistry } from "@doomscrolls/content";
 import { isPositionInsideZoneBounds } from "./validateCharacterLocation";
 import { initializeCombatInteractables } from "./initializeCombatInteractables";
@@ -516,6 +518,17 @@ export class CombatRoom extends Room {
 
     state.playerPresence.set(sessionId, presence);
     state.connectedPlayerCount = state.playerPresence.size;
+    registerConnectedPlayer(characterId, _client);
+
+    // See TownRoom.onJoin for why this is needed: the client's equipment
+    // panel only ever learns the loadout from `equipment_updated`, so a
+    // client entering combat with gear already equipped must get it here.
+    try {
+      const equipment = await buildEquipmentLoadout(characterId);
+      _client.send("equipment_updated", { type: "equipment_updated", equipment });
+    } catch {
+      // swallow send failures; the next equip/unequip will still sync it
+    }
 
     safeLog.info?.(
       {
@@ -543,6 +556,10 @@ export class CombatRoom extends Room {
     );
     const state = this.state as CombatRoomState;
     const presence = state.playerPresence.get(_client.sessionId);
+
+    if (presence !== undefined) {
+      unregisterConnectedPlayer(presence.characterId, _client);
+    }
 
     // A `request_combat_return` handoff already persisted the correct
     // destination (nightmarket) position via `updateCharacterRoomIntent`

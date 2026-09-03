@@ -58,6 +58,8 @@ import { validateHealingFlaskIntent } from "./healingFlaskValidation";
 import { applyHealingFlaskIntent } from "./applyHealingFlaskIntent";
 import { restoreFlaskToFull } from "./healingFlaskConfig";
 import { applyTownRestRefill } from "./townRestRefill";
+import { registerConnectedPlayer, unregisterConnectedPlayer } from "./connectedPlayerRegistry";
+import { buildEquipmentLoadout } from "../../character/buildEquipmentLoadout";
 import { applyTownRestAreaRefillForAll } from "./townRestAreaTrigger";
 import type {
   RequestUseHealingFlaskAcceptedServerMessage,
@@ -949,6 +951,7 @@ export class TownRoom extends Room {
 
     state.playerPresence.set(sessionId, presence);
     state.connectedPlayerCount = state.playerPresence.size;
+    registerConnectedPlayer(characterId, _client);
 
     // Send a town rest refill feedback message to the joining client.
     // The synced schema state is the source of truth for display; this
@@ -964,6 +967,19 @@ export class TownRoom extends Room {
         // swallow send failures; room state remains authoritative
       }
     }
+
+    // The client's equipment panel is fed exclusively by `equipment_updated`
+    // (see EquipmentService, which sends it after every equip/unequip) --
+    // without also sending it on join, a client that reconnects or enters
+    // the world with gear already equipped from a previous session would
+    // see every slot as empty until the next equip/unequip in this session.
+    try {
+      const equipment = await buildEquipmentLoadout(characterId);
+      _client.send("equipment_updated", { type: "equipment_updated", equipment });
+    } catch {
+      // swallow send failures; the next equip/unequip will still sync it
+    }
+
 
     safeLog.info?.(
       {
@@ -996,6 +1012,10 @@ export class TownRoom extends Room {
     );
     const state = this.state as TownRoomState;
     const presence = state.playerPresence.get(_client.sessionId);
+
+    if (presence !== undefined) {
+      unregisterConnectedPlayer(presence.characterId, _client);
+    }
 
     // A combat-zone handoff already persisted the correct destination
     // zone/position (and HP/flask snapshot) via `updateCharacterRoomIntent`

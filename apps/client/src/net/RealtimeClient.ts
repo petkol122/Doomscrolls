@@ -4,6 +4,7 @@ import type { CharacterId, CharacterRuntimeRoomKind, SessionToken, ZoneId } from
 import type { RoomJoinAuthPayload, RoomState } from "@doomscrolls/shared";
 import { contentRegistry } from "@doomscrolls/content";
 import { clientEnv } from "../config/env";
+import { bufferEquipmentUpdatesFor } from "./equipmentUpdateBuffer";
 
 export type RealtimeClient = Client;
 
@@ -32,7 +33,9 @@ export async function joinTownRoom(
     ...(requestedZoneId !== undefined ? { requestedZoneId } : {}),
   };
 
-  return client.joinOrCreate("town", payload);
+  const room = await client.joinOrCreate("town", payload);
+  bufferEquipmentUpdatesFor(room);
+  return room;
 }
 
 export async function joinCombatRoom(
@@ -48,7 +51,9 @@ export async function joinCombatRoom(
     ...(requestedZoneId !== undefined ? { requestedZoneId } : {}),
   };
 
-  return client.joinOrCreate("combat", payload);
+  const room = await client.joinOrCreate("combat", payload);
+  bufferEquipmentUpdatesFor(room);
+  return room;
 }
 
 /**

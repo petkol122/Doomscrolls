@@ -12,6 +12,7 @@ import type { StatModifier } from "@doomscrolls/shared";
 import type { EquipmentUpdatedServerMessage } from "@doomscrolls/shared";
 import { makeInteractive } from "./worldSessionPointerEvents";
 import { resolveItemIconUrl } from "../../itemIconResolver";
+import { consumeBufferedEquipmentLoadout } from "../../../net/equipmentUpdateBuffer";
 // Money formatting lives in @doomscrolls/shared (server-owned / shared contract).
 // The client must not reimplement gold/silver/copper breakdown ad hoc.
 import { formatMoneyCompact } from "@doomscrolls/shared";
@@ -60,6 +61,16 @@ export function registerEquipmentListener(
   room: Room<DoomscrollsRoomState>,
   setLoadout: (loadout: EquipmentLoadout) => void,
 ): () => void {
+  // The join-time `equipment_updated` (see connectedPlayerRegistry /
+  // buildEquipmentLoadout on the server) can arrive before this scene
+  // exists to register a handler -- `bufferEquipmentUpdatesFor` (called
+  // right after the room join resolves, in RealtimeClient.ts) catches it
+  // in the meantime, so pick that up here before wiring the live handler.
+  const buffered = consumeBufferedEquipmentLoadout(room);
+  if (buffered !== null) {
+    setLoadout(buffered);
+  }
+
   const handler = (message: unknown): void => {
     const msg = message as EquipmentUpdatedServerMessage;
     if (msg.type === "equipment_updated" && msg.equipment !== undefined) {
@@ -125,8 +136,17 @@ export function createEquipmentPanelSection(
   return wrapper;
 }
 
-/** Version checksum for equipment panel content to skip full rebuilds. */
-let _equipmentContentVersion = -1;
+/**
+ * Version checksum for equipment panel content, to skip full rebuilds when
+ * nothing changed. Keyed per content element (not a single module-level
+ * value) because `createEquipmentPanelSection` builds a brand new wrapper
+ * on every overlay sync (see `syncUtilityView`) -- a module-level version
+ * would compare a freshly created, still-empty element against whatever
+ * version an earlier (now-discarded) element last rendered, "skip" the
+ * rebuild it never actually did, and leave the panel blank until the next
+ * genuine data change.
+ */
+const equipmentContentVersions = new WeakMap<HTMLElement, number>();
 
 function computeEquipmentVersion(
   loadout: EquipmentLoadout,
@@ -174,10 +194,10 @@ export function updateEquipmentPanelSection(
   const loadout = getLoadout();
   const inventoryItems = getInventoryItems();
   const nextVersion = computeEquipmentVersion(loadout, inventoryItems);
-  if (nextVersion === _equipmentContentVersion) {
+  if (nextVersion === equipmentContentVersions.get(content)) {
     return;
   }
-  _equipmentContentVersion = nextVersion;
+  equipmentContentVersions.set(content, nextVersion);
 
   content.replaceChildren();
 
