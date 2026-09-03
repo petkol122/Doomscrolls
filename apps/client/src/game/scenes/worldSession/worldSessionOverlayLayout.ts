@@ -45,7 +45,10 @@ export function applyWorldSessionOverlayHudStyles(panel: HTMLElement): void {
   panel.style.display = "grid";
   panel.style.alignSelf = "end";
   panel.style.justifySelf = "center";
-  panel.style.width = "min(680px, calc(100vw - 32px))";
+  // Core 0.21 -- widened for the orb + belt-strip cluster (HP orb, 5
+  // belt slots, resource orb) sitting on one row; narrower viewports
+  // wrap the cluster via flex-wrap in worldSessionOverlayView.ts.
+  panel.style.width = "min(760px, calc(100vw - 32px))";
   panel.style.maxWidth = "100%";
 }
 

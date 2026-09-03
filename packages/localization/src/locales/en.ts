@@ -429,6 +429,8 @@ export const en = {
   // Future: Diablo-like right orb resource (mana/class resource) — placeholder until class resource system lands
   "world_session.resource": "Resource",
   "world_session.resource_placeholder": "Coming later",
+  "world_session.belt_slot_soon": "Soon",
+  "world_session.belt_slot_soon_hint": "Additional belt slot — not available yet",
   "world_session.travel_overlay.route_title": "Traveling",
   "world_session.travel_overlay.route_message": "Moving to the next area. Your new position will appear only after the server applies the travel.",
   "world_session.travel_overlay.waypoint_title": "Attuning Waypoint",

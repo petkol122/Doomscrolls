@@ -402,8 +402,10 @@ function renderHudContent(
     selfPresence?.objectiveRewardGranted,
     selfPresence?.objective2 ?? null,
     selfPresence?.objectiveRewardGranted2,
+    selfPresence?.nextSkillSlotAt,
+    skillTargeting,
+    lastSkillRejectedReason,
   ));
-  panel.appendChild(createSkillSlotPlaceholder(selfPresence?.nextSkillSlotAt, skillTargeting, lastSkillRejectedReason));
 
   if (selfPresence?.lifeState === "downed") {
     // Core 0.14 -- CombatRoom's downed state now sends the player back
@@ -1001,95 +1003,328 @@ function createMovementDebugSection(
 function createHudSection(
   hpSummary: string,
   hpRatio: number | null,
-  lifeState?: "alive" | "downed",
-  flaskCharges?: number,
-  maxFlaskCharges?: number,
-  level?: number,
-  xp?: number,
-  objective?: ObjectiveTrackerSource,
-  onResetObjective?: (slot: 1 | 2) => void,
-  objectiveRewardGranted?: boolean,
+  lifeState: "alive" | "downed" | undefined,
+  flaskCharges: number | undefined,
+  maxFlaskCharges: number | undefined,
+  level: number | undefined,
+  xp: number | undefined,
+  objective: ObjectiveTrackerSource,
+  onResetObjective: ((slot: 1 | 2) => void) | undefined,
+  objectiveRewardGranted: boolean | undefined,
   // Core 0.15 -- second concurrent objective slot, mirrors `objective`/`objectiveRewardGranted` above.
-  objective2?: ObjectiveTrackerSource,
-  objectiveRewardGranted2?: boolean,
+  objective2: ObjectiveTrackerSource,
+  objectiveRewardGranted2: boolean | undefined,
+  nextSkillSlotAt: number | undefined,
+  skillTargeting: WorldSessionSkillTargetingState,
+  lastSkillRejectedReason: string | null,
 ): HTMLElement {
-  const activeSlotCount = (objective !== null && objective !== undefined ? 1 : 0)
-    + (objective2 !== null && objective2 !== undefined ? 1 : 0);
+  // Core 0.21 -- PoE-style bottom-center HUD: a dual-orb cluster (HP orb,
+  // real; resource orb, visual stub -- Core 0.1 has no mana/resource
+  // system) flanking a flask/belt strip (flask_1 real, slots 2-5 visual
+  // stubs). Quest trackers and the skill-cooldown card keep their
+  // existing wiring/logic but sit above the orb cluster so it reads as
+  // one clean action bar, matching the reference games instead of the
+  // old stacked-text-card layout. See docs/CORE_BUILD_0_21_PLAN.md.
   const wrapper = document.createElement("section");
   wrapper.style.display = "grid";
   wrapper.style.gap = "8px";
-  wrapper.style.gridTemplateColumns = activeSlotCount === 0
-    ? "minmax(240px, 1.6fr) minmax(72px, auto)"
-    : activeSlotCount === 1
-      ? "minmax(240px, 1.6fr) minmax(176px, auto) minmax(72px, auto)"
-      : "minmax(240px, 1.6fr) minmax(176px, auto) minmax(176px, auto) minmax(72px, auto)";
-  wrapper.style.alignItems = "center";
-
-  const hpLine = document.createElement("div");
-  hpLine.style.display = "flex";
-  hpLine.style.justifyContent = "space-between";
-  hpLine.style.alignItems = "center";
-  hpLine.style.marginBottom = "4px";
-
-  const hpLabel = document.createElement("span");
-  hpLabel.textContent = t("world_session.player_hp");
-  hpLabel.style.color = "#d8c6a3";
-  hpLabel.style.fontSize = "12px";
-  hpLine.appendChild(hpLabel);
-
-  const hpValue = document.createElement("span");
-  hpValue.textContent = hpSummary;
-  hpValue.style.color = lifeState === "downed" ? "#e3a6a6" : "#c8aa7a";
-  hpValue.style.fontWeight = "bold";
-  hpValue.style.fontSize = "14px";
-  hpValue.style.fontFamily = "monospace";
-  hpLine.appendChild(hpValue);
-
-  const vitalityCard = document.createElement("div");
-  vitalityCard.style.padding = "8px 10px";
-  vitalityCard.style.border = "1px solid #4d2a2a";
-  vitalityCard.style.borderRadius = "12px";
-  vitalityCard.style.background = "linear-gradient(180deg, rgba(40, 12, 12, 0.92) 0%, rgba(20, 8, 8, 0.92) 100%)";
-  vitalityCard.appendChild(hpLine);
-
-  const barFrame = document.createElement("div");
-  barFrame.style.width = "100%";
-  barFrame.style.height = "14px";
-  barFrame.style.border = "1px solid #5f4a2f";
-  barFrame.style.borderRadius = "999px";
-  barFrame.style.background = "rgba(22, 16, 14, 0.95)";
-  barFrame.style.overflow = "hidden";
-  barFrame.style.marginBottom = "6px";
-
-  const barFill = document.createElement("div");
-  barFill.style.height = "100%";
-  barFill.style.width = hpRatio === null ? "0%" : `${Math.max(0, Math.min(100, hpRatio * 100))}%`;
-  barFill.style.background = lifeState === "downed"
-    ? "linear-gradient(90deg, #7a1f1f 0%, #bf5252 100%)"
-    : hpRatio !== null && hpRatio <= 0.25
-      ? "linear-gradient(90deg, #8f2a2a 0%, #d46262 100%)"
-      : "linear-gradient(90deg, #6e2f1f 0%, #c46a3a 100%)";
-  barFill.style.borderRadius = "999px";
-  barFill.style.transition = "width 0.3s ease";
-  barFrame.appendChild(barFill);
-  vitalityCard.appendChild(barFrame);
-
-  vitalityCard.appendChild(createFlaskChargesLine(flaskCharges, maxFlaskCharges));
-
-  wrapper.appendChild(vitalityCard);
+  wrapper.style.justifyItems = "center";
 
   const objectiveTrackerViewModel = resolveObjectiveTrackerViewModel(objective, objectiveRewardGranted);
-  if (objectiveTrackerViewModel !== null) {
-    wrapper.appendChild(createObjectiveTrackerCard(objectiveTrackerViewModel, 1, onResetObjective));
-  }
   const objectiveTrackerViewModel2 = resolveObjectiveTrackerViewModel(objective2, objectiveRewardGranted2);
-  if (objectiveTrackerViewModel2 !== null) {
-    wrapper.appendChild(createObjectiveTrackerCard(objectiveTrackerViewModel2, 2, onResetObjective));
+  if (objectiveTrackerViewModel !== null || objectiveTrackerViewModel2 !== null) {
+    const objectiveRow = document.createElement("div");
+    objectiveRow.style.display = "flex";
+    objectiveRow.style.flexWrap = "wrap";
+    objectiveRow.style.justifyContent = "center";
+    objectiveRow.style.gap = "8px";
+    if (objectiveTrackerViewModel !== null) {
+      objectiveRow.appendChild(createObjectiveTrackerCard(objectiveTrackerViewModel, 1, onResetObjective));
+    }
+    if (objectiveTrackerViewModel2 !== null) {
+      objectiveRow.appendChild(createObjectiveTrackerCard(objectiveTrackerViewModel2, 2, onResetObjective));
+    }
+    wrapper.appendChild(objectiveRow);
   }
 
+  wrapper.appendChild(createSkillSlotPlaceholder(nextSkillSlotAt, skillTargeting, lastSkillRejectedReason));
+  wrapper.appendChild(createVitalityClusterRow(hpSummary, hpRatio, lifeState, flaskCharges, maxFlaskCharges));
   wrapper.appendChild(createMiniHudStat(`${t("character.level")} ${String(level ?? 1)}`, `${t("character.xp")} ${String(xp ?? 0)}`));
 
   return wrapper;
+}
+
+const HUD_ORB_DIAMETER_PX = 84;
+const HUD_BELT_SLOT_SIZE_PX = 52;
+const HUD_BELT_STUB_SLOT_COUNT = 4;
+
+function createVitalityClusterRow(
+  hpSummary: string,
+  hpRatio: number | null,
+  lifeState: "alive" | "downed" | undefined,
+  flaskCharges: number | undefined,
+  maxFlaskCharges: number | undefined,
+): HTMLElement {
+  const row = document.createElement("div");
+  row.style.display = "flex";
+  row.style.alignItems = "flex-end";
+  row.style.justifyContent = "center";
+  row.style.gap = "14px";
+  row.style.flexWrap = "wrap";
+
+  row.appendChild(createHpOrb(hpSummary, hpRatio, lifeState));
+  row.appendChild(createBeltStrip(flaskCharges, maxFlaskCharges));
+  row.appendChild(createResourceOrbStub());
+
+  return row;
+}
+
+function createOrbShell(
+  diameterPx: number,
+  ringColor: string,
+  background: string,
+): { readonly shell: HTMLElement; readonly fill: HTMLElement; readonly labelLayer: HTMLElement } {
+  const shell = document.createElement("div");
+  shell.style.position = "relative";
+  shell.style.width = `${diameterPx}px`;
+  shell.style.height = `${diameterPx}px`;
+  shell.style.borderRadius = "50%";
+  shell.style.border = `3px solid ${ringColor}`;
+  shell.style.background = background;
+  shell.style.overflow = "hidden";
+  shell.style.boxShadow = "inset 0 0 12px rgba(0, 0, 0, 0.65), 0 4px 10px rgba(0, 0, 0, 0.4)";
+  shell.style.flex = "0 0 auto";
+
+  const fill = document.createElement("div");
+  fill.style.position = "absolute";
+  fill.style.left = "0";
+  fill.style.right = "0";
+  fill.style.bottom = "0";
+  fill.style.height = "0%";
+  fill.style.transition = "height 0.3s ease, background 0.3s ease";
+  shell.appendChild(fill);
+
+  const labelLayer = document.createElement("div");
+  labelLayer.style.position = "absolute";
+  labelLayer.style.inset = "0";
+  labelLayer.style.display = "flex";
+  labelLayer.style.flexDirection = "column";
+  labelLayer.style.alignItems = "center";
+  labelLayer.style.justifyContent = "center";
+  labelLayer.style.textAlign = "center";
+  labelLayer.style.pointerEvents = "none";
+  shell.appendChild(labelLayer);
+
+  return { shell, fill, labelLayer };
+}
+
+/** Real, wired: fill ratio and downed-state color come from the same
+ *  synced `hp`/`maxHp`/`lifeState` presence fields the old HP bar read. */
+function createHpOrb(
+  hpSummary: string,
+  hpRatio: number | null,
+  lifeState: "alive" | "downed" | undefined,
+): HTMLElement {
+  const isDowned = lifeState === "downed";
+  const { shell, fill, labelLayer } = createOrbShell(
+    HUD_ORB_DIAMETER_PX,
+    isDowned ? "#7a3535" : "#5a3c22",
+    "radial-gradient(circle at 50% 30%, rgba(48, 20, 20, 0.9) 0%, rgba(18, 8, 8, 0.95) 100%)",
+  );
+
+  fill.style.height = hpRatio === null ? "0%" : `${Math.max(0, Math.min(100, hpRatio * 100))}%`;
+  fill.style.background = isDowned
+    ? "linear-gradient(180deg, #bf5252 0%, #7a1f1f 100%)"
+    : hpRatio !== null && hpRatio <= 0.25
+      ? "linear-gradient(180deg, #d46262 0%, #8f2a2a 100%)"
+      : "linear-gradient(180deg, #c46a3a 0%, #6e2f1f 100%)";
+
+  const hpText = document.createElement("div");
+  hpText.textContent = hpSummary;
+  hpText.style.color = isDowned ? "#ffd6d6" : "#f3e2c4";
+  hpText.style.fontWeight = "bold";
+  hpText.style.fontSize = "11px";
+  hpText.style.fontFamily = "monospace";
+  hpText.style.textShadow = "0 1px 3px rgba(0, 0, 0, 0.85)";
+  hpText.style.padding = "0 4px";
+  labelLayer.appendChild(hpText);
+
+  const wrapper = document.createElement("div");
+  wrapper.style.display = "grid";
+  wrapper.style.justifyItems = "center";
+  wrapper.style.gap = "4px";
+  wrapper.appendChild(shell);
+
+  const caption = document.createElement("div");
+  caption.textContent = t("world_session.player_hp");
+  caption.style.fontSize = "9px";
+  caption.style.color = "#a88d63";
+  caption.style.textTransform = "uppercase";
+  caption.style.letterSpacing = "0.04em";
+  wrapper.appendChild(caption);
+
+  return wrapper;
+}
+
+/** Visual stub only -- Core 0.1 has no mana/class-resource system
+ *  (docs/GAME_DESIGN.md) and `PlayerPresenceEntry` has no such field.
+ *  Flat/unfilled vessel, lock glyph, "Coming Later" label, disabled
+ *  cursor, no click handler -- unmistakably not a live control. */
+function createResourceOrbStub(): HTMLElement {
+  const { shell, labelLayer } = createOrbShell(
+    HUD_ORB_DIAMETER_PX,
+    "#3c3a42",
+    "repeating-linear-gradient(135deg, rgba(40, 40, 46, 0.9) 0px, rgba(40, 40, 46, 0.9) 6px, rgba(28, 28, 32, 0.9) 6px, rgba(28, 28, 32, 0.9) 12px)",
+  );
+  shell.style.cursor = "not-allowed";
+  shell.title = t("world_session.resource_placeholder");
+
+  const lock = document.createElement("div");
+  lock.textContent = "\u{1F512}";
+  lock.style.fontSize = "16px";
+  lock.style.opacity = "0.75";
+  labelLayer.appendChild(lock);
+
+  const soonLabel = document.createElement("div");
+  soonLabel.textContent = t("world_session.resource_placeholder");
+  soonLabel.style.color = "#8a8a92";
+  soonLabel.style.fontSize = "9px";
+  soonLabel.style.fontWeight = "bold";
+  soonLabel.style.textTransform = "uppercase";
+  soonLabel.style.marginTop = "2px";
+  labelLayer.appendChild(soonLabel);
+
+  const wrapper = document.createElement("div");
+  wrapper.style.display = "grid";
+  wrapper.style.justifyItems = "center";
+  wrapper.style.gap = "4px";
+  wrapper.appendChild(shell);
+
+  const caption = document.createElement("div");
+  caption.textContent = t("world_session.resource");
+  caption.style.fontSize = "9px";
+  caption.style.color = "#6f6f76";
+  caption.style.textTransform = "uppercase";
+  caption.style.letterSpacing = "0.04em";
+  wrapper.appendChild(caption);
+
+  return wrapper;
+}
+
+function createBeltStrip(flaskCharges: number | undefined, maxFlaskCharges: number | undefined): HTMLElement {
+  const strip = document.createElement("div");
+  strip.style.display = "flex";
+  strip.style.gap = "6px";
+  strip.style.alignItems = "flex-end";
+
+  strip.appendChild(createFlaskBeltSlot(flaskCharges, maxFlaskCharges));
+  for (let i = 0; i < HUD_BELT_STUB_SLOT_COUNT; i++) {
+    strip.appendChild(createStubBeltSlot());
+  }
+
+  return strip;
+}
+
+function createBeltSlotShell(borderColor: string, background: string): HTMLElement {
+  const slot = document.createElement("div");
+  slot.style.position = "relative";
+  slot.style.width = `${HUD_BELT_SLOT_SIZE_PX}px`;
+  slot.style.height = `${HUD_BELT_SLOT_SIZE_PX}px`;
+  slot.style.border = `2px solid ${borderColor}`;
+  slot.style.borderRadius = "8px";
+  slot.style.background = background;
+  slot.style.display = "flex";
+  slot.style.flexDirection = "column";
+  slot.style.alignItems = "center";
+  slot.style.justifyContent = "center";
+  slot.style.boxSizing = "border-box";
+  slot.style.flex = "0 0 auto";
+  return slot;
+}
+
+/** Real, wired: same `flaskCharges`/`maxFlaskCharges` presence fields
+ *  and `[Q]` keybind the old flask-charges line read, redrawn as a
+ *  belt-slot tile instead of a standalone text-and-dots row. */
+function createFlaskBeltSlot(charges: number | undefined, maxCharges: number | undefined): HTMLElement {
+  const slot = createBeltSlotShell(
+    "#6b5738",
+    "linear-gradient(180deg, rgba(42, 32, 22, 0.96) 0%, rgba(24, 18, 13, 0.96) 100%)",
+  );
+
+  const keyBadge = document.createElement("div");
+  keyBadge.textContent = "Q";
+  keyBadge.style.position = "absolute";
+  keyBadge.style.top = "2px";
+  keyBadge.style.left = "3px";
+  keyBadge.style.fontSize = "8px";
+  keyBadge.style.fontWeight = "bold";
+  keyBadge.style.fontFamily = "monospace";
+  keyBadge.style.color = "#e0c88a";
+  slot.appendChild(keyBadge);
+
+  if (charges === undefined || maxCharges === undefined) {
+    const waiting = document.createElement("div");
+    waiting.textContent = "…";
+    waiting.style.color = "#7a5f4a";
+    waiting.style.fontSize = "14px";
+    slot.appendChild(waiting);
+    slot.title = t("world_session.awaiting_flask");
+    return slot;
+  }
+
+  const glyph = document.createElement("div");
+  glyph.textContent = "⚗";
+  glyph.style.fontSize = "18px";
+  glyph.style.color = charges > 0 ? "#e0824a" : "#5a4530";
+  slot.appendChild(glyph);
+
+  const dots = document.createElement("div");
+  dots.style.display = "flex";
+  dots.style.gap = "2px";
+  dots.style.marginTop = "2px";
+  for (let i = 0; i < maxCharges; i++) {
+    const dot = document.createElement("span");
+    dot.textContent = "●";
+    dot.style.fontSize = "7px";
+    dot.style.color = i < charges ? "#b4512a" : "#3a2a1a";
+    dots.appendChild(dot);
+  }
+  slot.appendChild(dots);
+
+  slot.title = `${t("world_session.flask_charges")}: ${charges}/${maxCharges} [Q]`;
+  return slot;
+}
+
+/** Visual stub only -- Core 0.1's belt has exactly one real flask slot
+ *  (`flask_1`); these represent belt capacity the itemization doesn't
+ *  have yet. Visibly locked (dashed border, reduced opacity, lock
+ *  glyph, "Soon" label, disabled cursor), no keybind badge, no click
+ *  handler -- reads as inert, not as a live slot that no-ops. */
+function createStubBeltSlot(): HTMLElement {
+  const slot = createBeltSlotShell(
+    "#4a4a4a",
+    "repeating-linear-gradient(135deg, rgba(36, 36, 40, 0.85) 0px, rgba(36, 36, 40, 0.85) 5px, rgba(24, 24, 27, 0.85) 5px, rgba(24, 24, 27, 0.85) 10px)",
+  );
+  slot.style.borderStyle = "dashed";
+  slot.style.opacity = "0.55";
+  slot.style.cursor = "not-allowed";
+  slot.title = t("world_session.belt_slot_soon_hint");
+
+  const lock = document.createElement("div");
+  lock.textContent = "\u{1F512}";
+  lock.style.fontSize = "13px";
+  slot.appendChild(lock);
+
+  const label = document.createElement("div");
+  label.textContent = t("world_session.belt_slot_soon");
+  label.style.fontSize = "7px";
+  label.style.color = "#8a8a8a";
+  label.style.fontWeight = "bold";
+  label.style.textTransform = "uppercase";
+  label.style.marginTop = "1px";
+  slot.appendChild(label);
+
+  return slot;
 }
 
 function createDerivedStatsSection(character: CharacterSummary | null): HTMLElement {
@@ -1505,77 +1740,6 @@ function createSkillSlotPlaceholder(
 
   card.appendChild(textBlock);
   return card;
-}
-
-function createFlaskChargesLine(charges?: number, maxCharges?: number): HTMLElement {
-  if (charges === undefined || maxCharges === undefined) {
-    const line = document.createElement("div");
-    line.style.display = "flex";
-    line.style.alignItems = "center";
-    line.style.gap = "6px";
-
-    const keyHint = document.createElement("span");
-    keyHint.textContent = "[Q]";
-    keyHint.style.color = "#7a5f4a";
-    keyHint.style.fontWeight = "bold";
-    keyHint.style.fontFamily = "monospace";
-    keyHint.style.fontSize = "11px";
-    keyHint.style.background = "rgba(63, 50, 30, 0.7)";
-    keyHint.style.padding = "1px 5px";
-    keyHint.style.borderRadius = "3px";
-    line.appendChild(keyHint);
-
-    const label = document.createElement("span");
-    label.textContent = t("world_session.awaiting_flask");
-    label.style.color = "#7a5f4a";
-    label.style.fontSize = "12px";
-    line.appendChild(label);
-    return line;
-  }
-
-  const line = document.createElement("div");
-  line.style.display = "flex";
-  line.style.alignItems = "center";
-  line.style.gap = "6px";
-  line.style.marginTop = "2px";
-
-  const keyHint = document.createElement("span");
-  keyHint.textContent = "[Q]";
-  keyHint.style.color = charges > 0 ? "#e0c88a" : "#7a5f4a";
-  keyHint.style.fontWeight = "bold";
-  keyHint.style.fontFamily = "monospace";
-  keyHint.style.fontSize = "11px";
-  keyHint.style.background = charges > 0 ? "rgba(63, 50, 30, 0.7)" : "rgba(40, 30, 20, 0.5)";
-  keyHint.style.padding = "1px 5px";
-  keyHint.style.borderRadius = "3px";
-  line.appendChild(keyHint);
-
-  // Mini flask charge dots
-  const dotsWrapper = document.createElement("div");
-  dotsWrapper.style.display = "flex";
-  dotsWrapper.style.gap = "4px";
-  dotsWrapper.style.alignItems = "center";
-
-  for (let i = 0; i < maxCharges; i++) {
-    const dot = document.createElement("span");
-    const isFilled = i < charges;
-    dot.textContent = "●";
-    dot.style.color = isFilled ? "#b4512a" : "#3a2a1a";
-    dot.style.fontSize = "14px";
-    dot.style.lineHeight = "1";
-    dotsWrapper.appendChild(dot);
-  }
-
-  line.appendChild(dotsWrapper);
-
-  const fracLabel = document.createElement("span");
-  fracLabel.textContent = `${charges} / ${maxCharges}`;
-  fracLabel.style.color = charges > 0 ? "#b9d49a" : "#7a5f4a";
-  fracLabel.style.fontSize = "11px";
-  fracLabel.style.fontFamily = "monospace";
-  line.appendChild(fracLabel);
-
-  return line;
 }
 
 function createInventoryPanelSection(
