@@ -14,7 +14,7 @@ import { InventoryRepository } from "../persistence/repositories/InventoryReposi
 import { CharacterRepository } from "../persistence/repositories/CharacterRepository";
 import { EquipmentError, EquipmentErrorCode } from "./EquipmentErrors";
 import { CharacterStatsService } from "./CharacterStatsService";
-import { sendToConnectedPlayer } from "../realtime/rooms/connectedPlayerRegistry";
+import { sendToConnectedPlayer, updateConnectedPlayerLiveCombatStats } from "../realtime/rooms/connectedPlayerRegistry";
 import { buildEquipmentLoadout } from "./buildEquipmentLoadout";
 
 interface InventorySlotCoordinates {
@@ -261,6 +261,17 @@ export class EquipmentService {
     await characterRepo.updateStats(characterId, {
       ...recalculatedStats.primary,
       ...recalculatedStats.derived,
+    });
+
+    // The database write above is necessary but not sufficient: if this
+    // character is currently connected to a room, combat reads
+    // player.damage/.armor directly off the live synced PlayerPresence,
+    // not the database, so that live copy must be pushed too or it stays
+    // stale (old weapon's damage, old armor's mitigation) until the
+    // player leaves and rejoins the room.
+    updateConnectedPlayerLiveCombatStats(characterId, {
+      damage: recalculatedStats.derived.damage,
+      armor: recalculatedStats.derived.armor,
     });
   }
 }

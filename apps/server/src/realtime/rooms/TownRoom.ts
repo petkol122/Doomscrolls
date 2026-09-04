@@ -951,7 +951,7 @@ export class TownRoom extends Room {
 
     state.playerPresence.set(sessionId, presence);
     state.connectedPlayerCount = state.playerPresence.size;
-    registerConnectedPlayer(characterId, _client);
+    registerConnectedPlayer(characterId, _client, this);
 
     // Send a town rest refill feedback message to the joining client.
     // The synced schema state is the source of truth for display; this

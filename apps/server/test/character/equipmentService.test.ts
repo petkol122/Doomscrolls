@@ -10,16 +10,25 @@ import { EquipmentService } from "../../src/character/EquipmentService";
  * sent, so a real equip never rendered as equipped in that panel even
  * though the underlying mechanic worked.
  *
+ * Also covers the follow-on regression found asking "does this actually
+ * change combat, not just the panel?": `recalculateEquippedCharacterStats`
+ * wrote the new damage/armor to the database only, so a mid-session
+ * equip/unequip left the player's *live* `PlayerPresence.damage`/`.armor`
+ * (what combat actually reads) stale until they left and rejoined the
+ * room.
+ *
  * `EquipmentService` runs entirely outside any Colyseus room (it's called
  * from `equipment.routes.ts`), so it must reach the player's live room
- * session through `connectedPlayerRegistry.sendToConnectedPlayer` instead
- * of a room's own `client.send`. That's the seam this test asserts.
+ * session through `connectedPlayerRegistry` instead of a room's own
+ * `client.send` / direct state mutation. That's the seam both sets of
+ * tests below assert.
  */
 vi.mock("../../src/realtime/rooms/connectedPlayerRegistry", () => ({
   sendToConnectedPlayer: vi.fn(),
+  updateConnectedPlayerLiveCombatStats: vi.fn(),
 }));
 
-import { sendToConnectedPlayer } from "../../src/realtime/rooms/connectedPlayerRegistry";
+import { sendToConnectedPlayer, updateConnectedPlayerLiveCombatStats } from "../../src/realtime/rooms/connectedPlayerRegistry";
 
 const CHARACTER_ID = "test-character-equip";
 const USER_ID = "test-user-equip";
@@ -113,12 +122,13 @@ function buildFakeDb() {
     $transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback(db),
   };
 
-  return { db, items };
+  return { db, items, characterStats };
 }
 
 describe("EquipmentService equipment_updated broadcast", () => {
   beforeEach(() => {
     vi.mocked(sendToConnectedPlayer).mockClear();
+    vi.mocked(updateConnectedPlayerLiveCombatStats).mockClear();
   });
 
   it("sends equipment_updated with the item in its slot after equip", async () => {
@@ -179,5 +189,48 @@ describe("EquipmentService equipment_updated broadcast", () => {
         flask_1: null,
       },
     });
+  });
+});
+
+describe("EquipmentService live combat stats", () => {
+  beforeEach(() => {
+    vi.mocked(sendToConnectedPlayer).mockClear();
+    vi.mocked(updateConnectedPlayerLiveCombatStats).mockClear();
+  });
+
+  it("pushes the new weapon's damage into the live PlayerPresence on equip, not just the database", async () => {
+    const { db, characterStats } = buildFakeDb();
+    const service = new EquipmentService(db as never);
+
+    await service.equip(CHARACTER_ID, USER_ID, WEAPON_ITEM_ID, "weapon");
+
+    // Sanity check the database side actually changed too (base damage
+    // 1 + power 4 = 5, +3 from the equipped Starter Pipe = 8).
+    expect(characterStats.damage).toBe(8);
+
+    expect(updateConnectedPlayerLiveCombatStats).toHaveBeenCalledTimes(1);
+    const [characterId, stats] = vi.mocked(updateConnectedPlayerLiveCombatStats).mock.calls[0]!;
+    expect(characterId).toBe(CHARACTER_ID);
+    expect(stats).toEqual({ damage: 8, armor: 0 });
+  });
+
+  it("pushes damage back down into the live PlayerPresence on unequip", async () => {
+    const { db, items } = buildFakeDb();
+    const weapon = items.get(WEAPON_ITEM_ID)!;
+    weapon.locationType = ItemLocationType.EQUIPMENT;
+    weapon.equipmentSlot = "weapon";
+    weapon.inventoryPage = null;
+    weapon.inventoryX = null;
+    weapon.inventoryY = null;
+
+    const service = new EquipmentService(db as never);
+
+    await service.unequip(CHARACTER_ID, USER_ID, "weapon");
+
+    expect(updateConnectedPlayerLiveCombatStats).toHaveBeenCalledTimes(1);
+    const [characterId, stats] = vi.mocked(updateConnectedPlayerLiveCombatStats).mock.calls[0]!;
+    expect(characterId).toBe(CHARACTER_ID);
+    // Base damage only (1 + power 4), the Starter Pipe's +3 no longer applies.
+    expect(stats).toEqual({ damage: 5, armor: 0 });
   });
 });

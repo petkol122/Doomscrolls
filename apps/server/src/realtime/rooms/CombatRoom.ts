@@ -518,7 +518,7 @@ export class CombatRoom extends Room {
 
     state.playerPresence.set(sessionId, presence);
     state.connectedPlayerCount = state.playerPresence.size;
-    registerConnectedPlayer(characterId, _client);
+    registerConnectedPlayer(characterId, _client, this);
 
     // See TownRoom.onJoin for why this is needed: the client's equipment
     // panel only ever learns the loadout from `equipment_updated`, so a

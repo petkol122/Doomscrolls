@@ -256,6 +256,157 @@ send `equipment_updated` on join). Client:
 No protocol/shape changes — `EquipmentUpdatedServerMessage` and
 `EquipmentLoadout` already existed, unused, from the original build.
 
+---
+
+## Follow-up 2 — Equip Mid-Session Never Reached Live Combat Stats
+
+**Date:** 2026-09-04
+**Status:** Fixed, live-verified, regression-tested. Working-tree only — nothing committed until this note.
+
+Follow-up's own follow-up: fixing the equipment panel raised the obvious
+next question — does equipping mid-session actually change what a
+player *deals and takes* in the room they're standing in, or does it
+just make the panel look right? It didn't. `EquipmentService.
+recalculateEquippedCharacterStats` wrote the new derived stats to the
+database only; `TownRoom`/`CombatRoom` combat resolution reads
+`player.damage`/`.armor` directly off the live synced `PlayerPresence`
+schema instance, never the database. So a mid-session equip/unequip
+updated the DB and (after the fix above) the panel, but the player's
+actual damage output and incoming-damage mitigation silently stayed at
+their pre-equip values until they left and rejoined the room (or
+leveled up, which happens to overwrite both fields as a side effect of
+its own unrelated recalculation).
+
+**Fix**: extended `connectedPlayerRegistry` — the same seam already
+built for reaching a connected player from outside a room to send
+`equipment_updated` — with `updateConnectedPlayerLiveCombatStats`. It
+now also stores the `Room` instance (not just the `Client`) per
+character, so it can reach into `room.state.playerPresence` and write
+the recalculated `damage`/`armor` directly onto the live schema
+instance, in the same `recalculateEquippedCharacterStats` call that
+already writes them to the database. One seam, not a second pattern for
+the same problem, as asked.
+
+**Scope check — is anything else in this position?** `EquipmentService`
+is the only HTTP-route-driven service that mutates a stat combat reads
+live off `PlayerPresence` (auth/character routes don't touch character
+stats). But `damage`/`armor` are not the only two derived stats this
+same recalculation computes and that `PlayerPresence` also tracks live
+— `moveSpeed`/`movementSpeed` and `attackCooldownMs` have the exact
+same live-desync gap, and it is not hypothetical: real equipped items
+already carry these modifiers today (e.g. Sewer Jacket: `armor +2,
+maxHp +5`; several items use `moveSpeed` and `attackCooldownMs`
+modifiers too — see `packages/content/src/data/items.ts`). Named, not
+fixed, for two different reasons:
+- `attackCooldownMs` is a trivial, same-shape addition (direct value,
+  no unit conversion) — held back anyway because this build's
+  verification and regression test were scoped to damage/armor
+  specifically, and bundling in an untested field alongside them would
+  break that same rigor rather than extend it.
+- `moveSpeed`/`movementSpeed` is not trivial: `PlayerPresence.
+  movementSpeed` is the *converted* runtime value
+  (`resolvePlayerMovementSpeed` multiplies the raw stat by a
+  room-scale constant currently commented as being "for the current
+  small Nightmarket test arena"), not a direct pass-through like
+  damage/armor/attackCooldownMs. Reusing it correctly needs either
+  wrapping the recalculated stats in a fake `CharacterDetails` shape or
+  a small refactor, and raises a real question about whether
+  Town/Combat should even share the same conversion constant — a
+  design decision, not a trivial fix.
+- `maxHp` (and by extension current `hp`) is also not trivial: the
+  existing level-up recalculation path doesn't just overwrite
+  `maxHp` — it reconciles `hp` too (`gainedMaxHp = max(0, nextMaxHp -
+  previousMaxHp)`, `hp = min(nextMaxHp, previousHp + gainedMaxHp)`, so
+  a level-up's HP gain is preserved and a HP overflow is clamped).
+  Whether an armor swap's maxHp change should apply that same
+  "preserve missing HP" reconciliation, or something else entirely, is
+  a gameplay-balance question, not a bug fix.
+
+### Live verification
+
+Registered a fresh test account/character, routed it directly into
+Blackwire Sewers (same technique as this build's own icon
+verification) for the damage half, seeded a `starter_pipe` (weapon, +3
+damage) unequipped in inventory, and — for one request only —
+temporarily exposed the live room on `window.__debugRoom` from
+`WorldSessionScene.init()` so Playwright could read `PlayerPresence`
+fields and enemy HP directly instead of guessing at canvas pixels
+(reverted before this note; never committed):
+
+- Baseline (unequipped): `player.damage = 5` live. Attacked a fresh,
+  full-HP Trashboar Runt: its hp went `12 -> 7`, exactly 5 damage.
+- Equipped the Starter Pipe through the real Inventory panel "Equip"
+  button, **without leaving the room**: `player.damage` live-updated to
+  `8` immediately (base 5 + the pipe's +3). Attacked a second, still
+  full-HP Runt right after: hp went `12 -> 4`, exactly 8 damage — the
+  new weapon's stat, reflected in real combat output, same session, no
+  relog.
+
+For the armor half: **found, in the process, that `CombatRoom`'s enemy
+AI currently never lets an enemy land a hit at all** — `applyEnemyDamage`
+resets an enemy that took damage back to `"idle"` and its
+`targetPlayerSessionId` is never assigned anywhere in `CombatRoom.ts`
+outside of clearing it; `test/combat/incomingDamageMitigation.test.ts`
+only proves the mitigation *math* by manually setting
+`enemy.targetPlayerSessionId` on server state, because there is no
+in-game path that sets it there today. This matches `CombatRoom`'s own
+doc comment on `applyCombatEnemyAggroDamage`: "a small CombatRoom-only
+loop, not a copy of the full TownRoom aggro-damage block... deferred."
+`TownRoom` has the full proximity-based aggro scan
+(`applyEnemyAggroDamage`) that `CombatRoom` doesn't. This is a
+pre-existing, unrelated gap (CombatRoom enemies not retaliating at all
+against player attacks) — noted here, not fixed, since fixing it means
+building out real CombatRoom enemy AI, a separate feature.
+
+Given that, the armor half was verified in Nightmarket (TownRoom)
+instead, where organic aggro exists, using the same live-push mechanism
+(room-agnostic — `connectedPlayerRegistry` doesn't know or care which
+room kind it's holding):
+
+- A fresh character (unequipped, `armor = 0`) walked into a Trashboar
+  Runt's aggro range; it organically aggroed and landed a hit: player
+  hp `45 -> 43`, exactly 2 damage (the Runt's raw `damage: 2` in
+  content, unmitigated).
+- Equipped the Sewer Jacket (armor +2) through the real Inventory panel
+  "Equip" button, without leaving the room: `player.armor` live-updated
+  to `2` immediately. The same Runt landed another hit: player hp
+  `49 -> 48`, exactly 1 damage — `mitigateIncomingDamage(2, 2) =
+  max(1, 2-2) = 1`, the floor rule working with the *new* armor value,
+  not the stale one.
+- Zero console errors throughout.
+
+Test account, character, and seeded item instances deleted afterward.
+
+### Regression test added
+
+`apps/server/test/character/equipmentService.test.ts` — new `describe`
+block: equip pushes the new weapon's damage into
+`updateConnectedPlayerLiveCombatStats` (exact value, matching the
+database-side number computed by the same call), unequip pushes it back
+down. Reverted the `updateConnectedPlayerLiveCombatStats` call in
+`EquipmentService.recalculateEquippedCharacterStats`, confirmed both new
+tests fail with "expected spy to be called 1 times, but got 0 times"
+(the existing `equipment_updated` tests in the same file stayed green,
+confirming the two concerns are properly independent), restored,
+confirmed all four tests green again.
+
+### Verified
+
+- `pnpm typecheck` clean across all 5 workspace packages.
+- `apps/server` full test suite: 27 files / 46 tests passing.
+- Live Playwright checks as described above, with exact expected
+  numbers computed by hand beforehand and matched exactly, for both
+  damage and armor.
+
+### File footprint (this follow-up)
+
+`apps/server/src/realtime/rooms/connectedPlayerRegistry.ts`
+(`registerConnectedPlayer` now also takes the `Room`; new
+`updateConnectedPlayerLiveCombatStats`), `TownRoom.ts`/`CombatRoom.ts`
+(pass `this` when registering), `EquipmentService.ts` (calls it from
+`recalculateEquippedCharacterStats`). No protocol/shape changes, no new
+client code.
+
 ### File footprint
 
 `packages/content/src/data/types.ts` (`item_icon`/`hp_bar` categories,
