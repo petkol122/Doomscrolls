@@ -12,10 +12,14 @@ export function createDoomscrollsGame(parent: string): Phaser.Game {
     parent,
     backgroundColor: "#090706",
     scale: {
-      mode: Phaser.Scale.FIT,
-      autoCenter: Phaser.Scale.CENTER_BOTH,
-      width: 1280,
-      height: 720
+      // Core 0.25 -- RESIZE fills the actual browser viewport (no
+      // letterboxing/dead space the way FIT's fixed 1280x720 logical
+      // resolution did); the canvas and `scene.scale.width/height` track
+      // the real viewport size, which world-area layout code
+      // (`resolveWorldSessionAreaLayout`) already reads dynamically.
+      mode: Phaser.Scale.RESIZE,
+      width: window.innerWidth,
+      height: window.innerHeight
     },
     scene: [BootScene, PreloadScene, AuthScene, AccountShellScene, WorldSessionScene]
   });

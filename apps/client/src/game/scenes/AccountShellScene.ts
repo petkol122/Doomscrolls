@@ -50,7 +50,7 @@ export class AccountShellScene extends Phaser.Scene {
     this.apiClient = clientEnv.apiUrl === undefined ? null : new ApiClient(clientEnv.apiUrl);
 
     this.add
-      .text(640, 96, "Doomscrolls", {
+      .text(this.scale.width / 2, 96, "Doomscrolls", {
         color: "#d8c6a3",
         fontFamily: "Georgia, serif",
         fontSize: "44px"
