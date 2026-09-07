@@ -59,6 +59,8 @@ import { applyHealingFlaskIntent } from "./applyHealingFlaskIntent";
 import { restoreFlaskToFull } from "./healingFlaskConfig";
 import { applyTownRestRefill } from "./townRestRefill";
 import { registerConnectedPlayer, unregisterConnectedPlayer } from "./connectedPlayerRegistry";
+import { registerChatHandler } from "./chatHandler";
+import { clearChatCooldown } from "./chatCooldown";
 import { buildEquipmentLoadout } from "../../character/buildEquipmentLoadout";
 import { applyTownRestAreaRefillForAll } from "./townRestAreaTrigger";
 import type {
@@ -695,6 +697,7 @@ export class TownRoom extends Room {
   private vendorBuyHandlerRegistered = false;
   private vendorSellHandlerRegistered = false;
   private stashTransferHandlerRegistered = false;
+  private chatHandlerRegistered = false;
 
   public override async onCreate(options: TownRoomJoinOptions): Promise<void> {
     const log = createRoomLogger(
@@ -725,6 +728,10 @@ export class TownRoom extends Room {
     this.registerVendorSellHandler(log);
     this.registerStashTransferHandler(log);
     this.registerStartBoardObjectiveHandler(log);
+    if (!this.chatHandlerRegistered) {
+      this.chatHandlerRegistered = true;
+      registerChatHandler(this, log);
+    }
     this.setSimulationInterval((deltaMs: number) => {
       const state = this.state as TownRoomState;
       stepTownRoomMovement(state, deltaMs, {
@@ -1016,6 +1023,7 @@ export class TownRoom extends Room {
     if (presence !== undefined) {
       unregisterConnectedPlayer(presence.characterId, _client);
     }
+    clearChatCooldown(_client.sessionId);
 
     // A combat-zone handoff already persisted the correct destination
     // zone/position (and HP/flask snapshot) via `updateCharacterRoomIntent`

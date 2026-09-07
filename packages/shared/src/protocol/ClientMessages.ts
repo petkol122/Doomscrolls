@@ -144,8 +144,18 @@ export interface ForceRecoverCorpseClientMessage {
   readonly type: "force_recover_corpse";
 }
 
-export interface ChatMessageClientMessage {
-  readonly type: "chat_message";
+/**
+ * Core 0.29 — Room-Local Chat.
+ *
+ * The client may only supply the message text. The server is the sole
+ * authority for the sender's identity (resolved server-side from the
+ * connected player's own PlayerPresence, never trusted from the
+ * client), message length, and rate limiting. Replaces the earlier
+ * `chat_message` client message, which was never wired to any room
+ * handler.
+ */
+export interface RequestChatClientMessage {
+  readonly type: "request_chat";
   readonly text: string;
 }
 
@@ -261,7 +271,7 @@ export type ClientRoomMessage =
   | RequestRespawnClientMessage
   | RetrieveCorpseClientMessage
   | ForceRecoverCorpseClientMessage
-  | ChatMessageClientMessage
+  | RequestChatClientMessage
   | TransitionZoneClientMessage
   | DropInventoryItemClientMessage
   | RequestInteractClientMessage

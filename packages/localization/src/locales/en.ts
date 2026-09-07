@@ -436,6 +436,8 @@ export const en = {
   "world_session.travel_overlay.waypoint_title": "Attuning Waypoint",
   "world_session.travel_overlay.waypoint_message": "Channeling waypoint travel. Arrival remains server-authoritative.",
   "world_session.travel_overlay.timeout": "Travel response took too long.",
+  "world_session.chat_input_placeholder": "Press Enter to chat...",
+  "world_session.chat_empty": "No messages yet.",
 
   "world_area.title": "World Area",
   "world_area.click_instruction": "Click inside to move.",

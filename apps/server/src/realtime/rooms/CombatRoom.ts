@@ -1,6 +1,7 @@
 import { Room, Client } from "colyseus";
 import {
   type CharacterId,
+  type DamageAppliedServerMessage,
   type EnemyAttackResolvedServerMessage,
   type EntityId,
   type EnemyAttackTelegraphServerMessage,
@@ -46,12 +47,19 @@ import type { TownRoomState } from "./TownRoomState";
 import { clearPendingAction, setPendingAction } from "./pendingActionState";
 import {
   ENEMY_ATTACK_RANGE,
+  ENEMY_RETURN_ARRIVAL_DISTANCE,
+  ENEMY_RETURN_REACQUIRE_BUFFER,
   clearEnemyTargetAndReturn,
+  moveEnemyTowardPoint,
   moveEnemyTowardTarget,
+  resetEnemyCombatState,
 } from "./enemyAiHelpers";
+import { applyWanderMovement } from "./wanderEnemies";
 import { contentRegistry } from "@doomscrolls/content";
 import { CharacterService } from "../../character/CharacterService";
 import { registerConnectedPlayer, unregisterConnectedPlayer } from "./connectedPlayerRegistry";
+import { registerChatHandler } from "./chatHandler";
+import { clearChatCooldown } from "./chatCooldown";
 import { buildEquipmentLoadout } from "../../character/buildEquipmentLoadout";
 import { contentRegistry as roomContentRegistry } from "@doomscrolls/content";
 import { isPositionInsideZoneBounds } from "./validateCharacterLocation";
@@ -270,19 +278,23 @@ function sendEnemyAttackResolved(
  *    `applyEnemyDamage` helpers (the same gate `TownRoom` uses).
  *  - Register a `setSimulationInterval` that runs the existing
  *    `stepTownRoomMovement` helper (state shape is identical) and
- *    a small local enemy aggro / damage tick that uses the
- *    extracted `enemyAiHelpers` primitives. Enemy respawn uses
- *    the same 5 s cooldown and `applyEnemyDamage` respawnAtMs
- *    bookkeeping that `TownRoom` uses. A minimal `request_respawn`
- *    handler keeps the player alive after defeat so the combat
- *    loop can be re-entered without leaving the room.
+ *    an enemy aggro / damage tick, `applyCombatEnemyAggroDamage`,
+ *    that as of Core 0.24 is a real port of `TownRoom.applyEnemyAggroDamage`
+ *    (proximity acquisition, leash/return, telegraph/windup/landing --
+ *    normal hits only, see that method's own doc comment). Enemy
+ *    respawn uses the same 5 s cooldown and `applyEnemyDamage`
+ *    respawnAtMs bookkeeping that `TownRoom` uses. A `request_respawn`
+ *    handler redirects a downed player back to Nightmarket (Core 0.14)
+ *    so the combat loop's real stakes have a real consequence.
  *  - `onLeave` persists the latest HP / location / flask state
  *    through the same `CharacterService` call `TownRoom` uses.
  *
- * Explicitly NOT included (deferred to dedicated tasks, see
- * `docs/BACKLOG_CORE_0_1.md` Task 268 follow-ups):
- *  - loot / XP / objectives on enemy defeat
- *  - heavy-attack telegraph (Brute-only content)
+ * Explicitly NOT included (deferred to dedicated tasks):
+ *  - heavy-attack telegraph (queued as an immediate follow-up build,
+ *    "CombatRoom Heavy Attack Parity" -- see `docs/CORE_BUILD_0_24_PLAN.md`)
+ *  - a simultaneous-attacker cap (a named, pre-committed fallback if
+ *    Core 0.24's own live-check criterion for multi-enemy pockets
+ *    fails -- see the plan's Risks section)
  *  - corpse / respawn UI flow on the client
  *  - combat spawn point content
  *  - client routing to CombatRoom
@@ -302,6 +314,7 @@ export class CombatRoom extends Room {
   private skillSlotHandlerRegistered = false;
   private dodgeHandlerRegistered = false;
   private healingFlaskHandlerRegistered = false;
+  private chatHandlerRegistered = false;
 
   /**
    * Enemy-kill XP/objective-progress writes are fired without being
@@ -345,6 +358,10 @@ export class CombatRoom extends Room {
     this.registerSkillSlotHandler(log);
     this.registerDodgeHandler(log);
     this.registerHealingFlaskHandler(log);
+    if (!this.chatHandlerRegistered) {
+      this.chatHandlerRegistered = true;
+      registerChatHandler(this, log);
+    }
 
     this.setSimulationInterval((deltaMs: number) => {
       // The CombatRoomState has the same `playerPresence` shape
@@ -560,6 +577,7 @@ export class CombatRoom extends Room {
     if (presence !== undefined) {
       unregisterConnectedPlayer(presence.characterId, _client);
     }
+    clearChatCooldown(_client.sessionId);
 
     // A `request_combat_return` handoff already persisted the correct
     // destination (nightmarket) position via `updateCharacterRoomIntent`
@@ -1507,139 +1525,252 @@ export class CombatRoom extends Room {
   }
 
   /**
-   * Minimal CombatRoom enemy aggro + damage tick.
+   * CombatRoom enemy aggro + damage tick.
    *
-   * Task 268 — CombatRoom minimal real combat wiring.
+   * Core 0.24 — ports `TownRoom.applyEnemyAggroDamage`'s proximity
+   * acquisition, leash/return-to-spawn, and telegraph/windup/landing
+   * state machine into CombatRoom, which previously never assigned a
+   * real player to `enemy.targetPlayerSessionId` at all (see
+   * `docs/CORE_BUILD_0_24_PLAN.md`) — enemies in every combat zone sat
+   * in "idle" forever and players could not take damage here by any
+   * path.
    *
-   * Walks `state.enemies`. For each non-defeated enemy with a
-   * currently-targeted player, moves toward that player using the
-   * shared `moveEnemyTowardTarget` helper. When the enemy is inside
-   * `ENEMY_ATTACK_RANGE` and its cooldown has elapsed, starts a
-   * windup telegraph and applies damage on landing. When the target
-   * goes out of aggro range or disconnects, the enemy is switched to
-   * the "returning" state via the shared `clearEnemyTargetAndReturn`
-   * helper. When a defeated enemy's `respawnAtMs` elapses, it is
-   * teleported back to its spawn point and put into the "idle" state
-   * so it can re-acquire targets.
+   * Scope cut (Core 0.24 plan, Question 1): normal hits only. Heavy
+   * attacks (`attackKind: "heavy"`, the `heavyAttack*` content fields)
+   * are intentionally not read here — `attackKind` stays `"normal"`
+   * for every enemy, including the three heavy anchors and the reused
+   * Trashboar Brute. This is a deliberate sequencing decision (isolate
+   * the never-tested base mechanism before layering a second
+   * never-tested one on top), not an oversight; heavy-attack parity is
+   * a named, queued follow-up build.
    *
-   * NOTE: This is intentionally a small CombatRoom-only loop, not a
-   * copy of the full TownRoom aggro-damage block. Full enemy AI
-   * (wander, leash-out, multi-target re-acquire, heavy attacks,
-   * aggro transfer between players, etc.) is deferred to a shared
-   * helper extraction task — see `docs/BACKLOG_CORE_0_1.md`
-   * "CombatRoom enemy AI helper extraction".
+   * Multi-enemy aggro (each enemy independently targets the nearest
+   * alive player) is in scope and falls out of the ported acquisition
+   * loop directly — there is no single-target restriction layered on
+   * top of it.
    */
   private applyCombatEnemyAggroDamage(now: number, deltaMs: number): void {
     const state = this.state as CombatRoomState;
+
     state.enemies.forEach((enemy) => {
-      if (enemy.defeated) {
+      const enemyDefinition = contentRegistry.enemies.get(
+        enemy.enemyId as ContentEnemyId,
+      );
+      // Enemy `moveSpeed` is authored in the same per-second stat
+      // space as the player's derived `moveSpeed` -- it must NOT be
+      // passed through `toWorldUnits` (that's for the tile-authored
+      // aggro/leash ranges below), otherwise the enemy moves 24x too
+      // fast. Matches TownRoom's `applyEnemyAggroDamage` exactly.
+      const enemyMoveSpeed =
+        (enemyDefinition?.moveSpeed ?? 0) * ENEMY_MOVEMENT_SPEED_UNITS_PER_SECOND_MULTIPLIER;
+      const enemyAggroRange = toWorldUnits(enemyDefinition?.aggroRange ?? 0, 120);
+      const enemyLeashRange = toWorldUnits(enemyDefinition?.leashRange ?? 0, 180);
+      const enemyAttackCooldownMs = enemyDefinition?.attackCooldownMs ?? 1200;
+      const enemyAttackDamage = enemyDefinition?.damage ?? 2;
+      const distanceFromSpawn = Math.hypot(enemy.x - enemy.spawnX, enemy.y - enemy.spawnY);
+
+      if (enemy.defeated || enemy.hp <= 0) {
+        enemy.state = "defeated";
+        enemy.targetPlayerSessionId = "";
+        enemy.nextAttackAtMs = 0;
         return;
       }
 
-      const targetSessionId = enemy.targetPlayerSessionId;
-      const targetPlayer =
-        targetSessionId.length > 0
-          ? state.playerPresence.get(targetSessionId)
-          : undefined;
+      const currentTargetSessionId = enemy.targetPlayerSessionId;
 
-      if (targetPlayer === undefined) {
-        if (enemy.state === "chasing") {
+      if (currentTargetSessionId.length > 0) {
+        const currentTarget = state.playerPresence.get(currentTargetSessionId);
+        if (currentTarget === undefined || currentTarget.lifeState !== "alive") {
           clearEnemyTargetAndReturn(enemy);
+        } else {
+          const targetDistance = Math.hypot(enemy.x - currentTarget.x, enemy.y - currentTarget.y);
+          if (targetDistance > enemyAggroRange || distanceFromSpawn > enemyLeashRange) {
+            clearEnemyTargetAndReturn(enemy);
+          }
+        }
+      }
+
+      if (enemy.targetPlayerSessionId.length === 0 && enemy.state === "returning") {
+        moveEnemyTowardPoint(
+          enemy,
+          { x: enemy.spawnX, y: enemy.spawnY },
+          enemyMoveSpeed,
+          deltaMs,
+        );
+
+        const remainingDistanceToSpawn = Math.hypot(enemy.x - enemy.spawnX, enemy.y - enemy.spawnY);
+        if (remainingDistanceToSpawn <= ENEMY_RETURN_ARRIVAL_DISTANCE) {
+          resetEnemyCombatState(enemy);
+          enemy.x = enemy.spawnX;
+          enemy.y = enemy.spawnY;
         }
         return;
       }
 
-      if (targetPlayer.lifeState !== "alive") {
+      let closestPlayerSessionId: string | null = null;
+      let closestDistance = Number.POSITIVE_INFINITY;
+
+      state.playerPresence.forEach((player, sessionId) => {
+        if (player.lifeState !== "alive") {
+          return;
+        }
+
+        const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestPlayerSessionId = sessionId;
+        }
+      });
+
+      if (enemy.targetPlayerSessionId.length === 0) {
+        const canReacquireWhileReturning = enemy.state !== "returning"
+          || distanceFromSpawn <= ENEMY_RETURN_REACQUIRE_BUFFER;
+        if (
+          closestPlayerSessionId === null
+          || closestDistance > enemyAggroRange
+          || !canReacquireWhileReturning
+        ) {
+          enemy.state = "idle";
+          applyWanderMovement(enemy, enemyMoveSpeed, deltaMs, now);
+          return;
+        }
+
+        enemy.targetPlayerSessionId = closestPlayerSessionId;
+      }
+
+      const targetPlayer = state.playerPresence.get(enemy.targetPlayerSessionId);
+      if (targetPlayer === undefined || targetPlayer.lifeState !== "alive") {
         clearEnemyTargetAndReturn(enemy);
         return;
       }
 
-      // Step the enemy toward the player. moveEnemyTowardTarget is
-      // a shared pure helper that does not enter the engagement
-      // radius.
-      const enemyDefinition = contentRegistry.enemies.get(
-        enemy.enemyId as ContentEnemyId,
-      );
-      const enemyMoveSpeed =
-        toWorldUnits(enemyDefinition?.moveSpeed ?? 0, 1.4) *
-        ENEMY_MOVEMENT_SPEED_UNITS_PER_SECOND_MULTIPLIER;
-      moveEnemyTowardTarget(
-        enemy,
-        { x: targetPlayer.x, y: targetPlayer.y },
-        enemyMoveSpeed,
-        deltaMs,
-      );
+      const targetDistance = Math.hypot(enemy.x - targetPlayer.x, enemy.y - targetPlayer.y);
+      if (targetDistance > enemyAggroRange || distanceFromSpawn > enemyLeashRange) {
+        clearEnemyTargetAndReturn(enemy);
+        return;
+      }
+
+      enemy.state = "chasing";
+
+      // CombatRoom-only divergence from TownRoom (Core 0.24): only
+      // chase while no attack is currently telegraphed. TownRoom's
+      // identical logic keeps chasing every tick regardless of
+      // windup state, which -- verified while writing this build's
+      // dodge test -- makes its own "distance > ENEMY_ATTACK_RANGE"
+      // miss check structurally unreachable for a single dodge: the
+      // enemy re-closes the gap (chase speed comfortably exceeds the
+      // dodge distance within the windup) before the check can ever
+      // see the player still out of range. Freezing position once a
+      // telegraph starts means a dodge that clears attack range stays
+      // cleared until landing, so the existing miss branch below is
+      // actually reachable. See docs/CORE_BUILD_0_24_PLAN.md.
+      if (enemy.attackLandingAtMs === 0) {
+        moveEnemyTowardTarget(
+          enemy,
+          targetPlayer,
+          enemyMoveSpeed,
+          deltaMs,
+        );
+      }
+
+      const currentDistance = Math.hypot(enemy.x - targetPlayer.x, enemy.y - targetPlayer.y);
 
       // Landing an in-flight telegraph.
-      if (
-        enemy.attackLandingAtMs > 0 &&
-        now >= enemy.attackLandingAtMs
-      ) {
-        enemy.attackLandingAtMs = 0;
+      if (enemy.attackLandingAtMs > 0) {
+        if (now < enemy.attackLandingAtMs) {
+          return;
+        }
+
+        const landingTarget = state.playerPresence.get(enemy.targetPlayerSessionId);
+        const landingClient = landingTarget === undefined
+          ? undefined
+          : this.clients.find((client) => client.sessionId === landingTarget.sessionId);
+
         if (
-          targetPlayer.lifeState === "alive" &&
-          Math.hypot(
-            targetPlayer.x - enemy.x,
-            targetPlayer.y - enemy.y,
-          ) <= ENEMY_ATTACK_RANGE
+          landingTarget === undefined
+          || landingTarget.lifeState !== "alive"
+          || Math.hypot(enemy.x - landingTarget.x, enemy.y - landingTarget.y) > ENEMY_ATTACK_RANGE
         ) {
-          const rawDamage = Math.max(1, Math.floor(enemyDefinition?.damage ?? 1));
-          const damage = mitigateIncomingDamage(rawDamage, targetPlayer.armor);
-          const previousHp = Math.max(0, targetPlayer.hp);
-          const nextHp = Math.max(0, previousHp - damage);
-          targetPlayer.hp = nextHp;
-          if (nextHp <= 0) {
-            targetPlayer.lifeState = "downed";
-            targetPlayer.hasMovementTarget = false;
-            clearPendingAction(targetPlayer);
-            enemy.state = "returning";
-            enemy.targetPlayerSessionId = "";
-          }
-          const targetClient = this.clients.find(
-            (client) => client.sessionId === targetSessionId,
-          );
-          if (targetClient !== undefined) {
-            const resolved: EnemyAttackResolvedServerMessage = {
+          // Target moved out of range or died during the windup: a
+          // server-authoritative miss. This is the mechanism dodge
+          // relies on to avoid an already-telegraphed hit.
+          enemy.attackLandingAtMs = 0;
+          enemy.nextAttackAtMs = now + enemyAttackCooldownMs;
+          if (landingClient !== undefined) {
+            sendEnemyAttackResolved(landingClient, {
               type: "enemy_attack_resolved",
               enemyId: enemy.id,
-              targetEntityId: targetPlayer.characterId as unknown as EntityId,
-              outcome: "hit",
+              targetEntityId: (landingTarget?.characterId ?? "") as unknown as EntityId,
+              outcome: "miss",
               attackKind: "normal",
-              damage: previousHp - nextHp,
-              remainingHp: nextHp,
-            };
-            sendEnemyAttackResolved(targetClient, resolved);
+            });
           }
+          return;
+        }
+
+        enemy.attackLandingAtMs = 0;
+        const damage = mitigateIncomingDamage(enemyAttackDamage, landingTarget.armor);
+        const previousHp = Math.max(0, landingTarget.hp);
+        const nextHp = Math.max(0, previousHp - damage);
+        landingTarget.hp = nextHp;
+        enemy.nextAttackAtMs = now + enemyAttackCooldownMs;
+
+        if (nextHp <= 0) {
+          landingTarget.lifeState = "downed";
+          landingTarget.hasMovementTarget = false;
+          clearPendingAction(landingTarget);
+          clearEnemyTargetAndReturn(enemy);
+        }
+
+        if (landingClient !== undefined) {
+          const damageMessage: DamageAppliedServerMessage = {
+            type: "damage_applied",
+            targetEntityId: landingTarget.characterId as unknown as EntityId,
+            sourceEntityId: enemy.id as unknown as EntityId,
+            damage,
+            remainingHp: nextHp,
+          };
+          try {
+            landingClient.send("damage_applied", damageMessage);
+          } catch {
+            // keep room state authoritative even if send fails
+          }
+          sendEnemyAttackResolved(landingClient, {
+            type: "enemy_attack_resolved",
+            enemyId: enemy.id,
+            targetEntityId: landingTarget.characterId as unknown as EntityId,
+            outcome: "hit",
+            attackKind: "normal",
+            damage,
+            remainingHp: nextHp,
+          });
         }
         return;
       }
 
+      if (currentDistance > ENEMY_ATTACK_RANGE) {
+        return;
+      }
+
       // Start a new telegraph when in range and the cooldown has
-      // elapsed.
+      // elapsed. `nextAttackAtMs` is a placeholder here (windup +
+      // cooldown from telegraph start); the landing/miss branches
+      // above overwrite it with a more accurate `now + cooldownMs`
+      // once the windup actually resolves, matching TownRoom.
       if (enemy.nextAttackAtMs <= now) {
-        const distance = Math.hypot(
-          targetPlayer.x - enemy.x,
-          targetPlayer.y - enemy.y,
+        enemy.attackLandingAtMs = now + ENEMY_ATTACK_WINDUP_MS;
+        enemy.nextAttackAtMs = enemy.attackLandingAtMs + enemyAttackCooldownMs;
+
+        const telegraphClient = this.clients.find(
+          (client) => client.sessionId === targetPlayer.sessionId,
         );
-        if (distance <= ENEMY_ATTACK_RANGE) {
-          const cooldownMs = Math.max(
-            500,
-            Math.floor(enemyDefinition?.attackCooldownMs ?? 1200),
+        if (telegraphClient !== undefined) {
+          sendEnemyAttackTelegraph(
+            telegraphClient,
+            enemy.id,
+            targetPlayer.characterId.toString(),
+            ENEMY_ATTACK_WINDUP_MS,
           );
-          enemy.nextAttackAtMs = now + cooldownMs;
-          enemy.attackLandingAtMs = now + ENEMY_ATTACK_WINDUP_MS;
-          enemy.state = "chasing";
-          const targetClient = this.clients.find(
-            (client) => client.sessionId === targetSessionId,
-          );
-          if (targetClient !== undefined) {
-            sendEnemyAttackTelegraph(
-              targetClient,
-              enemy.id,
-              targetPlayer.characterId.toString(),
-              ENEMY_ATTACK_WINDUP_MS,
-            );
-          }
         }
       }
     });

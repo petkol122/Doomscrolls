@@ -74,7 +74,9 @@ import {
   applyWorldSessionOverlayHudStyles,
   applyWorldSessionOverlayStatusStyles,
   applyWorldSessionOverlayUtilityStyles,
+  applyWorldSessionOverlayChatStyles,
 } from "./worldSession/worldSessionOverlayLayout";
+import { createWorldSessionChatView } from "./worldSession/worldSessionChatView";
 import type { WorldProjectionMode } from "../worldProjection";
 import { defaultWorldProjection } from "../worldProjection";
 import {
@@ -1057,6 +1059,11 @@ export class WorldSessionScene extends Phaser.Scene {
     const hudRegion = document.createElement("div");
     applyWorldSessionOverlayHudStyles(hudRegion);
     root.appendChild(hudRegion);
+
+    const chatRegion = document.createElement("div");
+    applyWorldSessionOverlayChatStyles(chatRegion);
+    chatRegion.appendChild(createWorldSessionChatView(room).root);
+    root.appendChild(chatRegion);
 
     const overlayView = createWorldSessionOverlayView(
       character,
