@@ -15,6 +15,7 @@
  */
 
 import type {
+  CharacterClassKey,
   CharacterId,
   PlayerPosition,
   SpawnPointId,
@@ -31,6 +32,14 @@ export interface PlayerPresenceEntry {
   readonly sessionId: string;
   readonly characterId: CharacterId;
   readonly displayName: string;
+  /**
+   * Core 0.27 -- the joined character's class, when present. Used for
+   * other-player rendering (a per-class tint, nothing more); the server
+   * has synced this field since Core 0.9 for skill-slot resolution, but
+   * no client reader ever extracted it until this field became
+   * user-visible for a third party.
+   */
+  readonly classKey?: CharacterClassKey;
   readonly level?: number;
   readonly xp?: number;
   readonly lifeState?: "alive" | "downed";
@@ -130,7 +139,8 @@ export function getTownRoomPresence(
       displayName: String(value.displayName ?? ""),
     };
 
-    const withSpawn = applyOptionalSpawnPoint(baseEntry, value);
+    const withClassKey = applyOptionalClassKey(baseEntry, value);
+    const withSpawn = applyOptionalSpawnPoint(withClassKey, value);
     const withProgression = applyOptionalProgression(withSpawn, value);
     const withLifeState = applyOptionalLifeState(withProgression, value);
     const withVitality = applyOptionalVitality(withLifeState, value);
@@ -255,6 +265,17 @@ function applyOptionalVitality(
     hp: Math.max(0, rawHp),
     maxHp: Math.max(0, rawMaxHp),
   };
+}
+
+function applyOptionalClassKey(
+  entry: PlayerPresenceEntry,
+  value: Record<string, unknown>,
+): PlayerPresenceEntry {
+  const rawClassKey = value.classKey;
+  if (rawClassKey !== "gravewalker" && rawClassKey !== "ironclad") {
+    return entry;
+  }
+  return { ...entry, classKey: rawClassKey };
 }
 
 function applyOptionalSpawnPoint(

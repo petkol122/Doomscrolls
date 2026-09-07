@@ -37,7 +37,11 @@ import {
 } from "../../worldProjection";
 import { resolveWorldAreaBounds } from "../accountShell/resolveWorldAreaBounds";
 import { resolveWorldSessionAreaLayout, type WorldSessionAreaLayout } from "./worldSessionAreaLayout";
-import { createWorldSessionPlayerPlaceholderView } from "./worldSessionPlayerPlaceholderView";
+import {
+  createWorldSessionPlayerPlaceholderView,
+  type WorldSessionPlayerPlaceholderView,
+} from "./worldSessionPlayerPlaceholderView";
+import { resolvePlayerTint } from "./classTint";
 import { createWorldSessionInteractablesView } from "./worldSessionInteractablesView";
 import { createWorldSessionEnemyPlaceholderView } from "./worldSessionEnemyPlaceholderView";
 import { createWorldSessionStaticPropsView } from "./worldSessionStaticPropsView";
@@ -281,6 +285,14 @@ export function createWorldSessionAreaView(
   }, worldContainer);
 
   const enemyPlaceholders = new Map<string, WorldSessionEnemyPlaceholderView>();
+  // Core 0.27 -- one placeholder per OTHER connected player (never self),
+  // keyed by sessionId. Same create/refresh/destroy-by-id idiom as
+  // enemyPlaceholders above. Only six PlayerPresenceEntry fields are ever
+  // read for these views (sessionId as the Map key, displayName, classKey,
+  // x, y, hp, maxHp) -- see docs/CORE_BUILD_0_27_PLAN.md Question 2a for
+  // the full field audit; every other field stays unread here even though
+  // it remains present on the parsed entry for the local HUD's own use.
+  const otherPlayerPlaceholders = new Map<string, WorldSessionPlayerPlaceholderView>();
   const lootPlaceholders = new Map<string, WorldSessionLootPlaceholderView>();
   const floatingDamageView: FloatingDamageNumberView = createFloatingDamageNumberView(scene, worldContainer);
   const enemyScreenPositions = new Map<string, EnemyScreenPositionSnapshot>();
@@ -1219,6 +1231,51 @@ export function createWorldSessionAreaView(
       }
     }
 
+    // --- Other-player placeholder processing (continues [C]) ---
+    // Core 0.27 -- Question 1: TownRoom only. Question 2: reuse the exact
+    // local-player placeholder shape, tinted by class, no new art.
+    // Question 3: hard setPosition snap, no interpolation (respects
+    // docs/CODING_RULES.md as written). Question 2a: only six whitelisted
+    // fields are read here -- see the otherPlayerPlaceholders declaration
+    // above and docs/CORE_BUILD_0_27_PLAN.md for the full field audit.
+    const currentOtherPlayerIds = new Set<string>();
+    if (presence !== null) {
+      for (const player of presence.players) {
+        if (player.sessionId === selfSessionId) {
+          continue;
+        }
+        if (player.position === undefined) {
+          continue;
+        }
+        currentOtherPlayerIds.add(player.sessionId);
+        const otherScreenPosition = worldToScreenActiveProjection(
+          player.position.x,
+          player.position.y,
+          worldProjection.bounds,
+          worldProjection.viewport,
+          projectionMode,
+        );
+
+        let otherView = otherPlayerPlaceholders.get(player.sessionId);
+        if (otherView === undefined) {
+          otherView = createWorldSessionPlayerPlaceholderView(
+            scene,
+            worldContainer,
+            resolvePlayerTint(player.classKey),
+          );
+          otherPlayerPlaceholders.set(player.sessionId, otherView);
+        }
+        otherView.setPosition(otherScreenPosition.x, otherScreenPosition.y);
+        otherView.setInfo(player.displayName, player.hp, player.maxHp);
+      }
+    }
+    for (const [sessionId, view] of otherPlayerPlaceholders.entries()) {
+      if (!currentOtherPlayerIds.has(sessionId)) {
+        view.destroy();
+        otherPlayerPlaceholders.delete(sessionId);
+      }
+    }
+
     // [D] Player position + rest area — lightweight. Moves existing
     //     Phaser objects (playerPlaceholder, targetMarker, restAreaIndicator),
     //     updates text labels and line graphic. No object creation or
@@ -1522,6 +1579,10 @@ export function createWorldSessionAreaView(
       }
       enemyPlaceholders.clear();
       enemyScreenPositions.clear();
+      for (const view of otherPlayerPlaceholders.values()) {
+        view.destroy();
+      }
+      otherPlayerPlaceholders.clear();
       for (const view of lootPlaceholders.values()) {
         view.destroy();
       }
