@@ -19,6 +19,13 @@ import { TEST_CHARACTER_ID, TEST_USER_ID } from "../support/fixtures";
  * landing on the very next tick by presetting `attackLandingAtMs` to a
  * past timestamp and co-locating the enemy with the target, then await
  * one real tick interval.
+ *
+ * Core 0.24 -- `applyCombatEnemyAggroDamage` now ports TownRoom's real
+ * leash/aggro-range re-validation (it used to have none at all, since
+ * targeting was never really wired). The enemy is co-located with its
+ * own real `spawnX`/`spawnY` (not just the target) so that re-check
+ * trivially passes, mirroring `test/town/incomingDamageMitigation.test.ts`'s
+ * identical fixture shape.
  */
 describe("CombatRoom incoming damage mitigation", () => {
   let colyseus: ColyseusTestServer;
@@ -65,11 +72,13 @@ describe("CombatRoom incoming damage mitigation", () => {
     player.maxHp = 1000;
     player.armor = 0;
     player.lifeState = "alive";
+    player.x = enemy.spawnX;
+    player.y = enemy.spawnY;
 
     enemy.defeated = false;
     enemy.hp = Math.max(1, enemy.hp);
-    enemy.x = player.x;
-    enemy.y = player.y;
+    enemy.x = enemy.spawnX;
+    enemy.y = enemy.spawnY;
     enemy.targetPlayerSessionId = player.sessionId;
     enemy.attackLandingAtMs = Date.now() - 100;
 
@@ -106,11 +115,13 @@ describe("CombatRoom incoming damage mitigation", () => {
     // just "less damage than before".
     player.armor = 999;
     player.lifeState = "alive";
+    player.x = enemy.spawnX;
+    player.y = enemy.spawnY;
 
     enemy.defeated = false;
     enemy.hp = Math.max(1, enemy.hp);
-    enemy.x = player.x;
-    enemy.y = player.y;
+    enemy.x = enemy.spawnX;
+    enemy.y = enemy.spawnY;
     enemy.targetPlayerSessionId = player.sessionId;
     enemy.attackLandingAtMs = Date.now() - 100;
 
