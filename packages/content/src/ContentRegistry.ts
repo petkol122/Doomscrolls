@@ -4,6 +4,7 @@ import { equipmentSlots } from "./data/equipmentSlots";
 import { items } from "./data/items";
 import { levelTables } from "./data/levelTables";
 import { lootTables } from "./data/lootTables";
+import { lore } from "./data/lore";
 import { objectives } from "./data/objectives";
 import { origins } from "./data/origins";
 import { passives } from "./data/passives";
@@ -34,6 +35,7 @@ import type {
   SpawnZoneDefinition,
   ZoneContentDefinition
 } from "./data/types";
+import type { LoreEntryContentDefinition } from "./data/lore";
 
 export interface ContentCollection<TDefinition extends { readonly id: string }> {
   readonly all: readonly TDefinition[];
@@ -61,6 +63,7 @@ export interface ContentRegistryInput {
   readonly spawnZones: readonly SpawnZoneDefinition[];
   readonly vendorStocks: readonly VendorStockEntryDefinition[];
   readonly townServices: readonly TownServiceContentDefinition[];
+  readonly lore: readonly LoreEntryContentDefinition[];
 }
 
 function createCollection<TDefinition extends { readonly id: string }>(
@@ -112,6 +115,7 @@ export class ContentRegistry {
   public readonly spawnZones: readonly SpawnZoneDefinition[];
   public readonly vendorStocks: ContentCollection<VendorStockEntryDefinition>;
   public readonly townServices: ContentCollection<TownServiceContentDefinition>;
+  public readonly lore: ContentCollection<LoreEntryContentDefinition>;
 
   public constructor(input: ContentRegistryInput) {
     this.origins = createCollection("origin", input.origins);
@@ -131,6 +135,7 @@ export class ContentRegistry {
     this.spawnZones = input.spawnZones;
     this.vendorStocks = createCollection("vendor stock", input.vendorStocks);
     this.townServices = createCollection("town service", input.townServices);
+    this.lore = createCollection("lore", input.lore);
   }
 }
 
@@ -151,5 +156,6 @@ export const contentRegistry = new ContentRegistry({
   visualAssets,
   spawnZones,
   vendorStocks,
-  townServices
+  townServices,
+  lore
 });

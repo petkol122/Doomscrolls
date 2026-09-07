@@ -692,7 +692,56 @@ export const en = {
 
   "world_session.town_rest_refill": "Restored in town. HP and flask charges replenished.",
   "world_session.rest_area_entered": "Rest Area — Replenishing",
-  "world_session.rest_area_exited": "Left Rest Area"
+  "world_session.rest_area_exited": "Left Rest Area",
+
+  // ── Lore (extended flavor text, not surfaced in any UI yet) ──
+  "lore.origin_sewer_dweller.title": "Life Below the Waterline",
+  "lore.origin_sewer_dweller.body":
+    "Nobody chooses the sewers first. You get pushed there by rent, by debt, by a landlord who stopped answering messages the same week the building's wiring started humming on its own. Down where the pipes leak and the old magic pools with the runoff, you learn fast or you learn once. The Sewer Dweller learned fast, and kept the nightvision as the only severance package the surface ever paid out.",
+
+  "lore.class_gravewalker.title": "What the Gravewalker Learned Below",
+  "lore.class_gravewalker.body":
+    "Grave dirt gets you further than a business card, if you know which graves to dig. The Gravewalker learned to read the cracks between worlds the way other people read terms of service -- badly, quickly, and only after something already went wrong. Whatever answers from the other side isn't polite about it, but it does answer, which puts a Gravewalker one step ahead of everyone still filling out forms.",
+
+  "lore.class_ironclad.title": "The Ironclad's One Argument",
+  "lore.class_ironclad.body":
+    "Ironclads don't negotiate, mostly because negotiating requires the other party to still be standing afterward. Every plate was scavenged off something that used to move, and every dent is a story nobody asks to hear twice. The philosophy is simple: stand close enough, long enough, and the problem eventually solves itself or stops being your problem.",
+
+  "lore.zone_nightmarket.title": "Business Hours That Never End",
+  "lore.zone_nightmarket.body":
+    "The Nightmarket runs under neon tubes that died years ago and kept working anyway, because someone somewhere still pays the invoice. Stalls sell rumors, protection, and items that failed every safety inspection that would have applied to them, if an inspector had ever come down and left again. Everyone here has a boss, a debt, or an arrangement they're behind on payments to -- often all three, and often the same relationship wearing different paperwork.",
+
+  "lore.zone_blackwire_sewers.title": "Whoever Ran This Cable Didn't Ask Permission",
+  "lore.zone_blackwire_sewers.body":
+    "The cabling tangled through Blackwire wasn't installed by any utility company still in business, and the runoff pooling underneath it isn't sewage in any sense a lab would confirm in writing. Something down here has been feeding on both for long enough to call it home. The trashboars are just the part of the ecosystem you can still hit with a pipe.",
+
+  "lore.zone_static_yard.title": "The Trams Stopped Running, the Current Didn't",
+  "lore.zone_static_yard.body":
+    "Static Yard used to move people. Now it mostly moves electricity nobody remembers routing here, arcing off snapped overhead lines into rail cars that gave up being rail cars a while ago. The things that live in the yard didn't evolve to handle that kind of exposure so much as give up resisting it, the same way everyone else in this city eventually stops asking why the lights still work.",
+
+  "lore.zone_cinderworks.title": "The Furnace That Never Got the Shutdown Memo",
+  "lore.zone_cinderworks.body":
+    "Cinderworks stopped shipping product before anyone currently working there was born, and the furnace floor never got the message. It keeps burning on fuel nobody's found a source for, tended by things that used to be shift workers and are still, in some literal sense, on shift. Ash Rats and Slag Hounds just mean the quota is being met by whatever's left to meet it.",
+
+  "lore.zone_saltmere_docks.title": "There Is No Sea Here",
+  "lore.zone_saltmere_docks.body":
+    "Saltmere Docks floods on a tide, which is a problem, because there has never been an ocean anywhere near this stretch of the Czech Republic and nobody working the pier wants to be the one who brings that up twice. The salt got into the cranes, the cargo, and eventually the people, the same slow way debt gets into everything else down here. Whatever the water's connected to, it isn't a sea, and it isn't done rising.",
+
+  "lore.enemy_trashboar_brute.title": "Middle Management, Blackwire Branch",
+  "lore.enemy_trashboar_brute.body":
+    "Every trashboar pack needs something to enforce the pecking order, and the Brute got the job the old-fashioned way -- it was already the biggest thing down there when the runoff changed everyone's chemistry. It doesn't lead so much as flatten anything that looks like leadership developing without it. Put it down and the rest of the pack remembers, briefly, how to be scared of something else.",
+
+  "lore.enemy_foundry_warden.title": "Still Clocked In",
+  "lore.enemy_foundry_warden.body":
+    "Nobody's signed the Warden's timesheet in years, and it hasn't noticed. It walks the furnace floor on the same patrol it walked when Cinderworks employed actual people, minding a shift quota that stopped mattering to anyone but it. Whatever's underneath the plating by now, the job description survived intact -- which, this far into the ash, counts as a kind of loyalty nobody asked for.",
+
+  "lore.enemy_arc_sentinel.title": "Wired In, Not Standing Guard",
+  "lore.enemy_arc_sentinel.body":
+    "The Sentinel doesn't patrol Static Yard so much as complete it -- close enough to the arcing cable that calling it a separate thing from the current feels like a technicality. It hits like the circuit itself objects to interruption. Nobody's sure if it's guarding the yard or the yard is running through it, and everyone still standing has decided not to find out which.",
+
+  "lore.enemy_drowned_hauler.title": "The Route Nobody Cancelled",
+  "lore.enemy_drowned_hauler.body":
+    "Somewhere there's a manifest with the Hauler's name on it, and a cargo run that was supposed to end a long time ago. It never got the cancellation notice, and it stopped needing air before it stopped needing to finish the route. It'll haul whatever's nearest to the pier onto its shoulders, cargo or otherwise, because as far as it's concerned the job's still open."
 } as const satisfies LocalizationDictionary;
 
 export type LocalizationKey = keyof typeof en;

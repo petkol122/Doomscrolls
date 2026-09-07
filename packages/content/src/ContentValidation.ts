@@ -88,6 +88,7 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
   validateUniqueIds("objective", registry.objectives.all, errors);
   validateUniqueIds("townService", registry.townServices.all, errors);
   validateUniqueIds("vendorStock", registry.vendorStocks.all, errors);
+  validateUniqueIds("lore", registry.lore.all, errors);
 
   for (const origin of registry.origins.all) {
     validateLocalizedDefinition("origin", origin, errors);
@@ -457,6 +458,43 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
 
     if (stock.priceCopper <= 0) {
       errors.push({ category: "vendorStock", id: stock.id, message: "priceCopper must be positive." });
+    }
+  }
+
+  // ── Lore validation ──
+  // Every lore entry must resolve to a real content ID of its declared
+  // kind, so prose lore can't silently drift out of sync with content
+  // the way it has in design docs.
+  for (const entry of registry.lore.all) {
+    if (en[entry.titleKey] === undefined) {
+      errors.push({ category: "lore", id: entry.id, message: `Missing English localization key: ${entry.titleKey}` });
+    }
+
+    if (en[entry.bodyKey] === undefined) {
+      errors.push({ category: "lore", id: entry.id, message: `Missing English localization key: ${entry.bodyKey}` });
+    }
+
+    switch (entry.targetKind) {
+      case "class":
+        if (!registry.classes.has(entry.targetId)) {
+          errors.push({ category: "lore", id: entry.id, message: `Unknown class id: ${entry.targetId}` });
+        }
+        break;
+      case "origin":
+        if (!registry.origins.has(entry.targetId)) {
+          errors.push({ category: "lore", id: entry.id, message: `Unknown origin id: ${entry.targetId}` });
+        }
+        break;
+      case "zone":
+        if (!registry.zones.has(entry.targetId)) {
+          errors.push({ category: "lore", id: entry.id, message: `Unknown zone id: ${entry.targetId}` });
+        }
+        break;
+      case "enemy":
+        if (!registry.enemies.has(entry.targetId)) {
+          errors.push({ category: "lore", id: entry.id, message: `Unknown enemy id: ${entry.targetId}` });
+        }
+        break;
     }
   }
 

@@ -19,6 +19,7 @@ export { enemies } from "./data/enemies";
 export { items } from "./data/items";
 export { lootTables } from "./data/lootTables";
 export { objectives, NOTICE_BOARD_OBJECTIVE_SEQUENCE } from "./data/objectives";
+export { lore } from "./data/lore";
 export { zones } from "./data/zones";
 export { spawnPoints } from "./data/spawnPoints";
 export { worldProps } from "./data/worldProps";
@@ -67,3 +68,11 @@ export type {
   ZoneContentRestAreaBounds,
   ZoneRoomType
 } from "./data/types";
+
+export type {
+  ClassLoreEntryDefinition,
+  EnemyLoreEntryDefinition,
+  LoreEntryContentDefinition,
+  OriginLoreEntryDefinition,
+  ZoneLoreEntryDefinition
+} from "./data/lore";
