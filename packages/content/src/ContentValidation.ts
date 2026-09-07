@@ -361,7 +361,7 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
   }
 
   // ── Visual asset validation ──
-  const VALID_VISUAL_ASSET_CATEGORIES = ["ground_tile", "enemy_sprite", "player_sprite", "prop_sprite", "item_icon", "hp_bar"] as const;
+  const VALID_VISUAL_ASSET_CATEGORIES = ["ground_tile", "enemy_sprite", "player_sprite", "prop_sprite", "item_icon", "hp_bar", "rarity_frame"] as const;
 
   for (const asset of registry.visualAssets.all) {
     if (!(VALID_VISUAL_ASSET_CATEGORIES as readonly string[]).includes(asset.category)) {

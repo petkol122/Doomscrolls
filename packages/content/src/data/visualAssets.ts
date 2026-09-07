@@ -28,6 +28,24 @@ import type { VisualAssetContentDefinition } from "./types";
  * - Enemy HP bar: one spritesheet row (bdragon1727's health-bar pack,
  *   apps/client/public/assets/UI/05.png) driving the real per-enemy
  *   HP/maxHp already tracked server-side.
+ *
+ * Core 0.26 — inventory/equipment slot-grid rarity framing. Three
+ * pre-cropped 24x24 slot-frame images (apps/client/public/assets/UI/
+ * rarity_common.png / rarity_rare.png / rarity_epic.png), cut from the
+ * same `UI/02.png` sheet the enemy HP bar's pack ships alongside (a
+ * grid of colored square slot-frame icons, one color family per
+ * rarity-adjacent tone: green/orange/cyan/purple). Mapped to this
+ * project's real, existing `ItemRarity` tiers ("common"/"rare"/"epic" —
+ * see packages/content/src/data/types.ts; there is no "legendary"
+ * tier, so the sheet's orange family is deliberately left unmapped):
+ * common -> green, rare -> cyan (matches the rare-is-blue color this
+ * client already used for item-name text), epic -> purple (ditto,
+ * already used for epic item-name text). Pre-cropped to individual
+ * files (matching how item icons are individual files, not sliced from
+ * a sheet at runtime) rather than using `frameWidth`/`frameHeight`
+ * slicing, because the three source cells sit at different (x, y)
+ * offsets in the sheet, not consecutive frames in one row the way the
+ * HP bar's are.
  */
 export const visualAssets: readonly VisualAssetContentDefinition[] = [
   {
@@ -53,6 +71,11 @@ export const visualAssets: readonly VisualAssetContentDefinition[] = [
     frameHeight: 32,
     frameCount: 8
   },
+
+  // ── Rarity slot frames (same pack as the HP bar, UI/02.png) ──
+  { id: "rarity_frame_common", category: "rarity_frame", path: "/assets/UI/rarity_common.png", sourceWidth: 24, sourceHeight: 24 },
+  { id: "rarity_frame_rare", category: "rarity_frame", path: "/assets/UI/rarity_rare.png", sourceWidth: 24, sourceHeight: 24 },
+  { id: "rarity_frame_epic", category: "rarity_frame", path: "/assets/UI/rarity_epic.png", sourceWidth: 24, sourceHeight: 24 },
 
   // ── Item icons (Glionox items16) ──
   // Weapons

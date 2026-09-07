@@ -11,7 +11,9 @@ import type {
 import type { StatModifier } from "@doomscrolls/shared";
 import type { EquipmentUpdatedServerMessage } from "@doomscrolls/shared";
 import { makeInteractive } from "./worldSessionPointerEvents";
+import { applyWorldSessionOverlayItemPanelStyles } from "./worldSessionOverlayLayout";
 import { resolveItemIconUrl } from "../../itemIconResolver";
+import { resolveRarityFrameUrl } from "../../rarityFrameResolver";
 import { consumeBufferedEquipmentLoadout } from "../../../net/equipmentUpdateBuffer";
 // Money formatting lives in @doomscrolls/shared (server-owned / shared contract).
 // The client must not reimplement gold/silver/copper breakdown ad hoc.
@@ -94,10 +96,10 @@ export function createEquipmentPanelSection(
 ): HTMLElement {
   const wrapper = document.createElement("details");
   wrapper.open = isOpen;
-  wrapper.style.border = "1px solid #31271c";
-  wrapper.style.borderRadius = "8px";
-  wrapper.style.background = "rgba(12, 10, 8, 0.72)";
   wrapper.style.padding = "0";
+  // Core 0.26 -- same ornate panel frame as the inventory panel, for
+  // consistency (see docs/CORE_BUILD_0_26_PLAN.md).
+  applyWorldSessionOverlayItemPanelStyles(wrapper);
   makeInteractive(wrapper);
   wrapper.addEventListener("toggle", () => {
     onOpenChange?.(wrapper.open);
@@ -246,7 +248,7 @@ export function updateEquipmentPanelSection(
       // below) so it lands between the slot label and the value text.
       const iconUrl = equippedItem === null ? null : resolveItemIconUrl(equippedItem.definitionId);
       if (iconUrl !== null) {
-        row.appendChild(createItemIconImg(iconUrl));
+        row.appendChild(createItemIconSlot(iconUrl, equippedItem?.rarity));
       }
     }
     valueLabel.style.fontWeight = "bold";
@@ -290,19 +292,43 @@ export function updateEquipmentPanelSection(
   }
 }
 
-/** A small pixelated icon `<img>` for an item row. Only ever called with a
- *  URL already resolved through the content registry (see
- *  itemIconResolver.ts) -- this function itself never sees a raw asset
- *  path decision, just renders whatever URL it's given. */
-function createItemIconImg(url: string): HTMLImageElement {
+/** A small pixelated item icon in a rarity-colored slot frame, for an
+ *  equipped-item row. Only ever called with a URL already resolved
+ *  through the content registry (see itemIconResolver.ts /
+ *  rarityFrameResolver.ts) -- this function itself never sees a raw
+ *  asset path decision, just renders whatever URLs it's given. Core
+ *  0.26 -- was a bare 18x18 `<img>`; now the same rarity slot-frame
+ *  treatment as the inventory grid, for panel consistency. */
+function createItemIconSlot(url: string, rarity: string | undefined): HTMLElement {
+  const slot = document.createElement("span");
+  slot.style.position = "relative";
+  slot.style.display = "inline-flex";
+  slot.style.alignItems = "center";
+  slot.style.justifyContent = "center";
+  slot.style.width = "22px";
+  slot.style.height = "22px";
+  slot.style.flex = "0 0 auto";
+  slot.style.boxSizing = "border-box";
+
+  const frameUrl = resolveRarityFrameUrl(rarity);
+  if (frameUrl === null) {
+    slot.style.border = `1px solid ${COMMON_ITEM_COLOR}`;
+    slot.style.borderRadius = "3px";
+  } else {
+    slot.style.backgroundImage = `url(${frameUrl})`;
+    slot.style.backgroundSize = "100% 100%";
+    slot.style.backgroundRepeat = "no-repeat";
+  }
+
   const icon = document.createElement("img");
   icon.src = url;
   icon.alt = "";
-  icon.style.width = "18px";
-  icon.style.height = "18px";
+  icon.style.width = "70%";
+  icon.style.height = "70%";
   icon.style.imageRendering = "pixelated";
-  icon.style.flex = "0 0 auto";
-  return icon;
+  slot.appendChild(icon);
+
+  return slot;
 }
 
 function formatEquippedItemLabel(item: { readonly label: string; readonly rarity?: string; readonly statModifiers?: readonly StatModifier[] }): string {
