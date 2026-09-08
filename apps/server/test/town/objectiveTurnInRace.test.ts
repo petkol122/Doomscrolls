@@ -78,9 +78,10 @@ describe("TownRoom objective turn-in race", () => {
     if (player === undefined) {
       throw new Error("expected joined player to have a presence entry");
     }
-    // The notice board's real world position (packages/content/src/data/worldProps.ts).
-    player.x = 190;
-    player.y = 235;
+    // The notice board's real world position (packages/content/src/data/worldProps.ts),
+    // as of Core 0.33's hard-landmark redo (the real City Hall).
+    player.x = 9449;
+    player.y = 8467;
 
     client.send("request_start_board_objective", { type: "request_start_board_objective", objectiveId: "break_the_brute" });
     await waitForMessage<ObjectiveUpdatedServerMessage>(client, "objective_updated");

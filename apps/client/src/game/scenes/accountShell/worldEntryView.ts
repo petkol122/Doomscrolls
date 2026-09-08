@@ -6,6 +6,7 @@ export function createWorldEntryStub(
   characters: readonly CharacterSummary[],
   selectedCharacterId: CharacterId | null,
   onEnterWorld: () => void,
+  onViewWorldMap: () => void,
 ): HTMLElement {
   const selectedCharacter = characters.find((character) => character.id === selectedCharacterId) ?? null;
   const section = document.createElement("section");
@@ -46,6 +47,23 @@ export function createWorldEntryStub(
   }
 
   section.appendChild(playButton);
+
+  // Core 0.32 — secondary, optional entry point. Genuinely additive:
+  // "Enter World" above is untouched and stays the default path for
+  // every character, fresh or returning.
+  const viewMapButton = createButton(t("world_entry.view_world_map"));
+  viewMapButton.disabled = isDisabled;
+  viewMapButton.style.cursor = isDisabled ? "not-allowed" : "pointer";
+  viewMapButton.style.opacity = isDisabled ? "0.62" : "1";
+  viewMapButton.style.marginLeft = "10px";
+
+  if (selectedCharacter !== null) {
+    viewMapButton.addEventListener("click", () => {
+      onViewWorldMap();
+    });
+  }
+
+  section.appendChild(viewMapButton);
 
   const status = document.createElement("p");
   status.id = "doomscrolls-world-entry-status";

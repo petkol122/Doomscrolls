@@ -3,7 +3,7 @@ import { contentRegistry } from "@doomscrolls/content";
 import type { ItemDefinitionId, WorldLootId } from "@doomscrolls/shared";
 import { resolveZoneBounds } from "./resolveZoneBounds";
 import { rollCrateCurrencyChance } from "./rollCrateCurrencyChance";
-import { rollLoot } from "./rollLoot";
+import { rollLootFromTableId } from "./rollLoot";
 import { WorldLoot } from "./WorldLoot";
 import { t } from "@doomscrolls/localization";
 
@@ -104,10 +104,15 @@ export function handleLootContainerInteraction(
   const now = Date.now();
   let spawned = 0;
 
-  // 1. Item loot — uses the shared sewer starter loot table so the
-  //    crate's item drops match the rest of the world. Server-only
-  //    roll, no client input.
-  const itemId = rollLoot("trashboar_runt");
+  // 1. Item loot — rolls from the container's own real lootTableId
+  //    (packages/content/src/data/worldProps.ts), not a hardcoded enemy
+  //    id borrowed as a stand-in loot-table key. A container in any zone
+  //    now rolls from that zone's own real loot pool. Server-only roll,
+  //    no client input.
+  const containerProp = contentRegistry.worldProps.get(objectId);
+  const itemId = containerProp?.lootTableId !== undefined
+    ? rollLootFromTableId(containerProp.lootTableId)
+    : null;
   if (itemId !== null) {
     const itemDefinition = contentRegistry.items.get(itemId);
     if (itemDefinition !== undefined) {

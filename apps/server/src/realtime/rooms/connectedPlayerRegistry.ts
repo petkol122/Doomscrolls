@@ -58,19 +58,31 @@ export function sendToConnectedPlayer(characterId: string, type: string, payload
 interface LivePlayerCombatStats {
   readonly damage: number;
   readonly armor: number;
+  /**
+   * Core 0.31 -- runtime world-units-per-second, already converted via
+   * `resolvePlayerMovementSpeed` (the same conversion TownRoom/
+   * CombatRoom apply at join). Not the raw `moveSpeed` stat.
+   */
+  readonly movementSpeed: number;
+  readonly attackCooldownMs: number;
 }
 
 /**
- * Push recalculated damage/armor into the character's live `PlayerPresence`,
- * if currently connected to a room. Basic attacks and skill casts read
- * `player.damage` directly off this synced schema instance (see
- * `TownRoom`/`CombatRoom`'s attack and skill-cast handlers), and incoming
- * damage mitigation reads `player.armor` the same way -- neither is
- * recomputed from the database per-action. Without this, an equip/unequip
- * mid-session updates the database and (via `sendToConnectedPlayer`
- * above) the client's equipment panel, but silently leaves the actual
- * damage dealt / mitigation applied unchanged until the player leaves and
- * rejoins the room.
+ * Push recalculated damage/armor/movementSpeed/attackCooldownMs into the
+ * character's live `PlayerPresence`, if currently connected to a room.
+ * Basic attacks and skill casts read `player.damage` directly off this
+ * synced schema instance (see `TownRoom`/`CombatRoom`'s attack and
+ * skill-cast handlers), incoming damage mitigation reads `player.armor`
+ * the same way, the movement tick reads `player.movementSpeed`
+ * (`stepTownRoomMovement`), and attack cadence reads
+ * `player.attackCooldownMs` (`consumeAttackCooldown`) -- none of the
+ * four is recomputed from the database per-action. Without this, an
+ * equip/unequip mid-session updates the database and (via
+ * `sendToConnectedPlayer` above) the client's equipment panel, but
+ * silently leaves the player's actual damage dealt, mitigation applied,
+ * movement rate, and attack cadence unchanged until the player leaves
+ * and rejoins the room (or levels up, which happens to overwrite all
+ * four as a side effect of its own unrelated recalculation).
  */
 export function updateConnectedPlayerLiveCombatStats(characterId: string, stats: LivePlayerCombatStats): void {
   const entry = connectedPlayersByCharacterId.get(characterId);
@@ -86,4 +98,6 @@ export function updateConnectedPlayerLiveCombatStats(characterId: string, stats:
 
   player.damage = stats.damage;
   player.armor = stats.armor;
+  player.movementSpeed = stats.movementSpeed;
+  player.attackCooldownMs = stats.attackCooldownMs;
 }

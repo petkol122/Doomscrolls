@@ -90,9 +90,10 @@ describe("CombatRoom death-to-town handoff", () => {
     // nightmarket_blackwire_combat_entry's own real spawn coordinates
     // (packages/content/src/data/spawnPoints.ts), not an in-zone
     // combat-spawn-box position -- the old in-place respawn never left
-    // the combat zone at all.
-    expect(x).toBe(2860);
-    expect(y).toBe(2120);
+    // the combat zone at all. Updated for Core 0.33's real city-center
+    // expansion (this spawn point moved along with everything else).
+    expect(x).toBe(6144);
+    expect(y).toBe(14775);
     expect(hp).toBe(player.maxHp);
 
     // The regression: onLeave must not have run its own overwrite with

@@ -1,6 +1,16 @@
 import type { LocalizationDictionary } from "../LocaleTypes";
 
 export const en = {
+  // ── World Map Foundation (Core 0.32) ──
+  "world.earth.name": "Earth",
+  "world.earth.description": "The one world this game currently takes place in.",
+
+  "continent.europe.name": "Europe",
+  "continent.europe.description": "Home to the one real area currently reachable.",
+
+  "area.pilsen.name": "Pilsen",
+  "area.pilsen.description": "A city built over its own sewers, wiring, furnaces and docks -- exactly the place the Nightmarket and its four combat zones already are.",
+
   "origin.sewer_dweller.name": "Sewer Dweller",
   "origin.sewer_dweller.description":
     "Raised below the city where leaking pipes, old magic and bad decisions all drain to the same place.",
@@ -356,11 +366,15 @@ export const en = {
 
   "world_entry.title": "Selected character",
   "world_entry.enter_world": "Enter World",
+  "world_entry.view_world_map": "View World Map",
   "world_entry.coming_next": "World entry coming next.",
   "world_entry.no_character_selected": "Select a character before entering the world.",
   "world_entry.connected": "Connected to The Nightmarket.",
   "world_entry.join_failed": "Could not enter world.",
   "world_entry.leave_world": "Leave",
+
+  "world_map.title": "World Map",
+  "world_map.back": "Back",
 
   "world_session.title": "World Session",
   "world_session.debug_notice": "Temporary server-synced debug state. This is not the final gameplay UI.",

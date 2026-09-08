@@ -62,10 +62,11 @@ describe("TownRoom combat-handoff position persistence", () => {
     if (player === undefined) {
       throw new Error("expected joined player to have a presence entry");
     }
-    // Stand exactly on the Blackwire Gate (world 735, 560) so the
-    // interact resolves immediately instead of queuing a move-closer.
-    player.x = 735;
-    player.y = 560;
+    // Stand exactly on the Blackwire Gate (world 9111, 10988 as of Core
+    // 0.33's real city-center expansion) so the interact resolves
+    // immediately instead of queuing a move-closer.
+    player.x = 9111;
+    player.y = 10988;
 
     const interactMessage: RequestInteractClientMessage = {
       type: "request_interact",

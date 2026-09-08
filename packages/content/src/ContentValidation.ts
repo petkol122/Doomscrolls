@@ -89,6 +89,9 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
   validateUniqueIds("townService", registry.townServices.all, errors);
   validateUniqueIds("vendorStock", registry.vendorStocks.all, errors);
   validateUniqueIds("lore", registry.lore.all, errors);
+  validateUniqueIds("world", registry.worlds.all, errors);
+  validateUniqueIds("continent", registry.continents.all, errors);
+  validateUniqueIds("area", registry.areas.all, errors);
 
   for (const origin of registry.origins.all) {
     validateLocalizedDefinition("origin", origin, errors);
@@ -155,6 +158,11 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
       if (!registry.zones.has(transitionZoneId)) {
         errors.push({ category: "zone", id: zone.id, message: `Unknown transition zone id: ${transitionZoneId}` });
       }
+    }
+
+    // Core 0.32 — every zone belongs to exactly one real-world Area.
+    if (!registry.areas.has(zone.areaId)) {
+      errors.push({ category: "zone", id: zone.id, message: `Unknown area id: ${zone.areaId}` });
     }
 
     const bounds = zone.bounds;
@@ -359,6 +367,17 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
     if (prop.labelKey !== undefined && en[prop.labelKey] === undefined) {
       errors.push({ category: "worldProp", id: prop.id, message: `Missing English localization key: ${prop.labelKey}` });
     }
+
+    // A loot_container must have its own real loot table -- interactValidation.ts
+    // reads this field directly rather than hardcoding an enemy id as a
+    // stand-in loot-table key, so this must always resolve to a real row.
+    if (prop.kind === "loot_container") {
+      if (prop.lootTableId === undefined) {
+        errors.push({ category: "worldProp", id: prop.id, message: "loot_container props must set lootTableId." });
+      } else if (!registry.lootTables.has(prop.lootTableId)) {
+        errors.push({ category: "worldProp", id: prop.id, message: `Unknown lootTableId: ${prop.lootTableId}` });
+      }
+    }
   }
 
   // ── Visual asset validation ──
@@ -495,6 +514,35 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
           errors.push({ category: "lore", id: entry.id, message: `Unknown enemy id: ${entry.targetId}` });
         }
         break;
+    }
+  }
+
+  // ── World / Continent / Area validation (Core 0.32 — World Map Foundation) ──
+  for (const world of registry.worlds.all) {
+    validateLocalizedDefinition("world", world, errors);
+  }
+
+  for (const continent of registry.continents.all) {
+    validateLocalizedDefinition("continent", continent, errors);
+
+    if (!registry.worlds.has(continent.worldId)) {
+      errors.push({ category: "continent", id: continent.id, message: `Unknown world id: ${continent.worldId}` });
+    }
+  }
+
+  for (const area of registry.areas.all) {
+    validateLocalizedDefinition("area", area, errors);
+
+    if (!registry.continents.has(area.continentId)) {
+      errors.push({ category: "area", id: area.id, message: `Unknown continent id: ${area.continentId}` });
+    }
+
+    if (!Number.isFinite(area.latitude) || area.latitude < -90 || area.latitude > 90) {
+      errors.push({ category: "area", id: area.id, message: `latitude must be a finite number between -90 and 90: ${area.latitude}` });
+    }
+
+    if (!Number.isFinite(area.longitude) || area.longitude < -180 || area.longitude > 180) {
+      errors.push({ category: "area", id: area.id, message: `longitude must be a finite number between -180 and 180: ${area.longitude}` });
     }
   }
 

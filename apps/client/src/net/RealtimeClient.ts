@@ -1,6 +1,6 @@
 import { Client, Room } from "@colyseus/sdk";
 
-import type { CharacterId, CharacterRuntimeRoomKind, SessionToken, ZoneId } from "@doomscrolls/shared";
+import type { CharacterId, CharacterRuntimeRoomKind, CharacterSummary, SessionToken, ZoneId } from "@doomscrolls/shared";
 import type { RoomJoinAuthPayload, RoomState } from "@doomscrolls/shared";
 import { contentRegistry } from "@doomscrolls/content";
 import { clientEnv } from "../config/env";
@@ -87,6 +87,26 @@ export async function joinResolvedCharacterRoom(
   }
 
   return joinTownRoom(client, sessionToken, characterId, requestedZoneId);
+}
+
+/**
+ * Core 0.32 — the join-flow body shared by every entry point into the
+ * game world (today: `AccountShellScene`'s "Enter World" button and
+ * `WorldMapScene`'s Pilsen marker click). Creates a fresh realtime
+ * client, resolves the selected character's current zone, and joins
+ * the exact room `joinResolvedCharacterRoom` already resolves to --
+ * unchanged for a fresh character (lands in Nightmarket) or a
+ * returning one (resumes wherever they were). Extracted so both entry
+ * points call one real implementation, not two copies of it.
+ */
+export async function enterWorldForCharacter(
+  characters: readonly CharacterSummary[],
+  characterId: CharacterId,
+  sessionToken: SessionToken,
+): Promise<Room<RoomState>> {
+  const client = createRealtimeClient();
+  const selectedCharacter = characters.find((character) => character.id === characterId) ?? null;
+  return joinResolvedCharacterRoom(client, sessionToken, characterId, selectedCharacter?.currentZoneId);
 }
 
 /**

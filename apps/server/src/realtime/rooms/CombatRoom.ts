@@ -473,7 +473,7 @@ export class CombatRoom extends Room {
     // every fresh CombatRoom join permanently "downed" with 0 max HP
     // and unable to move -- silently blocking attack, dodge, and skill
     // casts alike. Mirrors TownRoom.ts's resolution exactly.
-    const movementSpeed = resolvePlayerMovementSpeed(result.character);
+    const movementSpeed = resolvePlayerMovementSpeed(result.character.stats?.derived.moveSpeed);
     const attackCooldownMs = resolveAttackCooldownMs(
       result.character.stats?.derived.attackCooldownMs,
     );

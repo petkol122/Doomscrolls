@@ -17,13 +17,19 @@ export const zones = [
     enemyIds: ["trashboar_runt", "trashboar_brute", "trashboar_skitter"],
     transitionZoneIds: ["blackwire_sewers", "static_yard", "cinderworks", "saltmere_docks"],
     mapKey: "map_nightmarket_placeholder",
-    bounds: { minX: 0, maxX: 5000, minY: 0, maxY: 3600 },
-    // Task 303 / Task 328 — Physical town rest area: enlarged to match the
-    // widened Nightmarket spawn/services hub after the spacing pass.
-    // Players standing inside this area get HP and healing flask charges
-    // restored; bounds intentionally cover the safe/rest marker ring and the
-    // expanded service click targets.
-    restAreaBounds: { minX: 80, maxX: 780, minY: 120, maxY: 600 }
+    // Core 0.32 — World Map Foundation: migrates under the real Pilsen area.
+    areaId: "pilsen",
+    // Core 0.33 — Nightmarket Real City-Center Expansion. Bounds now cover
+    // Plzen's real historic-core footprint (the Okruzni mestske sady park
+    // ring, ~737m x 757m, measured from real OpenStreetMap data) at
+    // WORLD_UNITS_PER_METER (25.9 units/meter, see types.ts). See
+    // docs/CORE_BUILD_0_33_PLAN.md for the full derivation.
+    bounds: { minX: 0, maxX: 19080, minY: 0, maxY: 19613 },
+    // Task 303 / Task 328 — Physical town rest area, originally sized to
+    // the pre-0.33 hub; Core 0.33 remapped its corners through the same
+    // hub transform as every other service-cluster prop, so it still
+    // exactly covers the safe/rest marker ring at the new scale.
+    restAreaBounds: { minX: 7631, maxX: 10431, minY: 9398, maxY: 13033 }
   },
   {
     id: "blackwire_sewers",
@@ -36,6 +42,7 @@ export const zones = [
     enemyIds: ["trashboar_runt", "trashboar_skitter", "trashboar_brute"],
     transitionZoneIds: ["nightmarket"],
     mapKey: "map_blackwire_sewers_placeholder",
+    areaId: "pilsen",
     bounds: { minX: 0, maxX: 800, minY: 0, maxY: 600 },
     // Core 0.22 — Phase 1 of isometric art integration ships exactly one
     // zone's ground tile; see docs/CORE_BUILD_0_22_PLAN.md.
@@ -60,6 +67,7 @@ export const zones = [
     enemyIds: ["static_wretch", "arc_sentinel", "yard_drudge"],
     transitionZoneIds: ["nightmarket"],
     mapKey: "map_static_yard_placeholder",
+    areaId: "pilsen",
     bounds: { minX: 0, maxX: 800, minY: 0, maxY: 600 }
   },
   {
@@ -78,6 +86,7 @@ export const zones = [
     enemyIds: ["slag_hound", "foundry_warden", "ash_rat"],
     transitionZoneIds: ["nightmarket"],
     mapKey: "map_cinderworks_placeholder",
+    areaId: "pilsen",
     bounds: { minX: 0, maxX: 800, minY: 0, maxY: 600 }
   },
   {
@@ -98,6 +107,7 @@ export const zones = [
     enemyIds: ["brine_crawler", "tide_stalker", "drowned_hauler"],
     transitionZoneIds: ["nightmarket"],
     mapKey: "map_saltmere_docks_placeholder",
+    areaId: "pilsen",
     bounds: { minX: 0, maxX: 800, minY: 0, maxY: 600 }
   }
 ] as const satisfies readonly ZoneContentDefinition[];

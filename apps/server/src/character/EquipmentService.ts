@@ -15,6 +15,7 @@ import { CharacterRepository } from "../persistence/repositories/CharacterReposi
 import { EquipmentError, EquipmentErrorCode } from "./EquipmentErrors";
 import { CharacterStatsService } from "./CharacterStatsService";
 import { sendToConnectedPlayer, updateConnectedPlayerLiveCombatStats } from "../realtime/rooms/connectedPlayerRegistry";
+import { resolvePlayerMovementSpeed } from "../realtime/rooms/resolvePlayerMovementSpeed";
 import { buildEquipmentLoadout } from "./buildEquipmentLoadout";
 
 interface InventorySlotCoordinates {
@@ -264,14 +265,38 @@ export class EquipmentService {
     });
 
     // The database write above is necessary but not sufficient: if this
-    // character is currently connected to a room, combat reads
-    // player.damage/.armor directly off the live synced PlayerPresence,
-    // not the database, so that live copy must be pushed too or it stays
-    // stale (old weapon's damage, old armor's mitigation) until the
-    // player leaves and rejoins the room.
+    // character is currently connected to a room, combat/movement reads
+    // player.damage/.armor/.movementSpeed/.attackCooldownMs directly off
+    // the live synced PlayerPresence, not the database, so that live copy
+    // must be pushed too or it stays stale (old weapon's damage, old
+    // armor's mitigation, old boots' move speed, old gloves' attack
+    // cadence) until the player leaves and rejoins the room. Core 0.23
+    // fixed this for damage/armor only; movementSpeed/attackCooldownMs
+    // had the identical gap, named but left open at the time (see
+    // docs/CORE_BUILD_0_23_RELEASE_NOTES.md's Follow-up 2) -- closed here
+    // (Core 0.31).
+    //
+    // attackCooldownMs is a direct value, pushed exactly like damage/armor
+    // (no resolve-with-fallback wrapper: recalculatedStats is a freshly
+    // computed, always-finite number, not a possibly-corrupt DB read, so
+    // resolveAttackCooldownMs's NaN/undefined guard would be a no-op here
+    // -- same reasoning damage/armor already relied on by skipping
+    // resolvePlayerDamage/resolvePlayerArmor).
+    //
+    // movementSpeed is NOT a direct value -- PlayerPresence.movementSpeed
+    // is the *converted* runtime world-units-per-second value, not the
+    // raw moveSpeed stat, so it must go through the same
+    // resolvePlayerMovementSpeed conversion TownRoom/CombatRoom already
+    // apply at join (unrelated to `toWorldUnits`'s separate x24
+    // tile-to-pixel scalar used for enemy aggro/leash ranges -- conflating
+    // the two was the exact bug Core 0.24 found and fixed for enemy
+    // moveSpeed; player moveSpeed was never subject to it, since it has
+    // only ever gone through resolvePlayerMovementSpeed).
     updateConnectedPlayerLiveCombatStats(characterId, {
       damage: recalculatedStats.derived.damage,
       armor: recalculatedStats.derived.armor,
+      movementSpeed: resolvePlayerMovementSpeed(recalculatedStats.derived.moveSpeed),
+      attackCooldownMs: recalculatedStats.derived.attackCooldownMs,
     });
   }
 }

@@ -33,6 +33,15 @@ import { sendToConnectedPlayer, updateConnectedPlayerLiveCombatStats } from "../
 const CHARACTER_ID = "test-character-equip";
 const USER_ID = "test-user-equip";
 const WEAPON_ITEM_ID = "test-item-starter-pipe";
+const TREADS_ITEM_ID = "test-item-sewer-treads";
+const GLOVES_ITEM_ID = "test-item-wraptape-gloves";
+
+// sewer_dweller (power 1, speed 2, mind 1, toughness 2) + gravewalker
+// (power 3, speed 1, mind 2, toughness 3) = combined primary speed 3.
+// Mirrors CharacterStatsService's own formulas exactly, rather than a
+// hand-transcribed decimal, so floating-point results match bit-for-bit.
+const BASE_MOVE_SPEED = 1 + 3 * 0.02;
+const BASE_ATTACK_COOLDOWN_MS = Math.max(500, 1000 - 3 * 25);
 
 interface FakeItemRow {
   id: string;
@@ -56,6 +65,32 @@ function buildFakeDb() {
         locationType: ItemLocationType.INVENTORY,
         inventoryPage: 0,
         inventoryX: 0,
+        inventoryY: 0,
+        equipmentSlot: null,
+      },
+    ],
+    [
+      TREADS_ITEM_ID,
+      {
+        id: TREADS_ITEM_ID,
+        definitionId: "sewer_treads",
+        ownerCharacterId: CHARACTER_ID,
+        locationType: ItemLocationType.INVENTORY,
+        inventoryPage: 0,
+        inventoryX: 1,
+        inventoryY: 0,
+        equipmentSlot: null,
+      },
+    ],
+    [
+      GLOVES_ITEM_ID,
+      {
+        id: GLOVES_ITEM_ID,
+        definitionId: "wraptape_gloves",
+        ownerCharacterId: CHARACTER_ID,
+        locationType: ItemLocationType.INVENTORY,
+        inventoryPage: 0,
+        inventoryX: 2,
         inventoryY: 0,
         equipmentSlot: null,
       },
@@ -211,7 +246,14 @@ describe("EquipmentService live combat stats", () => {
     expect(updateConnectedPlayerLiveCombatStats).toHaveBeenCalledTimes(1);
     const [characterId, stats] = vi.mocked(updateConnectedPlayerLiveCombatStats).mock.calls[0]!;
     expect(characterId).toBe(CHARACTER_ID);
-    expect(stats).toEqual({ damage: 8, armor: 0 });
+    // Starter Pipe only modifies damage -- movementSpeed/attackCooldownMs
+    // are pushed too (Core 0.31), but at their unmodified base values.
+    expect(stats).toEqual({
+      damage: 8,
+      armor: 0,
+      movementSpeed: BASE_MOVE_SPEED * 220,
+      attackCooldownMs: BASE_ATTACK_COOLDOWN_MS,
+    });
   });
 
   it("pushes damage back down into the live PlayerPresence on unequip", async () => {
@@ -231,6 +273,55 @@ describe("EquipmentService live combat stats", () => {
     const [characterId, stats] = vi.mocked(updateConnectedPlayerLiveCombatStats).mock.calls[0]!;
     expect(characterId).toBe(CHARACTER_ID);
     // Base damage only (1 + power 4), the Starter Pipe's +3 no longer applies.
-    expect(stats).toEqual({ damage: 5, armor: 0 });
+    expect(stats).toEqual({
+      damage: 5,
+      armor: 0,
+      movementSpeed: BASE_MOVE_SPEED * 220,
+      attackCooldownMs: BASE_ATTACK_COOLDOWN_MS,
+    });
+  });
+
+  /**
+   * Core 0.31 -- the movementSpeed/attackCooldownMs half of the same gap
+   * Core 0.23's "Follow-up 2" fixed for damage/armor and explicitly named,
+   * but left open, for these two fields. Real equipped items already
+   * carry these modifiers (sewer_treads: moveSpeed +0.15; wraptape_gloves:
+   * attackCooldownMs -40 -- see packages/content/src/data/items.ts).
+   */
+  it("pushes the new runtime movementSpeed (not the raw moveSpeed stat) into the live PlayerPresence on equip", async () => {
+    const { db } = buildFakeDb();
+    const service = new EquipmentService(db as never);
+
+    await service.equip(CHARACTER_ID, USER_ID, TREADS_ITEM_ID, "feet");
+
+    expect(updateConnectedPlayerLiveCombatStats).toHaveBeenCalledTimes(1);
+    const [characterId, stats] = vi.mocked(updateConnectedPlayerLiveCombatStats).mock.calls[0]!;
+    expect(characterId).toBe(CHARACTER_ID);
+    // Base moveSpeed 1.06 + sewer_treads' +0.15 = 1.21 raw stat, then
+    // converted through the same x220 world-units-per-second scale
+    // TownRoom/CombatRoom apply at join (resolvePlayerMovementSpeed) --
+    // not the raw 1.21 itself, which would be the exact unit-mismatch
+    // bug this build's plan investigated and ruled out reintroducing.
+    expect(stats.movementSpeed).toBe((BASE_MOVE_SPEED + 0.15) * 220);
+    expect(stats.damage).toBe(5);
+    expect(stats.armor).toBe(0);
+    expect(stats.attackCooldownMs).toBe(BASE_ATTACK_COOLDOWN_MS);
+  });
+
+  it("pushes the new attackCooldownMs into the live PlayerPresence on equip", async () => {
+    const { db } = buildFakeDb();
+    const service = new EquipmentService(db as never);
+
+    await service.equip(CHARACTER_ID, USER_ID, GLOVES_ITEM_ID, "hands");
+
+    expect(updateConnectedPlayerLiveCombatStats).toHaveBeenCalledTimes(1);
+    const [characterId, stats] = vi.mocked(updateConnectedPlayerLiveCombatStats).mock.calls[0]!;
+    expect(characterId).toBe(CHARACTER_ID);
+    // Base 925ms + wraptape_gloves' -40ms = 885ms, pushed as a direct
+    // value (no unit conversion needed for this field, unlike moveSpeed).
+    expect(stats.attackCooldownMs).toBe(BASE_ATTACK_COOLDOWN_MS - 40);
+    expect(stats.damage).toBe(5);
+    expect(stats.armor).toBe(0);
+    expect(stats.movementSpeed).toBe(BASE_MOVE_SPEED * 220);
   });
 });

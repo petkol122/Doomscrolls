@@ -42,7 +42,7 @@ export const enemies = [
     xp: 15,
     lootTableId: "sewer_brute_loot",
     currencyDrop: { min: 4, max: 12 },
-    spriteKey: "enemy_trashboar_runt_placeholder"
+    spriteKey: "enemy_trashboar_brute_placeholder"
   },
   {
     // Trashboar Skitter — a smaller, faster runt cousin.
@@ -68,7 +68,7 @@ export const enemies = [
     // sharing Runt's, so the three enemy archetypes each feel distinct.
     lootTableId: "sewer_skitter_loot",
     currencyDrop: { min: 1, max: 4 },
-    spriteKey: "enemy_trashboar_runt_placeholder"
+    spriteKey: "enemy_trashboar_skitter_placeholder"
   },
   {
     // Core 0.6 — Static Wretch, Static Yard's own enemy. A scavenger left

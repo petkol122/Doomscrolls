@@ -870,7 +870,7 @@ export class TownRoom extends Room {
     const characterId = result.character.id;
     const characterName = result.character.characterName;
     const resolvedZoneId = result.resolvedZoneId;
-    const movementSpeed = resolvePlayerMovementSpeed(result.character);
+    const movementSpeed = resolvePlayerMovementSpeed(result.character.stats?.derived.moveSpeed);
     const attackCooldownMs = resolveAttackCooldownMs(
       result.character.stats?.derived.attackCooldownMs,
     );

@@ -1,4 +1,6 @@
+import { areas } from "./data/areas";
 import { classes } from "./data/classes";
+import { continents } from "./data/continents";
 import { enemies } from "./data/enemies";
 import { equipmentSlots } from "./data/equipmentSlots";
 import { items } from "./data/items";
@@ -15,9 +17,12 @@ import { townServices } from "./data/townServices";
 import { worldProps } from "./data/worldProps";
 import { spawnZones } from "./data/spawnZones";
 import { visualAssets } from "./data/visualAssets";
+import { worlds } from "./data/worlds";
 import { zones } from "./data/zones";
 import type {
+  AreaContentDefinition,
   CharacterClassContentDefinition,
+  ContinentContentDefinition,
   EnemyContentDefinition,
   EquipmentSlotContentDefinition,
   ItemContentDefinition,
@@ -30,6 +35,7 @@ import type {
   SpawnPointContentDefinition,
   TownServiceContentDefinition,
   VendorStockEntryDefinition,
+  WorldContentDefinition,
   WorldPropContentDefinition,
   VisualAssetContentDefinition,
   SpawnZoneDefinition,
@@ -64,6 +70,9 @@ export interface ContentRegistryInput {
   readonly vendorStocks: readonly VendorStockEntryDefinition[];
   readonly townServices: readonly TownServiceContentDefinition[];
   readonly lore: readonly LoreEntryContentDefinition[];
+  readonly worlds: readonly WorldContentDefinition[];
+  readonly continents: readonly ContinentContentDefinition[];
+  readonly areas: readonly AreaContentDefinition[];
 }
 
 function createCollection<TDefinition extends { readonly id: string }>(
@@ -116,6 +125,9 @@ export class ContentRegistry {
   public readonly vendorStocks: ContentCollection<VendorStockEntryDefinition>;
   public readonly townServices: ContentCollection<TownServiceContentDefinition>;
   public readonly lore: ContentCollection<LoreEntryContentDefinition>;
+  public readonly worlds: ContentCollection<WorldContentDefinition>;
+  public readonly continents: ContentCollection<ContinentContentDefinition>;
+  public readonly areas: ContentCollection<AreaContentDefinition>;
 
   public constructor(input: ContentRegistryInput) {
     this.origins = createCollection("origin", input.origins);
@@ -136,6 +148,9 @@ export class ContentRegistry {
     this.vendorStocks = createCollection("vendor stock", input.vendorStocks);
     this.townServices = createCollection("town service", input.townServices);
     this.lore = createCollection("lore", input.lore);
+    this.worlds = createCollection("world", input.worlds);
+    this.continents = createCollection("continent", input.continents);
+    this.areas = createCollection("area", input.areas);
   }
 }
 
@@ -157,5 +172,8 @@ export const contentRegistry = new ContentRegistry({
   spawnZones,
   vendorStocks,
   townServices,
-  lore
+  lore,
+  worlds,
+  continents,
+  areas
 });

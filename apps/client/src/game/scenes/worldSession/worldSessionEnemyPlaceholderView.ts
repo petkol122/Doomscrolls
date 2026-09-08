@@ -1,5 +1,6 @@
 ﻿import { t } from "@doomscrolls/localization";
 import Phaser from "phaser";
+import { contentRegistry } from "@doomscrolls/content";
 
 import type { TownRoomEnemySnapshot } from "../../../net/townRoomEnemies";
 import { ENEMY_HP_BAR_ASSET_ID } from "../../visualAssetLoader";
@@ -41,21 +42,26 @@ const HIDDEN_POSITION = -9999;
 // no longer looks like a random teleport. Server rules are unchanged.
 const RESPAWNED_LABEL_DURATION_MS = 1500;
 
-// Task 250 â€” Trashboar family readability batch.
-// Distinct placeholder sizing/shape only (no sprites, no animations, no
-// new AI/abilities). Skitter is smaller/faster-looking, Runt is the
-// baseline, Brute is larger/heavier. Server stats / spawns / loot
-// are untouched; only the visual placeholder proportions change.
-type TrashboarVariant = "runt" | "skitter" | "brute";
+// Core 0.33 follow-up -- every enemy's placeholder visual is now looked
+// up by its real content-defined spriteKey (packages/content/src/data/
+// enemies.ts), never guessed from a substring match on the enemy's
+// opaque instance id. Replaces the old 3-bucket Trashboar-only mapping,
+// whose silent "runt" fallback made all 9 non-Trashboar enemy types
+// (every enemy in Static Yard, Cinderworks, and Saltmere Docks) render
+// identically. One real entry per real spriteKey below; an enemy whose
+// content lookup fails (should not happen -- caught by content
+// validation) falls back to DEFAULT_SPRITE_KEY's own distinct
+// "unrecognized" look, not a silent match to any real enemy.
+const DEFAULT_SPRITE_KEY = "enemy_unknown_placeholder";
 
-function getTrashboarVariant(enemy: TownRoomEnemySnapshot): TrashboarVariant {
-  if (enemy.id.includes("trashboar_brute")) {
-    return "brute";
-  }
-  if (enemy.id.includes("trashboar_skitter")) {
-    return "skitter";
-  }
-  return "runt";
+function resolveEnemySpriteKey(enemy: TownRoomEnemySnapshot): string {
+  // `EnemyId` isn't part of either package's public export surface, so
+  // this matches the server's own established pattern for the same
+  // situation (an id that arrives as a plain string at a network/content
+  // boundary) -- see apps/server/src/realtime/rooms/rollLoot.ts's
+  // identical `as never` cast into `contentRegistry.enemies.get`.
+  const enemyDefinition = contentRegistry.enemies.get(enemy.enemyId as never);
+  return enemyDefinition?.spriteKey ?? DEFAULT_SPRITE_KEY;
 }
 
 interface VariantVisual {
@@ -73,58 +79,143 @@ interface VariantVisual {
   readonly defeatedCrossSize: number;
   readonly defeatedCrossThickness: number;
   readonly defeatedOutlineRadius: number;
+  // Idle-state coloring -- the enemy's own real visual identity. Chasing/
+  // returning stay universal (see applyEnemyVisualState) so "is this
+  // hostile right now" reads instantly regardless of which enemy it is.
+  readonly idleBodyColor: number;
+  readonly idleBodyStroke: number;
+  readonly idleRingColor: number;
+  readonly idleRingAlpha: number;
+  readonly idleRingStroke: number;
+  readonly idleRingStrokeAlpha: number;
+  readonly idleCoreColor: number;
 }
 
-const VARIANT_VISUALS: Readonly<Record<TrashboarVariant, VariantVisual>> = {
-  skitter: {
-    bodyWidth: 20,
-    bodyHeight: 20,
-    coreRadius: 4,
-    coreOffsetY: -1,
-    ringWidth: 30,
-    ringHeight: 14,
-    ringOffsetY: 8,
-    shadowWidth: 26,
-    shadowHeight: 11,
-    shadowOffsetY: 10,
-    labelFontSize: "11px",
-    defeatedCrossSize: 14,
-    defeatedCrossThickness: 3,
-    defeatedOutlineRadius: 9,
-  },
-  runt: {
-    bodyWidth: 24,
-    bodyHeight: 24,
-    coreRadius: 5,
-    coreOffsetY: -2,
-    ringWidth: 36,
-    ringHeight: 16,
-    ringOffsetY: 10,
-    shadowWidth: 30,
-    shadowHeight: 14,
-    shadowOffsetY: 12,
-    labelFontSize: "12px",
-    defeatedCrossSize: 18,
-    defeatedCrossThickness: 3,
-    defeatedOutlineRadius: 11,
-  },
-  brute: {
-    bodyWidth: 32,
-    bodyHeight: 30,
-    coreRadius: 6,
-    coreOffsetY: -4,
-    ringWidth: 48,
-    ringHeight: 22,
-    ringOffsetY: 10,
-    shadowWidth: 40,
-    shadowHeight: 18,
-    shadowOffsetY: 12,
-    labelFontSize: "13px",
-    defeatedCrossSize: 22,
-    defeatedCrossThickness: 4,
-    defeatedOutlineRadius: 14,
-  },
+// Three real size tiers, derived from each enemy's own real maxHp/moveSpeed
+// (packages/content/src/data/enemies.ts) -- heavy anchors (maxHp 30-34,
+// heavy-attack capable) are largest, fast skirmishers (moveSpeed >= 1.25)
+// are smallest, common/starter-tier enemies sit in between. Four distinct
+// color families, one per zone (sewer/Blackwire = red-rust, Static Yard =
+// electric blue, Cinderworks = molten orange, Saltmere Docks = brine teal),
+// so every one of the 12 real enemy types reads as visually its own thing.
+const SIZE_HEAVY = {
+  bodyWidth: 32, bodyHeight: 30, coreRadius: 6, coreOffsetY: -4,
+  ringWidth: 48, ringHeight: 22, ringOffsetY: 10,
+  shadowWidth: 40, shadowHeight: 18, shadowOffsetY: 12,
+  labelFontSize: "13px", defeatedCrossSize: 22, defeatedCrossThickness: 4, defeatedOutlineRadius: 14,
 };
+const SIZE_SKIRMISHER = {
+  bodyWidth: 20, bodyHeight: 20, coreRadius: 4, coreOffsetY: -1,
+  ringWidth: 30, ringHeight: 14, ringOffsetY: 8,
+  shadowWidth: 26, shadowHeight: 11, shadowOffsetY: 10,
+  labelFontSize: "11px", defeatedCrossSize: 14, defeatedCrossThickness: 3, defeatedOutlineRadius: 9,
+};
+const SIZE_COMMON = {
+  bodyWidth: 24, bodyHeight: 24, coreRadius: 5, coreOffsetY: -2,
+  ringWidth: 36, ringHeight: 16, ringOffsetY: 10,
+  shadowWidth: 30, shadowHeight: 14, shadowOffsetY: 12,
+  labelFontSize: "12px", defeatedCrossSize: 18, defeatedCrossThickness: 3, defeatedOutlineRadius: 11,
+};
+
+// A genuinely unrecognized spriteKey, not a stand-in for any real enemy.
+// Distinct neutral gray so a content gap is visually obvious instead of
+// silently matching a real type. Should never be reached in practice --
+// content validation guarantees every enemyId resolves.
+const DEFAULT_VARIANT_VISUAL: VariantVisual = {
+  ...SIZE_COMMON,
+  idleBodyColor: 0x555555, idleBodyStroke: 0xcccccc,
+  idleRingColor: 0x333333, idleRingAlpha: 0.26, idleRingStroke: 0x999999, idleRingStrokeAlpha: 0.36,
+  idleCoreColor: 0xdddddd,
+};
+
+const VARIANT_VISUALS: Readonly<Record<string, VariantVisual>> = {
+  // ── Sewer family (Blackwire Sewers / Nightmarket's reused ambient pockets) ──
+  enemy_trashboar_runt_placeholder: {
+    ...SIZE_COMMON,
+    idleBodyColor: 0xb12222, idleBodyStroke: 0xf0b0b0,
+    idleRingColor: 0x6f1414, idleRingAlpha: 0.28, idleRingStroke: 0xff7a7a, idleRingStrokeAlpha: 0.4,
+    idleCoreColor: 0xffe2e2,
+  },
+  enemy_trashboar_skitter_placeholder: {
+    ...SIZE_SKIRMISHER,
+    idleBodyColor: 0xd14a4a, idleBodyStroke: 0xffd0d0,
+    idleRingColor: 0x7a2020, idleRingAlpha: 0.28, idleRingStroke: 0xff9a9a, idleRingStrokeAlpha: 0.42,
+    idleCoreColor: 0xffe8e8,
+  },
+  enemy_trashboar_brute_placeholder: {
+    ...SIZE_HEAVY,
+    idleBodyColor: 0x8f4d1e, idleBodyStroke: 0xffddae,
+    idleRingColor: 0x5e2b10, idleRingAlpha: 0.28, idleRingStroke: 0xffc16e, idleRingStrokeAlpha: 0.52,
+    idleCoreColor: 0xffe2b8,
+  },
+  // ── Static Yard family (electric blue/yellow) ──
+  enemy_static_wretch_placeholder: {
+    ...SIZE_COMMON,
+    idleBodyColor: 0x2f5f7a, idleBodyStroke: 0xbfe8ff,
+    idleRingColor: 0x1a3a4a, idleRingAlpha: 0.28, idleRingStroke: 0x6fd0ff, idleRingStrokeAlpha: 0.42,
+    idleCoreColor: 0xdff6ff,
+  },
+  enemy_yard_drudge_placeholder: {
+    ...SIZE_COMMON,
+    idleBodyColor: 0x3a5568, idleBodyStroke: 0xa8c8d8,
+    idleRingColor: 0x24343f, idleRingAlpha: 0.26, idleRingStroke: 0x7fa8bf, idleRingStrokeAlpha: 0.36,
+    idleCoreColor: 0xc8e4ee,
+  },
+  enemy_arc_sentinel_placeholder: {
+    ...SIZE_HEAVY,
+    idleBodyColor: 0x4a7a8f, idleBodyStroke: 0xfff2a8,
+    idleRingColor: 0x1f4a5c, idleRingAlpha: 0.32, idleRingStroke: 0xfff066, idleRingStrokeAlpha: 0.6,
+    idleCoreColor: 0xfffbcc,
+  },
+  // ── Cinderworks family (molten orange/ash) ──
+  enemy_slag_hound_placeholder: {
+    ...SIZE_SKIRMISHER,
+    idleBodyColor: 0xb5451a, idleBodyStroke: 0xffcf9e,
+    idleRingColor: 0x6f2a0c, idleRingAlpha: 0.3, idleRingStroke: 0xff9a4a, idleRingStrokeAlpha: 0.46,
+    idleCoreColor: 0xffe0b0,
+  },
+  enemy_ash_rat_placeholder: {
+    ...SIZE_COMMON,
+    idleBodyColor: 0x5a4f47, idleBodyStroke: 0xcfc4b8,
+    idleRingColor: 0x352d28, idleRingAlpha: 0.26, idleRingStroke: 0x9a8f80, idleRingStrokeAlpha: 0.34,
+    idleCoreColor: 0xe4dcd0,
+  },
+  enemy_foundry_warden_placeholder: {
+    ...SIZE_HEAVY,
+    idleBodyColor: 0x6e1a12, idleBodyStroke: 0xffb08a,
+    idleRingColor: 0x3a0c08, idleRingAlpha: 0.34, idleRingStroke: 0xff5a2a, idleRingStrokeAlpha: 0.55,
+    idleCoreColor: 0xffceac,
+  },
+  // ── Saltmere Docks family (brine teal) ──
+  enemy_brine_crawler_placeholder: {
+    ...SIZE_COMMON,
+    idleBodyColor: 0x1f6e63, idleBodyStroke: 0xa8f0e0,
+    idleRingColor: 0x123f38, idleRingAlpha: 0.28, idleRingStroke: 0x5adfca, idleRingStrokeAlpha: 0.42,
+    idleCoreColor: 0xd6fff5,
+  },
+  enemy_tide_stalker_placeholder: {
+    ...SIZE_SKIRMISHER,
+    idleBodyColor: 0x2c8a80, idleBodyStroke: 0xc0fff2,
+    idleRingColor: 0x184e47, idleRingAlpha: 0.28, idleRingStroke: 0x7cf0de, idleRingStrokeAlpha: 0.44,
+    idleCoreColor: 0xe8fffa,
+  },
+  enemy_drowned_hauler_placeholder: {
+    ...SIZE_HEAVY,
+    idleBodyColor: 0x143d3a, idleBodyStroke: 0x8fd8cc,
+    idleRingColor: 0x0a201e, idleRingAlpha: 0.34, idleRingStroke: 0x3aab99, idleRingStrokeAlpha: 0.55,
+    idleCoreColor: 0xbdeee2,
+  },
+  [DEFAULT_SPRITE_KEY]: DEFAULT_VARIANT_VISUAL,
+};
+
+// A real, non-indexed reference to the fallback visual -- so
+// `resolveVariantVisual` below never has to treat the fallback lookup
+// itself as possibly-undefined (VARIANT_VISUALS is a plain
+// Record<string, VariantVisual>, and this project's tsconfig has
+// noUncheckedIndexedAccess on).
+function resolveVariantVisual(spriteKey: string): VariantVisual {
+  return VARIANT_VISUALS[spriteKey] ?? DEFAULT_VARIANT_VISUAL;
+}
 
 function getHpRatio(enemy: TownRoomEnemySnapshot): number {
   if (enemy.maxHp <= 0) {
@@ -156,8 +247,8 @@ export function createWorldSessionEnemyPlaceholderView(
   container.setDepth(400);
   parentContainer?.add(container);
 
-  const initialVariant = getTrashboarVariant(enemy);
-  const initialVisual = VARIANT_VISUALS[initialVariant];
+  const initialSpriteKey = resolveEnemySpriteKey(enemy);
+  const initialVisual = resolveVariantVisual(initialSpriteKey);
 
   const shadow = scene.add.ellipse(
     0,
@@ -172,25 +263,25 @@ export function createWorldSessionEnemyPlaceholderView(
     initialVisual.ringOffsetY,
     initialVisual.ringWidth,
     initialVisual.ringHeight,
-    initialVariant === "brute" ? 0x5e2b10 : 0x6f1414,
-    0.28,
+    initialVisual.idleRingColor,
+    initialVisual.idleRingAlpha,
   );
-  ring.setStrokeStyle(2, initialVariant === "brute" ? 0xffc16e : 0xff7a7a, initialVariant === "brute" ? 0.52 : 0.4);
+  ring.setStrokeStyle(2, initialVisual.idleRingStroke, initialVisual.idleRingStrokeAlpha);
   const body = scene.add.rectangle(
     0,
     0,
     initialVisual.bodyWidth,
     initialVisual.bodyHeight,
-    initialVariant === "brute" ? 0x8f4d1e : 0xb12222,
+    initialVisual.idleBodyColor,
     0.98,
   );
-  body.setStrokeStyle(2, initialVariant === "brute" ? 0xffddae : 0xffd0d0, 0.98);
+  body.setStrokeStyle(2, initialVisual.idleBodyStroke, 0.98);
   body.setInteractive({ useHandCursor: true });
   const core = scene.add.circle(
     0,
     initialVisual.coreOffsetY,
     initialVisual.coreRadius,
-    initialVariant === "brute" ? 0xffe2b8 : 0xffe2e2,
+    initialVisual.idleCoreColor,
     0.95,
   );
 
@@ -349,15 +440,15 @@ export function createWorldSessionEnemyPlaceholderView(
 
   let lastDefeated: boolean = enemy.defeated;
   let respawnedAtMs: number | null = null;
-  let lastVariant: TrashboarVariant = initialVariant;
+  let lastSpriteKey: string = initialSpriteKey;
 
   const applyEnemyVisualState = (nextEnemy: TownRoomEnemySnapshot): void => {
-    const nextVariant = getTrashboarVariant(nextEnemy);
-    const visual = VARIANT_VISUALS[nextVariant];
+    const nextSpriteKey = resolveEnemySpriteKey(nextEnemy);
+    const visual = resolveVariantVisual(nextSpriteKey);
     const hpRatio = getHpRatio(nextEnemy);
     hpBarSprite.setFrame(resolveHpBarFrame(hpRatio));
 
-    if (nextVariant !== lastVariant) {
+    if (nextSpriteKey !== lastSpriteKey) {
       shadow.setSize(visual.shadowWidth, visual.shadowHeight);
       shadow.setPosition(0, visual.shadowOffsetY);
       ring.setSize(visual.ringWidth, visual.ringHeight);
@@ -369,7 +460,7 @@ export function createWorldSessionEnemyPlaceholderView(
       defeatedCrossV.setSize(visual.defeatedCrossThickness, visual.defeatedCrossSize);
       defeatedCrossH.setSize(visual.defeatedCrossSize, visual.defeatedCrossThickness);
       defeatedCrossOutline.setRadius(visual.defeatedOutlineRadius);
-      lastVariant = nextVariant;
+      lastSpriteKey = nextSpriteKey;
     }
 
     if (nextEnemy.defeated) {
@@ -423,27 +514,31 @@ export function createWorldSessionEnemyPlaceholderView(
     hpBarSprite.setVisible(true);
     shadow.setFillStyle(0x000000, 0.28);
     if (nextEnemy.state === "chasing") {
-      ring.setFillStyle(nextVariant === "brute" ? 0x7a1a05 : 0x6b0a0a, 0.55);
+      // Universal chase glow, not type-tinted -- "this is hostile right
+      // now" should read instantly regardless of which of the 12 real
+      // enemy types this is; the idle colors below are what carry each
+      // enemy's own real identity.
+      ring.setFillStyle(0x6b0a0a, 0.55);
       ring.setStrokeStyle(3, 0xff3a1a, 0.95);
-      body.setFillStyle(nextVariant === "brute" ? 0xff5a1a : 0xff2a1a, 1);
+      body.setFillStyle(0xff2a1a, 1);
       body.setStrokeStyle(3, 0xffe066, 1);
-      core.setFillStyle(nextVariant === "brute" ? 0xffe066 : 0xfff0aa, 1);
+      core.setFillStyle(0xfff0aa, 1);
       core.setScale(1.4);
       stateText.setColor("#ff3a1a");
       aggroExclaim.setVisible(true);
     } else if (nextEnemy.state === "returning") {
       ring.setFillStyle(0x2b466f, 0.3);
       ring.setStrokeStyle(2, 0x8ab8ff, 0.48);
-      body.setFillStyle(nextVariant === "brute" ? 0x597eb3 : 0x426ca8, 0.95);
+      body.setFillStyle(0x426ca8, 0.95);
       body.setStrokeStyle(2, 0xbfd8ff, 0.95);
       stateText.setColor("#cfe0ff");
       aggroExclaim.setVisible(false);
       core.setScale(1);
     } else {
-      ring.setFillStyle(nextVariant === "brute" ? 0x5e2b10 : 0x6f1414, 0.28);
-      ring.setStrokeStyle(2, nextVariant === "brute" ? 0xffc16e : 0xff7a7a, nextVariant === "brute" ? 0.52 : 0.4);
-      body.setFillStyle(nextVariant === "brute" ? 0x8f4d1e : 0xb12222, 0.95);
-      body.setStrokeStyle(2, nextVariant === "brute" ? 0xffddae : 0xf0b0b0, 0.95);
+      ring.setFillStyle(visual.idleRingColor, visual.idleRingAlpha);
+      ring.setStrokeStyle(2, visual.idleRingStroke, visual.idleRingStrokeAlpha);
+      body.setFillStyle(visual.idleBodyColor, 0.95);
+      body.setStrokeStyle(2, visual.idleBodyStroke, 0.95);
       stateText.setColor("#d7d7ff");
       aggroExclaim.setVisible(false);
       core.setScale(1);

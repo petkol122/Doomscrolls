@@ -11,6 +11,9 @@ export type { ContentValidationIssue, ContentValidationResult } from "./ContentV
 
 export { ContentValidationError } from "./ContentErrors";
 
+export { worlds } from "./data/worlds";
+export { continents } from "./data/continents";
+export { areas } from "./data/areas";
 export { origins } from "./data/origins";
 export { classes } from "./data/classes";
 export { passives } from "./data/passives";
@@ -29,10 +32,13 @@ export { levelTables } from "./data/levelTables";
 export { equipmentSlots } from "./data/equipmentSlots";
 export { vendorStocks } from "./data/vendorStocks";
 export { townServices } from "./data/townServices";
+export { WORLD_UNITS_PER_METER } from "./data/types";
 
 export type {
+  AreaContentDefinition,
   CharacterClassContentDefinition,
   ContentLocalizationKey,
+  ContinentContentDefinition,
   EnemyContentDefinition,
   EnemyCurrencyDropDefinition,
   EquipmentSlotCategory,
@@ -59,6 +65,10 @@ export type {
   VendorStockEntryDefinition,
   VisualAssetCategory,
   VisualAssetContentDefinition,
+  WorldContentDefinition,
+  WorldContentId,
+  ContinentContentId,
+  AreaContentId,
   WorldPropContentDefinition,
   WorldPropKind,
   ZoneClassification,
