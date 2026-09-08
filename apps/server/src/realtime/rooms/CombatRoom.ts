@@ -284,7 +284,7 @@ function sendEnemyAttackResolved(
  *    normal hits only, see that method's own doc comment). Enemy
  *    respawn uses the same 5 s cooldown and `applyEnemyDamage`
  *    respawnAtMs bookkeeping that `TownRoom` uses. A `request_respawn`
- *    handler redirects a downed player back to Nightmarket (Core 0.14)
+ *    handler redirects a downed player back to town (Core 0.14)
  *    so the combat loop's real stakes have a real consequence.
  *  - `onLeave` persists the latest HP / location / flask state
  *    through the same `CharacterService` call `TownRoom` uses.
@@ -580,7 +580,7 @@ export class CombatRoom extends Room {
     clearChatCooldown(_client.sessionId);
 
     // A `request_combat_return` handoff already persisted the correct
-    // destination (nightmarket) position via `updateCharacterRoomIntent`
+    // destination (town) position via `updateCharacterRoomIntent`
     // before approving the transition. Persisting here too, using this
     // room's own zoneId and the player's stale in-room x/y, would race
     // that write (the client legitimately calls `room.leave()` once it
@@ -1302,7 +1302,7 @@ export class CombatRoom extends Room {
 
       // Core 0.14 -- death in a real combat zone now has a real
       // consequence: instead of a free in-place respawn, defeat sends
-      // the player back to Nightmarket through the exact same handoff
+      // the player back to town through the exact same handoff
       // `request_combat_return` already uses for a voluntary gate-click
       // return (resolveCombatZoneReturnSpawnId + updateCharacterRoomIntent
       // + combat_town_return_approved). This is a structural consequence
@@ -1317,8 +1317,8 @@ export class CombatRoom extends Room {
       const returnSpawn = roomContentRegistry.spawnPoints.get(returnSpawnId as never);
       if (
         returnSpawn === undefined
-        || returnSpawn.zoneId !== "nightmarket"
-        || !isPositionInsideZoneBounds("nightmarket" as ZoneId, returnSpawn.x, returnSpawn.y)
+        || returnSpawn.zoneId !== "namesti_republiky"
+        || !isPositionInsideZoneBounds("namesti_republiky" as ZoneId, returnSpawn.x, returnSpawn.y)
       ) {
         return;
       }
@@ -1334,7 +1334,7 @@ export class CombatRoom extends Room {
         });
         await new CharacterService().updateCharacterRoomIntent(
           player.characterId,
-          "nightmarket",
+          "namesti_republiky",
           returnSpawn.x,
           returnSpawn.y,
           player.maxHp,
@@ -1352,9 +1352,9 @@ export class CombatRoom extends Room {
           objectId,
           fromRoomKind: "combat",
           toRoomKind: "town",
-          targetZoneId: "nightmarket" as ZoneId,
+          targetZoneId: "namesti_republiky" as ZoneId,
           targetSpawnKey: returnSpawnId,
-          message: "Defeated. Returning to Nightmarket.",
+          message: "Defeated. Returning to town.",
         };
         try { client.send("combat_town_return_approved", approved); } catch {}
       } catch {
@@ -1368,10 +1368,10 @@ export class CombatRoom extends Room {
           roomName: this.roomName,
           sessionId: client.sessionId,
           characterId: player.characterId,
-          targetZoneId: "nightmarket",
+          targetZoneId: "namesti_republiky",
           targetSpawnKey: returnSpawnId,
         },
-        "CombatRoom request_respawn accepted: death redirected to Nightmarket via combat-town handoff.",
+        "CombatRoom request_respawn accepted: death redirected to town via combat-town handoff.",
       );
     });
   }
@@ -1424,8 +1424,8 @@ export class CombatRoom extends Room {
       const returnSpawn = roomContentRegistry.spawnPoints.get(returnSpawnId as never);
       if (
         returnSpawn === undefined
-        || returnSpawn.zoneId !== "nightmarket"
-        || !isPositionInsideZoneBounds("nightmarket" as ZoneId, returnSpawn.x, returnSpawn.y)
+        || returnSpawn.zoneId !== "namesti_republiky"
+        || !isPositionInsideZoneBounds("namesti_republiky" as ZoneId, returnSpawn.x, returnSpawn.y)
       ) {
         reject("invalid_destination");
         return;
@@ -1440,7 +1440,7 @@ export class CombatRoom extends Room {
         });
         await new CharacterService().updateCharacterRoomIntent(
           player.characterId,
-          "nightmarket",
+          "namesti_republiky",
           returnSpawn.x,
           returnSpawn.y,
           Math.max(0, Math.min(player.maxHp, player.hp)),
@@ -1453,9 +1453,9 @@ export class CombatRoom extends Room {
           objectId,
           fromRoomKind: "combat",
           toRoomKind: "town",
-          targetZoneId: "nightmarket" as ZoneId,
+          targetZoneId: "namesti_republiky" as ZoneId,
           targetSpawnKey: returnSpawnId,
-          message: "Returning to Nightmarket.",
+          message: "Returning to town.",
         };
         try { client.send("combat_town_return_approved", approved); } catch {}
       } catch {
@@ -1471,7 +1471,7 @@ export class CombatRoom extends Room {
           sessionId: client.sessionId,
           characterId: player.characterId,
           objectId,
-          targetZoneId: "nightmarket",
+          targetZoneId: "namesti_republiky",
           targetSpawnKey: returnSpawnId,
         },
         "CombatRoom request_combat_return approved for conservative leave-and-join handoff back to TownRoom.",

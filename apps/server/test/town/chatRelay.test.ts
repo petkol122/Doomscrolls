@@ -46,22 +46,22 @@ describe("TownRoom room-local chat relay", () => {
     const clientA = await colyseus.sdk.joinOrCreate("town", {
       userId: TEST_USER_ID,
       characterId: TEST_CHARACTER_ID,
-      requestedZoneId: "nightmarket" as ZoneId,
+      requestedZoneId: "namesti_republiky" as ZoneId,
     });
     const clientB = await colyseus.sdk.joinOrCreate("town", {
       userId: SECOND_TEST_USER_ID,
       characterId: TEST_IRONCLAD_CHARACTER_ID,
-      requestedZoneId: "nightmarket" as ZoneId,
+      requestedZoneId: "namesti_republiky" as ZoneId,
     });
 
     const bReceived = waitForMessage<ChatMessageServerMessage>(clientB, "chat_message");
     const aReceived = waitForMessage<ChatMessageServerMessage>(clientA, "chat_message");
 
-    clientA.send("request_chat", { type: "request_chat", text: "hello nightmarket" });
+    clientA.send("request_chat", { type: "request_chat", text: "hello town" });
 
     const [bMessage, aMessage] = await Promise.all([bReceived, aReceived]);
 
-    expect(bMessage.text).toBe("hello nightmarket");
+    expect(bMessage.text).toBe("hello town");
     expect(bMessage.displayName).toBe("Test Gravewalker");
     expect(bMessage.sessionId).toBe(clientA.sessionId);
     expect(typeof bMessage.sentAt).toBe("number");
@@ -71,7 +71,7 @@ describe("TownRoom room-local chat relay", () => {
     expect((bMessage as unknown as Record<string, unknown>).classKey).toBeUndefined();
     expect((bMessage as unknown as Record<string, unknown>).level).toBeUndefined();
 
-    expect(aMessage.text).toBe("hello nightmarket");
+    expect(aMessage.text).toBe("hello town");
     expect(aMessage.sessionId).toBe(clientA.sessionId);
   });
 
@@ -79,7 +79,7 @@ describe("TownRoom room-local chat relay", () => {
     const clientA = await colyseus.sdk.joinOrCreate("town", {
       userId: TEST_USER_ID,
       characterId: TEST_CHARACTER_ID,
-      requestedZoneId: "nightmarket" as ZoneId,
+      requestedZoneId: "namesti_republiky" as ZoneId,
     });
 
     const rejected = waitForMessage<RequestChatRejectedServerMessage>(
@@ -95,7 +95,7 @@ describe("TownRoom room-local chat relay", () => {
     const clientA = await colyseus.sdk.joinOrCreate("town", {
       userId: TEST_USER_ID,
       characterId: TEST_CHARACTER_ID,
-      requestedZoneId: "nightmarket" as ZoneId,
+      requestedZoneId: "namesti_republiky" as ZoneId,
     });
 
     const rejected = waitForMessage<RequestChatRejectedServerMessage>(
@@ -111,7 +111,7 @@ describe("TownRoom room-local chat relay", () => {
     const clientA = await colyseus.sdk.joinOrCreate("town", {
       userId: TEST_USER_ID,
       characterId: TEST_CHARACTER_ID,
-      requestedZoneId: "nightmarket" as ZoneId,
+      requestedZoneId: "namesti_republiky" as ZoneId,
     });
 
     const firstAccepted = waitForMessage<ChatMessageServerMessage>(clientA, "chat_message");

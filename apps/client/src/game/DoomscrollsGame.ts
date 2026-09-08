@@ -4,7 +4,6 @@ import { AuthScene } from "./scenes/AuthScene";
 import { AccountShellScene } from "./scenes/AccountShellScene";
 import { BootScene } from "./scenes/BootScene";
 import { PreloadScene } from "./scenes/PreloadScene";
-import { WorldMapScene } from "./scenes/WorldMapScene";
 import { WorldSessionScene } from "./scenes/WorldSessionScene";
 
 export function createDoomscrollsGame(parent: string): Phaser.Game {
@@ -22,6 +21,6 @@ export function createDoomscrollsGame(parent: string): Phaser.Game {
       width: window.innerWidth,
       height: window.innerHeight
     },
-    scene: [BootScene, PreloadScene, AuthScene, AccountShellScene, WorldMapScene, WorldSessionScene]
+    scene: [BootScene, PreloadScene, AuthScene, AccountShellScene, WorldSessionScene]
   });
 }

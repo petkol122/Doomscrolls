@@ -5,31 +5,36 @@ const zoneId = (value: string): ZoneId => value as ZoneId;
 
 export const zones = [
   {
-    // Core 0.1: nightmarket is test_hybrid because it has enemies despite being a town room.
-    // Long-term, towns/villages should be safe_hub with no enemy spawns.
-    id: "nightmarket",
-    zoneId: zoneId("nightmarket"),
-    nameKey: "zone.nightmarket.name",
-    descriptionKey: "zone.nightmarket.description",
+    // Core 0.34 — Namesti Republiky: fresh hub zone replacing Nightmarket.
+    // The square itself keeps its original bounds-relative placement
+    // (centered at 2500,1800 -- see spawnPoints.ts); no cathedral/shops/
+    // hub services yet (deliberately separate follow-up builds).
+    //
+    // Core 0.35 — real city-centre geometry. Bounds expanded to cover the
+    // square's immediate bordering blocks (real building footprints +
+    // street layout, fetched from Overpass API and converted at
+    // WORLD_UNITS_PER_METER, see types.ts) -- streets/building geometry
+    // only, not services; this is the first ring only, expanded
+    // incrementally outward in later builds. World-unit convention for
+    // this build's new geometry: origin (2500,1800) = the square's real
+    // center; +X = east, +Y = south (the pre-existing square itself does
+    // not encode true compass orientation, so this convention governs
+    // only content added from Core 0.35 onward).
+    id: "namesti_republiky",
+    zoneId: zoneId("namesti_republiky"),
+    nameKey: "zone.namesti_republiky.name",
+    descriptionKey: "zone.namesti_republiky.description",
     roomType: "town",
-    classification: "test_hybrid",
+    classification: "safe_hub",
     maxPlayers: 30,
-    enemyIds: ["trashboar_runt", "trashboar_brute", "trashboar_skitter"],
-    transitionZoneIds: ["blackwire_sewers", "static_yard", "cinderworks", "saltmere_docks"],
-    mapKey: "map_nightmarket_placeholder",
-    // Core 0.32 — World Map Foundation: migrates under the real Pilsen area.
+    enemyIds: [],
+    // No combat-zone gates in this build -- see docs on the Nightmarket
+    // removal/Namesti Republiky build for why combat access is deferred.
+    transitionZoneIds: [],
+    mapKey: "map_namesti_republiky_placeholder",
     areaId: "pilsen",
-    // Core 0.33 — Nightmarket Real City-Center Expansion. Bounds now cover
-    // Plzen's real historic-core footprint (the Okruzni mestske sady park
-    // ring, ~737m x 757m, measured from real OpenStreetMap data) at
-    // WORLD_UNITS_PER_METER (25.9 units/meter, see types.ts). See
-    // docs/CORE_BUILD_0_33_PLAN.md for the full derivation.
-    bounds: { minX: 0, maxX: 19080, minY: 0, maxY: 19613 },
-    // Task 303 / Task 328 — Physical town rest area, originally sized to
-    // the pre-0.33 hub; Core 0.33 remapped its corners through the same
-    // hub transform as every other service-cluster prop, so it still
-    // exactly covers the safe/rest marker ring at the new scale.
-    restAreaBounds: { minX: 7631, maxX: 10431, minY: 9398, maxY: 13033 }
+    bounds: { minX: -2238, maxX: 7303, minY: -3330, maxY: 6935 },
+    groundTileKey: "ground_stone"
   },
   {
     id: "blackwire_sewers",
@@ -40,7 +45,7 @@ export const zones = [
     classification: "combat",
     maxPlayers: 4,
     enemyIds: ["trashboar_runt", "trashboar_skitter", "trashboar_brute"],
-    transitionZoneIds: ["nightmarket"],
+    transitionZoneIds: ["namesti_republiky"],
     mapKey: "map_blackwire_sewers_placeholder",
     areaId: "pilsen",
     bounds: { minX: 0, maxX: 800, minY: 0, maxY: 600 },
@@ -65,7 +70,7 @@ export const zones = [
     // Static Yard's own heavy anchor; the zone's roster is now fully
     // its own, matching every other combat zone.
     enemyIds: ["static_wretch", "arc_sentinel", "yard_drudge"],
-    transitionZoneIds: ["nightmarket"],
+    transitionZoneIds: ["namesti_republiky"],
     mapKey: "map_static_yard_placeholder",
     areaId: "pilsen",
     bounds: { minX: 0, maxX: 800, minY: 0, maxY: 600 }
@@ -84,7 +89,7 @@ export const zones = [
     classification: "combat",
     maxPlayers: 4,
     enemyIds: ["slag_hound", "foundry_warden", "ash_rat"],
-    transitionZoneIds: ["nightmarket"],
+    transitionZoneIds: ["namesti_republiky"],
     mapKey: "map_cinderworks_placeholder",
     areaId: "pilsen",
     bounds: { minX: 0, maxX: 800, minY: 0, maxY: 600 }
@@ -105,7 +110,7 @@ export const zones = [
     classification: "combat",
     maxPlayers: 4,
     enemyIds: ["brine_crawler", "tide_stalker", "drowned_hauler"],
-    transitionZoneIds: ["nightmarket"],
+    transitionZoneIds: ["namesti_republiky"],
     mapKey: "map_saltmere_docks_placeholder",
     areaId: "pilsen",
     bounds: { minX: 0, maxX: 800, minY: 0, maxY: 600 }

@@ -129,7 +129,7 @@ const DEFAULT_VARIANT_VISUAL: VariantVisual = {
 };
 
 const VARIANT_VISUALS: Readonly<Record<string, VariantVisual>> = {
-  // ── Sewer family (Blackwire Sewers / Nightmarket's reused ambient pockets) ──
+  // ── Sewer family (Blackwire Sewers ambient pockets) ──
   enemy_trashboar_runt_placeholder: {
     ...SIZE_COMMON,
     idleBodyColor: 0xb12222, idleBodyStroke: 0xf0b0b0,

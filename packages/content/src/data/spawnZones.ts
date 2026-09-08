@@ -49,45 +49,6 @@ export const spawnZones = [
     minY: 340,
     maxY: 470,
   },
-  {
-    // First combat pocket around sewer edge marker 01, pushed farther from the
-    // enlarged town hub so hostile enemies do not visually crowd services.
-    // Core 0.33 — remapped through the Blackwire-corridor transform (see
-    // docs/CORE_BUILD_0_33_PLAN.md Question 3): same escalating-distance
-    // pacing, now oriented toward the real Smetanovy sady bearing.
-    id: "sewer_edge_trashboar_runt_zone",
-    zoneId: "nightmarket",
-    enemyId: "trashboar_runt" as EnemyId,
-    count: 3,
-    minX: 5438,
-    maxX: 6350,
-    minY: 14804,
-    maxY: 15570,
-  },
-  {
-    // Trashboar Skitter pocket — earlier approach pocket, but still clearly
-    // detached from the service hub and from the Runt cluster.
-    id: "sewer_edge_trashboar_skitter_zone",
-    zoneId: "nightmarket",
-    enemyId: "trashboar_skitter" as EnemyId,
-    count: 2,
-    minX: 6613,
-    maxX: 7269,
-    minY: 13486,
-    maxY: 14142,
-  },
-  {
-    // Deepest south-east pocket. Stays meaningfully farther from both earlier
-    // enemy groups so the route reads as escalating distance/depth.
-    id: "sewer_edge_trashboar_brute_zone",
-    zoneId: "nightmarket",
-    enemyId: "trashboar_brute" as EnemyId,
-    count: 1,
-    minX: 3887,
-    maxX: 5091,
-    minY: 16440,
-    maxY: 17352,
-  },
   // ── Core 0.6 — Static Yard combat zone pockets ──
   {
     // Entry-side wretch cluster. Kept clear of the COMBAT_SPAWN_BOX

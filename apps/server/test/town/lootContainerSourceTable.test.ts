@@ -1,13 +1,6 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { ColyseusTestServer } from "@colyseus/testing";
-import type { ZoneId } from "@doomscrolls/shared";
-import type { RequestInteractClientMessage } from "@doomscrolls/shared";
+import { describe, expect, it } from "vitest";
 import { contentRegistry } from "@doomscrolls/content";
 import { rollLootFromTableId } from "../../src/realtime/rooms/rollLoot";
-import type { TownRoomState } from "../../src/realtime/rooms/TownRoomState";
-import { createTestRealtimeServer } from "../support/testRealtimeServer";
-import { waitForMessage } from "../support/waitForMessage";
-import { TEST_CHARACTER_ID, TEST_USER_ID } from "../support/fixtures";
 
 /**
  * Core 0.33 follow-up -- `interactValidation.ts`'s loot-container handler
@@ -76,64 +69,5 @@ describe("loot container source table", () => {
       cinderExclusiveItemIds.includes(itemId as never),
     );
     expect(sawCinderExclusiveItem).toBe(true);
-  });
-
-  describe("real Nightmarket container interact flow", () => {
-    let colyseus: ColyseusTestServer;
-
-    beforeAll(async () => {
-      colyseus = await createTestRealtimeServer(2599);
-    });
-
-    afterEach(async () => {
-      await colyseus.cleanup();
-    });
-
-    afterAll(async () => {
-      await colyseus.shutdown();
-    });
-
-    it("the shipped nightmarket_loot_container_01 reads its lootTableId from content, not a hardcoded enemy id", async () => {
-      // Confirms the data wiring itself (Question 3's fix target),
-      // not just an item that happens to come out right.
-      const containerProp = contentRegistry.worldProps.get("nightmarket_loot_container_01");
-      expect(containerProp?.lootTableId).toBe("sewer_starter_loot");
-
-      const client = await colyseus.sdk.joinOrCreate("town", {
-        userId: TEST_USER_ID,
-        characterId: TEST_CHARACTER_ID,
-        requestedZoneId: "nightmarket" as ZoneId,
-      });
-
-      const room = colyseus.getRoomById<TownRoomState>(client.roomId);
-      const player = room.state.playerPresence.get(client.sessionId);
-      expect(player).toBeDefined();
-      if (player === undefined) {
-        throw new Error("expected joined player to have a presence entry");
-      }
-      // The loot container's own real world position (worldProps.ts).
-      player.x = 8131;
-      player.y = 12351;
-
-      const interactMessage: RequestInteractClientMessage = {
-        type: "request_interact",
-        objectId: "nightmarket_loot_container_01",
-      };
-      client.send("request_interact", interactMessage);
-      await waitForMessage(client, "interact_response");
-
-      const sewerTable = contentRegistry.lootTables.get("sewer_starter_loot" as never);
-      if (sewerTable === undefined) {
-        throw new Error("expected sewer_starter_loot to exist in content");
-      }
-      const sewerItemIds = new Set(sewerTable.entries.map((entry) => entry.itemId));
-
-      // WorldLoot has no discriminant "kind" field -- item vs currency
-      // drops are distinguished by whether itemId is a non-empty string
-      // (see WorldLoot.ts's own class comment).
-      const spawnedItems = [...room.state.worldLoot.values()].filter((loot) => loot.itemId !== "");
-      expect(spawnedItems.length).toBe(1);
-      expect(sewerItemIds.has(spawnedItems[0]!.itemId as never)).toBe(true);
-    });
   });
 });

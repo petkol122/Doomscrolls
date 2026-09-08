@@ -12,7 +12,7 @@ import type { ZoneContentBounds, ZoneContentId } from "@doomscrolls/content";
  * client UI never crashes on missing content.
  */
 export function resolveWorldAreaBounds(
-  zoneId: string = "nightmarket",
+  zoneId: string = "namesti_republiky",
 ): ZoneContentBounds {
   const zone = contentRegistry.zones.get(zoneId as ZoneContentId);
 

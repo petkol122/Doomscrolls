@@ -106,7 +106,7 @@ export interface InteractObjectIntent {
 
 /**
  * Combat-zone return gate — the player clicked the `combat_return_gate`
- * interactable that returns them to Nightmarket. Kept distinct from
+ * interactable that returns them to town. Kept distinct from
  * `InteractObjectIntent` because it dispatches a different network
  * message (`request_combat_return`, handled only by `CombatRoom`) --
  * routing it through the generic `request_interact` message would send

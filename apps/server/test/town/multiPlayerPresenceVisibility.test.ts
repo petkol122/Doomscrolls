@@ -16,7 +16,7 @@ const SECOND_TEST_USER_ID = "test-user-2" as UserId;
  * Core 0.27 -- proves the multiplayer-visibility mechanism that was
  * architecturally present but never exercised: TownRoom is registered
  * with no `.filterBy` (see createRealtimeServer.ts) and only one town
- * zone (`nightmarket`) exists, so two real clients already land in the
+ * zone (`namesti_republiky`) exists, so two real clients already land in the
  * same live room instance and Colyseus already syncs the *entire*
  * `playerPresence` MapSchema to both -- nothing about that data flow is
  * new. What was never tested is that a second client's own *replicated*
@@ -44,12 +44,12 @@ describe("TownRoom multiplayer presence visibility", () => {
     const clientA = await colyseus.sdk.joinOrCreate("town", {
       userId: TEST_USER_ID,
       characterId: TEST_CHARACTER_ID,
-      requestedZoneId: "nightmarket" as ZoneId,
+      requestedZoneId: "namesti_republiky" as ZoneId,
     });
     const clientB = await colyseus.sdk.joinOrCreate("town", {
       userId: SECOND_TEST_USER_ID,
       characterId: TEST_IRONCLAD_CHARACTER_ID,
-      requestedZoneId: "nightmarket" as ZoneId,
+      requestedZoneId: "namesti_republiky" as ZoneId,
     });
 
     // Same live room instance -- the no-`.filterBy` finding from the plan,
@@ -104,12 +104,12 @@ describe("TownRoom multiplayer presence visibility", () => {
     const clientA = await colyseus.sdk.joinOrCreate("town", {
       userId: TEST_USER_ID,
       characterId: TEST_CHARACTER_ID,
-      requestedZoneId: "nightmarket" as ZoneId,
+      requestedZoneId: "namesti_republiky" as ZoneId,
     });
     const clientB = await colyseus.sdk.joinOrCreate("town", {
       userId: SECOND_TEST_USER_ID,
       characterId: TEST_IRONCLAD_CHARACTER_ID,
-      requestedZoneId: "nightmarket" as ZoneId,
+      requestedZoneId: "namesti_republiky" as ZoneId,
     });
 
     await waitUntil(() => clientB.state.playerPresence?.get(clientA.sessionId) !== undefined);

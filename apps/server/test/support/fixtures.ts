@@ -37,7 +37,7 @@ export function buildTestCharacterDetails(
     classKey: "gravewalker",
     level: 3,
     xp: 0,
-    currentZoneId: "nightmarket" as ZoneId,
+    currentZoneId: "namesti_republiky" as ZoneId,
     moneyCopper: 0,
     stats: TEST_CHARACTER_STATS,
     createdAt: "2026-01-01T00:00:00.000Z" as CharacterDetails["createdAt"],

@@ -14,7 +14,7 @@ export { CombatRoomState } from "./CombatRoomState";
 
 // Spawn point resolution helper (Task 023.2).
 export {
-  NIGHTMARKET_DEFAULT_SPAWN_POINT_ID,
+  DEFAULT_TOWN_SPAWN_POINT_ID,
   resolveTownSpawnPoint,
 } from "./resolveTownSpawnPoint";
 

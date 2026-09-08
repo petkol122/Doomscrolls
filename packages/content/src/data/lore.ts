@@ -63,13 +63,6 @@ export const lore = [
     bodyKey: "lore.class_ironclad.body"
   },
   {
-    id: "zone_nightmarket",
-    targetKind: "zone",
-    targetId: "nightmarket",
-    titleKey: "lore.zone_nightmarket.title",
-    bodyKey: "lore.zone_nightmarket.body"
-  },
-  {
     id: "zone_blackwire_sewers",
     targetKind: "zone",
     targetId: "blackwire_sewers",

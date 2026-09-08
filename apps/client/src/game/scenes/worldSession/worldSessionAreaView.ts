@@ -867,7 +867,7 @@ export function createWorldSessionAreaView(
     latestRoom = nextRoom;
     const zoneId = typeof nextRoom.state?.zoneId === "string" && nextRoom.state.zoneId.length > 0
       ? nextRoom.state.zoneId
-      : "nightmarket";
+      : "namesti_republiky";
     const bounds = resolveWorldAreaBounds(zoneId);
     const presence = getTownRoomPresence(nextRoom.state as unknown as Record<string, unknown>);
     selfSessionId = nextRoom.sessionId;
@@ -1599,7 +1599,23 @@ export function createWorldSessionAreaView(
       corpseGlowTweens.clear();
       floatingDamageView.destroy();
       cursorFeedback.destroy();
-      restAreaIndicator.setText("");
+      // Root cause (see docs/WORLDSESSIONSCENE_TEARDOWN_CRASH_INVESTIGATION.md):
+      // Phaser's own internal Phaser.GameObjects.DisplayList#shutdown is
+      // registered on Phaser.Scenes.Events.SHUTDOWN during every scene
+      // start(), always BEFORE this view's own create()-registered
+      // teardown listener -- so by the time this destroy() runs,
+      // restAreaIndicator (added to worldContainer, a top-level scene
+      // child) has ALREADY been destroyed by Phaser itself. Every other
+      // call in this function is a `.destroy()` call, which Phaser
+      // GameObjects self-guard against double-invocation (`if
+      // (!this.scene) return;`), so those are harmlessly redundant. This
+      // was the one exception: `.setText()` is a mutation, not a
+      // destroy, and is not self-guarded -- calling it on an
+      // already-destroyed Text throws inside Phaser's own frame/texture
+      // code. It served no purpose even in the case it doesn't crash
+      // (clearing text immediately before the object's own destruction
+      // moments later has no visible effect either way), so removed
+      // rather than guarded.
       selfScreenPosition = null;
       container.destroy(true);
     },

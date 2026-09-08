@@ -413,7 +413,7 @@ function renderHudContent(
 
   if (selfPresence?.lifeState === "downed") {
     // Core 0.14 -- CombatRoom's downed state now sends the player back
-    // to Nightmarket on respawn (a real death consequence) instead of
+    // to town on respawn (a real death consequence) instead of
     // healing them in place; the copy here reflects that so the button
     // isn't describing a different mechanic than the one it triggers.
     // TownRoom's downed state is unaffected (its own corpse-recovery
@@ -1622,7 +1622,7 @@ function createObjectiveTrackerCard(
   card.appendChild(trackerLine);
 
   const subtitleLine = document.createElement("div");
-  subtitleLine.textContent = objective.location ?? "Nightmarket";
+  subtitleLine.textContent = objective.location ?? "Town";
   subtitleLine.style.fontSize = "10px";
   subtitleLine.style.color = "#a88d63";
   card.appendChild(subtitleLine);
@@ -1750,7 +1750,7 @@ function resolveObjectiveTrackerViewModel(
     target: objective.target,
     completed: objective.completed,
     ...(isReadyToTurnIn ? { readyToTurnIn: true } : {}),
-    location: subtitle ?? "The Nightmarket",
+    location: subtitle ?? "Town",
     ...(objective.xpReward !== undefined && { xpReward: objective.xpReward }),
     ...(objective.copperReward !== undefined && { copperReward: objective.copperReward }),
   };

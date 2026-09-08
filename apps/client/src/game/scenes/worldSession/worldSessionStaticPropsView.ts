@@ -12,6 +12,13 @@ import {
 interface StaticPropScreenSnapshot extends WorldPropContentDefinition {
   readonly screenX: number;
   readonly screenY: number;
+  /**
+   * Core 0.35 -- only present for `points`-bearing kinds (building
+   * footprints, street surfaces). Each point is already projected and
+   * expressed relative to (screenX, screenY), so `buildPropContainer`
+   * can hand them straight to a Phaser polygon local to the container.
+   */
+  readonly screenPoints?: readonly { readonly x: number; readonly y: number }[];
 }
 
 export interface WorldSessionStaticPropsView {
@@ -142,10 +149,22 @@ function projectProp(
     projection.projectionMode,
   );
 
+  const screenPoints = prop.points?.map((point) => {
+    const projected = worldToScreenActiveProjection(
+      point.x,
+      point.y,
+      projection.bounds,
+      projection.viewport,
+      projection.projectionMode,
+    );
+    return { x: projected.x - screenPosition.x, y: projected.y - screenPosition.y };
+  });
+
   return {
     ...prop,
     screenX: screenPosition.x,
     screenY: screenPosition.y,
+    ...(screenPoints !== undefined ? { screenPoints } : {}),
   };
 }
 
@@ -161,13 +180,20 @@ function buildPropContainer(
   prop: StaticPropScreenSnapshot,
 ): Phaser.GameObjects.Container {
   const propContainer = scene.add.container(prop.screenX, prop.screenY);
-  const shadow = scene.add.ellipse(0, 12, 42, 16, 0x000000, 0.18);
   const isAmbientCreature = prop.kind === "ambient_rat" || prop.kind === "ambient_pig" || prop.kind === "ambient_chicken";
   const isAreaLabel = prop.kind === "area_label";
   const isCombatEdge = prop.kind === "combat_edge";
   const isBoundaryMarker = prop.kind === "boundary_marker";
   const isSafeArea = prop.kind === "safe_area_marker";
   const isRestArea = prop.kind === "rest_area_marker";
+  const isBuildingFootprint = prop.kind === "building_footprint";
+  const isStreetSurface = prop.kind === "street_surface";
+  // A generic drop-shadow ellipse makes no sense under an arbitrarily
+  // large real building/street polygon (it's sized for small point
+  // props), and streets are flat ground -- neither casts one.
+  const shadow = isBuildingFootprint || isStreetSurface
+    ? null
+    : scene.add.ellipse(0, 12, 42, 16, 0x000000, 0.18);
   const labelColor = isSafeArea ? "#7ab87a" : isRestArea ? "#7ad8c0" : isAreaLabel ? "#8a7f6e" : (isCombatEdge || isBoundaryMarker) ? "#cc6666" : isAmbientCreature ? "#f2d96b" : "#c8b08d";
   const displayLabel = resolvePropLabel(prop);
   const labelFontSize = isAmbientCreature ? "9px" : isAreaLabel ? "13px" : "11px";
@@ -185,7 +211,9 @@ function buildPropContainer(
   // ambient/neutral status, keeping the label layer less noisy.
   const stateLabel: null = null;
 
-  propContainer.add(shadow);
+  if (shadow !== null) {
+    propContainer.add(shadow);
+  }
   // Ambient creature shadow stays minimal to reduce visual noise.
 
   switch (prop.kind) {
@@ -322,13 +350,51 @@ function buildPropContainer(
       propContainer.add([bg, deco]);
       break;
     }
+    case "building_footprint": {
+      // Real footprint, solid opaque mass -- deliberately no door/window
+      // graphics and no interact affordance of any kind (this kind is
+      // never registered as an interactable server-side either), so
+      // nothing here should visually suggest an entrance exists yet.
+      const flat = buildPolygonPoints(prop.screenPoints);
+      if (flat !== null) {
+        const wall = scene.add.polygon(0, 0, flat, 0x4a3f34, 0.96).setOrigin(0, 0);
+        wall.setStrokeStyle(2, 0x2c241c, 0.9);
+        propContainer.add(wall);
+      }
+      break;
+    }
+    case "street_surface": {
+      const flat = buildPolygonPoints(prop.screenPoints);
+      if (flat !== null) {
+        const surface = scene.add.polygon(0, 0, flat, 0x54504a, 0.9).setOrigin(0, 0);
+        surface.setStrokeStyle(1, 0x3e3b36, 0.4);
+        propContainer.add(surface);
+      }
+      break;
+    }
   }
 
   if (stateLabel !== null) {
     propContainer.add(stateLabel);
   }
-  if (!isAreaLabel && !isBoundaryMarker) {
+  if (!isAreaLabel && !isBoundaryMarker && !isStreetSurface && displayLabel.length > 0) {
     propContainer.add(label);
   }
   return propContainer;
+}
+
+/**
+ * Flattens projected polygon points into the `[x1, y1, x2, y2, ...]`
+ * shape `scene.add.polygon` expects. Returns null when there aren't
+ * enough points to form a shape (should never happen for valid
+ * content -- ContentValidation.ts requires 3+ -- but rendering must
+ * stay defensive against bad/missing data).
+ */
+function buildPolygonPoints(
+  screenPoints: StaticPropScreenSnapshot["screenPoints"],
+): number[] | null {
+  if (screenPoints === undefined || screenPoints.length < 3) {
+    return null;
+  }
+  return screenPoints.flatMap((point) => [point.x, point.y]);
 }

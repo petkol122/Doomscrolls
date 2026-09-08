@@ -71,6 +71,7 @@ export type {
   AreaContentId,
   WorldPropContentDefinition,
   WorldPropKind,
+  WorldPropPoint,
   ZoneClassification,
   ZoneContentBounds,
   ZoneContentDefinition,

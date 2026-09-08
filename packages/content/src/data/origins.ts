@@ -6,7 +6,7 @@ export const origins = [
     nameKey: "origin.sewer_dweller.name",
     descriptionKey: "origin.sewer_dweller.description",
     passiveIds: ["nightvision"],
-    startingZoneId: "nightmarket",
+    startingZoneId: "namesti_republiky",
     allowedClassIds: ["gravewalker", "ironclad"],
     baseStats: { power: 1, speed: 2, mind: 1, toughness: 2 }
   }

@@ -9,7 +9,7 @@ export const en = {
   "continent.europe.description": "Home to the one real area currently reachable.",
 
   "area.pilsen.name": "Pilsen",
-  "area.pilsen.description": "A city built over its own sewers, wiring, furnaces and docks -- exactly the place the Nightmarket and its four combat zones already are.",
+  "area.pilsen.description": "A city built over its own sewers, wiring, furnaces and docks -- exactly the place Namesti Republiky and its four combat zones already are.",
 
   "origin.sewer_dweller.name": "Sewer Dweller",
   "origin.sewer_dweller.description":
@@ -64,9 +64,9 @@ export const en = {
   "enemy.arc_sentinel.description":
     "Stands post where the current runs strongest, and hits like it's part of the circuit.",
 
-  "zone.nightmarket.name": "The Nightmarket",
-  "zone.nightmarket.description":
-    "A hidden market under dead neon where people buy protection, rumors and things that should not have barcodes.",
+  "zone.namesti_republiky.name": "Namesti Republiky",
+  "zone.namesti_republiky.description":
+    "The historic main square at the heart of Pilsen.",
 
   "zone.blackwire_sewers.name": "Blackwire Sewers",
   "zone.blackwire_sewers.description":
@@ -289,8 +289,8 @@ export const en = {
   // Progress feedback (sent as interact_response when the player interacts while active)
   "objective.progress_feedback": "[ {title} ] {current}/{target} {targetEnemy} killed.",
   // Feedback shown when the objective kill target is met
-  "objective.ready_to_turn_in": "All {targetEnemy} eliminated! Return to the Notice Board in Nightmarket Services to collect your reward.",
-  "objective.ready_to_turn_in_return_nightmarket": "[ {title} ] Objective complete. Return to Nightmarket and claim your reward at the Notice Board.",
+  "objective.ready_to_turn_in": "All {targetEnemy} eliminated! Return to the Notice Board in town to collect your reward.",
+  "objective.ready_to_turn_in_return_town": "[ {title} ] Objective complete. Return to town and claim your reward at the Notice Board.",
   "objective.ready_to_turn_in_notice_board": "[ {title} ] Objective complete. Interact with the Notice Board to claim your reward.",
   // Turn-in reward feedback uses the same keys but the text is clearer now
   "objective.turn_in_complete_reward": "Turned in! +{xpReward} XP, +{copperReward} copper",
@@ -324,7 +324,7 @@ export const en = {
   "objective.panel.state": "State",
   "objective.panel.progress": "Progress",
   "objective.panel.turn_in": "Turn-in",
-  "objective.panel.ready_to_turn_in_hint": "Ready to turn in at the Nightmarket Notice Board.",
+  "objective.panel.ready_to_turn_in_hint": "Ready to turn in at the town Notice Board.",
 
   "auth.username": "Username",
   "auth.password": "Password",
@@ -369,7 +369,6 @@ export const en = {
   "world_entry.view_world_map": "View World Map",
   "world_entry.coming_next": "World entry coming next.",
   "world_entry.no_character_selected": "Select a character before entering the world.",
-  "world_entry.connected": "Connected to The Nightmarket.",
   "world_entry.join_failed": "Could not enter world.",
   "world_entry.leave_world": "Leave",
 
@@ -409,7 +408,7 @@ export const en = {
   "world_session.projection_click_disabled_preview": "Disabled in isometric preview until safe screen-to-world mapping exists.",
   "world_session.downed_notice": "You are downed.",
   "world_session.downed_respawn_hint": "Respawn at safe point.",
-  "world_session.downed_respawn_hint_combat": "Defeat sends you back to Nightmarket.",
+  "world_session.downed_respawn_hint_combat": "Defeat sends you back to town.",
   "world_session.respawn_to_town": "Return to Town",
   "world_session.corpse_marker": "Corpse remains.",
   "world_session.damage_feedback": "-{damage} HP  ({hp} remaining)",
@@ -562,12 +561,7 @@ export const en = {
   "error.duplicate_character_name": "That character name is already used by this account.",
   "error.missing_localization_key": "Missing localization key: {key}",
 
-  "spawn.nightmarket.default": "Nightmarket Arrival",
-  "spawn.nightmarket.blackwire_combat_entry": "Blackwire Combat Entry",
-  "spawn.nightmarket.services_return": "Nightmarket Services Return",
-  "spawn.nightmarket.static_yard_combat_entry": "Static Yard Combat Entry",
-  "spawn.nightmarket.cinderworks_combat_entry": "Cinderworks Combat Entry",
-  "spawn.nightmarket.saltmere_docks_combat_entry": "Saltmere Docks Combat Entry",
+  "spawn.namesti_republiky.default": "Namesti Republiky Arrival",
 
   "world_prop.loot_container.name": "Loot Container",
   "world_prop.loot_container.description": "A shared container that may hold valuable finds.",
@@ -635,14 +629,7 @@ export const en = {
   "town_service.waypoint.rejected.destination_not_activated": "Destination locked or unavailable.",
   "town_service.waypoint.rejected.invalid_destination": "Invalid destination.",
   "town_service.waypoint.rejected.travel_failed": "Travel failed.",
-  "waypoint.destination.nightmarket_arrival": "Nightmarket Arrival",
-  "waypoint.destination.nightmarket_blackwire_combat_edge": "Blackwire Combat Edge",
-  "waypoint.destination.nightmarket_static_yard_combat_edge": "Static Yard Combat Edge",
-  "waypoint.destination.nightmarket_cinderworks_combat_edge": "Cinderworks Combat Edge",
-  "waypoint.destination.nightmarket_saltmere_docks_combat_edge": "Saltmere Docks Combat Edge",
-
   "town_service.route.blackwire_gate.prompt": "The Blackwire gate leads toward a hostile sewer edge.",
-  "town_service.route.blackwire_return.prompt": "Return to the Nightmarket service hub.",
   "town_service.route.static_yard_gate.prompt": "The Static Yard gate leads toward a live-wired tram depot.",
   "town_service.route.cinderworks_gate.prompt": "The Cinderworks gate leads toward a smelting yard that never fully cooled.",
   "town_service.route.saltmere_docks_gate.prompt": "The Saltmere Docks gate leads toward a flooded pier that never fully drained.",
@@ -655,11 +642,10 @@ export const en = {
   "town_service.route.rejected.travel_failed": "Route travel failed.",
 
   "zone.blackwire_sewer_edge.name": "→ Blackwire Sewer Edge",
-  "zone.blackwire_sewer_edge.description": "The boundary where Nightmarket alleys give way to sewer tunnels crawling with trashboars.",
+  "zone.blackwire_sewer_edge.description": "The boundary where town streets give way to sewer tunnels crawling with trashboars.",
 
   // ── World prop labels ──
   "world_prop.safe_area.label": "Safe Area",
-  "world_prop.area.nightmarket_services.label": "Nightmarket Services",
   "world_prop.area.sewer_approach.label": "Sewer Approach",
   "world_prop.area.skitter_warren.label": "Skitter Warren",
   "world_prop.area.blackwire_sewer_edge.label": "Blackwire Sewer Edge",
@@ -680,7 +666,7 @@ export const en = {
   "world_prop.cinderworks_gate.label": "Cinderworks Gate",
   "world_prop.saltmere_docks_waypoint.label": "Saltmere Docks Waypoint",
   "world_prop.saltmere_docks_gate.label": "Saltmere Docks Gate",
-  "world_prop.combat_return_gate.label": "← Return to Nightmarket",
+  "world_prop.combat_return_gate.label": "← Return to Town",
   "world_prop.market_crates.label": "Market Crates",
   "world_prop.rest_area.label": "Rest Area",
   "world_prop.crate.label": "Crate",
@@ -694,7 +680,6 @@ export const en = {
   "world_prop.sewer_rubble.label": "Sewer Rubble",
   "world_prop.skitter_refuse.label": "Skitter Refuse",
   "world_prop.edge_blackwire_sewer.label": "→ Blackwire Sewer Edge",
-  "world_prop.return_nightmarket_services.label": "← Return to Nightmarket Services",
   "world_prop.sewer_edge_debris.label": "Sewer Edge Debris",
   "world_prop.scrap_pile.label": "Scrap Pile",
   "world_prop.edge_blackwire_deep.label": "→ Blackwire Deep Edge",
@@ -721,9 +706,6 @@ export const en = {
   "lore.class_ironclad.body":
     "Ironclads don't negotiate, mostly because negotiating requires the other party to still be standing afterward. Every plate was scavenged off something that used to move, and every dent is a story nobody asks to hear twice. The philosophy is simple: stand close enough, long enough, and the problem eventually solves itself or stops being your problem.",
 
-  "lore.zone_nightmarket.title": "Business Hours That Never End",
-  "lore.zone_nightmarket.body":
-    "The Nightmarket runs under neon tubes that died years ago and kept working anyway, because someone somewhere still pays the invoice. Stalls sell rumors, protection, and items that failed every safety inspection that would have applied to them, if an inspector had ever come down and left again. Everyone here has a boss, a debt, or an arrangement they're behind on payments to -- often all three, and often the same relationship wearing different paperwork.",
 
   "lore.zone_blackwire_sewers.title": "Whoever Ran This Cable Didn't Ask Permission",
   "lore.zone_blackwire_sewers.body":

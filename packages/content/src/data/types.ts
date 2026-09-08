@@ -19,7 +19,7 @@ export type EnemyId = "trashboar_runt" | "trashboar_brute" | "trashboar_skitter"
 export type LootTableId = "sewer_starter_loot" | "sewer_brute_loot" | "sewer_skitter_loot" | "static_yard_loot" | "cinderworks_loot" | "saltmere_docks_loot";
 export type LevelTableId = "level_1_to_10";
 export type ObjectiveId = "cull_trashboars" | "break_the_brute" | "sewer_cleanup" | "skitter_hunt" | "static_cleanup" | "sewer_patrol" | "slag_hunt" | "foundry_purge" | "drudge_patrol" | "ash_cull" | "brine_cull" | "tide_hunt" | "hauler_purge" | "arc_purge" | "yard_patrol" | "cinder_patrol" | "dock_patrol";
-export type ZoneContentId = "nightmarket" | "blackwire_sewers" | "static_yard" | "cinderworks" | "saltmere_docks";
+export type ZoneContentId = "namesti_republiky" | "blackwire_sewers" | "static_yard" | "cinderworks" | "saltmere_docks";
 // Core 0.32 — World Map Foundation. A real-world world/continent/area
 // hierarchy the existing zones migrate under. Content/UI-layer only:
 // the server and protocol have no notion of any of these three ids.
@@ -30,19 +30,13 @@ export type ItemRarity = "common" | "rare" | "epic";
 export type SkillTargetingMode = "target";
 export type ZoneRoomType = "town" | "combat";
 export type ZoneClassification = "safe_hub" | "combat" | "test_hybrid";
-export type SpawnPointContentId =
-  | "nightmarket_spawn"
-  | "nightmarket_blackwire_combat_entry"
-  | "nightmarket_services_return"
-  | "nightmarket_static_yard_combat_entry"
-  | "nightmarket_cinderworks_combat_entry"
-  | "nightmarket_saltmere_docks_combat_entry";
-export type CombatInteractableId = "combat_return_to_nightmarket" | "static_yard_return_to_nightmarket" | "cinderworks_return_to_nightmarket" | "saltmere_docks_return_to_nightmarket";
+export type SpawnPointContentId = "namesti_republiky_spawn";
+export type CombatInteractableId = "combat_return_to_town" | "static_yard_return_to_town" | "cinderworks_return_to_town" | "saltmere_docks_return_to_town";
 export type EquipmentSlotCategory = "weapon" | "armor" | "accessory" | "belt" | "flask";
-export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken" | "loot_container" | "vendor" | "town_service" | "waypoint" | "combat_edge" | "combat_return_gate" | "area_label" | "path_marker" | "boundary_marker" | "safe_area_marker" | "rest_area_marker";
+export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken" | "loot_container" | "vendor" | "town_service" | "waypoint" | "combat_edge" | "combat_return_gate" | "area_label" | "path_marker" | "boundary_marker" | "safe_area_marker" | "rest_area_marker" | "building_footprint" | "street_surface";
 export type VisualAssetCategory = "ground_tile" | "enemy_sprite" | "player_sprite" | "prop_sprite" | "item_icon" | "hp_bar" | "rarity_frame";
-export type VendorId = "nightmarket_suspicious_vendor";
-export type TownServiceId = "nightmarket_stash_keeper" | "nightmarket_trainer" | "nightmarket_waypoint" | "nightmarket_suspicious_vendor";
+export type VendorId = never;
+export type TownServiceId = never;
 export type TownServiceKind = "vendor" | "stash" | "trainer" | "waypoint";
 
 export interface TownServiceContentDefinition {
@@ -326,6 +320,22 @@ export interface WorldPropContentDefinition {
    * pool, not another zone's borrowed table.
    */
   readonly lootTableId?: LootTableId;
+  /**
+   * Core 0.35 -- required for `kind: "building_footprint"` and
+   * `"street_surface"` (see ContentValidation.ts): the prop's real-world
+   * outline as a closed polygon, in the same absolute zone-local world
+   * units as `x`/`y`. `x`/`y` remain the shape's own centroid (label
+   * anchor, depth-sort key); `points` is the actual geometry the client
+   * renders. Deliberately NOT registered as an interactable anywhere
+   * (see `initializeTownInteractables.ts`'s allowlist) -- these are
+   * solid-looking world geometry only, never clickable.
+   */
+  readonly points?: readonly WorldPropPoint[];
+}
+
+export interface WorldPropPoint {
+  readonly x: number;
+  readonly y: number;
 }
 
 /**

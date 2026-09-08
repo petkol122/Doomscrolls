@@ -6,7 +6,7 @@ export const TOWN_MOVEMENT_SPEED_FALLBACK_UNITS_PER_SECOND = 220;
 
 /**
  * Converts the character-derived moveSpeed stat into practical runtime
- * world-units-per-second for the current small Nightmarket test arena.
+ * world-units-per-second for the current small town test arena.
  * Shared by TownRoom and CombatRoom (both call this same function at
  * join) and by EquipmentService's live mid-session push (Core 0.31) --
  * there is only ever one player movement-speed scale in this codebase.

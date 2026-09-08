@@ -15,7 +15,7 @@ import type { CombatRoomState } from "../../src/realtime/rooms/CombatRoomState";
  * `request_combat_return` (clicking the return gate) already does --
  * `resolveCombatZoneReturnSpawnId` + `CharacterService.updateCharacterRoomIntent`
  * + `combat_town_return_approved` -- landing the player back in
- * Nightmarket with full HP/flask charges instead of a free in-place
+ * town with full HP/flask charges instead of a free in-place
  * respawn.
  *
  * This mirrors `apps/server/test/town/combatHandoffPositionPersistence.test.ts`'s
@@ -41,7 +41,7 @@ describe("CombatRoom death-to-town handoff", () => {
     await colyseus.shutdown();
   });
 
-  it("redirects a downed player's respawn request to Nightmarket, not an in-place respawn", async () => {
+  it("redirects a downed player's respawn request to town, not an in-place respawn", async () => {
     const client = await colyseus.sdk.joinOrCreate("combat", {
       userId: TEST_USER_ID,
       characterId: TEST_CHARACTER_ID,
@@ -67,8 +67,8 @@ describe("CombatRoom death-to-town handoff", () => {
     );
     expect(approved.fromRoomKind).toBe("combat");
     expect(approved.toRoomKind).toBe("town");
-    expect(approved.targetZoneId).toBe("nightmarket");
-    expect(approved.targetSpawnKey).toBe("nightmarket_blackwire_combat_entry");
+    expect(approved.targetZoneId).toBe("namesti_republiky");
+    expect(approved.targetSpawnKey).toBe("namesti_republiky_spawn");
 
     // Mirrors the real client: it calls room.leave() right after
     // receiving the approval (see WorldSessionScene's
@@ -86,14 +86,13 @@ describe("CombatRoom death-to-town handoff", () => {
 
     expect(roomIntentCalls).toHaveLength(1);
     const [, zoneId, x, y, hp] = roomIntentCalls[0];
-    expect(zoneId).toBe("nightmarket");
-    // nightmarket_blackwire_combat_entry's own real spawn coordinates
+    expect(zoneId).toBe("namesti_republiky");
+    // namesti_republiky_spawn's own real spawn coordinates
     // (packages/content/src/data/spawnPoints.ts), not an in-zone
     // combat-spawn-box position -- the old in-place respawn never left
-    // the combat zone at all. Updated for Core 0.33's real city-center
-    // expansion (this spawn point moved along with everything else).
-    expect(x).toBe(6144);
-    expect(y).toBe(14775);
+    // the combat zone at all.
+    expect(x).toBe(2500);
+    expect(y).toBe(1800);
     expect(hp).toBe(player.maxHp);
 
     // The regression: onLeave must not have run its own overwrite with
