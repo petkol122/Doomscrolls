@@ -1,5 +1,5 @@
 import { ItemLocationType, type Prisma, type PrismaClient } from "@prisma/client";
-import { prisma as defaultPrisma } from "../prisma";
+import { getSharedPrismaClient } from "../prisma";
 
 type CharacterRepositoryClient = PrismaClient | Prisma.TransactionClient;
 
@@ -69,7 +69,7 @@ export interface CharacterProgressionContext {
 }
 
 export class CharacterRepository {
-  public constructor(private readonly db: CharacterRepositoryClient = defaultPrisma) {}
+  public constructor(private readonly db: CharacterRepositoryClient = getSharedPrismaClient()) {}
 
   public findByIdForUser(characterId: string, userId: string) {
     return this.db.character.findFirst({

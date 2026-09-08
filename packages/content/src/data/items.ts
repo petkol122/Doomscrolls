@@ -292,5 +292,349 @@ export const items = [
     ],
     durabilityMax: 20,
     iconKey: "item_static_wraps_placeholder"
+  },
+
+  // ── Core 0.16 — Cinderworks' own item family: one common material,
+  // one rare (belt slot, which had no rare option until now), and a
+  // 3-item epic family pool matching the Blackwire/Static Yard
+  // precedent (weapon + chest + one utility piece). ──
+  {
+    id: itemId("cinder_ash"),
+    nameKey: "item.cinder_ash.name" as ContentLocalizationKey,
+    descriptionKey: "item.cinder_ash.description" as ContentLocalizationKey,
+    category: "material",
+    rarity: "common",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: [],
+    stackable: true,
+    maxStackSize: 99,
+    statModifiers: [],
+    iconKey: "item_cinder_ash_placeholder"
+  },
+  {
+    id: itemId("slagbound_charm"),
+    nameKey: "item.slagbound_charm.name" as ContentLocalizationKey,
+    descriptionKey: "item.slagbound_charm.description" as ContentLocalizationKey,
+    category: "belt",
+    rarity: "rare",
+    size: { width: 2, height: 1 },
+    allowedEquipmentSlots: ["belt"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [
+      { target: "toughness", operation: "add", value: 2 },
+      { target: "armor", operation: "add", value: 1 }
+    ],
+    durabilityMax: 20,
+    iconKey: "item_slagbound_charm_placeholder"
+  },
+  {
+    id: itemId("slagforged_maul"),
+    nameKey: "item.slagforged_maul.name" as ContentLocalizationKey,
+    descriptionKey: "item.slagforged_maul.description" as ContentLocalizationKey,
+    category: "weapon",
+    rarity: "epic",
+    size: { width: 1, height: 3 },
+    allowedEquipmentSlots: ["weapon"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [
+      { target: "damage", operation: "add", value: 8 },
+      { target: "attackCooldownMs", operation: "add", value: 90 }
+    ],
+    durabilityMax: 20,
+    iconKey: "item_slagforged_maul_placeholder"
+  },
+  {
+    id: itemId("cinderplate_hauberk"),
+    nameKey: "item.cinderplate_hauberk.name" as ContentLocalizationKey,
+    descriptionKey: "item.cinderplate_hauberk.description" as ContentLocalizationKey,
+    category: "armor",
+    rarity: "epic",
+    size: { width: 2, height: 3 },
+    allowedEquipmentSlots: ["chest"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [
+      { target: "armor", operation: "add", value: 4 },
+      { target: "maxHp", operation: "add", value: 12 },
+      { target: "toughness", operation: "add", value: 2 }
+    ],
+    durabilityMax: 20,
+    iconKey: "item_cinderplate_hauberk_placeholder"
+  },
+  {
+    id: itemId("cinderfist_gauntlets"),
+    nameKey: "item.cinderfist_gauntlets.name" as ContentLocalizationKey,
+    descriptionKey: "item.cinderfist_gauntlets.description" as ContentLocalizationKey,
+    category: "armor",
+    rarity: "epic",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: ["hands"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [
+      { target: "damage", operation: "add", value: 3 },
+      { target: "attackCooldownMs", operation: "add", value: -50 }
+    ],
+    durabilityMax: 20,
+    iconKey: "item_cinderfist_gauntlets_placeholder"
+  },
+
+  // ── Core 0.17 — Static Yard's own rare, in the feet slot. Closes two
+  // gaps at once: Static Yard previously had no rare item of its own
+  // (it only shared Blackwire's signal_scarred_amulet), and the feet
+  // slot previously had exactly one item in the whole game
+  // (sewer_treads, common) -- the only slot with no rare-or-above
+  // option. An upgrade over sewer_treads' moveSpeed-only shape, not a
+  // sewer_treads balance change. ──
+  {
+    id: itemId("voltbound_treads"),
+    nameKey: "item.voltbound_treads.name" as ContentLocalizationKey,
+    descriptionKey: "item.voltbound_treads.description" as ContentLocalizationKey,
+    category: "armor",
+    rarity: "rare",
+    size: { width: 1, height: 2 },
+    allowedEquipmentSlots: ["feet"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [
+      { target: "moveSpeed", operation: "add", value: 0.22 },
+      { target: "armor", operation: "add", value: 1 }
+    ],
+    durabilityMax: 20,
+    iconKey: "item_voltbound_treads_placeholder"
+  },
+
+  // ── Core 0.18 — Saltmere Docks' own item family. Unlike every prior
+  // zone, this one contributes no new epics -- its whole itemization
+  // job is closing the rare-tier gap: weapon/head/chest/hands each had
+  // zero rare items before this build (jumping straight from common to
+  // epic). One rare per slot, each a genuine middle step between that
+  // slot's existing common and epic numbers, not an arbitrary value. ──
+  {
+    id: itemId("brine_salt"),
+    nameKey: "item.brine_salt.name" as ContentLocalizationKey,
+    descriptionKey: "item.brine_salt.description" as ContentLocalizationKey,
+    category: "material",
+    rarity: "common",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: [],
+    stackable: true,
+    maxStackSize: 99,
+    statModifiers: [],
+    iconKey: "item_brine_salt_placeholder"
+  },
+  {
+    // Weapon: common starter_pipe is damage+3; epics run damage+4 to +8.
+    id: itemId("tideworn_cutlass"),
+    nameKey: "item.tideworn_cutlass.name" as ContentLocalizationKey,
+    descriptionKey: "item.tideworn_cutlass.description" as ContentLocalizationKey,
+    category: "weapon",
+    rarity: "rare",
+    size: { width: 1, height: 3 },
+    allowedEquipmentSlots: ["weapon"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [{ target: "damage", operation: "add", value: 5 }],
+    durabilityMax: 20,
+    iconKey: "item_tideworn_cutlass_placeholder"
+  },
+  {
+    // Head: common scavenged_hood is armor+1; epic scavenger_king_helm
+    // is armor+3/toughness+2.
+    id: itemId("brinemask_visor"),
+    nameKey: "item.brinemask_visor.name" as ContentLocalizationKey,
+    descriptionKey: "item.brinemask_visor.description" as ContentLocalizationKey,
+    category: "armor",
+    rarity: "rare",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: ["head"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [{ target: "armor", operation: "add", value: 2 }],
+    durabilityMax: 20,
+    iconKey: "item_brinemask_visor_placeholder"
+  },
+  {
+    // Chest: common sewer_jacket is armor+2/maxHp+5; epic warden_plate
+    // is armor+5/maxHp+15 -- this sits cleanly between both.
+    id: itemId("saltcrust_vest"),
+    nameKey: "item.saltcrust_vest.name" as ContentLocalizationKey,
+    descriptionKey: "item.saltcrust_vest.description" as ContentLocalizationKey,
+    category: "armor",
+    rarity: "rare",
+    size: { width: 2, height: 3 },
+    allowedEquipmentSlots: ["chest"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [
+      { target: "armor", operation: "add", value: 3 },
+      { target: "maxHp", operation: "add", value: 10 }
+    ],
+    durabilityMax: 20,
+    iconKey: "item_saltcrust_vest_placeholder"
+  },
+  {
+    // Hands: common wraptape_gloves is attackCooldownMs-40; epics run
+    // -50 to -70.
+    id: itemId("brinewrap_gloves"),
+    nameKey: "item.brinewrap_gloves.name" as ContentLocalizationKey,
+    descriptionKey: "item.brinewrap_gloves.description" as ContentLocalizationKey,
+    category: "armor",
+    rarity: "rare",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: ["hands"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [{ target: "attackCooldownMs", operation: "add", value: -55 }],
+    durabilityMax: 20,
+    iconKey: "item_brinewrap_gloves_placeholder"
+  },
+
+  // ── Core 0.19 — rarity matrix, fully closed. Every remaining slot
+  // below full common/rare/epic coverage gets its missing tier(s):
+  // ring_1 and amulet (rare-only) get a common and an epic; flask_1
+  // (common-only, a gap 0.18's own notes understated as "no epic" when
+  // it actually has no rare either) gets a rare and an epic; feet and
+  // belt (common+rare) each get their epic. No item here is added for
+  // its own sake -- each plugs one named cell in the matrix. ──
+  {
+    id: itemId("frayed_signet"),
+    nameKey: "item.frayed_signet.name" as ContentLocalizationKey,
+    descriptionKey: "item.frayed_signet.description" as ContentLocalizationKey,
+    category: "accessory",
+    rarity: "common",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: ["ring_1"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [{ target: "armor", operation: "add", value: 1 }],
+    durabilityMax: 20,
+    iconKey: "item_frayed_signet_placeholder"
+  },
+  {
+    // ring_1 epic: rustbound_ring (rare) is armor+1/maxHp+8; this steps
+    // up from both stats, same pattern as every other rare-to-epic step.
+    id: itemId("voidglass_band"),
+    nameKey: "item.voidglass_band.name" as ContentLocalizationKey,
+    descriptionKey: "item.voidglass_band.description" as ContentLocalizationKey,
+    category: "accessory",
+    rarity: "epic",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: ["ring_1"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [
+      { target: "armor", operation: "add", value: 2 },
+      { target: "maxHp", operation: "add", value: 14 }
+    ],
+    durabilityMax: 20,
+    iconKey: "item_voidglass_band_placeholder"
+  },
+  {
+    id: itemId("scavenged_cord"),
+    nameKey: "item.scavenged_cord.name" as ContentLocalizationKey,
+    descriptionKey: "item.scavenged_cord.description" as ContentLocalizationKey,
+    category: "accessory",
+    rarity: "common",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: ["amulet"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [{ target: "mind", operation: "add", value: 1 }],
+    durabilityMax: 20,
+    iconKey: "item_scavenged_cord_placeholder"
+  },
+  {
+    // amulet epic: signal_scarred_amulet (rare) is mind+2; mirrors
+    // chargeplate_vest's mind+moveSpeed epic combo shape.
+    id: itemId("resonant_choker"),
+    nameKey: "item.resonant_choker.name" as ContentLocalizationKey,
+    descriptionKey: "item.resonant_choker.description" as ContentLocalizationKey,
+    category: "accessory",
+    rarity: "epic",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: ["amulet"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [
+      { target: "mind", operation: "add", value: 4 },
+      { target: "moveSpeed", operation: "add", value: 0.1 }
+    ],
+    durabilityMax: 20,
+    iconKey: "item_resonant_choker_placeholder"
+  },
+  {
+    // flask_1 rare: starter_blood_flask is restoreHpInstant 25/3
+    // charges -- this is a straight upgrade, vendor-obtainable like
+    // signal_scarred_amulet already is at rare.
+    id: itemId("sealed_blood_flask"),
+    nameKey: "item.sealed_blood_flask.name" as ContentLocalizationKey,
+    descriptionKey: "item.sealed_blood_flask.description" as ContentLocalizationKey,
+    category: "flask",
+    rarity: "rare",
+    size: { width: 1, height: 2 },
+    allowedEquipmentSlots: ["flask_1"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [],
+    useEffect: { type: "restoreHpInstant", value: 35, charges: 3 },
+    iconKey: "item_sealed_blood_flask_placeholder"
+  },
+  {
+    // flask_1 epic: follows the 0.7 "epics are drop-only" rule instead
+    // of the vendor path the two lower flask tiers use -- placed in the
+    // shared Blackwire-family epic pool alongside the other epics there.
+    id: itemId("vital_reserve_flask"),
+    nameKey: "item.vital_reserve_flask.name" as ContentLocalizationKey,
+    descriptionKey: "item.vital_reserve_flask.description" as ContentLocalizationKey,
+    category: "flask",
+    rarity: "epic",
+    size: { width: 1, height: 2 },
+    allowedEquipmentSlots: ["flask_1"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [],
+    useEffect: { type: "restoreHpInstant", value: 45, charges: 4 },
+    iconKey: "item_vital_reserve_flask_placeholder"
+  },
+  {
+    // feet epic: voltbound_treads (rare) is moveSpeed+0.22/armor+1;
+    // completes the slot Static Yard already claims via that rare.
+    id: itemId("voltbound_greaves"),
+    nameKey: "item.voltbound_greaves.name" as ContentLocalizationKey,
+    descriptionKey: "item.voltbound_greaves.description" as ContentLocalizationKey,
+    category: "armor",
+    rarity: "epic",
+    size: { width: 1, height: 2 },
+    allowedEquipmentSlots: ["feet"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [
+      { target: "moveSpeed", operation: "add", value: 0.28 },
+      { target: "armor", operation: "add", value: 2 }
+    ],
+    durabilityMax: 20,
+    iconKey: "item_voltbound_greaves_placeholder"
+  },
+  {
+    // belt epic: slagbound_charm (rare) is toughness+2/armor+1;
+    // completes the slot Cinderworks already claims via that rare.
+    id: itemId("cinderbound_girdle"),
+    nameKey: "item.cinderbound_girdle.name" as ContentLocalizationKey,
+    descriptionKey: "item.cinderbound_girdle.description" as ContentLocalizationKey,
+    category: "belt",
+    rarity: "epic",
+    size: { width: 2, height: 1 },
+    allowedEquipmentSlots: ["belt"],
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [
+      { target: "toughness", operation: "add", value: 3 },
+      { target: "armor", operation: "add", value: 2 }
+    ],
+    durabilityMax: 20,
+    iconKey: "item_cinderbound_girdle_placeholder"
   }
 ] as const satisfies readonly ItemContentDefinition[];

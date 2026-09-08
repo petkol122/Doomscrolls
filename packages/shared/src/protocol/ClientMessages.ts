@@ -124,7 +124,7 @@ export interface RequestUseHealingFlaskClientMessage {
  */
 export interface RequestUseSkillSlotClientMessage {
   readonly type: "request_use_skill_slot";
-  readonly slot: "secondary" | "tertiary";
+  readonly slot: "primary" | "secondary" | "tertiary";
   readonly targetEnemyId?: string;
 }
 
@@ -144,8 +144,18 @@ export interface ForceRecoverCorpseClientMessage {
   readonly type: "force_recover_corpse";
 }
 
-export interface ChatMessageClientMessage {
-  readonly type: "chat_message";
+/**
+ * Core 0.29 — Room-Local Chat.
+ *
+ * The client may only supply the message text. The server is the sole
+ * authority for the sender's identity (resolved server-side from the
+ * connected player's own PlayerPresence, never trusted from the
+ * client), message length, and rate limiting. Replaces the earlier
+ * `chat_message` client message, which was never wired to any room
+ * handler.
+ */
+export interface RequestChatClientMessage {
+  readonly type: "request_chat";
   readonly text: string;
 }
 
@@ -171,6 +181,8 @@ export interface RequestInteractClientMessage {
 
 export interface RequestResetObjectiveClientMessage {
   readonly type: "request_reset_objective";
+  // Core 0.15 -- which of the two concurrent objective slots to reset.
+  readonly slot: 1 | 2;
 }
 
 /**
@@ -259,7 +271,7 @@ export type ClientRoomMessage =
   | RequestRespawnClientMessage
   | RetrieveCorpseClientMessage
   | ForceRecoverCorpseClientMessage
-  | ChatMessageClientMessage
+  | RequestChatClientMessage
   | TransitionZoneClientMessage
   | DropInventoryItemClientMessage
   | RequestInteractClientMessage

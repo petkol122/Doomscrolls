@@ -9,8 +9,9 @@
  *   1. Enemy (living)       → AttackEnemyIntent
  *   2. Loot drop            → PickupLootIntent
  *   3. Own corpse           → CorpseRecoverIntent (inRange flag set by caller)
- *   4. Interactable object  → InteractObjectIntent
- *   5. Empty ground         → MoveIntent
+ *   4. Combat return gate   → CombatReturnIntent
+ *   5. Interactable object  → InteractObjectIntent
+ *   6. Empty ground         → MoveIntent
  *
  * ## Right-click
  *
@@ -69,6 +70,14 @@ export function resolveWorldInteraction(
     };
   }
   if (ctx.interactable !== null) {
+    if (ctx.interactable.objectType === "combat_return_gate") {
+      return {
+        kind: "combat_return",
+        objectId: ctx.interactable.objectId,
+        worldX: ctx.interactable.worldX,
+        worldY: ctx.interactable.worldY,
+      };
+    }
     return {
       kind: "interact_object",
       objectId: ctx.interactable.objectId,

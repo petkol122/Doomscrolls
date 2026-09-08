@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { prisma as defaultPrisma } from "../prisma";
+import { getSharedPrismaClient } from "../prisma";
 
 type ProfileRepositoryClient = PrismaClient | Prisma.TransactionClient;
 
@@ -15,7 +15,7 @@ export interface UpdateProfileData {
 }
 
 export class ProfileRepository {
-  public constructor(private readonly db: ProfileRepositoryClient = defaultPrisma) {}
+  public constructor(private readonly db: ProfileRepositoryClient = getSharedPrismaClient()) {}
 
   public createProfile(data: CreateProfileData) {
     return this.db.userProfile.create({ data });

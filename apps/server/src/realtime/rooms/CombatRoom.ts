@@ -1,10 +1,10 @@
 import { Room, Client } from "colyseus";
 import {
   type CharacterId,
+  type DamageAppliedServerMessage,
   type EnemyAttackResolvedServerMessage,
   type EntityId,
   type EnemyAttackTelegraphServerMessage,
-  type PlayerRespawnedServerMessage,
   type RequestAttackAcceptedServerMessage,
   type RequestAttackClientMessage,
   type RequestAttackRejectedServerMessage,
@@ -12,6 +12,10 @@ import {
   type RequestPickupWorldLootAcceptedServerMessage,
   type RequestPickupWorldLootClientMessage,
   type RequestPickupWorldLootRejectedServerMessage,
+  type RequestDodgeAcceptedServerMessage,
+  type RequestDodgeRejectedServerMessage,
+  type RequestUseHealingFlaskAcceptedServerMessage,
+  type RequestUseHealingFlaskRejectedServerMessage,
   type XpGainedServerMessage,
   type UserId,
   type ZoneId,
@@ -21,24 +25,42 @@ import type { CombatRoomJoinOptions } from "./combatRoomTypes";
 import { CombatRoomState } from "./CombatRoomState";
 import { createRoomLogger } from "./roomLogger";
 import { buildCombatPlayerPresence } from "./buildCombatPlayerPresence";
-import { initializeCombatEnemies, COMBAT_SPAWN_BOX } from "./initializeCombatEnemies";
+import { initializeCombatEnemies } from "./initializeCombatEnemies";
 import { validateMovementIntent } from "./movementIntentValidation";
 import { applyMovementIntent } from "./applyMovementIntent";
 import { resolvePlayerMovementSpeed } from "./resolvePlayerMovementSpeed";
+import { resolvePlayerDamage } from "./resolvePlayerDamage";
+import { resolvePlayerArmor } from "./resolvePlayerArmor";
+import { mitigateIncomingDamage } from "./incomingDamageMitigation";
 import { resolveAttackCooldownMs } from "./attackCooldown";
 import { stepTownRoomMovement, TOWN_MOVEMENT_TICK_RATE_MS } from "./stepTownRoomMovement";
 import { validateAttackIntent } from "./attackIntentValidation";
 import { consumeAttackCooldown } from "./attackCooldown";
 import { applyEnemyDamage } from "./applyEnemyDamage";
 import { restoreFlaskToFull } from "./healingFlaskConfig";
+import { validateDodgeIntent } from "./dodgeIntentValidation";
+import { applyDodgeIntent } from "./applyDodgeIntent";
+import { consumeDodgeCooldown, isDodgeReady } from "./dodgeCooldown";
+import { validateHealingFlaskIntent } from "./healingFlaskValidation";
+import { applyHealingFlaskIntent } from "./applyHealingFlaskIntent";
+import type { TownRoomState } from "./TownRoomState";
 import { clearPendingAction, setPendingAction } from "./pendingActionState";
 import {
   ENEMY_ATTACK_RANGE,
+  ENEMY_RETURN_ARRIVAL_DISTANCE,
+  ENEMY_RETURN_REACQUIRE_BUFFER,
   clearEnemyTargetAndReturn,
+  moveEnemyTowardPoint,
   moveEnemyTowardTarget,
+  resetEnemyCombatState,
 } from "./enemyAiHelpers";
+import { applyWanderMovement } from "./wanderEnemies";
 import { contentRegistry } from "@doomscrolls/content";
 import { CharacterService } from "../../character/CharacterService";
+import { registerConnectedPlayer, unregisterConnectedPlayer } from "./connectedPlayerRegistry";
+import { registerChatHandler } from "./chatHandler";
+import { clearChatCooldown } from "./chatCooldown";
+import { buildEquipmentLoadout } from "../../character/buildEquipmentLoadout";
 import { contentRegistry as roomContentRegistry } from "@doomscrolls/content";
 import { isPositionInsideZoneBounds } from "./validateCharacterLocation";
 import { initializeCombatInteractables } from "./initializeCombatInteractables";
@@ -49,10 +71,11 @@ import { dispatchPickedUpWorldLoot } from "./pickupWorldLootDispatcher";
 import { validatePickupWorldLootIntent } from "./pickupWorldLootValidation";
 import { tryResolveLevelProgression } from "./levelProgression";
 import { CharacterStatsService } from "../../character/CharacterStatsService";
-import { advanceObjectiveProgress } from "./advanceObjectiveProgress";
+import { advanceObjectiveProgressAllSlots } from "./advanceObjectiveProgress";
 import { resolveCombatZoneReturnSpawnId } from "./waypointService";
 import {
   getSkillSlotCooldownAt,
+  resolveSkillCastDamage,
   resolveSkillSlotDefinition,
   setSkillSlotCooldownAt,
 } from "./skillSlotContent";
@@ -80,7 +103,7 @@ type ProgressionUpdateResult =
   | { readonly ok: false };
 
 async function applyProgressionUpdate(
-  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number },
+  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number; damage?: number; armor?: number },
   progression: { readonly xp: number; readonly level: number; readonly leveledUp: boolean },
 ): Promise<ProgressionUpdateResult> {
   const characterRepository = new CharacterRepository();
@@ -133,6 +156,12 @@ async function applyProgressionUpdate(
   }
   if ("hp" in player) {
     player.hp = nextHp;
+  }
+  if ("damage" in player) {
+    player.damage = recalculated.derived.damage;
+  }
+  if ("armor" in player) {
+    player.armor = recalculated.derived.armor;
   }
 
   return { ok: true, maxHp: nextMaxHp, hp: nextHp, gainedMaxHp };
@@ -249,19 +278,23 @@ function sendEnemyAttackResolved(
  *    `applyEnemyDamage` helpers (the same gate `TownRoom` uses).
  *  - Register a `setSimulationInterval` that runs the existing
  *    `stepTownRoomMovement` helper (state shape is identical) and
- *    a small local enemy aggro / damage tick that uses the
- *    extracted `enemyAiHelpers` primitives. Enemy respawn uses
- *    the same 5 s cooldown and `applyEnemyDamage` respawnAtMs
- *    bookkeeping that `TownRoom` uses. A minimal `request_respawn`
- *    handler keeps the player alive after defeat so the combat
- *    loop can be re-entered without leaving the room.
+ *    an enemy aggro / damage tick, `applyCombatEnemyAggroDamage`,
+ *    that as of Core 0.24 is a real port of `TownRoom.applyEnemyAggroDamage`
+ *    (proximity acquisition, leash/return, telegraph/windup/landing --
+ *    normal hits only, see that method's own doc comment). Enemy
+ *    respawn uses the same 5 s cooldown and `applyEnemyDamage`
+ *    respawnAtMs bookkeeping that `TownRoom` uses. A `request_respawn`
+ *    handler redirects a downed player back to Nightmarket (Core 0.14)
+ *    so the combat loop's real stakes have a real consequence.
  *  - `onLeave` persists the latest HP / location / flask state
  *    through the same `CharacterService` call `TownRoom` uses.
  *
- * Explicitly NOT included (deferred to dedicated tasks, see
- * `docs/BACKLOG_CORE_0_1.md` Task 268 follow-ups):
- *  - loot / XP / objectives on enemy defeat
- *  - heavy-attack telegraph (Brute-only content)
+ * Explicitly NOT included (deferred to dedicated tasks):
+ *  - heavy-attack telegraph (queued as an immediate follow-up build,
+ *    "CombatRoom Heavy Attack Parity" -- see `docs/CORE_BUILD_0_24_PLAN.md`)
+ *  - a simultaneous-attacker cap (a named, pre-committed fallback if
+ *    Core 0.24's own live-check criterion for multi-enemy pockets
+ *    fails -- see the plan's Risks section)
  *  - corpse / respawn UI flow on the client
  *  - combat spawn point content
  *  - client routing to CombatRoom
@@ -279,6 +312,24 @@ export class CombatRoom extends Room {
   private combatReturnHandlerRegistered = false;
   private pickupWorldLootHandlerRegistered = false;
   private skillSlotHandlerRegistered = false;
+  private dodgeHandlerRegistered = false;
+  private healingFlaskHandlerRegistered = false;
+  private chatHandlerRegistered = false;
+
+  /**
+   * Enemy-kill XP/objective-progress writes are fired without being
+   * awaited in the message handler (combat shouldn't block on a DB
+   * round-trip to feel responsive) -- but an unawaited write can still
+   * be in flight when the room itself closes (zone travel, disconnect,
+   * matchmaking routing away from this room). Tearing the room down
+   * while one of these is still in flight is the same
+   * write-not-awaited-before-teardown shape confirmed as a real
+   * mechanism (there, corrupting a native client under test) in
+   * docs/PRISMA_WINDOWS_TEARDOWN_CRASH_INVESTIGATION.md §10. This set
+   * tracks every such write so `onDispose` can wait for them all to
+   * settle before the room finishes closing -- see `trackPendingWrite`.
+   */
+  private readonly pendingWrites = new Set<Promise<void>>();
 
   public override async onCreate(options: CombatRoomJoinOptions): Promise<void> {
     const log = createRoomLogger(
@@ -305,6 +356,12 @@ export class CombatRoom extends Room {
     this.registerCombatReturnHandler(log);
      this.registerPickupWorldLootHandler(log);
     this.registerSkillSlotHandler(log);
+    this.registerDodgeHandler(log);
+    this.registerHealingFlaskHandler(log);
+    if (!this.chatHandlerRegistered) {
+      this.chatHandlerRegistered = true;
+      registerChatHandler(this, log);
+    }
 
     this.setSimulationInterval((deltaMs: number) => {
       // The CombatRoomState has the same `playerPresence` shape
@@ -416,33 +473,40 @@ export class CombatRoom extends Room {
     // every fresh CombatRoom join permanently "downed" with 0 max HP
     // and unable to move -- silently blocking attack, dodge, and skill
     // casts alike. Mirrors TownRoom.ts's resolution exactly.
-    const movementSpeed = resolvePlayerMovementSpeed(result.character);
+    const movementSpeed = resolvePlayerMovementSpeed(result.character.stats?.derived.moveSpeed);
     const attackCooldownMs = resolveAttackCooldownMs(
       result.character.stats?.derived.attackCooldownMs,
     );
     const maxHp = Math.max(0, result.character.stats?.derived.maxHp ?? 0);
     const currentHp = Math.min(maxHp, Math.max(0, result.character.stats?.currentHp ?? maxHp));
+    const damage = resolvePlayerDamage(result.character.stats?.derived.damage);
+    const armor = resolvePlayerArmor(result.character.stats?.derived.armor);
 
     const objectiveRepo = new ObjectiveRepository();
-    let persistedObjective: {
+    type PersistedObjectiveState = {
       objectiveId: string;
       currentProgress: number;
       requiredProgress: number;
       completed: boolean;
       rewardGranted: boolean;
-    } | undefined;
+    };
+    // Core 0.15 -- collect up to two not-yet-reward-granted objectives
+    // (one per concurrent slot), mirroring TownRoom's restore loop.
+    const persistedObjectiveSlots: PersistedObjectiveState[] = [];
     const completedObjectives = await objectiveRepo.findCompletedByCharacter(characterId.toString());
     for (const candidateId of NOTICE_BOARD_OBJECTIVE_SEQUENCE) {
+      if (persistedObjectiveSlots.length >= 2) {
+        break;
+      }
       const objectiveRow = await objectiveRepo.findByCharacterAndObjective(characterId.toString(), candidateId);
       if (objectiveRow !== null && !objectiveRow.rewardGranted) {
-        persistedObjective = {
+        persistedObjectiveSlots.push({
           objectiveId: objectiveRow.objectiveId,
           currentProgress: objectiveRow.currentProgress,
           requiredProgress: objectiveRow.requiredProgress,
           completed: objectiveRow.completed,
           rewardGranted: objectiveRow.rewardGranted,
-        };
-        break;
+        });
       }
     }
 
@@ -459,15 +523,29 @@ export class CombatRoom extends Room {
       restoredFlaskCharges: undefined,
       movementSpeed,
       attackCooldownMs,
+      damage,
+      armor,
       restoredLocationZoneId: result.character.lastLocationZoneId ?? undefined,
       restoredLocationX: result.character.lastLocationX ?? undefined,
       restoredLocationY: result.character.lastLocationY ?? undefined,
-      objectiveState: persistedObjective,
+      objectiveState: persistedObjectiveSlots[0],
+      objectiveState2: persistedObjectiveSlots[1],
       completedObjectives,
     });
 
     state.playerPresence.set(sessionId, presence);
     state.connectedPlayerCount = state.playerPresence.size;
+    registerConnectedPlayer(characterId, _client, this);
+
+    // See TownRoom.onJoin for why this is needed: the client's equipment
+    // panel only ever learns the loadout from `equipment_updated`, so a
+    // client entering combat with gear already equipped must get it here.
+    try {
+      const equipment = await buildEquipmentLoadout(characterId);
+      _client.send("equipment_updated", { type: "equipment_updated", equipment });
+    } catch {
+      // swallow send failures; the next equip/unequip will still sync it
+    }
 
     safeLog.info?.(
       {
@@ -497,6 +575,22 @@ export class CombatRoom extends Room {
     const presence = state.playerPresence.get(_client.sessionId);
 
     if (presence !== undefined) {
+      unregisterConnectedPlayer(presence.characterId, _client);
+    }
+    clearChatCooldown(_client.sessionId);
+
+    // A `request_combat_return` handoff already persisted the correct
+    // destination (nightmarket) position via `updateCharacterRoomIntent`
+    // before approving the transition. Persisting here too, using this
+    // room's own zoneId and the player's stale in-room x/y, would race
+    // that write (the client legitimately calls `room.leave()` once it
+    // receives the approval) and could clobber a correct combat-zone
+    // position with a mismatched (zoneId, x, y) triple -- the same root
+    // cause found and fixed for the reverse direction in TownRoom.onLeave.
+    const hasApprovedZoneTransition = presence?.hasPendingAction === true
+      && presence.pendingActionType === "zone_transition";
+
+    if (presence !== undefined && !hasApprovedZoneTransition) {
       try {
         const characterService = new CharacterService();
         await characterService.updateCharacterLocation(
@@ -531,6 +625,52 @@ export class CombatRoom extends Room {
         clearEnemyTargetAndReturn(enemy);
       }
     });
+  }
+
+  /**
+   * Registers a fire-and-forget write (XP grant, objective progress)
+   * so `onDispose` can wait for it before the room finishes closing.
+   * The write is never re-thrown or left as an unhandled rejection --
+   * a failure is logged here (loudly, not silently dropped) and the
+   * tracked promise still resolves, so `onDispose` never hangs on a
+   * write that failed rather than merely being slow.
+   */
+  private trackPendingWrite(
+    promise: Promise<unknown>,
+    log: ReturnType<typeof createRoomLogger>,
+    description: string,
+  ): void {
+    const tracked = promise.then(
+      () => undefined,
+      (error: unknown) => {
+        log.error(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            write: description,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          "CombatRoom fire-and-forget write failed.",
+        );
+      },
+    );
+    this.pendingWrites.add(tracked);
+    void tracked.finally(() => {
+      this.pendingWrites.delete(tracked);
+    });
+  }
+
+  /**
+   * Colyseus awaits this before actually removing the room. Waiting
+   * for every tracked fire-and-forget write here (rather than letting
+   * them get orphaned when the room object goes away) is the fix for
+   * the race documented on `pendingWrites` above -- no write from an
+   * active room is abandoned mid-flight when that room closes.
+   */
+  public override async onDispose(): Promise<void> {
+    if (this.pendingWrites.size > 0) {
+      await Promise.all([...this.pendingWrites]);
+    }
   }
 
   private registerMovementIntentHandler(
@@ -631,7 +771,7 @@ export class CombatRoom extends Room {
       }
 
       consumeAttackCooldown(player, now);
-      const damageResult = applyEnemyDamage(validation.enemy, 1);
+      const damageResult = applyEnemyDamage(validation.enemy, player.damage);
 
       const accepted: RequestAttackAcceptedServerMessage = {
         type: "request_attack_accepted",
@@ -646,23 +786,32 @@ export class CombatRoom extends Room {
         : [];
 
       if (damageResult.defeated) {
-        void grantEnemyDefeatXp(player, validation.enemy.enemyId, (type, payload) => {
-          try {
-            client.send(type, payload);
-          } catch {}
-        });
+        this.trackPendingWrite(
+          grantEnemyDefeatXp(player, validation.enemy.enemyId, (type, payload) => {
+            try {
+              client.send(type, payload);
+            } catch {}
+          }),
+          log,
+          "grantEnemyDefeatXp",
+        );
 
-        const progressResult = advanceObjectiveProgress(player, validation.enemy.enemyId, (updated) => {
-          void new ObjectiveRepository().updateProgress(
-            updated.characterId.toString(),
-            updated.objectiveId,
-            updated.currentProgress,
+        const progressResults = advanceObjectiveProgressAllSlots(player, validation.enemy.enemyId, (updated) => {
+          this.trackPendingWrite(
+            new ObjectiveRepository().updateProgress(
+              updated.characterId.toString(),
+              updated.objectiveId,
+              updated.currentProgress,
+            ),
+            log,
+            "objectiveProgress.updateProgress",
           );
         });
-        if (progressResult !== undefined && progressResult.changed) {
+        for (const progressResult of progressResults) {
           try {
             client.send("objective_updated", {
               type: "objective_updated",
+              slot: progressResult.slot,
               objectiveId: progressResult.objectiveId,
               label: progressResult.label,
               descriptionKey: progressResult.descriptionKey,
@@ -695,6 +844,201 @@ export class CombatRoom extends Room {
   }
 
   /**
+   * Core 0.12 -- `request_dodge` handler for CombatRoom.
+   *
+   * Audit finding: `request_dodge` was previously registered only in
+   * TownRoom.ts, so a player could not dodge at all in Blackwire
+   * Sewers or Static Yard -- the game's only real combat zones. This
+   * is a direct port of TownRoom's handler, reusing the same
+   * `validateDodgeIntent`/`applyDodgeIntent`/`isDodgeReady`/
+   * `consumeDodgeCooldown` helpers unchanged. `applyDodgeIntent`
+   * expects a `TownRoomState`-shaped `state`; `CombatRoomState` has
+   * the same `zoneId`/`playerPresence` shape `resolveZoneBounds`
+   * actually needs, so it is safe to reuse via the same
+   * `as unknown as` cast `registerAttackHandler` above already uses
+   * for `validateAttackIntent`.
+   */
+  private registerDodgeHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.dodgeHandlerRegistered) {
+      return;
+    }
+    this.dodgeHandlerRegistered = true;
+
+    this.onMessage("request_dodge", (client: Client, raw: unknown) => {
+      const state = this.state as CombatRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+
+      if (player === undefined) {
+        log.warn?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+          },
+          "CombatRoom request_dodge rejected: player not found.",
+        );
+        return;
+      }
+
+      if (player.lifeState !== "alive") {
+        const rejection: RequestDodgeRejectedServerMessage = {
+          type: "request_dodge_rejected",
+          reason: "player_downed",
+        };
+        try {
+          client.send("request_dodge_rejected", rejection);
+        } catch {}
+        return;
+      }
+
+      const validation = validateDodgeIntent({ message: raw });
+      if (!validation.ok) {
+        const rejection: RequestDodgeRejectedServerMessage = {
+          type: "request_dodge_rejected",
+          reason: validation.reason,
+        };
+        try {
+          client.send("request_dodge_rejected", rejection);
+        } catch {}
+        return;
+      }
+
+      const now = Date.now();
+      if (!isDodgeReady(player, now)) {
+        const rejection: RequestDodgeRejectedServerMessage = {
+          type: "request_dodge_rejected",
+          reason: "dodge_on_cooldown",
+        };
+        try {
+          client.send("request_dodge_rejected", rejection);
+        } catch {}
+        return;
+      }
+
+      const applied = applyDodgeIntent({
+        state: state as unknown as TownRoomState,
+        player,
+        dirX: validation.dirX,
+        dirY: validation.dirY,
+        now,
+      });
+      consumeDodgeCooldown(player, now);
+
+      const accepted: RequestDodgeAcceptedServerMessage = {
+        type: "request_dodge_accepted",
+      };
+      try {
+        client.send("request_dodge_accepted", accepted);
+      } catch {}
+
+      log.debug?.(
+        {
+          roomId: this.roomId,
+          roomName: this.roomName,
+          sessionId: client.sessionId,
+          dirX: validation.dirX,
+          dirY: validation.dirY,
+          newX: applied.newX,
+          newY: applied.newY,
+          nextDodgeAt: player.nextDodgeAt,
+        },
+        "CombatRoom request_dodge accepted and player position updated.",
+      );
+    });
+  }
+
+  /**
+   * Core 0.12 -- `request_use_healing_flask` handler for CombatRoom.
+   *
+   * Audit finding: `request_use_healing_flask` was previously
+   * registered only in TownRoom.ts, so a player could not use their
+   * healing flask at all in Blackwire Sewers or Static Yard, despite
+   * CombatRoom already tracking and persisting flask charges
+   * end-to-end (join restoration, respawn restoration, onLeave
+   * persistence). This is a direct port of TownRoom's handler,
+   * reusing `validateHealingFlaskIntent`/`applyHealingFlaskIntent`
+   * unchanged -- no new heal logic, no itemization wiring (flask
+   * heal-amount itemization is explicitly cut from this build; see
+   * docs/CORE_BUILD_0_12_PLAN.md).
+   */
+  private registerHealingFlaskHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.healingFlaskHandlerRegistered) {
+      return;
+    }
+    this.healingFlaskHandlerRegistered = true;
+
+    this.onMessage("request_use_healing_flask", (client: Client, raw: unknown) => {
+      const state = this.state as CombatRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+
+      if (player === undefined) {
+        log.warn?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+          },
+          "CombatRoom request_use_healing_flask rejected: player not found.",
+        );
+        return;
+      }
+
+      const validation = validateHealingFlaskIntent({ message: raw });
+      if (!validation.ok) {
+        const rejection: RequestUseHealingFlaskRejectedServerMessage = {
+          type: "request_use_healing_flask_rejected",
+          reason: validation.reason,
+        };
+        try {
+          client.send("request_use_healing_flask_rejected", rejection);
+        } catch {}
+        return;
+      }
+
+      const now = Date.now();
+      const result = applyHealingFlaskIntent({ player, now });
+      if (!result.ok) {
+        const rejection: RequestUseHealingFlaskRejectedServerMessage = {
+          type: "request_use_healing_flask_rejected",
+          reason: result.reason,
+        };
+        try {
+          client.send("request_use_healing_flask_rejected", rejection);
+        } catch {}
+        return;
+      }
+
+      const accepted: RequestUseHealingFlaskAcceptedServerMessage = {
+        type: "request_use_healing_flask_accepted",
+        healedAmount: result.healedAmount,
+        remainingHp: result.remainingHp,
+        flaskCharges: result.flaskCharges,
+        nextFlaskAt: result.nextFlaskAt,
+      };
+      try {
+        client.send("request_use_healing_flask_accepted", accepted);
+      } catch {}
+
+      log.debug?.(
+        {
+          roomId: this.roomId,
+          roomName: this.roomName,
+          sessionId: client.sessionId,
+          healedAmount: result.healedAmount,
+          remainingHp: result.remainingHp,
+          flaskCharges: result.flaskCharges,
+          nextFlaskAt: result.nextFlaskAt,
+        },
+        "CombatRoom request_use_healing_flask accepted and HP / charges synced.",
+      );
+    });
+  }
+
+  /**
    * Core 0.7 -- `request_use_skill_slot` handler for CombatRoom.
    *
    * Audit finding: `request_use_skill_slot` was previously registered
@@ -718,7 +1062,9 @@ export class CombatRoom extends Room {
       const message = raw as Partial<RequestUseSkillSlotClientMessage> | null;
       const player = state.playerPresence.get(client.sessionId);
 
-      const slot = message?.slot === "secondary" || message?.slot === "tertiary" ? message.slot : undefined;
+      const slot = message?.slot === "primary" || message?.slot === "secondary" || message?.slot === "tertiary"
+        ? message.slot
+        : undefined;
 
       if (slot === undefined) {
         const rejection: RequestUseSkillSlotRejectedServerMessage = {
@@ -796,28 +1142,38 @@ export class CombatRoom extends Room {
       }
 
       setSkillSlotCooldownAt(player, slot, now + skillDefinition.cooldownMs);
-      const damageResult = applyEnemyDamage(enemy, skillDefinition.damage);
+      const castDamage = resolveSkillCastDamage(skillDefinition, player.damage);
+      const damageResult = applyEnemyDamage(enemy, castDamage);
 
       const spawnedLootList = damageResult.defeated
         ? spawnWorldLootOnEnemyDefeat(state as never, enemy, now)
         : [];
 
       if (damageResult.defeated) {
-        void grantEnemyDefeatXp(player, enemy.enemyId, (type, payload) => {
-          try { client.send(type, payload); } catch {}
-        });
+        this.trackPendingWrite(
+          grantEnemyDefeatXp(player, enemy.enemyId, (type, payload) => {
+            try { client.send(type, payload); } catch {}
+          }),
+          log,
+          "grantEnemyDefeatXp",
+        );
 
-        const progressResult = advanceObjectiveProgress(player, enemy.enemyId, (updated) => {
-          void new ObjectiveRepository().updateProgress(
-            updated.characterId.toString(),
-            updated.objectiveId,
-            updated.currentProgress,
+        const progressResults = advanceObjectiveProgressAllSlots(player, enemy.enemyId, (updated) => {
+          this.trackPendingWrite(
+            new ObjectiveRepository().updateProgress(
+              updated.characterId.toString(),
+              updated.objectiveId,
+              updated.currentProgress,
+            ),
+            log,
+            "objectiveProgress.updateProgress",
           );
         });
-        if (progressResult !== undefined && progressResult.changed) {
+        for (const progressResult of progressResults) {
           try {
             client.send("objective_updated", {
               type: "objective_updated",
+              slot: progressResult.slot,
               objectiveId: progressResult.objectiveId,
               label: progressResult.label,
               descriptionKey: progressResult.descriptionKey,
@@ -835,7 +1191,7 @@ export class CombatRoom extends Room {
         type: "request_use_skill_slot_accepted",
         slot,
         targetEnemyId: enemy.id,
-        damage: skillDefinition.damage,
+        damage: castDamage,
         remainingHp: damageResult.remainingHp,
         defeated: damageResult.defeated,
         nextReadyAt,
@@ -937,36 +1293,74 @@ export class CombatRoom extends Room {
     }
     this.respawnHandlerRegistered = true;
 
-    this.onMessage("request_respawn", (client: Client) => {
+    this.onMessage("request_respawn", async (client: Client) => {
       const state = this.state as CombatRoomState;
       const player = state.playerPresence.get(client.sessionId);
       if (player === undefined || player.lifeState === "alive") {
         return;
       }
 
-      // Minimal respawn: restore the player's HP to max and a
-      // ready flask set; teleport the player back to the centre of
-      // the combat spawn box (the same box `initializeCombatEnemies`
-      // uses). Heavy corpse / recovery UI is out of scope for the
-      // Task 268 minimal wiring.
-      player.hp = player.maxHp;
-      player.lifeState = "alive";
-      player.hasMovementTarget = false;
-      clearPendingAction(player);
-      const { minX, maxX, minY, maxY } = COMBAT_SPAWN_BOX;
-      player.x = Math.round((minX + maxX) / 2);
-      player.y = Math.round((minY + maxY) / 2);
-      restoreFlaskToFull(player);
+      // Core 0.14 -- death in a real combat zone now has a real
+      // consequence: instead of a free in-place respawn, defeat sends
+      // the player back to Nightmarket through the exact same handoff
+      // `request_combat_return` already uses for a voluntary gate-click
+      // return (resolveCombatZoneReturnSpawnId + updateCharacterRoomIntent
+      // + combat_town_return_approved). This is a structural consequence
+      // (leave the zone, travel back in), not a numeric one -- HP/flask
+      // are still fully restored on arrival, matching the old in-place
+      // respawn's own full-restore behavior.
+      if (player.hasPendingAction && player.pendingActionType === "zone_transition") {
+        return;
+      }
 
-      const respawned: PlayerRespawnedServerMessage = {
-        type: "player_respawned",
-        characterId: player.characterId,
-        zoneId: state.zoneId,
-        hp: player.hp,
-      };
+      const returnSpawnId = resolveCombatZoneReturnSpawnId(state.zoneId);
+      const returnSpawn = roomContentRegistry.spawnPoints.get(returnSpawnId as never);
+      if (
+        returnSpawn === undefined
+        || returnSpawn.zoneId !== "nightmarket"
+        || !isPositionInsideZoneBounds("nightmarket" as ZoneId, returnSpawn.x, returnSpawn.y)
+      ) {
+        return;
+      }
+
+      const objectId = "combat_death_return";
+
       try {
-        client.send("player_respawned", respawned);
-      } catch {}
+        setPendingAction(player, {
+          type: "zone_transition",
+          targetId: objectId,
+          targetX: returnSpawn.x,
+          targetY: returnSpawn.y,
+        });
+        await new CharacterService().updateCharacterRoomIntent(
+          player.characterId,
+          "nightmarket",
+          returnSpawn.x,
+          returnSpawn.y,
+          player.maxHp,
+          player.maxFlaskCharges,
+        );
+
+        player.hp = player.maxHp;
+        player.lifeState = "alive";
+        player.hasMovementTarget = false;
+        restoreFlaskToFull(player);
+
+        const approved: import("@doomscrolls/shared").CombatTownReturnApprovedServerMessage = {
+          type: "combat_town_return_approved",
+          characterId: player.characterId,
+          objectId,
+          fromRoomKind: "combat",
+          toRoomKind: "town",
+          targetZoneId: "nightmarket" as ZoneId,
+          targetSpawnKey: returnSpawnId,
+          message: "Defeated. Returning to Nightmarket.",
+        };
+        try { client.send("combat_town_return_approved", approved); } catch {}
+      } catch {
+        clearPendingAction(player);
+        return;
+      }
 
       log.info?.(
         {
@@ -974,12 +1368,10 @@ export class CombatRoom extends Room {
           roomName: this.roomName,
           sessionId: client.sessionId,
           characterId: player.characterId,
-          hp: player.hp,
-          maxHp: player.maxHp,
-          x: player.x,
-          y: player.y,
+          targetZoneId: "nightmarket",
+          targetSpawnKey: returnSpawnId,
         },
-        "CombatRoom request_respawn accepted: player HP restored and teleported to combat spawn centre.",
+        "CombatRoom request_respawn accepted: death redirected to Nightmarket via combat-town handoff.",
       );
     });
   }
@@ -1133,138 +1525,252 @@ export class CombatRoom extends Room {
   }
 
   /**
-   * Minimal CombatRoom enemy aggro + damage tick.
+   * CombatRoom enemy aggro + damage tick.
    *
-   * Task 268 — CombatRoom minimal real combat wiring.
+   * Core 0.24 — ports `TownRoom.applyEnemyAggroDamage`'s proximity
+   * acquisition, leash/return-to-spawn, and telegraph/windup/landing
+   * state machine into CombatRoom, which previously never assigned a
+   * real player to `enemy.targetPlayerSessionId` at all (see
+   * `docs/CORE_BUILD_0_24_PLAN.md`) — enemies in every combat zone sat
+   * in "idle" forever and players could not take damage here by any
+   * path.
    *
-   * Walks `state.enemies`. For each non-defeated enemy with a
-   * currently-targeted player, moves toward that player using the
-   * shared `moveEnemyTowardTarget` helper. When the enemy is inside
-   * `ENEMY_ATTACK_RANGE` and its cooldown has elapsed, starts a
-   * windup telegraph and applies damage on landing. When the target
-   * goes out of aggro range or disconnects, the enemy is switched to
-   * the "returning" state via the shared `clearEnemyTargetAndReturn`
-   * helper. When a defeated enemy's `respawnAtMs` elapses, it is
-   * teleported back to its spawn point and put into the "idle" state
-   * so it can re-acquire targets.
+   * Scope cut (Core 0.24 plan, Question 1): normal hits only. Heavy
+   * attacks (`attackKind: "heavy"`, the `heavyAttack*` content fields)
+   * are intentionally not read here — `attackKind` stays `"normal"`
+   * for every enemy, including the three heavy anchors and the reused
+   * Trashboar Brute. This is a deliberate sequencing decision (isolate
+   * the never-tested base mechanism before layering a second
+   * never-tested one on top), not an oversight; heavy-attack parity is
+   * a named, queued follow-up build.
    *
-   * NOTE: This is intentionally a small CombatRoom-only loop, not a
-   * copy of the full TownRoom aggro-damage block. Full enemy AI
-   * (wander, leash-out, multi-target re-acquire, heavy attacks,
-   * aggro transfer between players, etc.) is deferred to a shared
-   * helper extraction task — see `docs/BACKLOG_CORE_0_1.md`
-   * "CombatRoom enemy AI helper extraction".
+   * Multi-enemy aggro (each enemy independently targets the nearest
+   * alive player) is in scope and falls out of the ported acquisition
+   * loop directly — there is no single-target restriction layered on
+   * top of it.
    */
   private applyCombatEnemyAggroDamage(now: number, deltaMs: number): void {
     const state = this.state as CombatRoomState;
+
     state.enemies.forEach((enemy) => {
-      if (enemy.defeated) {
+      const enemyDefinition = contentRegistry.enemies.get(
+        enemy.enemyId as ContentEnemyId,
+      );
+      // Enemy `moveSpeed` is authored in the same per-second stat
+      // space as the player's derived `moveSpeed` -- it must NOT be
+      // passed through `toWorldUnits` (that's for the tile-authored
+      // aggro/leash ranges below), otherwise the enemy moves 24x too
+      // fast. Matches TownRoom's `applyEnemyAggroDamage` exactly.
+      const enemyMoveSpeed =
+        (enemyDefinition?.moveSpeed ?? 0) * ENEMY_MOVEMENT_SPEED_UNITS_PER_SECOND_MULTIPLIER;
+      const enemyAggroRange = toWorldUnits(enemyDefinition?.aggroRange ?? 0, 120);
+      const enemyLeashRange = toWorldUnits(enemyDefinition?.leashRange ?? 0, 180);
+      const enemyAttackCooldownMs = enemyDefinition?.attackCooldownMs ?? 1200;
+      const enemyAttackDamage = enemyDefinition?.damage ?? 2;
+      const distanceFromSpawn = Math.hypot(enemy.x - enemy.spawnX, enemy.y - enemy.spawnY);
+
+      if (enemy.defeated || enemy.hp <= 0) {
+        enemy.state = "defeated";
+        enemy.targetPlayerSessionId = "";
+        enemy.nextAttackAtMs = 0;
         return;
       }
 
-      const targetSessionId = enemy.targetPlayerSessionId;
-      const targetPlayer =
-        targetSessionId.length > 0
-          ? state.playerPresence.get(targetSessionId)
-          : undefined;
+      const currentTargetSessionId = enemy.targetPlayerSessionId;
 
-      if (targetPlayer === undefined) {
-        if (enemy.state === "chasing") {
+      if (currentTargetSessionId.length > 0) {
+        const currentTarget = state.playerPresence.get(currentTargetSessionId);
+        if (currentTarget === undefined || currentTarget.lifeState !== "alive") {
           clearEnemyTargetAndReturn(enemy);
+        } else {
+          const targetDistance = Math.hypot(enemy.x - currentTarget.x, enemy.y - currentTarget.y);
+          if (targetDistance > enemyAggroRange || distanceFromSpawn > enemyLeashRange) {
+            clearEnemyTargetAndReturn(enemy);
+          }
+        }
+      }
+
+      if (enemy.targetPlayerSessionId.length === 0 && enemy.state === "returning") {
+        moveEnemyTowardPoint(
+          enemy,
+          { x: enemy.spawnX, y: enemy.spawnY },
+          enemyMoveSpeed,
+          deltaMs,
+        );
+
+        const remainingDistanceToSpawn = Math.hypot(enemy.x - enemy.spawnX, enemy.y - enemy.spawnY);
+        if (remainingDistanceToSpawn <= ENEMY_RETURN_ARRIVAL_DISTANCE) {
+          resetEnemyCombatState(enemy);
+          enemy.x = enemy.spawnX;
+          enemy.y = enemy.spawnY;
         }
         return;
       }
 
-      if (targetPlayer.lifeState !== "alive") {
+      let closestPlayerSessionId: string | null = null;
+      let closestDistance = Number.POSITIVE_INFINITY;
+
+      state.playerPresence.forEach((player, sessionId) => {
+        if (player.lifeState !== "alive") {
+          return;
+        }
+
+        const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestPlayerSessionId = sessionId;
+        }
+      });
+
+      if (enemy.targetPlayerSessionId.length === 0) {
+        const canReacquireWhileReturning = enemy.state !== "returning"
+          || distanceFromSpawn <= ENEMY_RETURN_REACQUIRE_BUFFER;
+        if (
+          closestPlayerSessionId === null
+          || closestDistance > enemyAggroRange
+          || !canReacquireWhileReturning
+        ) {
+          enemy.state = "idle";
+          applyWanderMovement(enemy, enemyMoveSpeed, deltaMs, now);
+          return;
+        }
+
+        enemy.targetPlayerSessionId = closestPlayerSessionId;
+      }
+
+      const targetPlayer = state.playerPresence.get(enemy.targetPlayerSessionId);
+      if (targetPlayer === undefined || targetPlayer.lifeState !== "alive") {
         clearEnemyTargetAndReturn(enemy);
         return;
       }
 
-      // Step the enemy toward the player. moveEnemyTowardTarget is
-      // a shared pure helper that does not enter the engagement
-      // radius.
-      const enemyDefinition = contentRegistry.enemies.get(
-        enemy.enemyId as ContentEnemyId,
-      );
-      const enemyMoveSpeed =
-        toWorldUnits(enemyDefinition?.moveSpeed ?? 0, 1.4) *
-        ENEMY_MOVEMENT_SPEED_UNITS_PER_SECOND_MULTIPLIER;
-      moveEnemyTowardTarget(
-        enemy,
-        { x: targetPlayer.x, y: targetPlayer.y },
-        enemyMoveSpeed,
-        deltaMs,
-      );
+      const targetDistance = Math.hypot(enemy.x - targetPlayer.x, enemy.y - targetPlayer.y);
+      if (targetDistance > enemyAggroRange || distanceFromSpawn > enemyLeashRange) {
+        clearEnemyTargetAndReturn(enemy);
+        return;
+      }
+
+      enemy.state = "chasing";
+
+      // CombatRoom-only divergence from TownRoom (Core 0.24): only
+      // chase while no attack is currently telegraphed. TownRoom's
+      // identical logic keeps chasing every tick regardless of
+      // windup state, which -- verified while writing this build's
+      // dodge test -- makes its own "distance > ENEMY_ATTACK_RANGE"
+      // miss check structurally unreachable for a single dodge: the
+      // enemy re-closes the gap (chase speed comfortably exceeds the
+      // dodge distance within the windup) before the check can ever
+      // see the player still out of range. Freezing position once a
+      // telegraph starts means a dodge that clears attack range stays
+      // cleared until landing, so the existing miss branch below is
+      // actually reachable. See docs/CORE_BUILD_0_24_PLAN.md.
+      if (enemy.attackLandingAtMs === 0) {
+        moveEnemyTowardTarget(
+          enemy,
+          targetPlayer,
+          enemyMoveSpeed,
+          deltaMs,
+        );
+      }
+
+      const currentDistance = Math.hypot(enemy.x - targetPlayer.x, enemy.y - targetPlayer.y);
 
       // Landing an in-flight telegraph.
-      if (
-        enemy.attackLandingAtMs > 0 &&
-        now >= enemy.attackLandingAtMs
-      ) {
-        enemy.attackLandingAtMs = 0;
+      if (enemy.attackLandingAtMs > 0) {
+        if (now < enemy.attackLandingAtMs) {
+          return;
+        }
+
+        const landingTarget = state.playerPresence.get(enemy.targetPlayerSessionId);
+        const landingClient = landingTarget === undefined
+          ? undefined
+          : this.clients.find((client) => client.sessionId === landingTarget.sessionId);
+
         if (
-          targetPlayer.lifeState === "alive" &&
-          Math.hypot(
-            targetPlayer.x - enemy.x,
-            targetPlayer.y - enemy.y,
-          ) <= ENEMY_ATTACK_RANGE
+          landingTarget === undefined
+          || landingTarget.lifeState !== "alive"
+          || Math.hypot(enemy.x - landingTarget.x, enemy.y - landingTarget.y) > ENEMY_ATTACK_RANGE
         ) {
-          const damage = Math.max(1, Math.floor(enemyDefinition?.damage ?? 1));
-          const previousHp = Math.max(0, targetPlayer.hp);
-          const nextHp = Math.max(0, previousHp - damage);
-          targetPlayer.hp = nextHp;
-          if (nextHp <= 0) {
-            targetPlayer.lifeState = "downed";
-            targetPlayer.hasMovementTarget = false;
-            clearPendingAction(targetPlayer);
-            enemy.state = "returning";
-            enemy.targetPlayerSessionId = "";
-          }
-          const targetClient = this.clients.find(
-            (client) => client.sessionId === targetSessionId,
-          );
-          if (targetClient !== undefined) {
-            const resolved: EnemyAttackResolvedServerMessage = {
+          // Target moved out of range or died during the windup: a
+          // server-authoritative miss. This is the mechanism dodge
+          // relies on to avoid an already-telegraphed hit.
+          enemy.attackLandingAtMs = 0;
+          enemy.nextAttackAtMs = now + enemyAttackCooldownMs;
+          if (landingClient !== undefined) {
+            sendEnemyAttackResolved(landingClient, {
               type: "enemy_attack_resolved",
               enemyId: enemy.id,
-              targetEntityId: targetPlayer.characterId as unknown as EntityId,
-              outcome: "hit",
+              targetEntityId: (landingTarget?.characterId ?? "") as unknown as EntityId,
+              outcome: "miss",
               attackKind: "normal",
-              damage: previousHp - nextHp,
-              remainingHp: nextHp,
-            };
-            sendEnemyAttackResolved(targetClient, resolved);
+            });
           }
+          return;
+        }
+
+        enemy.attackLandingAtMs = 0;
+        const damage = mitigateIncomingDamage(enemyAttackDamage, landingTarget.armor);
+        const previousHp = Math.max(0, landingTarget.hp);
+        const nextHp = Math.max(0, previousHp - damage);
+        landingTarget.hp = nextHp;
+        enemy.nextAttackAtMs = now + enemyAttackCooldownMs;
+
+        if (nextHp <= 0) {
+          landingTarget.lifeState = "downed";
+          landingTarget.hasMovementTarget = false;
+          clearPendingAction(landingTarget);
+          clearEnemyTargetAndReturn(enemy);
+        }
+
+        if (landingClient !== undefined) {
+          const damageMessage: DamageAppliedServerMessage = {
+            type: "damage_applied",
+            targetEntityId: landingTarget.characterId as unknown as EntityId,
+            sourceEntityId: enemy.id as unknown as EntityId,
+            damage,
+            remainingHp: nextHp,
+          };
+          try {
+            landingClient.send("damage_applied", damageMessage);
+          } catch {
+            // keep room state authoritative even if send fails
+          }
+          sendEnemyAttackResolved(landingClient, {
+            type: "enemy_attack_resolved",
+            enemyId: enemy.id,
+            targetEntityId: landingTarget.characterId as unknown as EntityId,
+            outcome: "hit",
+            attackKind: "normal",
+            damage,
+            remainingHp: nextHp,
+          });
         }
         return;
       }
 
+      if (currentDistance > ENEMY_ATTACK_RANGE) {
+        return;
+      }
+
       // Start a new telegraph when in range and the cooldown has
-      // elapsed.
+      // elapsed. `nextAttackAtMs` is a placeholder here (windup +
+      // cooldown from telegraph start); the landing/miss branches
+      // above overwrite it with a more accurate `now + cooldownMs`
+      // once the windup actually resolves, matching TownRoom.
       if (enemy.nextAttackAtMs <= now) {
-        const distance = Math.hypot(
-          targetPlayer.x - enemy.x,
-          targetPlayer.y - enemy.y,
+        enemy.attackLandingAtMs = now + ENEMY_ATTACK_WINDUP_MS;
+        enemy.nextAttackAtMs = enemy.attackLandingAtMs + enemyAttackCooldownMs;
+
+        const telegraphClient = this.clients.find(
+          (client) => client.sessionId === targetPlayer.sessionId,
         );
-        if (distance <= ENEMY_ATTACK_RANGE) {
-          const cooldownMs = Math.max(
-            500,
-            Math.floor(enemyDefinition?.attackCooldownMs ?? 1200),
+        if (telegraphClient !== undefined) {
+          sendEnemyAttackTelegraph(
+            telegraphClient,
+            enemy.id,
+            targetPlayer.characterId.toString(),
+            ENEMY_ATTACK_WINDUP_MS,
           );
-          enemy.nextAttackAtMs = now + cooldownMs;
-          enemy.attackLandingAtMs = now + ENEMY_ATTACK_WINDUP_MS;
-          enemy.state = "chasing";
-          const targetClient = this.clients.find(
-            (client) => client.sessionId === targetSessionId,
-          );
-          if (targetClient !== undefined) {
-            sendEnemyAttackTelegraph(
-              targetClient,
-              enemy.id,
-              targetPlayer.characterId.toString(),
-              ENEMY_ATTACK_WINDUP_MS,
-            );
-          }
         }
       }
     });

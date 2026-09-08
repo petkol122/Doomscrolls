@@ -1,10 +1,10 @@
 import { contentRegistry } from "@doomscrolls/content";
 import type { ItemDefinitionId } from "@doomscrolls/shared";
-import { ItemLocationType, Prisma } from "@prisma/client";
+import { ItemLocationType, Prisma, type PrismaClient } from "@prisma/client";
 
 import { InventoryRepository } from "../../persistence/repositories/InventoryRepository";
 import { ItemRepository } from "../../persistence/repositories/ItemRepository";
-import { prisma } from "../../persistence/prisma";
+import { getSharedPrismaClient } from "../../persistence/prisma";
 
 export type PickupWorldLootFailureReason = "inventory_not_found" | "inventory_full" | "invalid_item_definition";
 
@@ -22,13 +22,15 @@ export async function persistPickedUpWorldLootToInventory(input: {
   readonly characterId: string;
   readonly itemDefinitionId: ItemDefinitionId;
   readonly itemLabel: string;
+  readonly db?: PrismaClient;
 }): Promise<PickupWorldLootInventoryResult> {
   const itemDefinition = contentRegistry.items.get(input.itemDefinitionId);
   if (itemDefinition === undefined) {
     return { ok: false, reason: "invalid_item_definition" };
   }
 
-  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+  const db = input.db ?? getSharedPrismaClient();
+  return db.$transaction(async (tx: Prisma.TransactionClient) => {
     const inventoryRepository = new InventoryRepository(tx);
     const itemRepository = new ItemRepository(tx);
     const inventory = await inventoryRepository.findByCharacterId(input.characterId);

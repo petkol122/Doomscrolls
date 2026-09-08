@@ -133,10 +133,43 @@ export interface CorpseRecoveredServerMessage {
   readonly recoveredItemIds: readonly ItemInstanceId[];
 }
 
+/**
+ * Core 0.29 — Room-Local Chat.
+ *
+ * Broadcast to every client currently connected to the sender's room
+ * (the same TownRoom or CombatRoom instance), including the sender
+ * itself -- this doubles as the accept signal, so there is no separate
+ * `request_chat_accepted`. Carries only what the Core 0.29 field-
+ * visibility audit classified as safe to show a third party:
+ * `sessionId` (keying only, never displayed), `displayName`, `text`
+ * and `sentAt`. Deliberately excludes `classKey`, `level` or any other
+ * `PlayerPresence` field. Replaces the earlier `chat_message` server
+ * message, which was never wired to any room handler.
+ */
 export interface ChatMessageServerMessage {
   readonly type: "chat_message";
-  readonly fromCharacterId: CharacterId;
+  readonly sessionId: string;
+  readonly displayName: string;
   readonly text: string;
+  readonly sentAt: number;
+}
+
+/**
+ * Core 0.29 — Room-Local Chat.
+ *
+ * Safe, server-owned rejection reasons for `request_chat` intents. The
+ * client never decides message shape, length or rate limiting; the
+ * server is the sole authority.
+ */
+export type RequestChatRejectedReason =
+  | "invalid_shape"
+  | "empty_message"
+  | "message_too_long"
+  | "chat_on_cooldown";
+
+export interface RequestChatRejectedServerMessage {
+  readonly type: "request_chat_rejected";
+  readonly reason: RequestChatRejectedReason;
 }
 
 export interface ZoneTransitionApprovedServerMessage {
@@ -307,7 +340,7 @@ export type RequestUseSkillSlotRejectedReason =
 
 export interface RequestUseSkillSlotAcceptedServerMessage {
   readonly type: "request_use_skill_slot_accepted";
-  readonly slot: "secondary" | "tertiary";
+  readonly slot: "primary" | "secondary" | "tertiary";
   readonly targetEnemyId: string;
   readonly damage: number;
   readonly remainingHp: number;
@@ -317,7 +350,7 @@ export interface RequestUseSkillSlotAcceptedServerMessage {
 
 export interface RequestUseSkillSlotRejectedServerMessage {
   readonly type: "request_use_skill_slot_rejected";
-  readonly slot: "secondary" | "tertiary";
+  readonly slot: "primary" | "secondary" | "tertiary";
   readonly reason: RequestUseSkillSlotRejectedReason;
 }
 
@@ -402,6 +435,9 @@ export interface InteractResponseServerMessage {
 
 export interface ObjectiveUpdatedServerMessage {
   readonly type: "objective_updated";
+  // Core 0.15 -- which of the two concurrent objective slots this update
+  // is for. Required: every emitter in this build is updated to pass it.
+  readonly slot: 1 | 2;
   readonly objectiveId: string;
   readonly label: string;
   readonly descriptionKey?: string;
@@ -625,4 +661,5 @@ export type ServerRoomMessage =
   | RequestRouteTravelAcceptedServerMessage
   | RequestRouteTravelRejectedServerMessage
   | RequestStartBoardObjectiveRejectedServerMessage
+  | RequestChatRejectedServerMessage
   | ErrorServerMessage;

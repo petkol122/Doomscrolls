@@ -15,11 +15,17 @@ import type { LocalizationKey } from "@doomscrolls/localization";
 export type ContentLocalizationKey = LocalizationKey;
 
 export type SkillId = "heavy_strike" | "grave_spark" | "bone_splinter" | "shatter_blow" | "groundbreaker";
-export type EnemyId = "trashboar_runt" | "trashboar_brute" | "trashboar_skitter" | "static_wretch";
-export type LootTableId = "sewer_starter_loot" | "sewer_brute_loot" | "sewer_skitter_loot" | "static_yard_loot";
+export type EnemyId = "trashboar_runt" | "trashboar_brute" | "trashboar_skitter" | "static_wretch" | "slag_hound" | "foundry_warden" | "yard_drudge" | "ash_rat" | "brine_crawler" | "tide_stalker" | "drowned_hauler" | "arc_sentinel";
+export type LootTableId = "sewer_starter_loot" | "sewer_brute_loot" | "sewer_skitter_loot" | "static_yard_loot" | "cinderworks_loot" | "saltmere_docks_loot";
 export type LevelTableId = "level_1_to_10";
-export type ObjectiveId = "cull_trashboars" | "break_the_brute" | "sewer_cleanup";
-export type ZoneContentId = "nightmarket" | "blackwire_sewers" | "static_yard";
+export type ObjectiveId = "cull_trashboars" | "break_the_brute" | "sewer_cleanup" | "skitter_hunt" | "static_cleanup" | "sewer_patrol" | "slag_hunt" | "foundry_purge" | "drudge_patrol" | "ash_cull" | "brine_cull" | "tide_hunt" | "hauler_purge" | "arc_purge" | "yard_patrol" | "cinder_patrol" | "dock_patrol";
+export type ZoneContentId = "nightmarket" | "blackwire_sewers" | "static_yard" | "cinderworks" | "saltmere_docks";
+// Core 0.32 — World Map Foundation. A real-world world/continent/area
+// hierarchy the existing zones migrate under. Content/UI-layer only:
+// the server and protocol have no notion of any of these three ids.
+export type WorldContentId = "earth";
+export type ContinentContentId = "europe";
+export type AreaContentId = "pilsen";
 export type ItemRarity = "common" | "rare" | "epic";
 export type SkillTargetingMode = "target";
 export type ZoneRoomType = "town" | "combat";
@@ -28,10 +34,13 @@ export type SpawnPointContentId =
   | "nightmarket_spawn"
   | "nightmarket_blackwire_combat_entry"
   | "nightmarket_services_return"
-  | "nightmarket_static_yard_combat_entry";
-export type CombatInteractableId = "combat_return_to_nightmarket" | "static_yard_return_to_nightmarket";
+  | "nightmarket_static_yard_combat_entry"
+  | "nightmarket_cinderworks_combat_entry"
+  | "nightmarket_saltmere_docks_combat_entry";
+export type CombatInteractableId = "combat_return_to_nightmarket" | "static_yard_return_to_nightmarket" | "cinderworks_return_to_nightmarket" | "saltmere_docks_return_to_nightmarket";
 export type EquipmentSlotCategory = "weapon" | "armor" | "accessory" | "belt" | "flask";
 export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken" | "loot_container" | "vendor" | "town_service" | "waypoint" | "combat_edge" | "combat_return_gate" | "area_label" | "path_marker" | "boundary_marker" | "safe_area_marker" | "rest_area_marker";
+export type VisualAssetCategory = "ground_tile" | "enemy_sprite" | "player_sprite" | "prop_sprite" | "item_icon" | "hp_bar" | "rarity_frame";
 export type VendorId = "nightmarket_suspicious_vendor";
 export type TownServiceId = "nightmarket_stash_keeper" | "nightmarket_trainer" | "nightmarket_waypoint" | "nightmarket_suspicious_vendor";
 export type TownServiceKind = "vendor" | "stash" | "trainer" | "waypoint";
@@ -128,6 +137,23 @@ export interface EnemyContentDefinition extends LocalizedContentDefinition {
   readonly spriteKey: string;
 }
 
+/**
+ * Core 0.33 — Nightmarket Real City-Center Expansion. The single scale
+ * constant every zone's `bounds` is measured against when it is meant to
+ * represent a real-world footprint: game units per real-world meter.
+ *
+ * Derived, not invented: Nightmarket's own pre-0.33 bounds (5000 x 3600)
+ * divided almost exactly evenly by Namesti Republiky's real dimensions
+ * (193m x 139m) on both axes independently (~25.906 and ~25.899, ~0.03%
+ * apart) -- a coincidence confirmed via full git-history audit (the bounds
+ * were tuned three times, always for gameplay spacing/aggro feel, never
+ * against real geography; see docs/CORE_BUILD_0_33_PLAN.md Question 2).
+ * Adopted deliberately here rather than left as an unexplained coincidence,
+ * since it costs nothing (no existing zone needed rescaling) and gives
+ * every future real-world-grounded zone one consistent constant to use.
+ */
+export const WORLD_UNITS_PER_METER = 25.9;
+
 export interface ZoneContentBounds {
   readonly minX: number;
   readonly maxX: number;
@@ -151,6 +177,14 @@ export interface ZoneContentDefinition extends LocalizedContentDefinition {
   readonly enemyIds: readonly EnemyId[];
   readonly transitionZoneIds: readonly ZoneContentId[];
   readonly mapKey: string;
+  /**
+   * Core 0.32 — which real-world Area this zone belongs to. Every zone
+   * has exactly one parent Area; an Area may have many zones (the
+   * child holds the single-parent reference, matching how
+   * `OriginContentDefinition.startingZoneId` already models a
+   * child-references-parent relationship elsewhere in this file).
+   */
+  readonly areaId: AreaContentId;
   readonly bounds: ZoneContentBounds;
   /**
    * Optional rectangular boundary for a physical town rest/replenish area.
@@ -159,6 +193,41 @@ export interface ZoneContentDefinition extends LocalizedContentDefinition {
    * Absent = no physical rest area in this zone.
    */
   readonly restAreaBounds?: ZoneContentRestAreaBounds;
+  /**
+   * Core 0.22 — optional semantic key into `visualAssets` for this zone's
+   * ground/floor tile texture. Absent = the client renders its existing
+   * flat placeholder fill unchanged. Isometric art integration is being
+   * rolled out one zone at a time (see docs/CORE_BUILD_0_22_PLAN.md);
+   * this field is how a zone opts in once its tiles are mapped.
+   */
+  readonly groundTileKey?: string;
+}
+
+/**
+ * Core 0.32 — World Map Foundation. A real-world `world -> continent ->
+ * area` hierarchy, minimal by design: World/Continent carry nothing
+ * beyond identity/localization (they exist to prove the hierarchy
+ * holds, not because any current feature reads a continent-level
+ * property), and Area carries only what the map screen and the
+ * scalability check need. No classification/gating field of any kind
+ * -- city-vs-safe-town distinction and level-gating are both out of
+ * scope for this build (see docs/CORE_BUILD_0_32_PLAN.md).
+ */
+export interface WorldContentDefinition extends LocalizedContentDefinition {
+  readonly id: WorldContentId;
+}
+
+export interface ContinentContentDefinition extends LocalizedContentDefinition {
+  readonly id: ContinentContentId;
+  readonly worldId: WorldContentId;
+}
+
+export interface AreaContentDefinition extends LocalizedContentDefinition {
+  readonly id: AreaContentId;
+  readonly continentId: ContinentContentId;
+  /** Real-world coordinates (WGS84 degrees), used to place this area's marker on the map screen. */
+  readonly latitude: number;
+  readonly longitude: number;
 }
 
 export interface ItemUseEffectDefinition {
@@ -249,4 +318,36 @@ export interface WorldPropContentDefinition {
   readonly labelKey?: ContentLocalizationKey;
   readonly x: number;
   readonly y: number;
+  /**
+   * Required for `kind: "loot_container"` props (see ContentValidation.ts).
+   * The container's own real loot table -- interactValidation.ts reads
+   * this instead of hardcoding an enemy id as a stand-in loot-table key,
+   * so a loot container in any zone rolls from that zone's own real loot
+   * pool, not another zone's borrowed table.
+   */
+  readonly lootTableId?: LootTableId;
+}
+
+/**
+ * Core 0.22 — maps a semantic key (e.g. "ground_stone") to an actual
+ * asset file, so rendering code can look up textures by key and never
+ * reference a specific file/pack directly. Swapping the underlying art
+ * pack later means editing this data, not any rendering code.
+ */
+export interface VisualAssetContentDefinition {
+  readonly id: string;
+  readonly category: VisualAssetCategory;
+  /** Path under the client's public/ directory, e.g. "/assets/isobricks.png". */
+  readonly path: string;
+  readonly sourceWidth: number;
+  readonly sourceHeight: number;
+  /**
+   * Core 0.23 — present only for a multi-frame sprite sheet (category
+   * "hp_bar" today). `frameWidth`/`frameHeight` describe one frame in
+   * the sheet at `path`; `frameCount` is how many frames it contains.
+   * Absent for a single-image asset.
+   */
+  readonly frameWidth?: number;
+  readonly frameHeight?: number;
+  readonly frameCount?: number;
 }

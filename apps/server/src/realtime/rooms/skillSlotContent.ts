@@ -16,8 +16,13 @@ import type { PlayerPresence } from "./PlayerPresence";
  * Core 0.9 -- now resolves per the joined character's own class (see
  * `resolveSkillSlotDefinition` below) instead of the single-class
  * hardcoded default this module originally shipped with.
+ *
+ * Core 0.14 -- added a third slot, "primary", resolving to the class's
+ * `startingSkillId` (`heavy_strike` for both current classes). This is
+ * the same content field every class definition already carried but
+ * that no input path had ever resolved.
  */
-export type SkillSlotId = "secondary" | "tertiary";
+export type SkillSlotId = "primary" | "secondary" | "tertiary";
 
 export interface SkillSlotDefinition {
   readonly skillId: string;
@@ -40,7 +45,11 @@ export function resolveSkillSlotDefinition(
   classKey: CharacterClassKey,
 ): SkillSlotDefinition {
   const characterClass = contentRegistry.classes.require(classKey);
-  const skillId = slot === "secondary" ? characterClass.secondarySkillId : characterClass.tertiarySkillId;
+  const skillId = slot === "primary"
+    ? characterClass.startingSkillId
+    : slot === "secondary"
+      ? characterClass.secondarySkillId
+      : characterClass.tertiarySkillId;
   const skill = contentRegistry.skills.require(skillId);
 
   return {
@@ -51,24 +60,54 @@ export function resolveSkillSlotDefinition(
   };
 }
 
+/**
+ * Core 0.10 -- combines a skill's own flat `baseDamage` with the caster's
+ * power/equipment-derived damage bonus, so weapon choice and the power
+ * stat matter for skill casts too, not just basic attacks.
+ *
+ * `CharacterStatsService.calculateDerivedStats` treats `1` as the
+ * universal per-hit floor shared by every damage source
+ * (`damage = 1 + power`); everything above that floor is the
+ * power-stat/equipment contribution. Subtracting it back out here
+ * isolates that bonus so it can be layered onto a skill's own numbers
+ * without double-counting the floor, and without skills losing their
+ * own identity as the dominant, distinguishing factor between them.
+ */
+export function resolveSkillCastDamage(
+  skillDefinition: Pick<SkillSlotDefinition, "damage">,
+  playerDamage: number,
+): number {
+  const damageBonus = Math.max(0, playerDamage - 1);
+  return skillDefinition.damage + damageBonus;
+}
+
 export function getSkillSlotCooldownAt(player: PlayerPresence, slot: SkillSlotId): number {
-  const value = slot === "secondary" ? player.nextSkillSlotAt : player.nextTertiarySkillSlotAt;
+  const value = slot === "primary"
+    ? player.nextPrimarySkillSlotAt
+    : slot === "secondary"
+      ? player.nextSkillSlotAt
+      : player.nextTertiarySkillSlotAt;
   return Number.isFinite(value) ? value : 0;
 }
 
 export function setSkillSlotCooldownAt(player: PlayerPresence, slot: SkillSlotId, value: number): void {
-  if (slot === "secondary") {
+  if (slot === "primary") {
+    player.nextPrimarySkillSlotAt = value;
+  } else if (slot === "secondary") {
     player.nextSkillSlotAt = value;
   } else {
     player.nextTertiarySkillSlotAt = value;
   }
 }
 
-export function pendingActionTypeForSkillSlot(slot: SkillSlotId): "skill_secondary" | "skill_tertiary" {
-  return slot === "secondary" ? "skill_secondary" : "skill_tertiary";
+export function pendingActionTypeForSkillSlot(slot: SkillSlotId): "skill_primary" | "skill_secondary" | "skill_tertiary" {
+  return slot === "primary" ? "skill_primary" : slot === "secondary" ? "skill_secondary" : "skill_tertiary";
 }
 
 export function skillSlotForPendingActionType(actionType: string): SkillSlotId | null {
+  if (actionType === "skill_primary") {
+    return "primary";
+  }
   if (actionType === "skill_secondary") {
     return "secondary";
   }

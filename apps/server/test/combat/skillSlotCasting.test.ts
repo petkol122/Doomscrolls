@@ -5,7 +5,12 @@ import type { RequestUseSkillSlotAcceptedServerMessage } from "@doomscrolls/shar
 import type { CombatRoomState } from "../../src/realtime/rooms/CombatRoomState";
 import { createTestRealtimeServer } from "../support/testRealtimeServer";
 import { waitForMessage } from "../support/waitForMessage";
-import { TEST_CHARACTER_ID, TEST_IRONCLAD_CHARACTER_ID, TEST_USER_ID } from "../support/fixtures";
+import {
+  TEST_CHARACTER_ID,
+  TEST_CHARACTER_STATS,
+  TEST_IRONCLAD_CHARACTER_ID,
+  TEST_USER_ID,
+} from "../support/fixtures";
 
 /**
  * Regression for Core 0.7 Task 360's "Unplanned finding" (see
@@ -79,9 +84,13 @@ describe("CombatRoom skill-slot casting", () => {
    * Regression for Core 0.9's real fix: `resolveSkillSlotDefinition` used
    * to hardcode Gravewalker's skill mapping regardless of the joined
    * character's actual class. An Ironclad player casting "secondary"
-   * must land Shatter Blow (damage 6), not Grave Spark (damage 3) --
-   * proving the *joined* character's class, not a default, determines
-   * which skill actually lands.
+   * must land Shatter Blow (base damage 6), not Grave Spark (base damage
+   * 3) -- proving the *joined* character's class, not a default,
+   * determines which skill actually lands.
+   *
+   * Core 0.10 -- the expected total now also includes the fixture's
+   * power/equipment damage bonus (`resolveSkillCastDamage`), since skill
+   * damage is no longer the flat content `baseDamage` alone.
    */
   it("resolves the joined character's own class, not a hardcoded default", async () => {
     const client = await colyseus.sdk.joinOrCreate("combat", {
@@ -120,7 +129,8 @@ describe("CombatRoom skill-slot casting", () => {
       "request_use_skill_slot_accepted",
     );
 
-    expect(accepted.damage).toBe(6);
-    expect(accepted.remainingHp).toBe(1000 - 6);
+    const expectedDamage = 6 + (TEST_CHARACTER_STATS.derived.damage - 1);
+    expect(accepted.damage).toBe(expectedDamage);
+    expect(accepted.remainingHp).toBe(1000 - expectedDamage);
   });
 });

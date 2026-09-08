@@ -1,5 +1,5 @@
 import { CorpseStatus, type Prisma, type PrismaClient } from "@prisma/client";
-import { prisma as defaultPrisma } from "../prisma";
+import { getSharedPrismaClient } from "../prisma";
 
 type CorpseRepositoryClient = PrismaClient | Prisma.TransactionClient;
 
@@ -17,7 +17,7 @@ export interface MarkCorpseRecoveredData {
 }
 
 export class CorpseRepository {
-  public constructor(private readonly db: CorpseRepositoryClient = defaultPrisma) {}
+  public constructor(private readonly db: CorpseRepositoryClient = getSharedPrismaClient()) {}
 
   public createCorpse(data: CreateCorpseData) {
     return this.db.corpse.create({ data });

@@ -6,6 +6,7 @@
 export type ApproachActionLabel = "attack" | "interact" | "pickup" | null;
 
 import Phaser from "phaser";
+import { DEFAULT_PLAYER_TINT, type PlayerPlaceholderTint } from "./classTint";
 
 const HIDDEN_POSITION = -9999;
 
@@ -38,6 +39,7 @@ export interface WorldSessionPlayerPlaceholderView {
 export function createWorldSessionPlayerPlaceholderView(
   scene: Phaser.Scene,
   parentContainer?: Phaser.GameObjects.Container,
+  tint: PlayerPlaceholderTint = DEFAULT_PLAYER_TINT,
 ): WorldSessionPlayerPlaceholderView {
   const container = scene.add.container(HIDDEN_POSITION, HIDDEN_POSITION);
   container.setDepth(500);
@@ -45,15 +47,15 @@ export function createWorldSessionPlayerPlaceholderView(
 
   const shadow = scene.add.ellipse(0, 13, 28, 14, 0x000000, 0.28);
   const ring = scene.add.ellipse(0, 10, 34, 18, 0x12304d, 0.28);
-  ring.setStrokeStyle(2, 0x8fd4ff, 0.55);
+  ring.setStrokeStyle(2, tint.ringStrokeColor, 0.55);
 
-  const legs = scene.add.triangle(0, 10, -8, 0, 8, 0, 0, 12, 0x2f6fb5, 0.98);
+  const legs = scene.add.triangle(0, 10, -8, 0, 8, 0, 0, 12, tint.legsColor, 0.98);
   legs.setStrokeStyle(2, 0xb8e4ff, 0.8);
 
-  const torso = scene.add.ellipse(0, -1, 22, 26, 0x4a9eff, 1);
+  const torso = scene.add.ellipse(0, -1, 22, 26, tint.torsoColor, 1);
   torso.setStrokeStyle(2, 0xd8ecff, 0.95);
 
-  const shoulders = scene.add.rectangle(0, -2, 28, 7, 0x78bbff, 0.95);
+  const shoulders = scene.add.rectangle(0, -2, 28, 7, tint.shoulderColor, 0.95);
   shoulders.setStrokeStyle(1, 0xe5f4ff, 0.7);
 
   const head = scene.add.circle(0, -15, 6, 0xf3efe5, 0.95);

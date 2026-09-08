@@ -1,6 +1,16 @@
 import type { LocalizationDictionary } from "../LocaleTypes";
 
 export const en = {
+  // ── World Map Foundation (Core 0.32) ──
+  "world.earth.name": "Earth",
+  "world.earth.description": "The one world this game currently takes place in.",
+
+  "continent.europe.name": "Europe",
+  "continent.europe.description": "Home to the one real area currently reachable.",
+
+  "area.pilsen.name": "Pilsen",
+  "area.pilsen.description": "A city built over its own sewers, wiring, furnaces and docks -- exactly the place the Nightmarket and its four combat zones already are.",
+
   "origin.sewer_dweller.name": "Sewer Dweller",
   "origin.sewer_dweller.description":
     "Raised below the city where leaking pipes, old magic and bad decisions all drain to the same place.",
@@ -29,6 +39,30 @@ export const en = {
   "enemy.static_wretch.name": "Static Wretch",
   "enemy.static_wretch.description":
     "A scavenger left twitchy and hyper-alert by too many nights sleeping against live cable. Notices you before you notice it.",
+  "enemy.slag_hound.name": "Slag Hound",
+  "enemy.slag_hound.description":
+    "Something that used to be a dog, before the foundry runoff got into everything. Fast, hungry, and never alone for long.",
+  "enemy.foundry_warden.name": "Foundry Warden",
+  "enemy.foundry_warden.description":
+    "Built to mind the furnace floor long after anyone stopped paying it to. It still takes the job seriously.",
+  "enemy.yard_drudge.name": "Yard Drudge",
+  "enemy.yard_drudge.description":
+    "Shuffles the same maintenance loop it's shuffled for years, live cable or not. Doesn't dodge. Doesn't need to, usually.",
+  "enemy.ash_rat.name": "Ash Rat",
+  "enemy.ash_rat.description":
+    "Grown fat and grey on furnace scraps. Not much of a threat alone, and it's never quite alone.",
+  "enemy.brine_crawler.name": "Brine Crawler",
+  "enemy.brine_crawler.description":
+    "Something with too many legs that learned to like the salt. Slow, but it doesn't tire.",
+  "enemy.tide_stalker.name": "Tide Stalker",
+  "enemy.tide_stalker.description":
+    "Moves with the water instead of against it, which means it's usually already behind you.",
+  "enemy.drowned_hauler.name": "Drowned Hauler",
+  "enemy.drowned_hauler.description":
+    "Still hauling cargo nobody's collecting anymore, in a body that stopped needing air a long time ago.",
+  "enemy.arc_sentinel.name": "Arc Sentinel",
+  "enemy.arc_sentinel.description":
+    "Stands post where the current runs strongest, and hits like it's part of the circuit.",
 
   "zone.nightmarket.name": "The Nightmarket",
   "zone.nightmarket.description":
@@ -41,6 +75,14 @@ export const en = {
   "zone.static_yard.name": "Static Yard",
   "zone.static_yard.description":
     "A derelict tram yard where snapped overhead cable still spits current into the dark, and what lives there has adjusted.",
+
+  "zone.cinderworks.name": "Cinderworks",
+  "zone.cinderworks.description":
+    "A scrap-smelting foundry yard that never fully went cold. Whatever still moves between the furnaces has gotten used to the heat.",
+
+  "zone.saltmere_docks.name": "Saltmere Docks",
+  "zone.saltmere_docks.description":
+    "A flooded dockyard where the salt got into everything -- the cargo, the cranes, and whatever still works the pier.",
 
   "item.starter_pipe.name": "Starter Pipe",
   "item.starter_pipe.description":
@@ -103,6 +145,73 @@ export const en = {
   "item.static_wraps.description":
     "Bound tight enough that your hands move before you've finished deciding to.",
 
+  // ── Core 0.16 — Cinderworks' own item family ──
+  "item.cinder_ash.name": "Cinder Ash",
+  "item.cinder_ash.description":
+    "Fine grey ash from the furnace floor, still faintly warm no matter how long it's been sitting in your pocket.",
+  "item.slagbound_charm.name": "Slagbound Charm",
+  "item.slagbound_charm.description":
+    "Cast from cooled slag and worn tight at the waist. Doesn't do much, but what it does, it does reliably.",
+  "item.slagforged_maul.name": "Slagforged Maul",
+  "item.slagforged_maul.description":
+    "Cast in one piece straight from the furnace floor. Every swing costs you time you'll wish you had back.",
+  "item.cinderplate_hauberk.name": "Cinderplate Hauberk",
+  "item.cinderplate_hauberk.description":
+    "Layered plate quenched in ash instead of water. Heavier for it, and better for it too.",
+  "item.cinderfist_gauntlets.name": "Cinderfist Gauntlets",
+  "item.cinderfist_gauntlets.description":
+    "Knuckle plating still warm from the mold. Every hit lands like it means it.",
+
+  // ── Core 0.17 — Static Yard's own rare, feet slot ──
+  "item.voltbound_treads.name": "Voltbound Treads",
+  "item.voltbound_treads.description":
+    "Soled with scavenged conductor plate. Every step lands with a little more spring than it should.",
+
+  // ── Core 0.18 — Saltmere Docks' own item family: one common
+  // material, four rares (weapon/head/chest/hands), no epics ──
+  "item.brine_salt.name": "Brine Salt",
+  "item.brine_salt.description":
+    "Coarse crystals scraped off a rusted piling. Somehow still worth something to somebody.",
+  "item.tideworn_cutlass.name": "Tideworn Cutlass",
+  "item.tideworn_cutlass.description":
+    "Pitted and salt-scarred, but the edge held. Whoever swung it last knew what they were doing.",
+  "item.brinemask_visor.name": "Brinemask Visor",
+  "item.brinemask_visor.description":
+    "Fogs up in the cold, but it's kept worse than seawater out of someone's eyes.",
+  "item.saltcrust_vest.name": "Saltcrust Vest",
+  "item.saltcrust_vest.description":
+    "Crusted over with years of brine until it set almost as hard as plate.",
+  "item.brinewrap_gloves.name": "Brinewrap Gloves",
+  "item.brinewrap_gloves.description":
+    "Tarred cord wound over the knuckles, the same way dockhands wrapped their hands for real work.",
+
+  // ── Core 0.19 — rarity matrix, fully closed: commons/epics for
+  // ring_1, amulet, flask_1, plus epics for feet and belt ──
+  "item.frayed_signet.name": "Frayed Signet",
+  "item.frayed_signet.description":
+    "Cheap metal gone thin at the band. Still holds a ward, barely.",
+  "item.voidglass_band.name": "Voidglass Band",
+  "item.voidglass_band.description":
+    "Set with a shard that swallows light instead of catching it. Nobody's sure what it used to be part of.",
+  "item.scavenged_cord.name": "Scavenged Cord",
+  "item.scavenged_cord.description":
+    "Braided wire and a scavenged charm. Hums faintly if you hold still long enough to notice.",
+  "item.resonant_choker.name": "Resonant Choker",
+  "item.resonant_choker.description":
+    "Keeps a low, steady frequency running against the throat. Sharpens the mind and quickens the step.",
+  "item.sealed_blood_flask.name": "Sealed Blood Flask",
+  "item.sealed_blood_flask.description":
+    "Stoppered tighter and filled fuller than the starter kit's version. Costs more for a reason.",
+  "item.vital_reserve_flask.name": "Vital Reserve Flask",
+  "item.vital_reserve_flask.description":
+    "The largest reservoir anyone's managed to seal without it spoiling. Never comes up for sale.",
+  "item.voltbound_greaves.name": "Voltbound Greaves",
+  "item.voltbound_greaves.description":
+    "The full conductor-plate treatment, not just the soles. Every step lands faster and sturdier.",
+  "item.cinderbound_girdle.name": "Cinderbound Girdle",
+  "item.cinderbound_girdle.description":
+    "Forged in one piece and never fully cooled. Holds a fight together better than the charm ever could.",
+
   "skill.heavy_strike.name": "Heavy Strike",
   "skill.heavy_strike.description":
     "A deliberate attack that solves immediate problems through blunt force.",
@@ -132,6 +241,48 @@ export const en = {
   "objective.sewer_cleanup.title": "Sewer Cleanup",
   "objective.sewer_cleanup.description":
     "The Blackwire Sewers are getting crowded — clear out enough trashboars to keep the tunnels passable.",
+  "objective.skitter_hunt.title": "Skitter Hunt",
+  "objective.skitter_hunt.description":
+    "Skitters dart through Blackwire Sewers too fast to track from the surface. Thin them out from the inside.",
+  "objective.static_cleanup.title": "Static Cleanup",
+  "objective.static_cleanup.description":
+    "Static Wretches keep dragging live cable into the yard. Put enough of them down to make the place safe to work.",
+  "objective.sewer_patrol.title": "Sewer Patrol",
+  "objective.sewer_patrol.description":
+    "A standing request: keep the trashboar runts at the sewer edge thinned out. There's always more.",
+  "objective.slag_hunt.title": "Slag Hunt",
+  "objective.slag_hunt.description":
+    "Slag Hounds are multiplying in Cinderworks faster than the furnace crews can work around them. Thin the pack.",
+  "objective.foundry_purge.title": "Foundry Purge",
+  "objective.foundry_purge.description":
+    "The Foundry Warden has held that furnace floor too long. Put it down and the rest of Cinderworks gets easier.",
+  "objective.drudge_patrol.title": "Drudge Patrol",
+  "objective.drudge_patrol.description":
+    "Yard Drudges keep shuffling their maintenance loop straight through live sections of Static Yard. Thin them out.",
+  "objective.ash_cull.title": "Ash Cull",
+  "objective.ash_cull.description":
+    "Ash Rats are overrunning the furnace scrap piles. Cull enough of them to keep the yard workable.",
+  "objective.brine_cull.title": "Brine Cull",
+  "objective.brine_cull.description":
+    "Brine Crawlers are thick along the Saltmere piers. Thin them out before they clog the docks entirely.",
+  "objective.tide_hunt.title": "Tide Hunt",
+  "objective.tide_hunt.description":
+    "Tide Stalkers move too fast to track from the surface. Hunt them down from inside the docks.",
+  "objective.hauler_purge.title": "Hauler Purge",
+  "objective.hauler_purge.description":
+    "The Drowned Hauler still walks its old cargo route. Put it down and the rest of the docks get quieter.",
+  "objective.arc_purge.title": "Arc Purge",
+  "objective.arc_purge.description":
+    "The Arc Sentinel holds the yard's worst stretch of live current. Put it down and Static Yard gets safer.",
+  "objective.yard_patrol.title": "Yard Patrol",
+  "objective.yard_patrol.description":
+    "A standing request: keep Static Yard's wretches, drudges, and sentinels thinned out. There's always more.",
+  "objective.cinder_patrol.title": "Cinder Patrol",
+  "objective.cinder_patrol.description":
+    "A standing request: keep Cinderworks' hounds, rats, and wardens thinned out. There's always more.",
+  "objective.dock_patrol.title": "Dock Patrol",
+  "objective.dock_patrol.description":
+    "A standing request: keep Saltmere Docks' crawlers, stalkers, and haulers thinned out. There's always more.",
 
   // Feedback shown when a new objective starts
   "objective.accepted_with_route": "[ {title} ] Use the Blackwire gate or waypoint to reach the sewers and hunt {targetEnemy}.",
@@ -215,11 +366,15 @@ export const en = {
 
   "world_entry.title": "Selected character",
   "world_entry.enter_world": "Enter World",
+  "world_entry.view_world_map": "View World Map",
   "world_entry.coming_next": "World entry coming next.",
   "world_entry.no_character_selected": "Select a character before entering the world.",
   "world_entry.connected": "Connected to The Nightmarket.",
   "world_entry.join_failed": "Could not enter world.",
   "world_entry.leave_world": "Leave",
+
+  "world_map.title": "World Map",
+  "world_map.back": "Back",
 
   "world_session.title": "World Session",
   "world_session.debug_notice": "Temporary server-synced debug state. This is not the final gameplay UI.",
@@ -254,6 +409,8 @@ export const en = {
   "world_session.projection_click_disabled_preview": "Disabled in isometric preview until safe screen-to-world mapping exists.",
   "world_session.downed_notice": "You are downed.",
   "world_session.downed_respawn_hint": "Respawn at safe point.",
+  "world_session.downed_respawn_hint_combat": "Defeat sends you back to Nightmarket.",
+  "world_session.respawn_to_town": "Return to Town",
   "world_session.corpse_marker": "Corpse remains.",
   "world_session.damage_feedback": "-{damage} HP  ({hp} remaining)",
   "world_session.downed_damage_feedback": "-{damage} HP  You are downed.",
@@ -263,6 +420,7 @@ export const en = {
   "world_session.controls": "Controls",
   "world_session.control_move": "Click ground: move",
   "world_session.control_attack": "Click enemy: attack / approach",
+  "world_session.control_skill_primary": "1: Heavy Strike",
   "world_session.control_skill_secondary": "Right click: Grave Spark",
   "world_session.control_skill_tertiary": "E: Bone Splinter",
   "world_session.control_dodge": "Space: dodge",
@@ -285,11 +443,15 @@ export const en = {
   // Future: Diablo-like right orb resource (mana/class resource) — placeholder until class resource system lands
   "world_session.resource": "Resource",
   "world_session.resource_placeholder": "Coming later",
+  "world_session.belt_slot_soon": "Soon",
+  "world_session.belt_slot_soon_hint": "Additional belt slot — not available yet",
   "world_session.travel_overlay.route_title": "Traveling",
   "world_session.travel_overlay.route_message": "Moving to the next area. Your new position will appear only after the server applies the travel.",
   "world_session.travel_overlay.waypoint_title": "Attuning Waypoint",
   "world_session.travel_overlay.waypoint_message": "Channeling waypoint travel. Arrival remains server-authoritative.",
   "world_session.travel_overlay.timeout": "Travel response took too long.",
+  "world_session.chat_input_placeholder": "Press Enter to chat...",
+  "world_session.chat_empty": "No messages yet.",
 
   "world_area.title": "World Area",
   "world_area.click_instruction": "Click inside to move.",
@@ -315,6 +477,13 @@ export const en = {
   "world_area.skill_tertiary_sent": "Bone Splinter sent.",
   "world_area.skill_tertiary_too_far": "Bone Splinter target too far.",
   "world_area.skill_tertiary_on_cooldown": "Bone Splinter is on cooldown.",
+  "world_area.skill_primary_hit": "Heavy Strike hits for {damage}.",
+  "world_area.skill_primary_hit_label": "Strike {damage}",
+  "world_area.skill_primary_target_missing": "Heavy Strike target missing.",
+  "world_area.skill_primary_target_dead": "Heavy Strike target already dead.",
+  "world_area.skill_primary_sent": "Heavy Strike sent.",
+  "world_area.skill_primary_too_far": "Heavy Strike target too far.",
+  "world_area.skill_primary_on_cooldown": "Heavy Strike is on cooldown.",
   "world_area.pickup_sent": "Pickup request sent.",
   "world_area.pickup_too_far": "Too far away to pick that up.",
   "world_area.pickup_moving_closer": "Moving closer to pick that up.",
@@ -397,6 +566,8 @@ export const en = {
   "spawn.nightmarket.blackwire_combat_entry": "Blackwire Combat Entry",
   "spawn.nightmarket.services_return": "Nightmarket Services Return",
   "spawn.nightmarket.static_yard_combat_entry": "Static Yard Combat Entry",
+  "spawn.nightmarket.cinderworks_combat_entry": "Cinderworks Combat Entry",
+  "spawn.nightmarket.saltmere_docks_combat_entry": "Saltmere Docks Combat Entry",
 
   "world_prop.loot_container.name": "Loot Container",
   "world_prop.loot_container.description": "A shared container that may hold valuable finds.",
@@ -467,10 +638,14 @@ export const en = {
   "waypoint.destination.nightmarket_arrival": "Nightmarket Arrival",
   "waypoint.destination.nightmarket_blackwire_combat_edge": "Blackwire Combat Edge",
   "waypoint.destination.nightmarket_static_yard_combat_edge": "Static Yard Combat Edge",
+  "waypoint.destination.nightmarket_cinderworks_combat_edge": "Cinderworks Combat Edge",
+  "waypoint.destination.nightmarket_saltmere_docks_combat_edge": "Saltmere Docks Combat Edge",
 
   "town_service.route.blackwire_gate.prompt": "The Blackwire gate leads toward a hostile sewer edge.",
   "town_service.route.blackwire_return.prompt": "Return to the Nightmarket service hub.",
   "town_service.route.static_yard_gate.prompt": "The Static Yard gate leads toward a live-wired tram depot.",
+  "town_service.route.cinderworks_gate.prompt": "The Cinderworks gate leads toward a smelting yard that never fully cooled.",
+  "town_service.route.saltmere_docks_gate.prompt": "The Saltmere Docks gate leads toward a flooded pier that never fully drained.",
   "town_service.route.travel_success.generic": "Route travel complete.",
   "town_service.route.travel_success.to_combat": "You push toward",
   "town_service.route.travel_success.to_hub": "You return to",
@@ -490,6 +665,8 @@ export const en = {
   "world_prop.area.blackwire_sewer_edge.label": "Blackwire Sewer Edge",
   "world_prop.area.deep_sewer_edge.label": "Deep Sewer Edge",
   "world_prop.area.static_yard_edge.label": "Static Yard Edge",
+  "world_prop.area.cinderworks_edge.label": "Cinderworks Edge",
+  "world_prop.area.saltmere_docks_edge.label": "Saltmere Docks Edge",
   "world_prop.notice_board.label": "Notice Board",
   "world_prop.suspicious_vendor.label": "Suspicious Vendor",
   "world_prop.stash_keeper.label": "Stash Keeper",
@@ -499,6 +676,10 @@ export const en = {
   "world_prop.blackwire_gate.label": "Blackwire Gate",
   "world_prop.static_yard_waypoint.label": "Static Yard Waypoint",
   "world_prop.static_yard_gate.label": "Static Yard Gate",
+  "world_prop.cinderworks_waypoint.label": "Cinderworks Waypoint",
+  "world_prop.cinderworks_gate.label": "Cinderworks Gate",
+  "world_prop.saltmere_docks_waypoint.label": "Saltmere Docks Waypoint",
+  "world_prop.saltmere_docks_gate.label": "Saltmere Docks Gate",
   "world_prop.combat_return_gate.label": "← Return to Nightmarket",
   "world_prop.market_crates.label": "Market Crates",
   "world_prop.rest_area.label": "Rest Area",
@@ -525,7 +706,56 @@ export const en = {
 
   "world_session.town_rest_refill": "Restored in town. HP and flask charges replenished.",
   "world_session.rest_area_entered": "Rest Area — Replenishing",
-  "world_session.rest_area_exited": "Left Rest Area"
+  "world_session.rest_area_exited": "Left Rest Area",
+
+  // ── Lore (extended flavor text, not surfaced in any UI yet) ──
+  "lore.origin_sewer_dweller.title": "Life Below the Waterline",
+  "lore.origin_sewer_dweller.body":
+    "Nobody chooses the sewers first. You get pushed there by rent, by debt, by a landlord who stopped answering messages the same week the building's wiring started humming on its own. Down where the pipes leak and the old magic pools with the runoff, you learn fast or you learn once. The Sewer Dweller learned fast, and kept the nightvision as the only severance package the surface ever paid out.",
+
+  "lore.class_gravewalker.title": "What the Gravewalker Learned Below",
+  "lore.class_gravewalker.body":
+    "Grave dirt gets you further than a business card, if you know which graves to dig. The Gravewalker learned to read the cracks between worlds the way other people read terms of service -- badly, quickly, and only after something already went wrong. Whatever answers from the other side isn't polite about it, but it does answer, which puts a Gravewalker one step ahead of everyone still filling out forms.",
+
+  "lore.class_ironclad.title": "The Ironclad's One Argument",
+  "lore.class_ironclad.body":
+    "Ironclads don't negotiate, mostly because negotiating requires the other party to still be standing afterward. Every plate was scavenged off something that used to move, and every dent is a story nobody asks to hear twice. The philosophy is simple: stand close enough, long enough, and the problem eventually solves itself or stops being your problem.",
+
+  "lore.zone_nightmarket.title": "Business Hours That Never End",
+  "lore.zone_nightmarket.body":
+    "The Nightmarket runs under neon tubes that died years ago and kept working anyway, because someone somewhere still pays the invoice. Stalls sell rumors, protection, and items that failed every safety inspection that would have applied to them, if an inspector had ever come down and left again. Everyone here has a boss, a debt, or an arrangement they're behind on payments to -- often all three, and often the same relationship wearing different paperwork.",
+
+  "lore.zone_blackwire_sewers.title": "Whoever Ran This Cable Didn't Ask Permission",
+  "lore.zone_blackwire_sewers.body":
+    "The cabling tangled through Blackwire wasn't installed by any utility company still in business, and the runoff pooling underneath it isn't sewage in any sense a lab would confirm in writing. Something down here has been feeding on both for long enough to call it home. The trashboars are just the part of the ecosystem you can still hit with a pipe.",
+
+  "lore.zone_static_yard.title": "The Trams Stopped Running, the Current Didn't",
+  "lore.zone_static_yard.body":
+    "Static Yard used to move people. Now it mostly moves electricity nobody remembers routing here, arcing off snapped overhead lines into rail cars that gave up being rail cars a while ago. The things that live in the yard didn't evolve to handle that kind of exposure so much as give up resisting it, the same way everyone else in this city eventually stops asking why the lights still work.",
+
+  "lore.zone_cinderworks.title": "The Furnace That Never Got the Shutdown Memo",
+  "lore.zone_cinderworks.body":
+    "Cinderworks stopped shipping product before anyone currently working there was born, and the furnace floor never got the message. It keeps burning on fuel nobody's found a source for, tended by things that used to be shift workers and are still, in some literal sense, on shift. Ash Rats and Slag Hounds just mean the quota is being met by whatever's left to meet it.",
+
+  "lore.zone_saltmere_docks.title": "There Is No Sea Here",
+  "lore.zone_saltmere_docks.body":
+    "Saltmere Docks floods on a tide, which is a problem, because there has never been an ocean anywhere near this stretch of the Czech Republic and nobody working the pier wants to be the one who brings that up twice. The salt got into the cranes, the cargo, and eventually the people, the same slow way debt gets into everything else down here. Whatever the water's connected to, it isn't a sea, and it isn't done rising.",
+
+  "lore.enemy_trashboar_brute.title": "Middle Management, Blackwire Branch",
+  "lore.enemy_trashboar_brute.body":
+    "Every trashboar pack needs something to enforce the pecking order, and the Brute got the job the old-fashioned way -- it was already the biggest thing down there when the runoff changed everyone's chemistry. It doesn't lead so much as flatten anything that looks like leadership developing without it. Put it down and the rest of the pack remembers, briefly, how to be scared of something else.",
+
+  "lore.enemy_foundry_warden.title": "Still Clocked In",
+  "lore.enemy_foundry_warden.body":
+    "Nobody's signed the Warden's timesheet in years, and it hasn't noticed. It walks the furnace floor on the same patrol it walked when Cinderworks employed actual people, minding a shift quota that stopped mattering to anyone but it. Whatever's underneath the plating by now, the job description survived intact -- which, this far into the ash, counts as a kind of loyalty nobody asked for.",
+
+  "lore.enemy_arc_sentinel.title": "Wired In, Not Standing Guard",
+  "lore.enemy_arc_sentinel.body":
+    "The Sentinel doesn't patrol Static Yard so much as complete it -- close enough to the arcing cable that calling it a separate thing from the current feels like a technicality. It hits like the circuit itself objects to interruption. Nobody's sure if it's guarding the yard or the yard is running through it, and everyone still standing has decided not to find out which.",
+
+  "lore.enemy_drowned_hauler.title": "The Route Nobody Cancelled",
+  "lore.enemy_drowned_hauler.body":
+    "Somewhere there's a manifest with the Hauler's name on it, and a cargo run that was supposed to end a long time ago. It never got the cancellation notice, and it stopped needing air before it stopped needing to finish the route. It'll haul whatever's nearest to the pier onto its shoulders, cargo or otherwise, because as far as it's concerned the job's still open."
 } as const satisfies LocalizationDictionary;
 
 export type LocalizationKey = keyof typeof en;

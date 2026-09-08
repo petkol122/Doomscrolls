@@ -4,9 +4,10 @@ import type { RequestResetObjectiveClientMessage, RoomState } from "@doomscrolls
 /**
  * Send a real objective reset intent through the joined room.
  */
-export function sendResetObjectiveIntent(room: Room<RoomState>): void {
+export function sendResetObjectiveIntent(room: Room<RoomState>, slot: 1 | 2): void {
   const message: RequestResetObjectiveClientMessage = {
     type: "request_reset_objective",
+    slot,
   };
 
   try {

@@ -37,10 +37,15 @@ import {
 } from "../../worldProjection";
 import { resolveWorldAreaBounds } from "../accountShell/resolveWorldAreaBounds";
 import { resolveWorldSessionAreaLayout, type WorldSessionAreaLayout } from "./worldSessionAreaLayout";
-import { createWorldSessionPlayerPlaceholderView } from "./worldSessionPlayerPlaceholderView";
+import {
+  createWorldSessionPlayerPlaceholderView,
+  type WorldSessionPlayerPlaceholderView,
+} from "./worldSessionPlayerPlaceholderView";
+import { resolvePlayerTint } from "./classTint";
 import { createWorldSessionInteractablesView } from "./worldSessionInteractablesView";
 import { createWorldSessionEnemyPlaceholderView } from "./worldSessionEnemyPlaceholderView";
 import { createWorldSessionStaticPropsView } from "./worldSessionStaticPropsView";
+import { createWorldSessionGroundTileView } from "./worldSessionGroundTileView";
 import {
   getTownRoomEnemies,
   type TownRoomEnemySnapshot,
@@ -261,6 +266,9 @@ export function createWorldSessionAreaView(
   const frame = scene.add.graphics();
   const worldFrame = scene.add.graphics();
 
+  // Ground tiles are added to worldContainer first so they render beneath
+  // static props / entities by child order alone -- no depth-sorting needed.
+  const groundTileView = createWorldSessionGroundTileView(scene, worldContainer);
   const staticPropsView = createWorldSessionStaticPropsView(scene, worldContainer);
   const playerPlaceholder = createWorldSessionPlayerPlaceholderView(scene, worldContainer);
   const interactablesView = createWorldSessionInteractablesView(scene, layout, (objectId: string) => {
@@ -277,6 +285,14 @@ export function createWorldSessionAreaView(
   }, worldContainer);
 
   const enemyPlaceholders = new Map<string, WorldSessionEnemyPlaceholderView>();
+  // Core 0.27 -- one placeholder per OTHER connected player (never self),
+  // keyed by sessionId. Same create/refresh/destroy-by-id idiom as
+  // enemyPlaceholders above. Only six PlayerPresenceEntry fields are ever
+  // read for these views (sessionId as the Map key, displayName, classKey,
+  // x, y, hp, maxHp) -- see docs/CORE_BUILD_0_27_PLAN.md Question 2a for
+  // the full field audit; every other field stays unread here even though
+  // it remains present on the parsed entry for the local HUD's own use.
+  const otherPlayerPlaceholders = new Map<string, WorldSessionPlayerPlaceholderView>();
   const lootPlaceholders = new Map<string, WorldSessionLootPlaceholderView>();
   const floatingDamageView: FloatingDamageNumberView = createFloatingDamageNumberView(scene, worldContainer);
   const enemyScreenPositions = new Map<string, EnemyScreenPositionSnapshot>();
@@ -570,7 +586,12 @@ export function createWorldSessionAreaView(
         ? { worldX: hitCorpse.worldX, worldY: hitCorpse.worldY, inRange: hitCorpse.inRange }
         : null,
       interactable: hitInteractable !== null
-        ? { objectId: hitInteractable.objectId, worldX: hitInteractable.worldX, worldY: hitInteractable.worldY }
+        ? {
+            objectId: hitInteractable.objectId,
+            objectType: hitInteractable.objectType,
+            worldX: hitInteractable.worldX,
+            worldY: hitInteractable.worldY,
+          }
         : null,
       groundTarget,
     };
@@ -708,6 +729,28 @@ export function createWorldSessionAreaView(
             objectId: intent.objectId,
             targetWorldX: hitInteractable.worldX,
             targetWorldY: hitInteractable.worldY,
+          };
+          onPickupFeedback?.(t("world_area.interact_moving_closer"));
+          lastClickTarget = { x: hitInteractable.worldX, y: hitInteractable.worldY };
+        }
+        break;
+      }
+      case "combat_return": {
+        const selfPos = selfWorldPosition;
+        const isInRange = selfPos !== null && hitInteractable !== null &&
+          Math.hypot(hitInteractable.worldX - selfPos.x, hitInteractable.worldY - selfPos.y) <= INTERACT_RANGE;
+
+        if (isInRange) {
+          if (hitInteractable !== null) {
+            lastClickTarget = { x: hitInteractable.worldX, y: hitInteractable.worldY };
+          }
+        } else if (hitInteractable !== null) {
+          sendMovementIntent(room, hitInteractable.worldX, hitInteractable.worldY);
+          pendingInteractTarget = {
+            objectId: intent.objectId,
+            targetWorldX: hitInteractable.worldX,
+            targetWorldY: hitInteractable.worldY,
+            kind: "combat_return",
           };
           onPickupFeedback?.(t("world_area.interact_moving_closer"));
           lastClickTarget = { x: hitInteractable.worldX, y: hitInteractable.worldY };
@@ -862,6 +905,12 @@ export function createWorldSessionAreaView(
       viewport: worldProjection.viewport,
       projectionMode: worldProjection.projectionMode,
     });
+    groundTileView.updateProjection({
+      zoneId,
+      bounds: worldProjection.bounds,
+      viewport: worldProjection.viewport,
+      projectionMode: worldProjection.projectionMode,
+    });
     interactablesView.updateProjection(nextRoom, worldProjection);
 
     // [B] EXPENSIVE: Only when roomStateDirty. Destroys and recreates
@@ -876,6 +925,12 @@ export function createWorldSessionAreaView(
       );
 
       staticPropsView.refresh({
+        zoneId,
+        bounds: worldProjection.bounds,
+        viewport: worldProjection.viewport,
+        projectionMode: worldProjection.projectionMode,
+      });
+      groundTileView.refresh({
         zoneId,
         bounds: worldProjection.bounds,
         viewport: worldProjection.viewport,
@@ -1176,6 +1231,51 @@ export function createWorldSessionAreaView(
       }
     }
 
+    // --- Other-player placeholder processing (continues [C]) ---
+    // Core 0.27 -- Question 1: TownRoom only. Question 2: reuse the exact
+    // local-player placeholder shape, tinted by class, no new art.
+    // Question 3: hard setPosition snap, no interpolation (respects
+    // docs/CODING_RULES.md as written). Question 2a: only six whitelisted
+    // fields are read here -- see the otherPlayerPlaceholders declaration
+    // above and docs/CORE_BUILD_0_27_PLAN.md for the full field audit.
+    const currentOtherPlayerIds = new Set<string>();
+    if (presence !== null) {
+      for (const player of presence.players) {
+        if (player.sessionId === selfSessionId) {
+          continue;
+        }
+        if (player.position === undefined) {
+          continue;
+        }
+        currentOtherPlayerIds.add(player.sessionId);
+        const otherScreenPosition = worldToScreenActiveProjection(
+          player.position.x,
+          player.position.y,
+          worldProjection.bounds,
+          worldProjection.viewport,
+          projectionMode,
+        );
+
+        let otherView = otherPlayerPlaceholders.get(player.sessionId);
+        if (otherView === undefined) {
+          otherView = createWorldSessionPlayerPlaceholderView(
+            scene,
+            worldContainer,
+            resolvePlayerTint(player.classKey),
+          );
+          otherPlayerPlaceholders.set(player.sessionId, otherView);
+        }
+        otherView.setPosition(otherScreenPosition.x, otherScreenPosition.y);
+        otherView.setInfo(player.displayName, player.hp, player.maxHp);
+      }
+    }
+    for (const [sessionId, view] of otherPlayerPlaceholders.entries()) {
+      if (!currentOtherPlayerIds.has(sessionId)) {
+        view.destroy();
+        otherPlayerPlaceholders.delete(sessionId);
+      }
+    }
+
     // [D] Player position + rest area — lightweight. Moves existing
     //     Phaser objects (playerPlaceholder, targetMarker, restAreaIndicator),
     //     updates text labels and line graphic. No object creation or
@@ -1471,6 +1571,7 @@ export function createWorldSessionAreaView(
       // Task 307 — Remove input zone listeners registered once in setup.
       inputZone.removeAllListeners();
       staticPropsView.destroy();
+      groundTileView.destroy();
       playerPlaceholder.destroy();
       interactablesView.destroy();
       for (const view of enemyPlaceholders.values()) {
@@ -1478,6 +1579,10 @@ export function createWorldSessionAreaView(
       }
       enemyPlaceholders.clear();
       enemyScreenPositions.clear();
+      for (const view of otherPlayerPlaceholders.values()) {
+        view.destroy();
+      }
+      otherPlayerPlaceholders.clear();
       for (const view of lootPlaceholders.values()) {
         view.destroy();
       }

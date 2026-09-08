@@ -11,6 +11,9 @@ export type { ContentValidationIssue, ContentValidationResult } from "./ContentV
 
 export { ContentValidationError } from "./ContentErrors";
 
+export { worlds } from "./data/worlds";
+export { continents } from "./data/continents";
+export { areas } from "./data/areas";
 export { origins } from "./data/origins";
 export { classes } from "./data/classes";
 export { passives } from "./data/passives";
@@ -19,18 +22,23 @@ export { enemies } from "./data/enemies";
 export { items } from "./data/items";
 export { lootTables } from "./data/lootTables";
 export { objectives, NOTICE_BOARD_OBJECTIVE_SEQUENCE } from "./data/objectives";
+export { lore } from "./data/lore";
 export { zones } from "./data/zones";
 export { spawnPoints } from "./data/spawnPoints";
 export { worldProps } from "./data/worldProps";
+export { visualAssets } from "./data/visualAssets";
 export { spawnZones } from "./data/spawnZones";
 export { levelTables } from "./data/levelTables";
 export { equipmentSlots } from "./data/equipmentSlots";
 export { vendorStocks } from "./data/vendorStocks";
 export { townServices } from "./data/townServices";
+export { WORLD_UNITS_PER_METER } from "./data/types";
 
 export type {
+  AreaContentDefinition,
   CharacterClassContentDefinition,
   ContentLocalizationKey,
+  ContinentContentDefinition,
   EnemyContentDefinition,
   EnemyCurrencyDropDefinition,
   EquipmentSlotCategory,
@@ -55,6 +63,12 @@ export type {
   TownServiceKind,
   VendorId,
   VendorStockEntryDefinition,
+  VisualAssetCategory,
+  VisualAssetContentDefinition,
+  WorldContentDefinition,
+  WorldContentId,
+  ContinentContentId,
+  AreaContentId,
   WorldPropContentDefinition,
   WorldPropKind,
   ZoneClassification,
@@ -64,3 +78,11 @@ export type {
   ZoneContentRestAreaBounds,
   ZoneRoomType
 } from "./data/types";
+
+export type {
+  ClassLoreEntryDefinition,
+  EnemyLoreEntryDefinition,
+  LoreEntryContentDefinition,
+  OriginLoreEntryDefinition,
+  ZoneLoreEntryDefinition
+} from "./data/lore";

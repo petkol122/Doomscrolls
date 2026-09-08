@@ -10,20 +10,98 @@ import type { EnemyContentDefinition } from "@doomscrolls/content";
 type ContentEnemyId = EnemyContentDefinition["id"];
 
 /**
- * Objective progress update — single-objective foundation only.
+ * Core 0.15 -- two concurrent objective slots.
  *
- * This is a temporary, minimal approach to track kill progress against
- * the active notice board objective. It is NOT the final quest system:
+ * `PlayerPresence` carries two full, parallel sets of the 8 objective
+ * fields below (slot 1: the original unsuffixed names; slot 2: the same
+ * names with a `2` suffix) -- the same duplicated-field pattern this
+ * codebase already uses for skill-slot cooldowns
+ * (`nextSkillSlotAt`/`nextTertiarySkillSlotAt`/`nextPrimarySkillSlotAt`),
+ * not a generic array. `readObjectiveSlot`/`writeObjectiveSlot` below
+ * are the only new plumbing this requires: every existing function in
+ * this file keeps operating on a single, slot-agnostic 8-field shape,
+ * and callers snapshot the right slot in, then write it back out.
+ */
+export type ObjectiveSlot = 1 | 2;
+
+export interface ObjectiveSlotFields {
+  hasObjective: boolean;
+  objectiveId: string;
+  objectiveLabel: string;
+  objectiveDescriptionKey: string;
+  objectiveCurrent: number;
+  objectiveTarget: number;
+  objectiveCompleted: boolean;
+  objectiveRewardGranted: boolean;
+}
+
+type ObjectiveSlotPlayer = ObjectiveSlotFields & {
+  hasObjective2: boolean;
+  objectiveId2: string;
+  objectiveLabel2: string;
+  objectiveDescriptionKey2: string;
+  objectiveCurrent2: number;
+  objectiveTarget2: number;
+  objectiveCompleted2: boolean;
+  objectiveRewardGranted2: boolean;
+};
+
+export function readObjectiveSlot(player: ObjectiveSlotPlayer, slot: ObjectiveSlot): ObjectiveSlotFields {
+  return slot === 1
+    ? {
+      hasObjective: player.hasObjective,
+      objectiveId: player.objectiveId,
+      objectiveLabel: player.objectiveLabel,
+      objectiveDescriptionKey: player.objectiveDescriptionKey,
+      objectiveCurrent: player.objectiveCurrent,
+      objectiveTarget: player.objectiveTarget,
+      objectiveCompleted: player.objectiveCompleted,
+      objectiveRewardGranted: player.objectiveRewardGranted,
+    }
+    : {
+      hasObjective: player.hasObjective2,
+      objectiveId: player.objectiveId2,
+      objectiveLabel: player.objectiveLabel2,
+      objectiveDescriptionKey: player.objectiveDescriptionKey2,
+      objectiveCurrent: player.objectiveCurrent2,
+      objectiveTarget: player.objectiveTarget2,
+      objectiveCompleted: player.objectiveCompleted2,
+      objectiveRewardGranted: player.objectiveRewardGranted2,
+    };
+}
+
+export function writeObjectiveSlot(player: ObjectiveSlotPlayer, slot: ObjectiveSlot, fields: ObjectiveSlotFields): void {
+  if (slot === 1) {
+    player.hasObjective = fields.hasObjective;
+    player.objectiveId = fields.objectiveId;
+    player.objectiveLabel = fields.objectiveLabel;
+    player.objectiveDescriptionKey = fields.objectiveDescriptionKey;
+    player.objectiveCurrent = fields.objectiveCurrent;
+    player.objectiveTarget = fields.objectiveTarget;
+    player.objectiveCompleted = fields.objectiveCompleted;
+    player.objectiveRewardGranted = fields.objectiveRewardGranted;
+    return;
+  }
+  player.hasObjective2 = fields.hasObjective;
+  player.objectiveId2 = fields.objectiveId;
+  player.objectiveLabel2 = fields.objectiveLabel;
+  player.objectiveDescriptionKey2 = fields.objectiveDescriptionKey;
+  player.objectiveCurrent2 = fields.objectiveCurrent;
+  player.objectiveTarget2 = fields.objectiveTarget;
+  player.objectiveCompleted2 = fields.objectiveCompleted;
+  player.objectiveRewardGranted2 = fields.objectiveRewardGranted;
+}
+
+/**
+ * Objective progress update — operates on a single slot's snapshot.
  *
- *  - Only one objective may be active at a time.
- *  - No quest journal, no multi-objective support, no turn-in UI.
- *  - Completion flag and reward granting are handled separately by
- *    a later task; this function ONLY increments progress and sends
- *    the `objective_updated` message so the HUD stays synced.
- *
- * Once the final quest system is implemented, this module should be
- * replaced by a generic objective manager that supports multiple
- * active objectives, quest chains, dynamic conditions, and persistence.
+ * Callers now loop over both objective slots (see `readObjectiveSlot`/
+ * `writeObjectiveSlot` above) so a kill can advance either or both
+ * concurrently active objectives; this function itself is unchanged
+ * and remains slot-agnostic. Completion flag and reward granting are
+ * handled separately by the notice board turn-in handler; this
+ * function ONLY increments progress and returns the new state so the
+ * caller can send `objective_updated` and persist it.
  *
  * Task 333D — Accepts an optional `onPersistUpdate` callback that is
  * called after the in-memory progress has been advanced. The caller
@@ -112,4 +190,54 @@ export function advanceObjectiveProgress(
     target: player.objectiveTarget,
     completed: player.objectiveCompleted,
   };
+}
+
+/**
+ * Core 0.15 -- kill-progress entry point for callers (CombatRoom's and
+ * TownRoom's kill handlers) that must advance BOTH concurrent slots,
+ * since either or both active objectives could target the killed
+ * enemy. Wraps `advanceObjectiveProgress` per slot via
+ * `readObjectiveSlot`/`writeObjectiveSlot` so that function itself
+ * stays single-slot and unchanged. Returns one entry per slot whose
+ * progress actually changed.
+ */
+export function advanceObjectiveProgressAllSlots(
+  player: ObjectiveSlotPlayer & { readonly characterId: CharacterId },
+  enemyId: string,
+  onPersistUpdate?: (updated: {
+    readonly characterId: CharacterId;
+    readonly objectiveId: string;
+    readonly currentProgress: number;
+    readonly completed: boolean;
+  }) => void,
+): readonly {
+  readonly slot: ObjectiveSlot;
+  readonly objectiveId: string;
+  readonly label: string;
+  readonly descriptionKey: string;
+  readonly current: number;
+  readonly target: number;
+  readonly completed: boolean;
+}[] {
+  const results: {
+    slot: ObjectiveSlot;
+    objectiveId: string;
+    label: string;
+    descriptionKey: string;
+    current: number;
+    target: number;
+    completed: boolean;
+  }[] = [];
+
+  for (const slot of [1, 2] as const) {
+    const snap = readObjectiveSlot(player, slot) as ObjectiveSlotFields & { characterId: CharacterId };
+    snap.characterId = player.characterId;
+    const progressResult = advanceObjectiveProgress(snap, enemyId, onPersistUpdate);
+    if (progressResult !== undefined && progressResult.changed) {
+      writeObjectiveSlot(player, slot, snap);
+      results.push({ slot, ...progressResult });
+    }
+  }
+
+  return results;
 }

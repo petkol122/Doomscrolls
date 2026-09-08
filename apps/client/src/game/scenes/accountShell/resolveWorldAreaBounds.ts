@@ -17,9 +17,9 @@ export function resolveWorldAreaBounds(
   const zone = contentRegistry.zones.get(zoneId as ZoneContentId);
 
   if (zone === undefined) {
-    // Safe fallback — matches the current Nightmarket test-arena definition.
-    // This should only be reached if content data is missing, which would
-    // also fail content validation.
+    // Safe fallback — an intentionally-arbitrary small box, not meant to
+    // match any real zone's actual bounds. This should only be reached if
+    // content data is missing, which would also fail content validation.
     return { minX: 0, maxX: 480, minY: 0, maxY: 320 };
   }
 

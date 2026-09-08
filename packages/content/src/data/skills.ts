@@ -6,7 +6,15 @@ export const skills = [
     nameKey: "skill.heavy_strike.name",
     descriptionKey: "skill.heavy_strike.description",
     targeting: "target",
-    range: 1.4,
+    // Core 0.14 -- fixed from 1.4: this was authored in a different unit
+    // than every other skill's range (grave_spark 96, bone_splinter 140,
+    // shatter_blow 64, groundbreaker 80, all world-space pixels).
+    // heavy_strike was never resolved by any input path before 0.14, so
+    // the mismatch went unnoticed; left at 1.4 it would fail every
+    // realistic-distance cast as "out_of_range". 64 matches
+    // shatter_blow, the other melee-flavored skill -- a unit-consistency
+    // fix, not a balance change (baseDamage/cooldownMs are untouched).
+    range: 64,
     cooldownMs: 1000,
     baseDamage: 3
   },

@@ -5,7 +5,7 @@ import type { RequestUseSkillSlotAcceptedServerMessage } from "@doomscrolls/shar
 import type { TownRoomState } from "../../src/realtime/rooms/TownRoomState";
 import { createTestRealtimeServer } from "../support/testRealtimeServer";
 import { waitForMessage } from "../support/waitForMessage";
-import { TEST_IRONCLAD_CHARACTER_ID, TEST_USER_ID } from "../support/fixtures";
+import { TEST_CHARACTER_STATS, TEST_IRONCLAD_CHARACTER_ID, TEST_USER_ID } from "../support/fixtures";
 
 /**
  * TownRoom's first vitest regression case (see docs/CORE_BUILD_0_9_PLAN.md
@@ -72,8 +72,12 @@ describe("TownRoom skill-slot class resolution", () => {
       "request_use_skill_slot_accepted",
     );
 
-    // Shatter Blow (Ironclad's secondary), not Grave Spark (Gravewalker's).
-    expect(accepted.damage).toBe(6);
-    expect(accepted.remainingHp).toBe(1000 - 6);
+    // Shatter Blow (Ironclad's secondary, base damage 6), not Grave Spark
+    // (Gravewalker's, base damage 3). Core 0.10 -- the expected total also
+    // includes the fixture's power/equipment damage bonus, since skill
+    // damage is no longer the flat content `baseDamage` alone.
+    const expectedDamage = 6 + (TEST_CHARACTER_STATS.derived.damage - 1);
+    expect(accepted.damage).toBe(expectedDamage);
+    expect(accepted.remainingHp).toBe(1000 - expectedDamage);
   });
 });

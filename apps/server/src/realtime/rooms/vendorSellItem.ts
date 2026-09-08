@@ -9,11 +9,11 @@
  */
 import { contentRegistry } from "@doomscrolls/content";
 import type { RequestSellItemRejectedReason } from "@doomscrolls/shared";
-import { ItemLocationType, Prisma } from "@prisma/client";
+import { ItemLocationType, Prisma, type PrismaClient } from "@prisma/client";
 
 import { CharacterRepository } from "../../persistence/repositories/CharacterRepository";
 import { ItemRepository } from "../../persistence/repositories/ItemRepository";
-import { prisma } from "../../persistence/prisma";
+import { getSharedPrismaClient } from "../../persistence/prisma";
 
 /**
  * Sell price ratio: the player receives 50 % of the vendor buy price
@@ -64,8 +64,10 @@ export async function executeVendorSellItem(input: {
   readonly characterId: string;
   readonly vendorId: string;
   readonly itemInstanceId: string;
+  readonly db?: PrismaClient;
 }): Promise<VendorSellItemResult> {
   const { characterId, vendorId, itemInstanceId } = input;
+  const db = input.db ?? getSharedPrismaClient();
 
   // 1. Validate vendor exists in town-service content
   const vendorService = contentRegistry.townServices.get(vendorId as never);
@@ -74,7 +76,7 @@ export async function executeVendorSellItem(input: {
   }
 
   // 2. Load item instance owned by this character
-  const itemRepo = new ItemRepository();
+  const itemRepo = new ItemRepository(db);
   const item = await itemRepo.findByIdForCharacter(itemInstanceId, characterId);
   if (item === null) {
     return { ok: false, reason: "item_not_owned" };
@@ -99,7 +101,7 @@ export async function executeVendorSellItem(input: {
 
   // 6. Atomically: delete item + add copper
   try {
-    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const result = await db.$transaction(async (tx: Prisma.TransactionClient) => {
       const txCharacterRepo = new CharacterRepository(tx);
       const txItemRepo = new ItemRepository(tx);
 

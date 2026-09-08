@@ -25,6 +25,7 @@ import { sendSkillSlotIntent } from "../../../net/skillSlotIntentClient";
 import { sendPickupWorldLootIntent } from "../../../net/pickupWorldLootClient";
 import { sendCorpseInteractIntent } from "../../../net/corpseInteractClient";
 import { sendInteractIntent } from "../../../net/interactIntentClient";
+import { sendCombatReturnIntent } from "../../../net/combatReturnIntentClient";
 import type { WorldInteractionIntent } from "./WorldInteractionIntent";
 
 export interface DispatchResult {
@@ -170,6 +171,11 @@ export function dispatchWorldInteraction(
 
     case "interact_object": {
       sendInteractIntent(room, intent.objectId);
+      return noPendingAttack(true, null);
+    }
+
+    case "combat_return": {
+      sendCombatReturnIntent(room, intent.objectId);
       return noPendingAttack(true, null);
     }
   }

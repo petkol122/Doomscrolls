@@ -1,5 +1,5 @@
 import { SessionStatus, type Prisma, type PrismaClient } from "@prisma/client";
-import { prisma as defaultPrisma } from "../prisma";
+import { getSharedPrismaClient } from "../prisma";
 
 type SessionRepositoryClient = PrismaClient | Prisma.TransactionClient;
 
@@ -10,7 +10,7 @@ export interface CreateSessionData {
 }
 
 export class SessionRepository {
-  public constructor(private readonly db: SessionRepositoryClient = defaultPrisma) {}
+  public constructor(private readonly db: SessionRepositoryClient = getSharedPrismaClient()) {}
 
   public createSession(data: CreateSessionData) {
     return this.db.session.create({

@@ -11,6 +11,10 @@ import type {
 import type { StatModifier } from "@doomscrolls/shared";
 import type { EquipmentUpdatedServerMessage } from "@doomscrolls/shared";
 import { makeInteractive } from "./worldSessionPointerEvents";
+import { applyWorldSessionOverlayItemPanelStyles } from "./worldSessionOverlayLayout";
+import { resolveItemIconUrl } from "../../itemIconResolver";
+import { resolveRarityFrameUrl } from "../../rarityFrameResolver";
+import { consumeBufferedEquipmentLoadout } from "../../../net/equipmentUpdateBuffer";
 // Money formatting lives in @doomscrolls/shared (server-owned / shared contract).
 // The client must not reimplement gold/silver/copper breakdown ad hoc.
 import { formatMoneyCompact } from "@doomscrolls/shared";
@@ -59,6 +63,16 @@ export function registerEquipmentListener(
   room: Room<DoomscrollsRoomState>,
   setLoadout: (loadout: EquipmentLoadout) => void,
 ): () => void {
+  // The join-time `equipment_updated` (see connectedPlayerRegistry /
+  // buildEquipmentLoadout on the server) can arrive before this scene
+  // exists to register a handler -- `bufferEquipmentUpdatesFor` (called
+  // right after the room join resolves, in RealtimeClient.ts) catches it
+  // in the meantime, so pick that up here before wiring the live handler.
+  const buffered = consumeBufferedEquipmentLoadout(room);
+  if (buffered !== null) {
+    setLoadout(buffered);
+  }
+
   const handler = (message: unknown): void => {
     const msg = message as EquipmentUpdatedServerMessage;
     if (msg.type === "equipment_updated" && msg.equipment !== undefined) {
@@ -82,10 +96,10 @@ export function createEquipmentPanelSection(
 ): HTMLElement {
   const wrapper = document.createElement("details");
   wrapper.open = isOpen;
-  wrapper.style.border = "1px solid #31271c";
-  wrapper.style.borderRadius = "8px";
-  wrapper.style.background = "rgba(12, 10, 8, 0.72)";
   wrapper.style.padding = "0";
+  // Core 0.26 -- same ornate panel frame as the inventory panel, for
+  // consistency (see docs/CORE_BUILD_0_26_PLAN.md).
+  applyWorldSessionOverlayItemPanelStyles(wrapper);
   makeInteractive(wrapper);
   wrapper.addEventListener("toggle", () => {
     onOpenChange?.(wrapper.open);
@@ -124,8 +138,17 @@ export function createEquipmentPanelSection(
   return wrapper;
 }
 
-/** Version checksum for equipment panel content to skip full rebuilds. */
-let _equipmentContentVersion = -1;
+/**
+ * Version checksum for equipment panel content, to skip full rebuilds when
+ * nothing changed. Keyed per content element (not a single module-level
+ * value) because `createEquipmentPanelSection` builds a brand new wrapper
+ * on every overlay sync (see `syncUtilityView`) -- a module-level version
+ * would compare a freshly created, still-empty element against whatever
+ * version an earlier (now-discarded) element last rendered, "skip" the
+ * rebuild it never actually did, and leave the panel blank until the next
+ * genuine data change.
+ */
+const equipmentContentVersions = new WeakMap<HTMLElement, number>();
 
 function computeEquipmentVersion(
   loadout: EquipmentLoadout,
@@ -173,10 +196,10 @@ export function updateEquipmentPanelSection(
   const loadout = getLoadout();
   const inventoryItems = getInventoryItems();
   const nextVersion = computeEquipmentVersion(loadout, inventoryItems);
-  if (nextVersion === _equipmentContentVersion) {
+  if (nextVersion === equipmentContentVersions.get(content)) {
     return;
   }
-  _equipmentContentVersion = nextVersion;
+  equipmentContentVersions.set(content, nextVersion);
 
   content.replaceChildren();
 
@@ -218,6 +241,15 @@ export function updateEquipmentPanelSection(
         ? "Equipped"
         : formatEquippedItemLabel(equippedItem);
       valueLabel.style.color = equippedItem === null ? "#b9d49a" : getItemRarityColor(equippedItem.rarity);
+
+      // Real icon when the pack has a reasonable match for this item
+      // (see visualAssets.ts); otherwise the row stays text-only, same
+      // as before this build. Appended here (valueLabel is appended
+      // below) so it lands between the slot label and the value text.
+      const iconUrl = equippedItem === null ? null : resolveItemIconUrl(equippedItem.definitionId);
+      if (iconUrl !== null) {
+        row.appendChild(createItemIconSlot(iconUrl, equippedItem?.rarity));
+      }
     }
     valueLabel.style.fontWeight = "bold";
     valueLabel.style.fontSize = "11px";
@@ -258,6 +290,45 @@ export function updateEquipmentPanelSection(
 
     content.appendChild(row);
   }
+}
+
+/** A small pixelated item icon in a rarity-colored slot frame, for an
+ *  equipped-item row. Only ever called with a URL already resolved
+ *  through the content registry (see itemIconResolver.ts /
+ *  rarityFrameResolver.ts) -- this function itself never sees a raw
+ *  asset path decision, just renders whatever URLs it's given. Core
+ *  0.26 -- was a bare 18x18 `<img>`; now the same rarity slot-frame
+ *  treatment as the inventory grid, for panel consistency. */
+function createItemIconSlot(url: string, rarity: string | undefined): HTMLElement {
+  const slot = document.createElement("span");
+  slot.style.position = "relative";
+  slot.style.display = "inline-flex";
+  slot.style.alignItems = "center";
+  slot.style.justifyContent = "center";
+  slot.style.width = "22px";
+  slot.style.height = "22px";
+  slot.style.flex = "0 0 auto";
+  slot.style.boxSizing = "border-box";
+
+  const frameUrl = resolveRarityFrameUrl(rarity);
+  if (frameUrl === null) {
+    slot.style.border = `1px solid ${COMMON_ITEM_COLOR}`;
+    slot.style.borderRadius = "3px";
+  } else {
+    slot.style.backgroundImage = `url(${frameUrl})`;
+    slot.style.backgroundSize = "100% 100%";
+    slot.style.backgroundRepeat = "no-repeat";
+  }
+
+  const icon = document.createElement("img");
+  icon.src = url;
+  icon.alt = "";
+  icon.style.width = "70%";
+  icon.style.height = "70%";
+  icon.style.imageRendering = "pixelated";
+  slot.appendChild(icon);
+
+  return slot;
 }
 
 function formatEquippedItemLabel(item: { readonly label: string; readonly rarity?: string; readonly statModifiers?: readonly StatModifier[] }): string {

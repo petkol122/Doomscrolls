@@ -1,9 +1,13 @@
 import type { Room } from "@colyseus/sdk";
+import { contentRegistry, type ZoneContentId } from "@doomscrolls/content";
 import { t } from "@doomscrolls/localization";
+import { resolveZoneDisplayName } from "./worldSessionAreaBannerView";
 import type { CharacterSummary, EquippedItemSummary, InventorySummaryItem, RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
+import { DEFAULT_INVENTORY_GRID_CONFIG } from "@doomscrolls/shared";
 import type { StatModifier } from "@doomscrolls/shared";
 import type { EquipmentSlot } from "@doomscrolls/shared";
 
+import { clientEnv } from "../../../config/env";
 import { formatTownRoomState } from "../../../net/RealtimeClient";
 import { getCurrentPlayerPresence, getTownRoomPresence } from "../../../net/townRoomPresence";
 import { createButton, createInfoLine } from "../accountShell/accountShellDom";
@@ -12,13 +16,16 @@ import {
   createEmptyEquipmentLoadout,
   createEquipmentPanelSection,
 } from "./worldSessionEquipmentView";
-import { makeInteractive, makePassive } from "./worldSessionPointerEvents";
+import { makeInteractive, makeInteractiveAndStopWorldInput, makePassive } from "./worldSessionPointerEvents";
 import type { EquipmentLoadout } from "@doomscrolls/shared";
 import {
   applyWorldSessionOverlayPanelStyles,
-  applyWorldSessionOverlayScrollablePanelStyles,
+  applyWorldSessionOverlayFloatingHudStyles,
+  applyWorldSessionOverlayItemPanelStyles,
 } from "./worldSessionOverlayLayout";
 import type { WorldProjectionMode } from "../../worldProjection";
+import { resolveItemIconUrl } from "../../itemIconResolver";
+import { resolveRarityFrameUrl } from "../../rarityFrameResolver";
 
 const COMMON_ITEM_COLOR = "#d8c6a3";
 const COMMON_ITEM_ACCENT_COLOR = "#a88d63";
@@ -103,7 +110,7 @@ export function createWorldSessionOverlayView(
   lastSkillRejectedReason: string | null,
   onProjectionModeChange: (mode: WorldProjectionMode) => void,
   onRespawn: () => void,
-  onResetObjective: () => void,
+  onResetObjective: (slot: 1 | 2) => void,
   onLeaveWorld: () => void,
   onReturnToTown?: () => void,
   getUtilityState: () => WorldSessionUtilityPanelOpenState = () =>
@@ -118,7 +125,7 @@ export function createWorldSessionOverlayView(
   let currentStatusPanel: HTMLElement | null = null;
 
   const statusRefs = character !== null
-    ? createCharacterChip(character, character.characterName, character.level, character.xp ?? 0, onLeaveWorld, onReturnToTown)
+    ? createCharacterChip(character, character.characterName, character.level, character.xp ?? 0, onLeaveWorld, onReturnToTown, resolveCurrentZoneId(room))
     : null;
   const utilityRefs = createStableUtilityContent(
     character,
@@ -199,13 +206,37 @@ export function createWorldSessionOverlayView(
   };
 }
 
+/** Reads the live room's current zone id off its synced state. */
+function resolveCurrentZoneId(room: Room<DoomscrollsRoomState>): string {
+  const state = room.state as unknown as Record<string, unknown>;
+  return typeof state.zoneId === "string" ? state.zoneId : "";
+}
+
+/** Short, at-a-glance subtitle for the character chip's zone line,
+ *  derived from the zone's own content (`roomType`), not hardcoded
+ *  per zone -- unlike the old "Temporary test combat zone" constant,
+ *  this stays correct as new zones/room kinds are added. */
+function resolveZoneKindLabel(zoneId: string): string {
+  try {
+    const zone = contentRegistry.zones.get(zoneId as ZoneContentId);
+    if (zone?.roomType === "combat") {
+      return "Combat Zone";
+    }
+    if (zone?.roomType === "town") {
+      return "Town";
+    }
+  } catch { /* fall through */ }
+  return "";
+}
+
 function createCharacterChip(
   character: CharacterSummary,
   displayName: string,
   level: number,
   xp: number,
   onLeaveWorld: () => void,
-  onReturnToTown?: () => void,
+  onReturnToTown: (() => void) | undefined,
+  zoneId: string,
 ): StatusViewRefs {
   // Task 242 — the chip is a visible interactive panel root. We
   // intentionally do NOT call `makePassive(panel)` here; the panel
@@ -227,14 +258,14 @@ function createCharacterChip(
   textBlock.style.gap = "3px";
 
   const zoneLine = document.createElement("div");
-  zoneLine.textContent = "The Nightmarket";
+  zoneLine.textContent = resolveZoneDisplayName(zoneId);
   zoneLine.style.fontSize = "11px";
   zoneLine.style.fontWeight = "bold";
   zoneLine.style.color = "#d8c6a3";
   textBlock.appendChild(zoneLine);
 
   const testCombatLine = document.createElement("div");
-  testCombatLine.textContent = "Temporary test combat zone";
+  testCombatLine.textContent = resolveZoneKindLabel(zoneId);
   testCombatLine.style.fontSize = "9px";
   testCombatLine.style.color = "#a88d63";
   textBlock.appendChild(testCombatLine);
@@ -303,8 +334,9 @@ function syncStatusView(
     room.sessionId,
   );
   const selfDisplayName = selfPresence?.displayName ?? character.characterName ?? t("world_session.selected_character");
-  refs.zoneLine.textContent = "The Nightmarket";
-  refs.testCombatLine.textContent = "Temporary test combat zone";
+  const currentZoneId = resolveCurrentZoneId(room);
+  refs.zoneLine.textContent = resolveZoneDisplayName(currentZoneId);
+  refs.testCombatLine.textContent = resolveZoneKindLabel(currentZoneId);
   refs.nameLine.textContent = character.characterName;
   refs.subLine.textContent = `${selfDisplayName} • ${t("world_session.level_xp_format", { level: selfPresence?.level ?? character.level, xp: selfPresence?.xp ?? character.xp ?? 0 })}`;
 }
@@ -314,7 +346,7 @@ function createStableHudContent(
   room: Room<DoomscrollsRoomState>,
   skillTargeting: WorldSessionSkillTargetingState,
   lastSkillRejectedReason: string | null,
-  onResetObjective: () => void,
+  onResetObjective: (slot: 1 | 2) => void,
   onRespawn: () => void,
 ): HudViewRefs {
   const root = document.createElement("div");
@@ -329,7 +361,7 @@ function syncHudView(
   room: Room<DoomscrollsRoomState>,
   skillTargeting: WorldSessionSkillTargetingState,
   lastSkillRejectedReason: string | null,
-  onResetObjective: () => void,
+  onResetObjective: (slot: 1 | 2) => void,
   onRespawn: () => void,
 ): void {
   // Task 229: HUD content is rebuilt on every update pass. This means
@@ -348,7 +380,7 @@ function renderHudContent(
   nextRoom: Room<DoomscrollsRoomState>,
   skillTargeting: WorldSessionSkillTargetingState,
   lastSkillRejectedReason: string | null,
-  onResetObjective: () => void,
+  onResetObjective: (slot: 1 | 2) => void,
   onRespawn: () => void,
 ): HTMLElement {
   const selfPresence = getCurrentPlayerPresence(
@@ -358,10 +390,9 @@ function renderHudContent(
   const selfHpSummary = formatPlayerHpSummary(selfPresence?.hp, selfPresence?.maxHp);
   const selfHpRatio = resolvePlayerHpRatio(selfPresence?.hp, selfPresence?.maxHp);
 
-  const panel = createCardSection();
+  const panel = createFloatingHudSection();
   panel.style.display = "grid";
   panel.style.gap = "4px";
-  panel.style.padding = "6px 8px";
   panel.appendChild(createHudSection(
     selfHpSummary,
     selfHpRatio,
@@ -373,19 +404,33 @@ function renderHudContent(
     selfPresence?.objective ?? null,
     onResetObjective,
     selfPresence?.objectiveRewardGranted,
+    selfPresence?.objective2 ?? null,
+    selfPresence?.objectiveRewardGranted2,
+    selfPresence?.nextSkillSlotAt,
+    skillTargeting,
+    lastSkillRejectedReason,
   ));
-  panel.appendChild(createSkillSlotPlaceholder(selfPresence?.nextSkillSlotAt, skillTargeting, lastSkillRejectedReason));
 
   if (selfPresence?.lifeState === "downed") {
+    // Core 0.14 -- CombatRoom's downed state now sends the player back
+    // to Nightmarket on respawn (a real death consequence) instead of
+    // healing them in place; the copy here reflects that so the button
+    // isn't describing a different mechanic than the one it triggers.
+    // TownRoom's downed state is unaffected (its own corpse-recovery
+    // flow), so this only changes copy for a combat-zone room.
+    const isCombatZoneRoom = resolveZoneKindLabel(resolveCurrentZoneId(nextRoom)) === "Combat Zone";
+
     const downedNotice = createMutedText(t("world_session.downed_notice"));
     downedNotice.style.color = "#e3a6a6";
     panel.appendChild(downedNotice);
 
-    const respawnHint = createMutedText(t("world_session.downed_respawn_hint"));
+    const respawnHint = createMutedText(
+      t(isCombatZoneRoom ? "world_session.downed_respawn_hint_combat" : "world_session.downed_respawn_hint"),
+    );
     respawnHint.style.color = "#a88d63";
     panel.appendChild(respawnHint);
 
-    const respawnButton = createButton(t("world_session.respawn"));
+    const respawnButton = createButton(t(isCombatZoneRoom ? "world_session.respawn_to_town" : "world_session.respawn"));
     respawnButton.style.marginTop = "4px";
     respawnButton.style.width = "220px";
     respawnButton.addEventListener("click", (event) => {
@@ -418,48 +463,81 @@ function createStableUtilityContent(
   onSelectItem: (itemId: InventorySummaryItem["itemInstanceId"]) => void,
   onProjectionModeChange: (mode: WorldProjectionMode) => void,
 ): UtilityViewRefs {
-  const root = createScrollableCardSection();
+  // Core 0.25 -- corner icon toolbar, not a stacked list of bordered
+  // buttons. `root` only lays out the icons in a row; each icon's own
+  // `<details>` hosts its flyout panel via `toIconMenuItem` below.
+  //
+  // `makeInteractiveAndStopWorldInput` then `makePassive` (in that
+  // order) is the same idiom `createCardSection`/`createScrollableCardSection`
+  // use: the capture-phase pointerdown/mousedown listeners it attaches
+  // stay in effect regardless of `root`'s own `pointer-events` value, so
+  // every icon click (a descendant with pointer-events:auto) is still
+  // intercepted before it can bubble to Phaser's window-level pointer
+  // listener -- while `makePassive` afterward keeps clicks in the empty
+  // gaps between icons falling through to the world underneath. Without
+  // this, a click square on an icon still reaches Phaser as a world
+  // click, firing click-to-move underneath the menu.
+  const root = document.createElement("div");
+  makeInteractiveAndStopWorldInput(root);
   makePassive(root);
-  root.style.display = "grid";
+  root.style.display = "flex";
+  root.style.flexDirection = "row";
   root.style.gap = "8px";
-  root.style.alignContent = "start";
+  root.style.justifyContent = "flex-end";
 
   const utilityState = getUtilityState();
-  const controlsSection = createControlsSection(utilityState.controls, (open) => {
-    onUtilityStateChange?.({ ...getUtilityState(), controls: open });
-  });
-  const objectivesSection = createObjectivesSection(
-    getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.objective ?? null,
-    getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.objectiveRewardGranted,
-    getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.completedObjectives ?? [],
-    utilityState.objectives,
-    (open) => {
-      onUtilityStateChange?.({ ...getUtilityState(), objectives: open });
-    },
+  const controlsSection = toIconMenuItem(
+    createControlsSection(utilityState.controls, (open) => {
+      onUtilityStateChange?.({ ...getUtilityState(), controls: open });
+    }),
+    { icon: "❓", label: `${t("world_session.controls")} / Help` },
   );
-  const equipmentSection = createEquipmentPanelSection(
-    getEquipmentLoadout,
-    () => character?.inventorySummaryItems ?? [],
-    utilityState.equipment,
-    (open) => {
-      onUtilityStateChange?.({ ...getUtilityState(), equipment: open });
-    },
-    character?.id !== undefined && onUnequipItem !== undefined
-      ? (slot) => onUnequipItem(character.id, slot)
-      : undefined,
-    () => character,
+  const objectivesSection = toIconMenuItem(
+    createObjectivesSection(
+      getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.objective ?? null,
+      getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.objectiveRewardGranted,
+      getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.objective2 ?? null,
+      getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.objectiveRewardGranted2,
+      getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.completedObjectives ?? [],
+      utilityState.objectives,
+      (open) => {
+        onUtilityStateChange?.({ ...getUtilityState(), objectives: open });
+      },
+    ),
+    { icon: "\u{1F4DC}", label: t("objective.panel.title" as never) },
   );
-  const derivedStatsSection = createDerivedStatsSection(character);
-  const inventorySection = createInventoryPanelSection(
-    character,
-    { getSelectedItemId, onSelectItem },
-    getEquipmentLoadout(),
-    character?.id ?? null,
-    onEquipItem,
-    utilityState.inventory,
-    (open) => {
-      onUtilityStateChange?.({ ...getUtilityState(), inventory: open });
-    },
+  const equipmentSection = toIconMenuItem(
+    createEquipmentPanelSection(
+      getEquipmentLoadout,
+      () => character?.inventorySummaryItems ?? [],
+      utilityState.equipment,
+      (open) => {
+        onUtilityStateChange?.({ ...getUtilityState(), equipment: open });
+      },
+      character?.id !== undefined && onUnequipItem !== undefined
+        ? (slot) => onUnequipItem(character.id, slot)
+        : undefined,
+      () => character,
+    ),
+    { icon: "\u{1F6E1}", label: t("equipment.title") },
+  );
+  const derivedStatsSection = toIconMenuItem(
+    createDerivedStatsSection(character),
+    { icon: "\u{1F4CA}", label: "Derived Stats" },
+  );
+  const inventorySection = toIconMenuItem(
+    createInventoryPanelSection(
+      character,
+      { getSelectedItemId, onSelectItem },
+      getEquipmentLoadout(),
+      character?.id ?? null,
+      onEquipItem,
+      utilityState.inventory,
+      (open) => {
+        onUtilityStateChange?.({ ...getUtilityState(), inventory: open });
+      },
+    ),
+    { icon: "\u{1F392}", label: "Inventory" },
   );
   const debugSection = createDebugPanel(
     room,
@@ -472,7 +550,15 @@ function createStableUtilityContent(
     },
   );
 
-  root.append(controlsSection, objectivesSection, equipmentSection, derivedStatsSection, inventorySection, debugSection);
+  const menuItems = [controlsSection, objectivesSection, equipmentSection, derivedStatsSection, inventorySection];
+  // Core 0.25 -- Debug Panel is a dev-only tool, not a menu item players
+  // should ever see. Only wired into the toolbar in dev builds; in a
+  // production build `debugSection` is built (harmless) but never
+  // appended anywhere, so it's neither visible nor reachable.
+  if (clientEnv.isDevBuild) {
+    menuItems.push(toIconMenuItem(debugSection, { icon: "\u{1F41E}", label: "Debug Panel" }));
+  }
+  root.append(...menuItems);
   return { root, equipmentSection, inventorySection, debugSection };
 }
 
@@ -491,41 +577,58 @@ function syncUtilityView(
   onProjectionModeChange: (mode: WorldProjectionMode) => void,
 ): void {
   const utilityState = getUtilityState();
-  const controlsSection = createControlsSection(utilityState.controls, (open) => {
-    onUtilityStateChange?.({ ...getUtilityState(), controls: open });
-  });
-  const objectivesSection = createObjectivesSection(
-    getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.objective ?? null,
-    getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.objectiveRewardGranted,
-    getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.completedObjectives ?? [],
-    utilityState.objectives,
-    (open) => {
-      onUtilityStateChange?.({ ...getUtilityState(), objectives: open });
-    },
+  const controlsSection = toIconMenuItem(
+    createControlsSection(utilityState.controls, (open) => {
+      onUtilityStateChange?.({ ...getUtilityState(), controls: open });
+    }),
+    { icon: "❓", label: `${t("world_session.controls")} / Help` },
   );
-  const equipmentSection = createEquipmentPanelSection(
-    getEquipmentLoadout,
-    () => character?.inventorySummaryItems ?? [],
-    utilityState.equipment,
-    (open) => {
-      onUtilityStateChange?.({ ...getUtilityState(), equipment: open });
-    },
-    character?.id !== undefined && onUnequipItem !== undefined
-      ? (slot) => onUnequipItem(character.id, slot)
-      : undefined,
-    () => character,
+  const objectivesSection = toIconMenuItem(
+    createObjectivesSection(
+      getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.objective ?? null,
+      getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.objectiveRewardGranted,
+      getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.objective2 ?? null,
+      getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.objectiveRewardGranted2,
+      getCurrentPlayerPresence(room.state as unknown as Record<string, unknown>, room.sessionId)?.completedObjectives ?? [],
+      utilityState.objectives,
+      (open) => {
+        onUtilityStateChange?.({ ...getUtilityState(), objectives: open });
+      },
+    ),
+    { icon: "\u{1F4DC}", label: t("objective.panel.title" as never) },
   );
-  const derivedStatsSection = createDerivedStatsSection(character);
-  const inventorySection = createInventoryPanelSection(
-    character,
-    { getSelectedItemId, onSelectItem },
-    getEquipmentLoadout(),
-    character?.id ?? null,
-    onEquipItem,
-    utilityState.inventory,
-    (open) => {
-      onUtilityStateChange?.({ ...getUtilityState(), inventory: open });
-    },
+  const equipmentSection = toIconMenuItem(
+    createEquipmentPanelSection(
+      getEquipmentLoadout,
+      () => character?.inventorySummaryItems ?? [],
+      utilityState.equipment,
+      (open) => {
+        onUtilityStateChange?.({ ...getUtilityState(), equipment: open });
+      },
+      character?.id !== undefined && onUnequipItem !== undefined
+        ? (slot) => onUnequipItem(character.id, slot)
+        : undefined,
+      () => character,
+    ),
+    { icon: "\u{1F6E1}", label: t("equipment.title") },
+  );
+  const derivedStatsSection = toIconMenuItem(
+    createDerivedStatsSection(character),
+    { icon: "\u{1F4CA}", label: "Derived Stats" },
+  );
+  const inventorySection = toIconMenuItem(
+    createInventoryPanelSection(
+      character,
+      { getSelectedItemId, onSelectItem },
+      getEquipmentLoadout(),
+      character?.id ?? null,
+      onEquipItem,
+      utilityState.inventory,
+      (open) => {
+        onUtilityStateChange?.({ ...getUtilityState(), inventory: open });
+      },
+    ),
+    { icon: "\u{1F392}", label: "Inventory" },
   );
   const nextDebugSection = createDebugPanel(
     room,
@@ -537,14 +640,11 @@ function syncUtilityView(
       onUtilityStateChange?.({ ...getUtilityState(), debug: open });
     },
   );
-  refs.root.replaceChildren(
-    controlsSection,
-    objectivesSection,
-    equipmentSection,
-    derivedStatsSection,
-    inventorySection,
-    nextDebugSection,
-  );
+  const menuItems = [controlsSection, objectivesSection, equipmentSection, derivedStatsSection, inventorySection];
+  if (clientEnv.isDevBuild) {
+    menuItems.push(toIconMenuItem(nextDebugSection, { icon: "\u{1F41E}", label: "Debug Panel" }));
+  }
+  refs.root.replaceChildren(...menuItems);
   refs.equipmentSection = equipmentSection;
   refs.inventorySection = inventorySection;
   refs.debugSection = nextDebugSection;
@@ -581,6 +681,7 @@ function createControlsSection(isOpen: boolean, onOpenChange: (open: boolean) =>
   const bindings: readonly { readonly key: string; readonly action: string }[] = [
     { key: "Click", action: t("world_session.control_move") },
     { key: "Click (enemy)", action: t("world_session.control_attack") },
+    { key: "1 (enemy)", action: t("skill.heavy_strike.name") },
     { key: "RMB (enemy)", action: t("skill.grave_spark.name") },
     { key: "E (enemy)", action: t("skill.bone_splinter.name") },
     { key: "Click (loot)", action: "Pickup" },
@@ -620,20 +721,26 @@ function createControlsSection(isOpen: boolean, onOpenChange: (open: boolean) =>
   return details;
 }
 
+type ObjectiveTrackerSource = {
+  readonly id: string;
+  readonly label: string;
+  readonly descriptionKey?: string;
+  readonly current: number;
+  readonly target: number;
+  readonly completed: boolean;
+  readonly readyToTurnIn?: boolean;
+  readonly xpReward?: number;
+  readonly copperReward?: number;
+  readonly targetEnemyLabel?: string | undefined;
+} | null;
+
 function createObjectivesSection(
-  objective: {
-    readonly id: string;
-    readonly label: string;
-    readonly descriptionKey?: string;
-    readonly current: number;
-    readonly target: number;
-    readonly completed: boolean;
-    readonly readyToTurnIn?: boolean;
-    readonly xpReward?: number;
-    readonly copperReward?: number;
-    readonly targetEnemyLabel?: string | undefined;
-  } | null,
-  objectiveRewardGranted: boolean | undefined,
+  // Core 0.15 -- two concurrent objective slots, rendered as two
+  // independent "Active" blocks under one shared "Completed" history.
+  objective1: ObjectiveTrackerSource,
+  objectiveRewardGranted1: boolean | undefined,
+  objective2: ObjectiveTrackerSource,
+  objectiveRewardGranted2: boolean | undefined,
   completedObjectives: readonly {
     readonly id: string;
     readonly title: string;
@@ -668,7 +775,6 @@ function createObjectivesSection(
   content.style.display = "grid";
   content.style.gap = "8px";
 
-  const viewModel = resolveObjectiveTrackerViewModel(objective, objectiveRewardGranted);
   const activeSectionTitle = document.createElement("div");
   activeSectionTitle.textContent = t("objective.panel.active_section" as never);
   activeSectionTitle.style.fontSize = "11px";
@@ -676,35 +782,48 @@ function createObjectivesSection(
   activeSectionTitle.style.color = "#d8c6a3";
   content.appendChild(activeSectionTitle);
 
-  if (viewModel === null) {
+  const slotSources: readonly [1 | 2, ObjectiveTrackerSource, boolean | undefined][] = [
+    [1, objective1, objectiveRewardGranted1],
+    [2, objective2, objectiveRewardGranted2],
+  ];
+  const activeSlots = slotSources.filter(([, objective]) => objective !== null);
+
+  if (activeSlots.length === 0) {
     content.appendChild(createMutedText(t("objective.panel.empty" as never)));
   } else {
-    const card = createObjectiveTrackerCard(viewModel);
-    content.appendChild(card);
+    for (const [slot, objective, objectiveRewardGranted] of activeSlots) {
+      const viewModel = resolveObjectiveTrackerViewModel(objective, objectiveRewardGranted);
+      if (viewModel === null) {
+        continue;
+      }
 
-    const stateLine = createInfoLine(t("objective.panel.state" as never), viewModel.stateLabel);
-    content.appendChild(stateLine);
+      const card = createObjectiveTrackerCard(viewModel, slot);
+      content.appendChild(card);
 
-    const progressLine = createInfoLine(
-      t("objective.panel.progress" as never),
-      `${viewModel.current}/${viewModel.target}`,
-    );
-    content.appendChild(progressLine);
+      const stateLine = createInfoLine(t("objective.panel.state" as never), viewModel.stateLabel);
+      content.appendChild(stateLine);
 
-    if (viewModel.description !== undefined) {
-      const description = createMutedText(viewModel.description);
-      description.style.color = "#cdb892";
-      content.appendChild(description);
-    }
-
-    if (viewModel.completed) {
-      const turnInState = createInfoLine(
-        t("objective.panel.turn_in" as never),
-        objectiveRewardGranted === true
-          ? t("objective.state.completed")
-          : t("objective.state.ready_to_turn_in"),
+      const progressLine = createInfoLine(
+        t("objective.panel.progress" as never),
+        `${viewModel.current}/${viewModel.target}`,
       );
-      content.appendChild(turnInState);
+      content.appendChild(progressLine);
+
+      if (viewModel.description !== undefined) {
+        const description = createMutedText(viewModel.description);
+        description.style.color = "#cdb892";
+        content.appendChild(description);
+      }
+
+      if (viewModel.completed) {
+        const turnInState = createInfoLine(
+          t("objective.panel.turn_in" as never),
+          objectiveRewardGranted === true
+            ? t("objective.state.completed")
+            : t("objective.state.ready_to_turn_in"),
+        );
+        content.appendChild(turnInState);
+      }
     }
   }
 
@@ -821,11 +940,73 @@ function createCardSection(): HTMLElement {
   return section;
 }
 
-function createScrollableCardSection(): HTMLElement {
+/** Core 0.25 -- the borderless variant of `createCardSection` for the
+ * bottom HUD, which must float over the world with no visible container
+ * (see `applyWorldSessionOverlayFloatingHudStyles`). */
+function createFloatingHudSection(): HTMLElement {
   const section = document.createElement("section");
-  applyWorldSessionOverlayScrollablePanelStyles(section);
+  applyWorldSessionOverlayFloatingHudStyles(section);
   section.style.margin = "0";
   return section;
+}
+
+/** Core 0.25 -- turns one of the utility menu's `<details>` sections (as
+ * built by `createControlsSection`/`createObjectivesSection`/etc., each a
+ * `<details>` with a `<summary>` first child) into a single icon-button
+ * toolbar item: the `<summary>` becomes a round icon glyph, and every
+ * other child is moved into one absolutely-positioned flyout panel that
+ * opens below it. This only restyles/regroups the DOM the section
+ * functions already build -- their open/close state wiring (`isOpen`,
+ * `onOpenChange`, the native `toggle` event) is untouched. */
+function toIconMenuItem(details: HTMLElement, options: { readonly icon: string; readonly label: string }): HTMLElement {
+  const summary = details.firstElementChild;
+  const flyoutChildren = Array.from(details.children).filter((child) => child !== summary);
+  const flyout = document.createElement("div");
+  flyout.style.position = "absolute";
+  flyout.style.top = "calc(100% + 8px)";
+  flyout.style.right = "0";
+  flyout.style.minWidth = "240px";
+  flyout.style.width = "max-content";
+  flyout.style.maxWidth = "min(340px, calc(100vw - 24px))";
+  flyout.style.maxHeight = "calc(100vh - 80px)";
+  flyout.style.overflowY = "auto";
+  flyout.style.border = "1px solid #4d3f2a";
+  flyout.style.borderRadius = "10px";
+  flyout.style.background = "rgba(10, 8, 7, 0.94)";
+  flyout.style.boxShadow = "0 10px 30px rgba(0, 0, 0, 0.45)";
+  flyout.style.zIndex = "30";
+  flyout.style.padding = "4px 0 8px";
+  flyout.append(...flyoutChildren);
+  details.appendChild(flyout);
+
+  details.style.position = "relative";
+  details.style.border = "none";
+  details.style.background = "transparent";
+  details.style.borderRadius = "0";
+  details.style.padding = "0";
+  details.style.width = "auto";
+  details.style.flex = "0 0 auto";
+
+  if (summary instanceof HTMLElement) {
+    summary.textContent = options.icon;
+    summary.title = options.label;
+    summary.setAttribute("aria-label", options.label);
+    summary.style.display = "flex";
+    summary.style.alignItems = "center";
+    summary.style.justifyContent = "center";
+    summary.style.width = "40px";
+    summary.style.height = "40px";
+    summary.style.margin = "0";
+    summary.style.padding = "0";
+    summary.style.fontSize = "18px";
+    summary.style.lineHeight = "1";
+    summary.style.border = "1px solid #4d3f2a";
+    summary.style.borderRadius = "50%";
+    summary.style.background = "rgba(10, 8, 7, 0.86)";
+    summary.style.boxShadow = "0 4px 14px rgba(0, 0, 0, 0.35)";
+  }
+
+  return details;
 }
 
 function createSectionBlock(titleText: string, children: readonly HTMLElement[], options?: { readonly compact?: boolean }): HTMLElement {
@@ -847,6 +1028,15 @@ function createSectionBlock(titleText: string, children: readonly HTMLElement[],
     wrapper.appendChild(child);
   }
 
+  return wrapper;
+}
+
+/** Core 0.26 -- same as `createSectionBlock`, but with the more ornate
+ * inventory/equipment panel frame (`applyWorldSessionOverlayItemPanelStyles`)
+ * instead of the plain flat box every other section block still uses. */
+function createItemPanelSectionBlock(titleText: string, children: readonly HTMLElement[], options?: { readonly compact?: boolean }): HTMLElement {
+  const wrapper = createSectionBlock(titleText, children, options);
+  applyWorldSessionOverlayItemPanelStyles(wrapper);
   return wrapper;
 }
 
@@ -939,94 +1129,328 @@ function createMovementDebugSection(
 function createHudSection(
   hpSummary: string,
   hpRatio: number | null,
-  lifeState?: "alive" | "downed",
-  flaskCharges?: number,
-  maxFlaskCharges?: number,
-  level?: number,
-  xp?: number,
-  objective?: {
-    readonly id: string;
-    readonly label: string;
-    readonly descriptionKey?: string;
-    readonly current: number;
-    readonly target: number;
-    readonly completed: boolean;
-    readonly xpReward?: number;
-    readonly copperReward?: number;
-    readonly targetEnemyLabel?: string | undefined;
-  } | null,
-  onResetObjective?: () => void,
-  objectiveRewardGranted?: boolean,
+  lifeState: "alive" | "downed" | undefined,
+  flaskCharges: number | undefined,
+  maxFlaskCharges: number | undefined,
+  level: number | undefined,
+  xp: number | undefined,
+  objective: ObjectiveTrackerSource,
+  onResetObjective: ((slot: 1 | 2) => void) | undefined,
+  objectiveRewardGranted: boolean | undefined,
+  // Core 0.15 -- second concurrent objective slot, mirrors `objective`/`objectiveRewardGranted` above.
+  objective2: ObjectiveTrackerSource,
+  objectiveRewardGranted2: boolean | undefined,
+  nextSkillSlotAt: number | undefined,
+  skillTargeting: WorldSessionSkillTargetingState,
+  lastSkillRejectedReason: string | null,
 ): HTMLElement {
+  // Core 0.21 -- PoE-style bottom-center HUD: a dual-orb cluster (HP orb,
+  // real; resource orb, visual stub -- Core 0.1 has no mana/resource
+  // system) flanking a flask/belt strip (flask_1 real, slots 2-5 visual
+  // stubs). Quest trackers and the skill-cooldown card keep their
+  // existing wiring/logic but sit above the orb cluster so it reads as
+  // one clean action bar, matching the reference games instead of the
+  // old stacked-text-card layout. See docs/CORE_BUILD_0_21_PLAN.md.
   const wrapper = document.createElement("section");
   wrapper.style.display = "grid";
   wrapper.style.gap = "8px";
-  wrapper.style.gridTemplateColumns = objective === null || objective === undefined
-    ? "minmax(240px, 1.6fr) minmax(72px, auto)"
-    : "minmax(240px, 1.6fr) minmax(176px, auto) minmax(72px, auto)";
-  wrapper.style.alignItems = "center";
-
-  const hpLine = document.createElement("div");
-  hpLine.style.display = "flex";
-  hpLine.style.justifyContent = "space-between";
-  hpLine.style.alignItems = "center";
-  hpLine.style.marginBottom = "4px";
-
-  const hpLabel = document.createElement("span");
-  hpLabel.textContent = t("world_session.player_hp");
-  hpLabel.style.color = "#d8c6a3";
-  hpLabel.style.fontSize = "12px";
-  hpLine.appendChild(hpLabel);
-
-  const hpValue = document.createElement("span");
-  hpValue.textContent = hpSummary;
-  hpValue.style.color = lifeState === "downed" ? "#e3a6a6" : "#c8aa7a";
-  hpValue.style.fontWeight = "bold";
-  hpValue.style.fontSize = "14px";
-  hpValue.style.fontFamily = "monospace";
-  hpLine.appendChild(hpValue);
-
-  const vitalityCard = document.createElement("div");
-  vitalityCard.style.padding = "8px 10px";
-  vitalityCard.style.border = "1px solid #4d2a2a";
-  vitalityCard.style.borderRadius = "12px";
-  vitalityCard.style.background = "linear-gradient(180deg, rgba(40, 12, 12, 0.92) 0%, rgba(20, 8, 8, 0.92) 100%)";
-  vitalityCard.appendChild(hpLine);
-
-  const barFrame = document.createElement("div");
-  barFrame.style.width = "100%";
-  barFrame.style.height = "14px";
-  barFrame.style.border = "1px solid #5f4a2f";
-  barFrame.style.borderRadius = "999px";
-  barFrame.style.background = "rgba(22, 16, 14, 0.95)";
-  barFrame.style.overflow = "hidden";
-  barFrame.style.marginBottom = "6px";
-
-  const barFill = document.createElement("div");
-  barFill.style.height = "100%";
-  barFill.style.width = hpRatio === null ? "0%" : `${Math.max(0, Math.min(100, hpRatio * 100))}%`;
-  barFill.style.background = lifeState === "downed"
-    ? "linear-gradient(90deg, #7a1f1f 0%, #bf5252 100%)"
-    : hpRatio !== null && hpRatio <= 0.25
-      ? "linear-gradient(90deg, #8f2a2a 0%, #d46262 100%)"
-      : "linear-gradient(90deg, #6e2f1f 0%, #c46a3a 100%)";
-  barFill.style.borderRadius = "999px";
-  barFill.style.transition = "width 0.3s ease";
-  barFrame.appendChild(barFill);
-  vitalityCard.appendChild(barFrame);
-
-  vitalityCard.appendChild(createFlaskChargesLine(flaskCharges, maxFlaskCharges));
-
-  wrapper.appendChild(vitalityCard);
+  wrapper.style.justifyItems = "center";
 
   const objectiveTrackerViewModel = resolveObjectiveTrackerViewModel(objective, objectiveRewardGranted);
-  if (objectiveTrackerViewModel !== null) {
-    wrapper.appendChild(createObjectiveTrackerCard(objectiveTrackerViewModel, onResetObjective));
+  const objectiveTrackerViewModel2 = resolveObjectiveTrackerViewModel(objective2, objectiveRewardGranted2);
+  if (objectiveTrackerViewModel !== null || objectiveTrackerViewModel2 !== null) {
+    const objectiveRow = document.createElement("div");
+    objectiveRow.style.display = "flex";
+    objectiveRow.style.flexWrap = "wrap";
+    objectiveRow.style.justifyContent = "center";
+    objectiveRow.style.gap = "8px";
+    if (objectiveTrackerViewModel !== null) {
+      objectiveRow.appendChild(createObjectiveTrackerCard(objectiveTrackerViewModel, 1, onResetObjective));
+    }
+    if (objectiveTrackerViewModel2 !== null) {
+      objectiveRow.appendChild(createObjectiveTrackerCard(objectiveTrackerViewModel2, 2, onResetObjective));
+    }
+    wrapper.appendChild(objectiveRow);
   }
 
+  wrapper.appendChild(createSkillSlotPlaceholder(nextSkillSlotAt, skillTargeting, lastSkillRejectedReason));
+  wrapper.appendChild(createVitalityClusterRow(hpSummary, hpRatio, lifeState, flaskCharges, maxFlaskCharges));
   wrapper.appendChild(createMiniHudStat(`${t("character.level")} ${String(level ?? 1)}`, `${t("character.xp")} ${String(xp ?? 0)}`));
 
   return wrapper;
+}
+
+const HUD_ORB_DIAMETER_PX = 84;
+const HUD_BELT_SLOT_SIZE_PX = 52;
+const HUD_BELT_STUB_SLOT_COUNT = 4;
+
+function createVitalityClusterRow(
+  hpSummary: string,
+  hpRatio: number | null,
+  lifeState: "alive" | "downed" | undefined,
+  flaskCharges: number | undefined,
+  maxFlaskCharges: number | undefined,
+): HTMLElement {
+  const row = document.createElement("div");
+  row.style.display = "flex";
+  row.style.alignItems = "flex-end";
+  row.style.justifyContent = "center";
+  row.style.gap = "14px";
+  row.style.flexWrap = "wrap";
+
+  row.appendChild(createHpOrb(hpSummary, hpRatio, lifeState));
+  row.appendChild(createBeltStrip(flaskCharges, maxFlaskCharges));
+  row.appendChild(createResourceOrbStub());
+
+  return row;
+}
+
+function createOrbShell(
+  diameterPx: number,
+  ringColor: string,
+  background: string,
+): { readonly shell: HTMLElement; readonly fill: HTMLElement; readonly labelLayer: HTMLElement } {
+  const shell = document.createElement("div");
+  shell.style.position = "relative";
+  shell.style.width = `${diameterPx}px`;
+  shell.style.height = `${diameterPx}px`;
+  shell.style.borderRadius = "50%";
+  shell.style.border = `3px solid ${ringColor}`;
+  shell.style.background = background;
+  shell.style.overflow = "hidden";
+  shell.style.boxShadow = "inset 0 0 12px rgba(0, 0, 0, 0.65), 0 4px 10px rgba(0, 0, 0, 0.4)";
+  shell.style.flex = "0 0 auto";
+
+  const fill = document.createElement("div");
+  fill.style.position = "absolute";
+  fill.style.left = "0";
+  fill.style.right = "0";
+  fill.style.bottom = "0";
+  fill.style.height = "0%";
+  fill.style.transition = "height 0.3s ease, background 0.3s ease";
+  shell.appendChild(fill);
+
+  const labelLayer = document.createElement("div");
+  labelLayer.style.position = "absolute";
+  labelLayer.style.inset = "0";
+  labelLayer.style.display = "flex";
+  labelLayer.style.flexDirection = "column";
+  labelLayer.style.alignItems = "center";
+  labelLayer.style.justifyContent = "center";
+  labelLayer.style.textAlign = "center";
+  labelLayer.style.pointerEvents = "none";
+  shell.appendChild(labelLayer);
+
+  return { shell, fill, labelLayer };
+}
+
+/** Real, wired: fill ratio and downed-state color come from the same
+ *  synced `hp`/`maxHp`/`lifeState` presence fields the old HP bar read. */
+function createHpOrb(
+  hpSummary: string,
+  hpRatio: number | null,
+  lifeState: "alive" | "downed" | undefined,
+): HTMLElement {
+  const isDowned = lifeState === "downed";
+  const { shell, fill, labelLayer } = createOrbShell(
+    HUD_ORB_DIAMETER_PX,
+    isDowned ? "#7a3535" : "#5a3c22",
+    "radial-gradient(circle at 50% 30%, rgba(48, 20, 20, 0.9) 0%, rgba(18, 8, 8, 0.95) 100%)",
+  );
+
+  fill.style.height = hpRatio === null ? "0%" : `${Math.max(0, Math.min(100, hpRatio * 100))}%`;
+  fill.style.background = isDowned
+    ? "linear-gradient(180deg, #bf5252 0%, #7a1f1f 100%)"
+    : hpRatio !== null && hpRatio <= 0.25
+      ? "linear-gradient(180deg, #d46262 0%, #8f2a2a 100%)"
+      : "linear-gradient(180deg, #c46a3a 0%, #6e2f1f 100%)";
+
+  const hpText = document.createElement("div");
+  hpText.textContent = hpSummary;
+  hpText.style.color = isDowned ? "#ffd6d6" : "#f3e2c4";
+  hpText.style.fontWeight = "bold";
+  hpText.style.fontSize = "11px";
+  hpText.style.fontFamily = "monospace";
+  hpText.style.textShadow = "0 1px 3px rgba(0, 0, 0, 0.85)";
+  hpText.style.padding = "0 4px";
+  labelLayer.appendChild(hpText);
+
+  const wrapper = document.createElement("div");
+  wrapper.style.display = "grid";
+  wrapper.style.justifyItems = "center";
+  wrapper.style.gap = "4px";
+  wrapper.appendChild(shell);
+
+  const caption = document.createElement("div");
+  caption.textContent = t("world_session.player_hp");
+  caption.style.fontSize = "9px";
+  caption.style.color = "#a88d63";
+  caption.style.textTransform = "uppercase";
+  caption.style.letterSpacing = "0.04em";
+  wrapper.appendChild(caption);
+
+  return wrapper;
+}
+
+/** Visual stub only -- Core 0.1 has no mana/class-resource system
+ *  (docs/GAME_DESIGN.md) and `PlayerPresenceEntry` has no such field.
+ *  Flat/unfilled vessel, lock glyph, "Coming Later" label, disabled
+ *  cursor, no click handler -- unmistakably not a live control. */
+function createResourceOrbStub(): HTMLElement {
+  const { shell, labelLayer } = createOrbShell(
+    HUD_ORB_DIAMETER_PX,
+    "#3c3a42",
+    "repeating-linear-gradient(135deg, rgba(40, 40, 46, 0.9) 0px, rgba(40, 40, 46, 0.9) 6px, rgba(28, 28, 32, 0.9) 6px, rgba(28, 28, 32, 0.9) 12px)",
+  );
+  shell.style.cursor = "not-allowed";
+  shell.title = t("world_session.resource_placeholder");
+
+  const lock = document.createElement("div");
+  lock.textContent = "\u{1F512}";
+  lock.style.fontSize = "16px";
+  lock.style.opacity = "0.75";
+  labelLayer.appendChild(lock);
+
+  const soonLabel = document.createElement("div");
+  soonLabel.textContent = t("world_session.resource_placeholder");
+  soonLabel.style.color = "#8a8a92";
+  soonLabel.style.fontSize = "9px";
+  soonLabel.style.fontWeight = "bold";
+  soonLabel.style.textTransform = "uppercase";
+  soonLabel.style.marginTop = "2px";
+  labelLayer.appendChild(soonLabel);
+
+  const wrapper = document.createElement("div");
+  wrapper.style.display = "grid";
+  wrapper.style.justifyItems = "center";
+  wrapper.style.gap = "4px";
+  wrapper.appendChild(shell);
+
+  const caption = document.createElement("div");
+  caption.textContent = t("world_session.resource");
+  caption.style.fontSize = "9px";
+  caption.style.color = "#6f6f76";
+  caption.style.textTransform = "uppercase";
+  caption.style.letterSpacing = "0.04em";
+  wrapper.appendChild(caption);
+
+  return wrapper;
+}
+
+function createBeltStrip(flaskCharges: number | undefined, maxFlaskCharges: number | undefined): HTMLElement {
+  const strip = document.createElement("div");
+  strip.style.display = "flex";
+  strip.style.gap = "6px";
+  strip.style.alignItems = "flex-end";
+
+  strip.appendChild(createFlaskBeltSlot(flaskCharges, maxFlaskCharges));
+  for (let i = 0; i < HUD_BELT_STUB_SLOT_COUNT; i++) {
+    strip.appendChild(createStubBeltSlot());
+  }
+
+  return strip;
+}
+
+function createBeltSlotShell(borderColor: string, background: string): HTMLElement {
+  const slot = document.createElement("div");
+  slot.style.position = "relative";
+  slot.style.width = `${HUD_BELT_SLOT_SIZE_PX}px`;
+  slot.style.height = `${HUD_BELT_SLOT_SIZE_PX}px`;
+  slot.style.border = `2px solid ${borderColor}`;
+  slot.style.borderRadius = "8px";
+  slot.style.background = background;
+  slot.style.display = "flex";
+  slot.style.flexDirection = "column";
+  slot.style.alignItems = "center";
+  slot.style.justifyContent = "center";
+  slot.style.boxSizing = "border-box";
+  slot.style.flex = "0 0 auto";
+  return slot;
+}
+
+/** Real, wired: same `flaskCharges`/`maxFlaskCharges` presence fields
+ *  and `[Q]` keybind the old flask-charges line read, redrawn as a
+ *  belt-slot tile instead of a standalone text-and-dots row. */
+function createFlaskBeltSlot(charges: number | undefined, maxCharges: number | undefined): HTMLElement {
+  const slot = createBeltSlotShell(
+    "#6b5738",
+    "linear-gradient(180deg, rgba(42, 32, 22, 0.96) 0%, rgba(24, 18, 13, 0.96) 100%)",
+  );
+
+  const keyBadge = document.createElement("div");
+  keyBadge.textContent = "Q";
+  keyBadge.style.position = "absolute";
+  keyBadge.style.top = "2px";
+  keyBadge.style.left = "3px";
+  keyBadge.style.fontSize = "8px";
+  keyBadge.style.fontWeight = "bold";
+  keyBadge.style.fontFamily = "monospace";
+  keyBadge.style.color = "#e0c88a";
+  slot.appendChild(keyBadge);
+
+  if (charges === undefined || maxCharges === undefined) {
+    const waiting = document.createElement("div");
+    waiting.textContent = "…";
+    waiting.style.color = "#7a5f4a";
+    waiting.style.fontSize = "14px";
+    slot.appendChild(waiting);
+    slot.title = t("world_session.awaiting_flask");
+    return slot;
+  }
+
+  const glyph = document.createElement("div");
+  glyph.textContent = "⚗";
+  glyph.style.fontSize = "18px";
+  glyph.style.color = charges > 0 ? "#e0824a" : "#5a4530";
+  slot.appendChild(glyph);
+
+  const dots = document.createElement("div");
+  dots.style.display = "flex";
+  dots.style.gap = "2px";
+  dots.style.marginTop = "2px";
+  for (let i = 0; i < maxCharges; i++) {
+    const dot = document.createElement("span");
+    dot.textContent = "●";
+    dot.style.fontSize = "7px";
+    dot.style.color = i < charges ? "#b4512a" : "#3a2a1a";
+    dots.appendChild(dot);
+  }
+  slot.appendChild(dots);
+
+  slot.title = `${t("world_session.flask_charges")}: ${charges}/${maxCharges} [Q]`;
+  return slot;
+}
+
+/** Visual stub only -- Core 0.1's belt has exactly one real flask slot
+ *  (`flask_1`); these represent belt capacity the itemization doesn't
+ *  have yet. Visibly locked (dashed border, reduced opacity, lock
+ *  glyph, "Soon" label, disabled cursor), no keybind badge, no click
+ *  handler -- reads as inert, not as a live slot that no-ops. */
+function createStubBeltSlot(): HTMLElement {
+  const slot = createBeltSlotShell(
+    "#4a4a4a",
+    "repeating-linear-gradient(135deg, rgba(36, 36, 40, 0.85) 0px, rgba(36, 36, 40, 0.85) 5px, rgba(24, 24, 27, 0.85) 5px, rgba(24, 24, 27, 0.85) 10px)",
+  );
+  slot.style.borderStyle = "dashed";
+  slot.style.opacity = "0.55";
+  slot.style.cursor = "not-allowed";
+  slot.title = t("world_session.belt_slot_soon_hint");
+
+  const lock = document.createElement("div");
+  lock.textContent = "\u{1F512}";
+  lock.style.fontSize = "13px";
+  slot.appendChild(lock);
+
+  const label = document.createElement("div");
+  label.textContent = t("world_session.belt_slot_soon");
+  label.style.fontSize = "7px";
+  label.style.color = "#8a8a8a";
+  label.style.fontWeight = "bold";
+  label.style.textTransform = "uppercase";
+  label.style.marginTop = "1px";
+  slot.appendChild(label);
+
+  return slot;
 }
 
 function createDerivedStatsSection(character: CharacterSummary | null): HTMLElement {
@@ -1135,7 +1559,11 @@ function createMiniHudStat(labelText: string, valueText: string): HTMLElement {
   return card;
 }
 
-function createObjectiveTrackerCard(objective: ObjectiveTrackerViewModel, onResetObjective?: () => void): HTMLElement {
+function createObjectiveTrackerCard(
+  objective: ObjectiveTrackerViewModel,
+  slot: 1 | 2,
+  onResetObjective?: (slot: 1 | 2) => void,
+): HTMLElement {
   const card = document.createElement("div");
   card.style.display = "grid";
   card.style.gap = "4px";
@@ -1265,7 +1693,7 @@ function createObjectiveTrackerCard(objective: ObjectiveTrackerViewModel, onRese
   clearButton.style.fontSize = "11px";
   clearButton.addEventListener("click", (event) => {
     event.stopPropagation();
-    onResetObjective?.();
+    onResetObjective?.(slot);
   });
   makeInteractive(clearButton);
   card.appendChild(clearButton);
@@ -1440,77 +1868,6 @@ function createSkillSlotPlaceholder(
   return card;
 }
 
-function createFlaskChargesLine(charges?: number, maxCharges?: number): HTMLElement {
-  if (charges === undefined || maxCharges === undefined) {
-    const line = document.createElement("div");
-    line.style.display = "flex";
-    line.style.alignItems = "center";
-    line.style.gap = "6px";
-
-    const keyHint = document.createElement("span");
-    keyHint.textContent = "[Q]";
-    keyHint.style.color = "#7a5f4a";
-    keyHint.style.fontWeight = "bold";
-    keyHint.style.fontFamily = "monospace";
-    keyHint.style.fontSize = "11px";
-    keyHint.style.background = "rgba(63, 50, 30, 0.7)";
-    keyHint.style.padding = "1px 5px";
-    keyHint.style.borderRadius = "3px";
-    line.appendChild(keyHint);
-
-    const label = document.createElement("span");
-    label.textContent = t("world_session.awaiting_flask");
-    label.style.color = "#7a5f4a";
-    label.style.fontSize = "12px";
-    line.appendChild(label);
-    return line;
-  }
-
-  const line = document.createElement("div");
-  line.style.display = "flex";
-  line.style.alignItems = "center";
-  line.style.gap = "6px";
-  line.style.marginTop = "2px";
-
-  const keyHint = document.createElement("span");
-  keyHint.textContent = "[Q]";
-  keyHint.style.color = charges > 0 ? "#e0c88a" : "#7a5f4a";
-  keyHint.style.fontWeight = "bold";
-  keyHint.style.fontFamily = "monospace";
-  keyHint.style.fontSize = "11px";
-  keyHint.style.background = charges > 0 ? "rgba(63, 50, 30, 0.7)" : "rgba(40, 30, 20, 0.5)";
-  keyHint.style.padding = "1px 5px";
-  keyHint.style.borderRadius = "3px";
-  line.appendChild(keyHint);
-
-  // Mini flask charge dots
-  const dotsWrapper = document.createElement("div");
-  dotsWrapper.style.display = "flex";
-  dotsWrapper.style.gap = "4px";
-  dotsWrapper.style.alignItems = "center";
-
-  for (let i = 0; i < maxCharges; i++) {
-    const dot = document.createElement("span");
-    const isFilled = i < charges;
-    dot.textContent = "●";
-    dot.style.color = isFilled ? "#b4512a" : "#3a2a1a";
-    dot.style.fontSize = "14px";
-    dot.style.lineHeight = "1";
-    dotsWrapper.appendChild(dot);
-  }
-
-  line.appendChild(dotsWrapper);
-
-  const fracLabel = document.createElement("span");
-  fracLabel.textContent = `${charges} / ${maxCharges}`;
-  fracLabel.style.color = charges > 0 ? "#b9d49a" : "#7a5f4a";
-  fracLabel.style.fontSize = "11px";
-  fracLabel.style.fontFamily = "monospace";
-  line.appendChild(fracLabel);
-
-  return line;
-}
-
 function createInventoryPanelSection(
   character: CharacterSummary | null,
   selection: {
@@ -1671,22 +2028,35 @@ function resolvePlayerHpRatio(hp?: number, maxHp?: number): number | null {
   return Math.max(0, Math.min(1, hp / maxHp));
 }
 
+const INVENTORY_GRID_CELL_PX = 30;
+const INVENTORY_GRID_GAP_PX = 3;
+
+/** Core 0.26 -- a real slot grid, not a scrollable text list: every item
+ * already carries its true `pageIndex`/`x`/`y`/`size` (the server-owned
+ * grid position, `packages/shared/src/inventory/InventoryTypes.ts`), so
+ * this renders the actual `DEFAULT_INVENTORY_GRID_CONFIG` grid (page 0 --
+ * Core 0.1 has exactly one page) with each item spanning its real
+ * width/height, plus an empty rarity-neutral slot for every uncovered
+ * cell, instead of re-flowing occupied items into an arbitrary list. */
 function createInventorySummarySection(
   items: readonly InventorySummaryItem[],
   getSelectedItemId: () => InventorySummaryItem["itemInstanceId"] | null,
   onSelectItem: (itemId: InventorySummaryItem["itemInstanceId"]) => void,
 ): HTMLElement {
   if (items.length === 0) {
-    return createSectionBlock("Inventory Summary", [createMutedText("No inventory items in bag.")], { compact: true });
+    return createItemPanelSectionBlock("Inventory Summary", [createMutedText("No inventory items in bag.")], { compact: true });
   }
 
-  const list = document.createElement("ul");
-  list.style.margin = "0";
-  list.style.padding = "0";
-  list.style.color = "#d8c6a3";
-  list.style.fontSize = "12px";
-  makeInteractive(list);
-  list.addEventListener("click", (event) => {
+  const { gridWidth, gridHeight } = DEFAULT_INVENTORY_GRID_CONFIG;
+  const pageItems = items.filter((item) => item.pageIndex === 0);
+
+  const grid = document.createElement("div");
+  grid.style.display = "grid";
+  grid.style.gridTemplateColumns = `repeat(${gridWidth}, ${INVENTORY_GRID_CELL_PX}px)`;
+  grid.style.gridTemplateRows = `repeat(${gridHeight}, ${INVENTORY_GRID_CELL_PX}px)`;
+  grid.style.gap = `${INVENTORY_GRID_GAP_PX}px`;
+  makeInteractive(grid);
+  grid.addEventListener("click", (event) => {
     event.stopPropagation();
 
     const target = event.target;
@@ -1712,33 +2082,101 @@ function createInventorySummarySection(
     onSelectItem(selectedItem.itemInstanceId);
   });
 
-  for (const item of items) {
-    const row = document.createElement("li");
-    const isSelected = getSelectedItemId() === item.itemInstanceId;
-    row.style.marginBottom = "6px";
-    row.style.listStyle = "none";
-    makeInteractive(row);
-    row.dataset.inventoryItemId = item.itemInstanceId;
+  const occupied = new Set<string>();
+  for (const item of pageItems) {
+    const width = item.size?.width ?? 1;
+    const height = item.size?.height ?? 1;
+    for (let dy = 0; dy < height; dy++) {
+      for (let dx = 0; dx < width; dx++) {
+        occupied.add(`${item.x + dx},${item.y + dy}`);
+      }
+    }
 
-    const button = createButton(item.label);
-    button.style.width = "100%";
-    button.style.textAlign = "left";
-    button.style.fontSize = "12px";
-    button.style.padding = "6px 8px";
-    button.style.background = isSelected ? "rgba(63, 83, 49, 0.9)" : "rgba(31, 24, 18, 0.95)";
-    button.style.color = getItemRarityColor(item.rarity);
-    button.setAttribute("aria-pressed", isSelected ? "true" : "false");
-    button.type = "button";
-    button.dataset.inventoryItemId = item.itemInstanceId;
-    const sizeText = item.size === undefined ? "" : ` • ${item.size.width}x${item.size.height}`;
-    const rarityText = formatItemRarityLabel(item.rarity);
-    button.textContent = `${item.label} [${rarityText}]${sizeText}`;
-    makeInteractive(button);
-    row.appendChild(button);
-    list.appendChild(row);
+    const isSelected = getSelectedItemId() === item.itemInstanceId;
+    const slot = document.createElement("button");
+    slot.type = "button";
+    slot.dataset.inventoryItemId = item.itemInstanceId;
+    slot.setAttribute("aria-pressed", isSelected ? "true" : "false");
+    slot.title = `${item.label} [${formatItemRarityLabel(item.rarity)}]`;
+    slot.style.gridColumn = `${item.x + 1} / span ${width}`;
+    slot.style.gridRow = `${item.y + 1} / span ${height}`;
+    applyInventorySlotShellStyles(slot, item.rarity, isSelected);
+    makeInteractive(slot);
+
+    // Real icon when the pack has a reasonable match for this item (see
+    // visualAssets.ts); otherwise a short text fallback, same fallback
+    // rule item rows used before this build.
+    const iconUrl = resolveItemIconUrl(item.definitionId);
+    if (iconUrl === null) {
+      const fallbackText = document.createElement("span");
+      fallbackText.textContent = item.label.slice(0, 3);
+      fallbackText.style.fontSize = "9px";
+      fallbackText.style.color = getItemRarityColor(item.rarity);
+      fallbackText.style.textAlign = "center";
+      fallbackText.style.overflow = "hidden";
+      fallbackText.style.pointerEvents = "none";
+      slot.appendChild(fallbackText);
+    } else {
+      const icon = document.createElement("img");
+      icon.src = iconUrl;
+      icon.alt = "";
+      icon.style.width = "70%";
+      icon.style.height = "70%";
+      icon.style.imageRendering = "pixelated";
+      icon.style.pointerEvents = "none";
+      slot.appendChild(icon);
+    }
+
+    grid.appendChild(slot);
   }
 
-  return createSectionBlock("Inventory Summary", [list], { compact: true });
+  for (let y = 0; y < gridHeight; y++) {
+    for (let x = 0; x < gridWidth; x++) {
+      if (occupied.has(`${x},${y}`)) {
+        continue;
+      }
+
+      const emptySlot = document.createElement("div");
+      emptySlot.style.gridColumn = `${x + 1} / span 1`;
+      emptySlot.style.gridRow = `${y + 1} / span 1`;
+      applyInventorySlotShellStyles(emptySlot, undefined, false);
+      emptySlot.style.opacity = "0.4";
+      grid.appendChild(emptySlot);
+    }
+  }
+
+  return createItemPanelSectionBlock("Inventory Summary", [grid], { compact: true });
+}
+
+/** Shared shell styling for both an occupied (item) and empty inventory
+ * grid cell -- a rarity-colored slot frame from the pack when the item
+ * has a recognized rarity (`resolveRarityFrameUrl`), or a plain neutral
+ * border for an empty cell / an item with no rarity match. */
+function applyInventorySlotShellStyles(cell: HTMLElement, rarity: string | undefined, isSelected: boolean): void {
+  cell.style.position = "relative";
+  cell.style.display = "flex";
+  cell.style.alignItems = "center";
+  cell.style.justifyContent = "center";
+  cell.style.padding = "0";
+  cell.style.margin = "0";
+  cell.style.boxSizing = "border-box";
+  cell.style.background = "rgba(20, 16, 12, 0.85)";
+  cell.style.cursor = cell.tagName === "BUTTON" ? "pointer" : "default";
+
+  const frameUrl = resolveRarityFrameUrl(rarity);
+  if (frameUrl === null) {
+    cell.style.border = `1px solid ${COMMON_ITEM_ACCENT_COLOR}`;
+    cell.style.borderRadius = "3px";
+  } else {
+    cell.style.border = "none";
+    cell.style.borderRadius = "0";
+    cell.style.backgroundImage = `url(${frameUrl})`;
+    cell.style.backgroundSize = "100% 100%";
+    cell.style.backgroundRepeat = "no-repeat";
+    cell.style.backgroundPosition = "center";
+  }
+
+  cell.style.boxShadow = isSelected ? "0 0 0 2px #f0ddbb, 0 0 8px rgba(240, 221, 187, 0.7)" : "none";
 }
 
 function createInventoryDetailSection(
@@ -1748,7 +2186,7 @@ function createInventoryDetailSection(
   onEquipItem?: (characterId: string, itemInstanceId: string, slot: string) => Promise<void>,
 ): HTMLElement {
   if (item === null) {
-    return createSectionBlock("Item Detail", [createMutedText("Select an item to inspect it.")], { compact: true });
+    return createItemPanelSectionBlock("Item Detail", [createMutedText("Select an item to inspect it.")], { compact: true });
   }
 
   const children: HTMLElement[] = [];
@@ -1837,7 +2275,7 @@ function createInventoryDetailSection(
     children.push(equipRow);
   }
 
-  const section = createSectionBlock("Item Detail", [], { compact: true });
+  const section = createItemPanelSectionBlock("Item Detail", [], { compact: true });
   section.style.display = "grid";
   section.style.gap = "8px";
   section.append(...children);

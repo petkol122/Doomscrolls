@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { prisma as defaultPrisma } from "../prisma";
+import { getSharedPrismaClient } from "../prisma";
 
 type SettingsRepositoryClient = PrismaClient | Prisma.TransactionClient;
 
@@ -11,7 +11,7 @@ export interface UpdateSettingsData {
 }
 
 export class SettingsRepository {
-  public constructor(private readonly db: SettingsRepositoryClient = defaultPrisma) {}
+  public constructor(private readonly db: SettingsRepositoryClient = getSharedPrismaClient()) {}
 
   public createDefaultSettings(userId: string) {
     return this.db.userSettings.create({ data: { userId } });

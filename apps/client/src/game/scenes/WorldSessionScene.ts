@@ -66,11 +66,17 @@ import {
   type WorldSessionSkillTertiaryInput,
 } from "./worldSession/worldSessionSkillTertiaryInput";
 import {
+  attachWorldSessionSkillPrimaryInput,
+  type WorldSessionSkillPrimaryInput,
+} from "./worldSession/worldSessionSkillPrimaryInput";
+import {
   applyWorldSessionOverlayRootStyles,
   applyWorldSessionOverlayHudStyles,
   applyWorldSessionOverlayStatusStyles,
   applyWorldSessionOverlayUtilityStyles,
+  applyWorldSessionOverlayChatStyles,
 } from "./worldSession/worldSessionOverlayLayout";
+import { createWorldSessionChatView } from "./worldSession/worldSessionChatView";
 import type { WorldProjectionMode } from "../worldProjection";
 import { defaultWorldProjection } from "../worldProjection";
 import {
@@ -78,6 +84,7 @@ import {
   registerEquipmentListener,
 } from "./worldSession/worldSessionEquipmentView";
 import type { WorldSessionUtilityPanelOpenState } from "./worldSession/worldSessionOverlayView";
+import { queueZoneGroundTileLoad, queueEnemyHpBarLoad } from "../visualAssetLoader";
 
 function formatItemRarityLabel(rarity?: string): string | null {
   if (rarity === undefined || rarity.length === 0) {
@@ -133,6 +140,7 @@ export class WorldSessionScene extends Phaser.Scene {
   private dodgeInput: WorldSessionDodgeInput | null = null;
   private healingFlaskInput: WorldSessionHealingFlaskInput | null = null;
   private tertiarySkillInput: WorldSessionSkillTertiaryInput | null = null;
+  private primarySkillInput: WorldSessionSkillPrimaryInput | null = null;
   private equipmentLoadout: EquipmentLoadout = createEmptyEquipmentLoadout();
   private lastObjectiveCompletionNotice: string | null = null;
   private lastObjectiveReadyToTurnInId: string | null = null;
@@ -164,6 +172,28 @@ export class WorldSessionScene extends Phaser.Scene {
     this.account = data.account;
     this.characterId = data.characterId;
     this.room = data.room;
+  }
+
+  public preload(): void {
+    // Core 0.23 -- the enemy HP bar spritesheet is used in every room
+    // kind (both TownRoom and CombatRoom enemies render through the same
+    // worldSessionEnemyPlaceholderView.ts), so it loads unconditionally.
+    queueEnemyHpBarLoad(this);
+
+    // Core 0.22 -- queue the current zone's ground-tile texture (if it
+    // has one) so it's loaded before create() builds the world view.
+    // The room is already joined and its state already synced by the
+    // time this scene starts (showAreaBanner() below relies on the same
+    // synchronous room.state.zoneId read in create()).
+    if (this.room === null) {
+      return;
+    }
+    const state = this.room.state as unknown as Record<string, unknown>;
+    const zoneId = typeof state.zoneId === "string" && state.zoneId.length > 0 ? state.zoneId : null;
+    if (zoneId === null) {
+      return;
+    }
+    queueZoneGroundTileLoad(this, zoneId);
   }
 
   public create(): void {
@@ -757,6 +787,8 @@ export class WorldSessionScene extends Phaser.Scene {
     this.healingFlaskInput = null;
     this.tertiarySkillInput?.destroy();
     this.tertiarySkillInput = null;
+    this.primarySkillInput?.destroy();
+    this.primarySkillInput = null;
 
     // Task 246 -- wire each typed reason to its own feedback state so
     // cooldown, downed, no-direction and generic rejection are distinct
@@ -834,6 +866,43 @@ export class WorldSessionScene extends Phaser.Scene {
       },
     );
 
+    // Core 0.14 -- primary skill slot (Heavy Strike). Same shared
+    // message-type reasoning as the tertiary slot above: this module
+    // does not register its own listeners; the single
+    // `registerSkillSlotResponseListeners` call below routes
+    // slot === "primary" responses into handleAccepted/handleRejected.
+    this.primarySkillInput = attachWorldSessionSkillPrimaryInput(
+      this,
+      this.room,
+      {
+        getTargetEnemyId: () => {
+          const state = this.worldAreaView?.getSkillTargetingState();
+          return state?.hoveredEnemyId ?? state?.selectedEnemyId ?? null;
+        },
+      },
+      {
+        onSentFeedback: (message) => {
+          this.feedbackView?.showNotice(message);
+        },
+        onAcceptedFeedback: (message) => {
+          this.feedbackView?.showNotice(t("world_area.skill_primary_hit", { damage: message.damage }));
+          this.worldAreaView?.showEnemyFloatingDamage(
+            message.targetEnemyId,
+            t("world_area.skill_primary_hit_label", { damage: message.damage }),
+          );
+          this.worldAreaView?.showEnemyHitFlash(message.targetEnemyId);
+          this.renderOverlay();
+        },
+        onRejectedFeedback: (message) => {
+          if (message.reason === "out_of_range") { this.feedbackView?.showNotice(t("world_area.skill_primary_too_far")); return; }
+          if (message.reason === "skill_on_cooldown") { this.feedbackView?.showNotice(t("world_area.skill_primary_on_cooldown")); return; }
+          if (message.reason === "enemy_defeated") { this.feedbackView?.showNotice(t("world_area.skill_primary_target_dead")); return; }
+          if (message.reason === "enemy_not_found") { this.feedbackView?.showNotice(t("world_area.skill_primary_target_missing")); return; }
+          this.feedbackView?.showNotice(t("world_area.skill_unavailable"));
+        },
+      },
+    );
+
     registerPickupWorldLootResponseListeners(this.room, {
       onDeferredQueued: (message) => {
         this.worldAreaView?.setPendingPickupTarget(message.targetId);
@@ -861,6 +930,10 @@ export class WorldSessionScene extends Phaser.Scene {
           this.tertiarySkillInput?.handleAccepted(message);
           return;
         }
+        if (message.slot === "primary") {
+          this.primarySkillInput?.handleAccepted(message);
+          return;
+        }
         this.latestSkillRejectedReason = null;
         this.feedbackView?.showNotice(t("world_area.skill_hit", { damage: message.damage }));
         this.worldAreaView?.showEnemyFloatingDamage(
@@ -874,6 +947,10 @@ export class WorldSessionScene extends Phaser.Scene {
       onRejected: (message) => {
         if (message.slot === "tertiary") {
           this.tertiarySkillInput?.handleRejected(message);
+          return;
+        }
+        if (message.slot === "primary") {
+          this.primarySkillInput?.handleRejected(message);
           return;
         }
         this.latestSkillRejectedReason = message.reason;
@@ -983,6 +1060,11 @@ export class WorldSessionScene extends Phaser.Scene {
     applyWorldSessionOverlayHudStyles(hudRegion);
     root.appendChild(hudRegion);
 
+    const chatRegion = document.createElement("div");
+    applyWorldSessionOverlayChatStyles(chatRegion);
+    chatRegion.appendChild(createWorldSessionChatView(room).root);
+    root.appendChild(chatRegion);
+
     const overlayView = createWorldSessionOverlayView(
       character,
       room,
@@ -995,9 +1077,9 @@ export class WorldSessionScene extends Phaser.Scene {
       () => {
         this.handleRespawn();
       },
-      () => {
+      (slot: 1 | 2) => {
         if (this.room !== null) {
-          sendResetObjectiveIntent(this.room);
+          sendResetObjectiveIntent(this.room, slot);
         }
       },
       () => {
@@ -1112,6 +1194,8 @@ export class WorldSessionScene extends Phaser.Scene {
     this.healingFlaskInput = null;
     this.tertiarySkillInput?.destroy();
     this.tertiarySkillInput = null;
+    this.primarySkillInput?.destroy();
+    this.primarySkillInput = null;
     this.feedbackView?.destroy();
     this.feedbackView = null;
     this.vendorPanel?.destroy();

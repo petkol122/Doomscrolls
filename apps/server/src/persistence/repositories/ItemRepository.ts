@@ -1,5 +1,5 @@
 import { ItemLocationType, type Prisma, type PrismaClient } from "@prisma/client";
-import { prisma as defaultPrisma } from "../prisma";
+import { getSharedPrismaClient } from "../prisma";
 
 type ItemRepositoryClient = PrismaClient | Prisma.TransactionClient;
 
@@ -42,7 +42,7 @@ export interface UpdateItemLocationData {
 }
 
 export class ItemRepository {
-  public constructor(private readonly db: ItemRepositoryClient = defaultPrisma) {}
+  public constructor(private readonly db: ItemRepositoryClient = getSharedPrismaClient()) {}
 
   public findByIdForCharacter(itemInstanceId: string, characterId: string) {
     return this.db.itemInstance.findFirst({

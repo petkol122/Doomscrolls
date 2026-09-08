@@ -1,4 +1,5 @@
 import { defineConfig } from "vitest/config";
+import { DbClusterAwareSequencer } from "./test/support/dbClusterAwareSequencer";
 
 export default defineConfig({
   test: {
@@ -18,5 +19,12 @@ export default defineConfig({
     // IPC protocol and crashes the worker. Worker threads have no
     // `process.send`, so @pm2/io stays dormant.
     pool: "threads",
+    sequence: {
+      // See dbClusterAwareSequencer.ts and this investigation's §9:
+      // spreads apart the 4 test files whose back-to-back real
+      // PrismaClient construction correlated with the Windows-only
+      // native-engine teardown crash, without reordering anything else.
+      sequencer: DbClusterAwareSequencer,
+    },
   },
 });

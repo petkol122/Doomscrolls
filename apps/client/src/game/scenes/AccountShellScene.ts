@@ -11,10 +11,7 @@ import {
 } from "../../auth/sessionStorage";
 import { clientEnv } from "../../config/env";
 import { ApiClient, ApiClientError, type AccountState, type ApiErrorCode } from "../../net/ApiClient";
-import {
-  createRealtimeClient,
-  joinResolvedCharacterRoom
-} from "../../net/RealtimeClient";
+import { enterWorldForCharacter } from "../../net/RealtimeClient";
 
 import { createAccountHeader } from "./accountShell/accountShellAccountHeader";
 import { createInfoLine } from "./accountShell/accountShellDom";
@@ -50,7 +47,7 @@ export class AccountShellScene extends Phaser.Scene {
     this.apiClient = clientEnv.apiUrl === undefined ? null : new ApiClient(clientEnv.apiUrl);
 
     this.add
-      .text(640, 96, "Doomscrolls", {
+      .text(this.scale.width / 2, 96, "Doomscrolls", {
         color: "#d8c6a3",
         fontFamily: "Georgia, serif",
         fontSize: "44px"
@@ -121,6 +118,9 @@ export class AccountShellScene extends Phaser.Scene {
         this.selectedCharacterId,
         () => {
           void this.handleEnterWorld();
+        },
+        () => {
+          this.handleViewWorldMap();
         }
       )
     );
@@ -169,28 +169,23 @@ export class AccountShellScene extends Phaser.Scene {
 
   private async handleEnterWorld(): Promise<void> {
     const sessionToken = readStoredSessionToken();
-    if (sessionToken === null || this.selectedCharacterId === null) {
+    if (sessionToken === null || this.selectedCharacterId === null || this.account === null) {
       return;
     }
 
     try {
-      const client = createRealtimeClient();
-      const selectedCharacter = this.account?.characters.find((character) => character.id === this.selectedCharacterId) ?? null;
-      const joinedRoom = await joinResolvedCharacterRoom(
-        client,
-        sessionToken as SessionToken,
+      const joinedRoom = await enterWorldForCharacter(
+        this.account.characters,
         this.selectedCharacterId,
-        selectedCharacter?.currentZoneId,
+        sessionToken as SessionToken,
       );
 
-      if (this.account !== null) {
-        this.destroyOverlay();
-        this.scene.start("WorldSessionScene", {
-          account: this.account,
-          characterId: this.selectedCharacterId,
-          room: joinedRoom,
-        });
-      }
+      this.destroyOverlay();
+      this.scene.start("WorldSessionScene", {
+        account: this.account,
+        characterId: this.selectedCharacterId,
+        room: joinedRoom,
+      });
     } catch {
       const status = document.getElementById("doomscrolls-world-entry-status");
       if (status !== null) {
@@ -198,6 +193,24 @@ export class AccountShellScene extends Phaser.Scene {
         status.style.color = "#ff9c8a";
       }
     }
+  }
+
+  /**
+   * Core 0.32 — secondary, optional entry point alongside "Enter World"
+   * (untouched above). Does not join anything itself; `WorldMapScene`
+   * performs the real join only once the player clicks the Pilsen
+   * marker, via the same `enterWorldForCharacter` helper.
+   */
+  private handleViewWorldMap(): void {
+    if (this.account === null || this.selectedCharacterId === null) {
+      return;
+    }
+
+    this.destroyOverlay();
+    this.scene.start("WorldMapScene", {
+      account: this.account,
+      characterId: this.selectedCharacterId,
+    });
   }
 
   private async submitCreateCharacter(elements: CharacterCreateFormElements): Promise<void> {

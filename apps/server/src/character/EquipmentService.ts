@@ -2,17 +2,21 @@ import { contentRegistry as defaultContentRegistry, type ContentRegistry } from 
 import {
   type CharacterId,
   type EquipmentSlot,
+  type EquipmentUpdatedServerMessage,
   type ItemDefinitionId,
   type ItemInstanceId,
   type UserId,
 } from "@doomscrolls/shared";
 import { ItemLocationType, type PrismaClient } from "@prisma/client";
-import { prisma as defaultPrismaClient } from "../persistence/prisma";
+import { getSharedPrismaClient } from "../persistence/prisma";
 import { ItemRepository } from "../persistence/repositories/ItemRepository";
 import { InventoryRepository } from "../persistence/repositories/InventoryRepository";
 import { CharacterRepository } from "../persistence/repositories/CharacterRepository";
 import { EquipmentError, EquipmentErrorCode } from "./EquipmentErrors";
 import { CharacterStatsService } from "./CharacterStatsService";
+import { sendToConnectedPlayer, updateConnectedPlayerLiveCombatStats } from "../realtime/rooms/connectedPlayerRegistry";
+import { resolvePlayerMovementSpeed } from "../realtime/rooms/resolvePlayerMovementSpeed";
+import { buildEquipmentLoadout } from "./buildEquipmentLoadout";
 
 interface InventorySlotCoordinates {
   readonly pageIndex: number;
@@ -24,7 +28,7 @@ export class EquipmentService {
   private readonly characterStatsService = new CharacterStatsService();
 
   public constructor(
-    private readonly db: PrismaClient = defaultPrismaClient,
+    private readonly db: PrismaClient = getSharedPrismaClient(),
     private readonly content: ContentRegistry = defaultContentRegistry,
   ) {}
 
@@ -158,6 +162,8 @@ export class EquipmentService {
 
       await this.recalculateEquippedCharacterStats(characterIdStr, txItemRepo, txCharacterRepo);
     });
+
+    await this.notifyEquipmentUpdated(characterIdStr);
   }
 
   public async unequip(
@@ -212,6 +218,17 @@ export class EquipmentService {
 
       await this.recalculateEquippedCharacterStats(characterIdStr, txItemRepo, txCharacterRepo);
     });
+
+    await this.notifyEquipmentUpdated(characterIdStr);
+  }
+
+  private async notifyEquipmentUpdated(characterId: string): Promise<void> {
+    const loadout = await buildEquipmentLoadout(characterId, this.db);
+    const message: EquipmentUpdatedServerMessage = {
+      type: "equipment_updated",
+      equipment: loadout,
+    };
+    sendToConnectedPlayer(characterId, "equipment_updated", message);
   }
 
   private async recalculateEquippedCharacterStats(
@@ -245,6 +262,41 @@ export class EquipmentService {
     await characterRepo.updateStats(characterId, {
       ...recalculatedStats.primary,
       ...recalculatedStats.derived,
+    });
+
+    // The database write above is necessary but not sufficient: if this
+    // character is currently connected to a room, combat/movement reads
+    // player.damage/.armor/.movementSpeed/.attackCooldownMs directly off
+    // the live synced PlayerPresence, not the database, so that live copy
+    // must be pushed too or it stays stale (old weapon's damage, old
+    // armor's mitigation, old boots' move speed, old gloves' attack
+    // cadence) until the player leaves and rejoins the room. Core 0.23
+    // fixed this for damage/armor only; movementSpeed/attackCooldownMs
+    // had the identical gap, named but left open at the time (see
+    // docs/CORE_BUILD_0_23_RELEASE_NOTES.md's Follow-up 2) -- closed here
+    // (Core 0.31).
+    //
+    // attackCooldownMs is a direct value, pushed exactly like damage/armor
+    // (no resolve-with-fallback wrapper: recalculatedStats is a freshly
+    // computed, always-finite number, not a possibly-corrupt DB read, so
+    // resolveAttackCooldownMs's NaN/undefined guard would be a no-op here
+    // -- same reasoning damage/armor already relied on by skipping
+    // resolvePlayerDamage/resolvePlayerArmor).
+    //
+    // movementSpeed is NOT a direct value -- PlayerPresence.movementSpeed
+    // is the *converted* runtime world-units-per-second value, not the
+    // raw moveSpeed stat, so it must go through the same
+    // resolvePlayerMovementSpeed conversion TownRoom/CombatRoom already
+    // apply at join (unrelated to `toWorldUnits`'s separate x24
+    // tile-to-pixel scalar used for enemy aggro/leash ranges -- conflating
+    // the two was the exact bug Core 0.24 found and fixed for enemy
+    // moveSpeed; player moveSpeed was never subject to it, since it has
+    // only ever gone through resolvePlayerMovementSpeed).
+    updateConnectedPlayerLiveCombatStats(characterId, {
+      damage: recalculatedStats.derived.damage,
+      armor: recalculatedStats.derived.armor,
+      movementSpeed: resolvePlayerMovementSpeed(recalculatedStats.derived.moveSpeed),
+      attackCooldownMs: recalculatedStats.derived.attackCooldownMs,
     });
   }
 }

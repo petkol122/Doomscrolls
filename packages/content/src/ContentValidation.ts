@@ -84,9 +84,14 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
   validateUniqueIds("spawnZone", registry.spawnZones, errors);
   validateUniqueIds("spawnPoint", registry.spawnPoints.all, errors);
   validateUniqueIds("worldProp", registry.worldProps.all, errors);
+  validateUniqueIds("visualAsset", registry.visualAssets.all, errors);
   validateUniqueIds("objective", registry.objectives.all, errors);
   validateUniqueIds("townService", registry.townServices.all, errors);
   validateUniqueIds("vendorStock", registry.vendorStocks.all, errors);
+  validateUniqueIds("lore", registry.lore.all, errors);
+  validateUniqueIds("world", registry.worlds.all, errors);
+  validateUniqueIds("continent", registry.continents.all, errors);
+  validateUniqueIds("area", registry.areas.all, errors);
 
   for (const origin of registry.origins.all) {
     validateLocalizedDefinition("origin", origin, errors);
@@ -155,6 +160,11 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
       }
     }
 
+    // Core 0.32 — every zone belongs to exactly one real-world Area.
+    if (!registry.areas.has(zone.areaId)) {
+      errors.push({ category: "zone", id: zone.id, message: `Unknown area id: ${zone.areaId}` });
+    }
+
     const bounds = zone.bounds;
 
     if (bounds.minX >= bounds.maxX) {
@@ -195,6 +205,15 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
           id: zone.id,
           message: `Rest area bounds (${restAreaBounds.minX}, ${restAreaBounds.minY}) - (${restAreaBounds.maxX}, ${restAreaBounds.maxY}) must be within zone bounds (${bounds.minX}, ${bounds.minY}) - (${bounds.maxX}, ${bounds.maxY}).`,
         });
+      }
+    }
+
+    if (zone.groundTileKey !== undefined) {
+      const asset = registry.visualAssets.get(zone.groundTileKey);
+      if (asset === undefined) {
+        errors.push({ category: "zone", id: zone.id, message: `Unknown ground tile key: ${zone.groundTileKey}` });
+      } else if (asset.category !== "ground_tile") {
+        errors.push({ category: "zone", id: zone.id, message: `groundTileKey "${zone.groundTileKey}" is not a ground_tile visual asset.` });
       }
     }
   }
@@ -348,6 +367,56 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
     if (prop.labelKey !== undefined && en[prop.labelKey] === undefined) {
       errors.push({ category: "worldProp", id: prop.id, message: `Missing English localization key: ${prop.labelKey}` });
     }
+
+    // A loot_container must have its own real loot table -- interactValidation.ts
+    // reads this field directly rather than hardcoding an enemy id as a
+    // stand-in loot-table key, so this must always resolve to a real row.
+    if (prop.kind === "loot_container") {
+      if (prop.lootTableId === undefined) {
+        errors.push({ category: "worldProp", id: prop.id, message: "loot_container props must set lootTableId." });
+      } else if (!registry.lootTables.has(prop.lootTableId)) {
+        errors.push({ category: "worldProp", id: prop.id, message: `Unknown lootTableId: ${prop.lootTableId}` });
+      }
+    }
+  }
+
+  // ── Visual asset validation ──
+  const VALID_VISUAL_ASSET_CATEGORIES = ["ground_tile", "enemy_sprite", "player_sprite", "prop_sprite", "item_icon", "hp_bar", "rarity_frame"] as const;
+
+  for (const asset of registry.visualAssets.all) {
+    if (!(VALID_VISUAL_ASSET_CATEGORIES as readonly string[]).includes(asset.category)) {
+      errors.push({ category: "visualAsset", id: asset.id, message: `Unknown visual asset category: ${asset.category}` });
+    }
+
+    if (asset.path.length === 0) {
+      errors.push({ category: "visualAsset", id: asset.id, message: "path must not be empty." });
+    }
+
+    if (!asset.path.startsWith("/")) {
+      errors.push({ category: "visualAsset", id: asset.id, message: `path must be root-relative (start with "/"): ${asset.path}` });
+    }
+
+    if (!Number.isFinite(asset.sourceWidth) || asset.sourceWidth <= 0 || !Number.isFinite(asset.sourceHeight) || asset.sourceHeight <= 0) {
+      errors.push({ category: "visualAsset", id: asset.id, message: "sourceWidth/sourceHeight must be positive finite numbers." });
+    }
+
+    if (asset.frameWidth !== undefined || asset.frameHeight !== undefined || asset.frameCount !== undefined) {
+      if (
+        asset.frameWidth === undefined || asset.frameWidth <= 0 ||
+        asset.frameHeight === undefined || asset.frameHeight <= 0 ||
+        asset.frameCount === undefined || asset.frameCount <= 0
+      ) {
+        errors.push({ category: "visualAsset", id: asset.id, message: "frameWidth/frameHeight/frameCount must all be set and positive when any one is set." });
+      } else if (asset.frameWidth * asset.frameCount !== asset.sourceWidth || asset.frameHeight !== asset.sourceHeight) {
+        errors.push({ category: "visualAsset", id: asset.id, message: "frameWidth * frameCount must equal sourceWidth, and frameHeight must equal sourceHeight." });
+      }
+    }
+
+    // An item_icon row that matches no item's iconKey is orphaned data
+    // (most likely a typo) -- it can never be looked up by real content.
+    if (asset.category === "item_icon" && !registry.items.all.some((item) => item.iconKey === asset.id)) {
+      errors.push({ category: "visualAsset", id: asset.id, message: `item_icon asset id does not match any item's iconKey: ${asset.id}` });
+    }
   }
 
   // ── Objective validation ──
@@ -408,6 +477,72 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
 
     if (stock.priceCopper <= 0) {
       errors.push({ category: "vendorStock", id: stock.id, message: "priceCopper must be positive." });
+    }
+  }
+
+  // ── Lore validation ──
+  // Every lore entry must resolve to a real content ID of its declared
+  // kind, so prose lore can't silently drift out of sync with content
+  // the way it has in design docs.
+  for (const entry of registry.lore.all) {
+    if (en[entry.titleKey] === undefined) {
+      errors.push({ category: "lore", id: entry.id, message: `Missing English localization key: ${entry.titleKey}` });
+    }
+
+    if (en[entry.bodyKey] === undefined) {
+      errors.push({ category: "lore", id: entry.id, message: `Missing English localization key: ${entry.bodyKey}` });
+    }
+
+    switch (entry.targetKind) {
+      case "class":
+        if (!registry.classes.has(entry.targetId)) {
+          errors.push({ category: "lore", id: entry.id, message: `Unknown class id: ${entry.targetId}` });
+        }
+        break;
+      case "origin":
+        if (!registry.origins.has(entry.targetId)) {
+          errors.push({ category: "lore", id: entry.id, message: `Unknown origin id: ${entry.targetId}` });
+        }
+        break;
+      case "zone":
+        if (!registry.zones.has(entry.targetId)) {
+          errors.push({ category: "lore", id: entry.id, message: `Unknown zone id: ${entry.targetId}` });
+        }
+        break;
+      case "enemy":
+        if (!registry.enemies.has(entry.targetId)) {
+          errors.push({ category: "lore", id: entry.id, message: `Unknown enemy id: ${entry.targetId}` });
+        }
+        break;
+    }
+  }
+
+  // ── World / Continent / Area validation (Core 0.32 — World Map Foundation) ──
+  for (const world of registry.worlds.all) {
+    validateLocalizedDefinition("world", world, errors);
+  }
+
+  for (const continent of registry.continents.all) {
+    validateLocalizedDefinition("continent", continent, errors);
+
+    if (!registry.worlds.has(continent.worldId)) {
+      errors.push({ category: "continent", id: continent.id, message: `Unknown world id: ${continent.worldId}` });
+    }
+  }
+
+  for (const area of registry.areas.all) {
+    validateLocalizedDefinition("area", area, errors);
+
+    if (!registry.continents.has(area.continentId)) {
+      errors.push({ category: "area", id: area.id, message: `Unknown continent id: ${area.continentId}` });
+    }
+
+    if (!Number.isFinite(area.latitude) || area.latitude < -90 || area.latitude > 90) {
+      errors.push({ category: "area", id: area.id, message: `latitude must be a finite number between -90 and 90: ${area.latitude}` });
+    }
+
+    if (!Number.isFinite(area.longitude) || area.longitude < -180 || area.longitude > 180) {
+      errors.push({ category: "area", id: area.id, message: `longitude must be a finite number between -180 and 180: ${area.longitude}` });
     }
   }
 

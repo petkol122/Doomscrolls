@@ -25,4 +25,18 @@ describe("resolveSkillSlotDefinition", () => {
     const tertiary = resolveSkillSlotDefinition("tertiary", "ironclad");
     expect(tertiary).toEqual({ skillId: "groundbreaker", range: 80, damage: 10, cooldownMs: 3200 });
   });
+
+  /**
+   * Core 0.14 -- the new "primary" slot resolves the class's
+   * `startingSkillId` (heavy_strike for both current classes), a field
+   * every class definition already carried but that no slot had ever
+   * consulted before this build.
+   */
+  it("resolves both classes' primary slot to their startingSkillId (heavy_strike)", () => {
+    const gravewalkerPrimary = resolveSkillSlotDefinition("primary", "gravewalker");
+    expect(gravewalkerPrimary).toEqual({ skillId: "heavy_strike", range: 64, damage: 3, cooldownMs: 1000 });
+
+    const ironcladPrimary = resolveSkillSlotDefinition("primary", "ironclad");
+    expect(ironcladPrimary).toEqual({ skillId: "heavy_strike", range: 64, damage: 3, cooldownMs: 1000 });
+  });
 });

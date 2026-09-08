@@ -52,14 +52,17 @@ export const spawnZones = [
   {
     // First combat pocket around sewer edge marker 01, pushed farther from the
     // enlarged town hub so hostile enemies do not visually crowd services.
+    // Core 0.33 — remapped through the Blackwire-corridor transform (see
+    // docs/CORE_BUILD_0_33_PLAN.md Question 3): same escalating-distance
+    // pacing, now oriented toward the real Smetanovy sady bearing.
     id: "sewer_edge_trashboar_runt_zone",
     zoneId: "nightmarket",
     enemyId: "trashboar_runt" as EnemyId,
     count: 3,
-    minX: 2840,
-    maxX: 3340,
-    minY: 2040,
-    maxY: 2460,
+    minX: 5438,
+    maxX: 6350,
+    minY: 14804,
+    maxY: 15570,
   },
   {
     // Trashboar Skitter pocket — earlier approach pocket, but still clearly
@@ -68,10 +71,10 @@ export const spawnZones = [
     zoneId: "nightmarket",
     enemyId: "trashboar_skitter" as EnemyId,
     count: 2,
-    minX: 2140,
-    maxX: 2500,
-    minY: 1520,
-    maxY: 1880,
+    minX: 6613,
+    maxX: 7269,
+    minY: 13486,
+    maxY: 14142,
   },
   {
     // Deepest south-east pocket. Stays meaningfully farther from both earlier
@@ -80,10 +83,10 @@ export const spawnZones = [
     zoneId: "nightmarket",
     enemyId: "trashboar_brute" as EnemyId,
     count: 1,
-    minX: 3720,
-    maxX: 4380,
-    minY: 2740,
-    maxY: 3240,
+    minX: 3887,
+    maxX: 5091,
+    minY: 16440,
+    maxY: 17352,
   },
   // ── Core 0.6 — Static Yard combat zone pockets ──
   {
@@ -111,15 +114,125 @@ export const spawnZones = [
     maxY: 500,
   },
   {
-    // Single heavy anchor reusing the existing Trashboar Brute, mirroring
-    // Blackwire's own single-brute-anchor pattern.
-    id: "static_yard_brute_anchor",
+    // Core 0.19 — single heavy anchor, Static Yard's own Arc Sentinel
+    // (replaces the reused Trashboar Brute).
+    id: "static_yard_sentinel_anchor",
     zoneId: "static_yard",
-    enemyId: "trashboar_brute" as EnemyId,
+    enemyId: "arc_sentinel" as EnemyId,
     count: 1,
     minX: 620,
     maxX: 740,
     minY: 150,
     maxY: 260,
+  },
+  {
+    // Core 0.17 — Yard Drudge, Static Yard's own common/starter tier.
+    // Mid-room pocket, clear of the wretch pockets and the brute anchor.
+    id: "static_yard_drudge_pocket",
+    zoneId: "static_yard",
+    enemyId: "yard_drudge" as EnemyId,
+    count: 2,
+    minX: 300,
+    maxX: 440,
+    minY: 300,
+    maxY: 420,
+  },
+  // ── Core 0.16 — Cinderworks combat zone pockets ──
+  {
+    // Entry-side hound cluster. Kept clear of the COMBAT_SPAWN_BOX entry
+    // area (x 96-180, y 420-520) and the return gate.
+    id: "cinderworks_hound_pocket_north",
+    zoneId: "cinderworks",
+    enemyId: "slag_hound" as EnemyId,
+    count: 3,
+    minX: 150,
+    maxX: 300,
+    minY: 120,
+    maxY: 240,
+  },
+  {
+    // Second hound pocket, mid-room, distinct from the north pocket so
+    // the room reads as inhabited without matching Static Yard's layout.
+    id: "cinderworks_hound_pocket_south",
+    zoneId: "cinderworks",
+    enemyId: "slag_hound" as EnemyId,
+    count: 2,
+    minX: 480,
+    maxX: 620,
+    minY: 380,
+    maxY: 500,
+  },
+  {
+    // Single heavy anchor, Cinderworks' own Foundry Warden.
+    id: "cinderworks_warden_anchor",
+    zoneId: "cinderworks",
+    enemyId: "foundry_warden" as EnemyId,
+    count: 1,
+    minX: 620,
+    maxX: 740,
+    minY: 150,
+    maxY: 260,
+  },
+  {
+    // Core 0.17 — Ash Rat, Cinderworks' own common/starter tier. Mid-room
+    // pocket, mirroring Static Yard's drudge pocket placement.
+    id: "cinderworks_rat_pocket",
+    zoneId: "cinderworks",
+    enemyId: "ash_rat" as EnemyId,
+    count: 3,
+    minX: 300,
+    maxX: 440,
+    minY: 300,
+    maxY: 420,
+  },
+  // ── Core 0.18 — Saltmere Docks combat zone pockets ──
+  {
+    // Entry-side crawler cluster. Kept clear of the COMBAT_SPAWN_BOX
+    // entry area (x 96-180, y 420-520) and the return gate.
+    id: "saltmere_docks_crawler_pocket_north",
+    zoneId: "saltmere_docks",
+    enemyId: "brine_crawler" as EnemyId,
+    count: 3,
+    minX: 150,
+    maxX: 300,
+    minY: 120,
+    maxY: 240,
+  },
+  {
+    // Skirmisher pocket, mid-room, distinct from the crawler pocket.
+    id: "saltmere_docks_stalker_pocket",
+    zoneId: "saltmere_docks",
+    enemyId: "tide_stalker" as EnemyId,
+    count: 2,
+    minX: 480,
+    maxX: 620,
+    minY: 380,
+    maxY: 500,
+  },
+  {
+    // Single heavy anchor, Saltmere Docks' own Drowned Hauler.
+    id: "saltmere_docks_hauler_anchor",
+    zoneId: "saltmere_docks",
+    enemyId: "drowned_hauler" as EnemyId,
+    count: 1,
+    minX: 620,
+    maxX: 740,
+    minY: 150,
+    maxY: 260,
+  },
+  {
+    // Core 0.20 -- Saltmere Docks was the only post-0.16 combat zone
+    // without a second common-tier pocket (Static Yard has
+    // static_yard_drudge_pocket, Cinderworks has cinderworks_rat_pocket).
+    // Same mid-room coordinates those two already use for their own
+    // extra pocket.
+    id: "saltmere_docks_crawler_pocket_south",
+    zoneId: "saltmere_docks",
+    enemyId: "brine_crawler" as EnemyId,
+    count: 2,
+    minX: 300,
+    maxX: 440,
+    minY: 300,
+    maxY: 420,
   },
 ] as const satisfies readonly SpawnZoneDefinition[];
