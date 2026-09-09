@@ -172,6 +172,42 @@ export interface RequestChatRejectedServerMessage {
   readonly reason: RequestChatRejectedReason;
 }
 
+/**
+ * Global chat -- sent to every connected player process-wide (see
+ * `broadcastToAllConnectedPlayers` in `connectedPlayerRegistry.ts`),
+ * not just the sender's own room. Same field-visibility rules as
+ * `ChatMessageServerMessage`; this also doubles as its own accept
+ * signal, so there is no separate `request_global_chat_accepted`.
+ */
+export interface GlobalChatMessageServerMessage {
+  readonly type: "global_chat_message";
+  readonly sessionId: string;
+  readonly displayName: string;
+  readonly text: string;
+  readonly sentAt: number;
+}
+
+export interface RequestGlobalChatRejectedServerMessage {
+  readonly type: "request_global_chat_rejected";
+  readonly reason: RequestChatRejectedReason;
+}
+
+/**
+ * Sent once, on join, to the joining client only (never broadcast) --
+ * the recent tail of the logged global chat history, oldest first, so
+ * a player who logs back in sees the conversation instead of an empty
+ * log. No `sessionId`: history entries aren't tied to a live session
+ * (the sender may no longer be connected).
+ */
+export interface GlobalChatHistoryServerMessage {
+  readonly type: "global_chat_history";
+  readonly messages: readonly {
+    readonly displayName: string;
+    readonly text: string;
+    readonly sentAt: number;
+  }[];
+}
+
 export interface ZoneTransitionApprovedServerMessage {
   readonly type: "zone_transition_approved";
   readonly characterId: CharacterId;
@@ -241,7 +277,8 @@ export type RequestMoveRejectedReason =
   | "invalid_shape"
   | "non_finite_target"
   | "out_of_range"
-  | "player_downed";
+  | "player_downed"
+  | "target_inside_building";
 
 export interface RequestMoveRejectedServerMessage {
   readonly type: "request_move_rejected";
@@ -624,6 +661,8 @@ export type ServerRoomMessage =
   | CorpseInteractAcceptedServerMessage
   | CorpseRecoveredServerMessage
   | ChatMessageServerMessage
+  | GlobalChatMessageServerMessage
+  | GlobalChatHistoryServerMessage
   | TownCombatHandoffApprovedServerMessage
   | TownCombatHandoffRejectedServerMessage
   | CombatTownReturnApprovedServerMessage
@@ -662,4 +701,5 @@ export type ServerRoomMessage =
   | RequestRouteTravelRejectedServerMessage
   | RequestStartBoardObjectiveRejectedServerMessage
   | RequestChatRejectedServerMessage
+  | RequestGlobalChatRejectedServerMessage
   | ErrorServerMessage;

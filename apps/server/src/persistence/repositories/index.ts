@@ -29,3 +29,6 @@ export { UserRepository } from "./UserRepository";
 export type { CreateUserData } from "./UserRepository";
 
 export { ObjectiveRepository } from "./ObjectiveRepository";
+
+export { ChatRepository } from "./ChatRepository";
+export type { CreateChatMessageData } from "./ChatRepository";

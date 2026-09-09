@@ -170,49 +170,6 @@ function buildCrateWorldLootId(
  * client stay aligned on the "not available yet" copy.
  */
 export function getInteractableResponseMessage(objectId: string): string {
-  if (objectId === "nightmarket_blackwire_gate_01") {
-    return t("town_service.route.blackwire_gate.prompt");
-  }
-  if (objectId === "nightmarket_blackwire_return_01") {
-    return t("town_service.route.blackwire_return.prompt");
-  }
-  if (objectId === "nightmarket_static_yard_gate_01") {
-    return t("town_service.route.static_yard_gate.prompt");
-  }
-  if (objectId === "nightmarket_cinderworks_gate_01") {
-    return t("town_service.route.cinderworks_gate.prompt");
-  }
-  if (objectId === "nightmarket_saltmere_docks_gate_01") {
-    return t("town_service.route.saltmere_docks_gate.prompt");
-  }
-  if (objectId === "nightmarket_stash_keeper_01") {
-    const service = contentRegistry.townServices.get("nightmarket_stash_keeper");
-    if (service !== undefined) {
-      return t(service.unavailableMessageKey);
-    }
-  }
-  if (objectId === "nightmarket_trainer_01") {
-    const service = contentRegistry.townServices.get("nightmarket_trainer");
-    if (service !== undefined) {
-      return t(service.unavailableMessageKey);
-    }
-  }
-  if (objectId === "nightmarket_waypoint_01" || objectId === "nightmarket_waypoint_blackwire_combat_edge") {
-    const service = contentRegistry.townServices.get("nightmarket_waypoint");
-    if (service !== undefined) {
-      return t(service.unavailableMessageKey);
-    }
-  }
-  // Vendor interaction — use town service content definition for greeting
-  if (objectId === "nightmarket_vendor_01") {
-    const vendorService = contentRegistry.townServices.get("nightmarket_suspicious_vendor");
-    if (vendorService !== undefined) {
-      return `${t(vendorService.labelKey)}: "What're you buyin'?"`;
-    }
-    return '"What\'re you buyin\'?"';
-  }
-  const responses: Record<string, string> = {
-    nightmarket_notice_board_01: t("world_prop.notice_board.label"),
-  };
+  const responses: Record<string, string> = {};
   return responses[objectId] ?? "You interact with the object.";
 }

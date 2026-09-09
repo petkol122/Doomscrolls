@@ -62,10 +62,10 @@ export function buildCombatPlayerPresence(
     restoredZoneId !== undefined &&
     // The restored position must belong to the zone actually being
     // joined, not merely satisfy *some* zone's bounds. Without this,
-    // a stale/mismatched (zoneId, x, y) triple -- e.g. a nightmarket
+    // a stale/mismatched (zoneId, x, y) triple -- e.g. a town-room
     // position left behind by a room the player has since left --
     // could pass the bounds check below purely by numeric coincidence
-    // (nightmarket's bounds are far larger than any combat zone's) and
+    // (the town zone's bounds are far larger than any combat zone's) and
     // be used as a combat-zone spawn point anyway. Mirrors the same
     // zone-match guard `resolvePlayerInitialPosition` already applies
     // for TownRoom's own restoration.

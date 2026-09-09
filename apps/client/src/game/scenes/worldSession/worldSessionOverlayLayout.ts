@@ -109,12 +109,20 @@ export function applyWorldSessionOverlayScrollablePanelStyles(panel: HTMLElement
 
 /** Core 0.25 -- the bottom HUD (orb cluster/belt/objective trackers)
  * floats directly over the game world with no visible container, matching
- * an ARPG HUD. Every child (orbs, belt slots, trackers) already carries
- * its own border/background, so this wrapper only needs to keep clicks
- * from leaking to the Phaser canvas underneath -- it must stay visually
- * invisible, unlike `applyWorldSessionOverlayPanelStyles`. */
+ * an ARPG HUD.
+ *
+ * Core 0.4x -- this wrapper spans the full HUD row width (100%), most of
+ * which is transparent empty space over the world. It previously used
+ * `makeInteractiveAndStopWorldInput`, which sets `pointer-events: auto`
+ * on the *entire* box and stops every pointerdown/mousedown that lands
+ * anywhere in it -- including the empty gaps between the HP orb, belt
+ * and skill card. That silently ate held-movement drags and clicks the
+ * moment the cursor neared the bottom of the screen, even in spots with
+ * nothing drawn there. This panel itself must stay passive; only the
+ * genuinely interactive descendant (the objective tracker's clear
+ * button, via `makeInteractiveAndStopWorldInput` there) opts back in. */
 export function applyWorldSessionOverlayFloatingHudStyles(panel: HTMLElement): void {
-  makeInteractiveAndStopWorldInput(panel);
+  makeOverlayPassive(panel);
   panel.style.background = "transparent";
   panel.style.border = "none";
   panel.style.boxShadow = "none";

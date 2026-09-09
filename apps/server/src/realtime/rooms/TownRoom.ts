@@ -37,7 +37,10 @@ import { createRoomLogger } from "./roomLogger";
 import { validateMovementIntent } from "./movementIntentValidation";
 import { applyMovementIntent } from "./applyMovementIntent";
 import { resolveZoneBounds } from "./resolveZoneBounds";
-import { resolvePlayerMovementSpeed } from "./resolvePlayerMovementSpeed";
+import { resolveZoneBuildingFootprints } from "./resolveZoneBuildingFootprints";
+import { isPointInsideAnyPolygon } from "./pointInPolygon";
+import { computeBuildingAvoidancePath } from "./buildingAvoidancePathfinding";
+import { resolvePlayerMovementSpeed, resolveSafeZoneMovementSpeedMultiplier } from "./resolvePlayerMovementSpeed";
 import { resolvePlayerDamage } from "./resolvePlayerDamage";
 import { resolvePlayerArmor } from "./resolvePlayerArmor";
 import { mitigateIncomingDamage } from "./incomingDamageMitigation";
@@ -47,7 +50,7 @@ import {
 } from "./stepTownRoomMovement";
 import { initializeTownInteractables } from "./initializeTownInteractables";
 import { initializeTownEnemies } from "./initializeTownEnemies";
-import { validateInteractIntent, getInteractableResponseMessage, handleLootContainerInteraction } from "./interactValidation";
+import { validateInteractIntent, getInteractableResponseMessage } from "./interactValidation";
 import { validateAttackIntent } from "./attackIntentValidation";
 import { consumeAttackCooldown, resolveAttackCooldownMs } from "./attackCooldown";
 import { applyEnemyDamage } from "./applyEnemyDamage";
@@ -61,6 +64,8 @@ import { applyTownRestRefill } from "./townRestRefill";
 import { registerConnectedPlayer, unregisterConnectedPlayer } from "./connectedPlayerRegistry";
 import { registerChatHandler } from "./chatHandler";
 import { clearChatCooldown } from "./chatCooldown";
+import { registerGlobalChatHandler, sendGlobalChatHistory } from "./globalChatHandler";
+import { clearGlobalChatCooldown } from "./globalChatCooldown";
 import { buildEquipmentLoadout } from "../../character/buildEquipmentLoadout";
 import { applyTownRestAreaRefillForAll } from "./townRestAreaTrigger";
 import type {
@@ -81,12 +86,11 @@ import { validatePickupWorldLootIntent } from "./pickupWorldLootValidation";
 import { clearPendingAction, setPendingAction } from "./pendingActionState";
 import { resolvePlayerInitialPosition } from "./validateCharacterLocation";
 import { contentRegistry, NOTICE_BOARD_OBJECTIVE_SEQUENCE } from "@doomscrolls/content";
-import type { SpawnPointContentId, ObjectiveId } from "@doomscrolls/content";
-import { NIGHTMARKET_DEFAULT_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
+import type { SpawnPointContentId, ObjectiveId, ZoneContentId, WorldPropPoint } from "@doomscrolls/content";
+import { DEFAULT_TOWN_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
 import { resolveTownZoneId } from "./resolveTownZoneId";
 import { CharacterRepository, ObjectiveRepository } from "../../persistence/repositories";
 import { ItemRepository } from "../../persistence/repositories/ItemRepository";
-import { toItemInstanceDto } from "../../persistence/mappers/itemMapper";
 import { tryResolveLevelProgression } from "./levelProgression";
 import { CharacterStatsService } from "../../character/CharacterStatsService";
 import { executeVendorBuyItem } from "./vendorBuyItem";
@@ -336,15 +340,6 @@ function resetNoticeBoardObjective(player: {
   player.objectiveTarget = 0;
   player.objectiveCompleted = false;
   player.objectiveRewardGranted = false;
-}
-
-function getActiveObjectiveContent(
-  player: { objectiveId: string },
-): import("@doomscrolls/content").ObjectiveContentDefinition | undefined {
-  if (player.objectiveId.length === 0) {
-    return undefined;
-  }
-  return contentRegistry.objectives.get(player.objectiveId as ObjectiveId);
 }
 
 async function grantFlatXpReward(
@@ -698,6 +693,16 @@ export class TownRoom extends Room {
   private vendorSellHandlerRegistered = false;
   private stashTransferHandlerRegistered = false;
   private chatHandlerRegistered = false;
+  private globalChatHandlerRegistered = false;
+  /**
+   * Core 0.4x -- building_footprint polygons for this room's zone,
+   * resolved once at creation (a room's zone never changes mid-session)
+   * and reused by both the `request_move` handler (reject a target
+   * that lands inside a building) and the simulation tick (stop a
+   * player who would otherwise be stepped into one). See
+   * `resolveZoneBuildingFootprints.ts`.
+   */
+  private buildingFootprints: readonly (readonly WorldPropPoint[])[] = [];
 
   public override async onCreate(options: TownRoomJoinOptions): Promise<void> {
     const log = createRoomLogger(
@@ -706,7 +711,23 @@ export class TownRoom extends Room {
 
     const zoneId = resolveTownZoneId(options.requestedZoneId);
 
+    if (
+      options.requestedZoneId !== undefined &&
+      options.requestedZoneId !== zoneId
+    ) {
+      log.warn?.(
+        {
+          roomId: this.roomId,
+          roomName: this.roomName,
+          requestedZoneId: options.requestedZoneId,
+          resolvedZoneId: zoneId,
+        },
+        "TownRoom created with a redirected zoneId: requested zone is not a registered town-type zone.",
+      );
+    }
+
     this.setState(new TownRoomState(zoneId));
+    this.buildingFootprints = resolveZoneBuildingFootprints(zoneId);
 
     // Task 057 — Initialize interactable objects
     initializeTownInteractables(this.state as TownRoomState, zoneId);
@@ -732,10 +753,22 @@ export class TownRoom extends Room {
       this.chatHandlerRegistered = true;
       registerChatHandler(this, log);
     }
+    if (!this.globalChatHandlerRegistered) {
+      this.globalChatHandlerRegistered = true;
+      registerGlobalChatHandler(this, log);
+    }
+    // Core 0.4x -- resolved once at room creation (the room's zone never
+    // changes mid-session) from the zone's classification, not its id,
+    // so any future safe_hub zone gets faster town movement automatically.
+    const movementSpeedMultiplier = resolveSafeZoneMovementSpeedMultiplier(
+      contentRegistry.zones.get(zoneId as ZoneContentId)?.classification,
+    );
     this.setSimulationInterval((deltaMs: number) => {
       const state = this.state as TownRoomState;
       stepTownRoomMovement(state, deltaMs, {
         now: Date.now(),
+        movementSpeedMultiplier,
+        buildingFootprints: this.buildingFootprints,
         onPendingActionReady: (sessionId, payload) => {
           const targetClient = this.clients.find((client) => client.sessionId === sessionId);
           if (targetClient === undefined) {
@@ -987,6 +1020,7 @@ export class TownRoom extends Room {
       // swallow send failures; the next equip/unequip will still sync it
     }
 
+    await sendGlobalChatHistory(_client, safeLog);
 
     safeLog.info?.(
       {
@@ -1024,6 +1058,7 @@ export class TownRoom extends Room {
       unregisterConnectedPlayer(presence.characterId, _client);
     }
     clearChatCooldown(_client.sessionId);
+    clearGlobalChatCooldown(_client.sessionId);
 
     // A combat-zone handoff already persisted the correct destination
     // zone/position (and HP/flask snapshot) via `updateCharacterRoomIntent`
@@ -1031,9 +1066,9 @@ export class TownRoom extends Room {
     // this generic onLeave persistence running *after* that approval (the
     // client legitimately calls `room.leave()` once it receives the
     // approval) and blindly overwriting it with this room's own
-    // zoneId ("nightmarket") and the player's stale in-room x/y, which
-    // CombatRoom would then restore from on join. That is how a player
-    // could land at a nightmarket-scale position inside a combat zone
+    // zoneId ("namesti_republiky") and the player's stale in-room x/y,
+    // which CombatRoom would then restore from on join. That is how a
+    // player could land at a town-scale position inside a combat zone
     // whose bounds are a fraction of the size -- numerically "outside
     // the map" for that zone.
     const hasApprovedRoomHandoff = (presence as { pendingRoomHandoff?: boolean } | undefined)?.pendingRoomHandoff === true;
@@ -1153,14 +1188,55 @@ export class TownRoom extends Room {
         return;
       }
 
+      if (
+        this.buildingFootprints.length > 0 &&
+        isPointInsideAnyPolygon(result.targetX, result.targetY, this.buildingFootprints)
+      ) {
+        const rejection: RequestMoveRejectedServerMessage = {
+          type: "request_move_rejected",
+          reason: "target_inside_building",
+          ...(result.clientTime !== undefined ? { clientTime: result.clientTime } : {}),
+        };
+        try {
+          client.send("request_move_rejected", rejection);
+        } catch {
+          // Swallow send errors; see the shape/range rejection above.
+        }
+        log.warn?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            targetX: result.targetX,
+            targetY: result.targetY,
+          },
+          "TownRoom request_move rejected: target lands inside a building footprint.",
+        );
+        return;
+      }
+
+      // Core 0.4x -- route around any building between the player and
+      // the clicked target (Diablo/WoW-style glide instead of stopping
+      // dead at the first wall); a clear straight line is returned
+      // as-is. See `computeBuildingAvoidancePath`.
+      const path = computeBuildingAvoidancePath(
+        player?.x ?? result.targetX,
+        player?.y ?? result.targetY,
+        result.targetX,
+        result.targetY,
+        this.buildingFootprints,
+      );
+      const [firstWaypoint, ...remainingWaypoints] = path;
+
       // Store the validated movement target. The room simulation tick
       // advances position later; Colyseus schema synchronization handles
       // the broadcast automatically.
       const applied = applyMovementIntent(
         state,
         client.sessionId,
-        result.targetX,
-        result.targetY,
+        firstWaypoint?.x ?? result.targetX,
+        firstWaypoint?.y ?? result.targetY,
+        remainingWaypoints,
       );
 
       if (applied !== null) {
@@ -1345,233 +1421,6 @@ export class TownRoom extends Room {
 
       // Send response message to the requesting client
       const responseMessage = getInteractableResponseMessage(message.objectId);
-      if (message.objectId === "nightmarket_notice_board_01") {
-        // Task 333C / Core 0.15 — Turn-in flow for the notice board,
-        // now looped over both concurrent objective slots. Per slot:
-        //  1. Completed AND reward not yet granted → turn it in, grant
-        //     copper/XP, mark rewardGranted, clear HUD state for that
-        //     slot, send interact_response with localized feedback.
-        //  2. Completed AND reward already granted → show safe
-        //     "already completed" message for that slot.
-        //  3. Active but not completed → re-send current state for
-        //     that slot (no duplicate, no reset).
-        //  4. Empty → nothing to report for that slot individually;
-        //     handled below via the shared catalog display once both
-        //     slots have been processed.
-        // Task 333E — Reward granting persists rewardGranted = true
-        // BEFORE granting copper to prevent duplicate reward on
-        // reconnect/crash.
-        let anySlotHandled = false;
-
-        for (const slot of [1, 2] as const) {
-          const snap = readObjectiveSlot(player, slot);
-
-          if (snap.hasObjective && snap.objectiveId.length > 0 && snap.objectiveCompleted && !snap.objectiveRewardGranted) {
-            anySlotHandled = true;
-            const activeObjective = getActiveObjectiveContent(snap);
-            if (activeObjective !== undefined) {
-              const turnInCharId = player.characterId;
-              const turnInObjId = snap.objectiveId;
-              const turnInLabel = snap.objectiveLabel;
-              const copperReward = activeObjective.copperReward;
-              const xpReward = activeObjective.xpReward;
-
-              // Hotfix — close this slot's turn-in gate synchronously,
-              // before the first await, not after. The turn-in branch's
-              // guard (`hasObjective && ... && !objectiveRewardGranted`)
-              // used to stay open across three awaited calls
-              // (markRewardGranted, incrementMoneyCopper,
-              // grantFlatXpReward). Colyseus processes one room's
-              // messages sequentially but yields to the next queued
-              // message at each await, so two `request_interact`
-              // messages arriving before the first one's awaits
-              // resolved would both snapshot `hasObjective: true` and
-              // both take this branch, double-granting the reward.
-              // Closing the gate here — before any await exists to
-              // yield into — means a second concurrent invocation's
-              // own snapshot already sees it closed. Found during Core
-              // 0.15's regression trace; unrelated to what 0.15 shipped.
-              const preCloseSnap: typeof snap = { ...snap };
-              snap.hasObjective = false;
-              snap.objectiveLabel = "";
-              snap.objectiveCurrent = 0;
-              snap.objectiveTarget = 0;
-              snap.objectiveCompleted = false;
-              snap.objectiveRewardGranted = true;
-              writeObjectiveSlot(player, slot, snap);
-
-              // Persist rewardGranted = true to DB FIRST. This
-              // prevents duplicate copper on reconnect/crash.
-              try {
-                await new ObjectiveRepository().markRewardGranted(
-                  turnInCharId.toString(),
-                  turnInObjId,
-                );
-              } catch {
-                // Persistence failed — reopen the gate so the slot is
-                // retryable, instead of leaving it silently cleared
-                // with nothing persisted.
-                writeObjectiveSlot(player, slot, preCloseSnap);
-                continue;
-              }
-
-              const completedIds = player.completedObjectiveIds.length > 0
-                ? player.completedObjectiveIds.split(",").filter((value) => value.length > 0)
-                : [];
-              const completedTitles = player.completedObjectiveTitles.length > 0
-                ? player.completedObjectiveTitles.split(",")
-                : [];
-              if (!completedIds.includes(turnInObjId)) {
-                completedIds.push(turnInObjId);
-                completedTitles.push(turnInLabel);
-                player.completedObjectiveIds = completedIds.join(",");
-                player.completedObjectiveTitles = completedTitles.join(",");
-              }
-
-              // Grant copper reward (awaited, not fire-and-forget).
-              if (Number.isFinite(copperReward) && copperReward > 0) {
-                const rep = new CharacterRepository();
-                const total = await rep.incrementMoneyCopper(turnInCharId.toString(), copperReward);
-                if (total !== null) {
-                  const currencyMsg: import("@doomscrolls/shared").CurrencyPickedUpServerMessage = {
-                    type: "currency_picked_up",
-                    characterId: turnInCharId,
-                    gainedCopper: copperReward,
-                    totalMoneyCopper: total,
-                  };
-                  try { client.send("currency_picked_up", currencyMsg); } catch {}
-                }
-              }
-
-              // Task 349 — Grant XP reward through server-authoritative
-              // progression path. rewardGranted is already persisted
-              // above, so a crash/reconnect between here and persistence
-              // cannot double-award XP.
-              await grantFlatXpReward(
-                { characterId: turnInCharId, xp: player.xp, level: player.level, maxHp: player.maxHp, hp: player.hp, damage: player.damage, armor: player.armor },
-                xpReward,
-                (type, payload) => { try { client.send(type, payload); } catch {} },
-              );
-
-              // Send interact_response with localized turn-in feedback.
-              const hasXp = Number.isFinite(xpReward) && xpReward > 0;
-              const hasCopper = Number.isFinite(copperReward) && copperReward > 0;
-              const turnInText = hasXp && hasCopper
-                ? t("objective.turn_in_complete_reward" as never, { xpReward, copperReward } as never)
-                : hasXp
-                  ? t("objective.turn_in_complete_reward_xp_only" as never, { xpReward } as never)
-                  : hasCopper
-                    ? t("objective.turn_in_complete_reward_copper_only" as never, { copperReward } as never)
-                    : t("objective.ready_to_turn_in" as never, { title: turnInLabel } as never);
-              const turnInMessage: import("@doomscrolls/shared").InteractResponseServerMessage = {
-                type: "interact_response",
-                objectId: message.objectId,
-                message: turnInText,
-              };
-              try { client.send("interact_response", turnInMessage); } catch {}
-              log.debug?.(
-                { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, characterId: turnInCharId, objectiveId: turnInObjId, slot, copperReward },
-                "TownRoom notice board turn-in accepted: reward granted.",
-              );
-            }
-          } else if (snap.hasObjective && snap.objectiveId.length > 0 && snap.objectiveCompleted && snap.objectiveRewardGranted) {
-            // Already completed and rewarded — show safe message.
-            anySlotHandled = true;
-            const doneMessage: import("@doomscrolls/shared").InteractResponseServerMessage = {
-              type: "interact_response",
-              objectId: message.objectId,
-              message: t("objective.already_completed" as never),
-            };
-            try { client.send("interact_response", doneMessage); } catch {}
-          } else if (snap.hasObjective && snap.objectiveId.length > 0 && !snap.objectiveCompleted && !snap.objectiveRewardGranted) {
-            // Active objective that is not yet complete — re-send
-            // current state without resetting or duplicating.
-            anySlotHandled = true;
-            const reSend = buildObjectiveUpdatedMessage(snap, snap.objectiveId, slot);
-            try { client.send("objective_updated", reSend); } catch {}
-          }
-          // Empty slot: nothing to report per-slot; the catalog below
-          // covers it once both slots have been processed.
-        }
-
-        // At least one slot is empty — show the objectives available
-        // to start into it. This replaces the old auto-start-next
-        // behavior with a selectable catalog, extended to two slots.
-        const hasEmptySlot = !player.hasObjective || !player.hasObjective2;
-        if (hasEmptySlot) {
-          const availableEntries = buildAvailableNoticeBoardObjectives(player);
-          if (availableEntries.length > 0) {
-            const catalogMessage: import("@doomscrolls/shared").InteractResponseServerMessage = {
-              type: "interact_response",
-              objectId: message.objectId,
-              message: t("objective.choose_objective" as never),
-              availableObjectives: availableEntries,
-            };
-            try { client.send("interact_response", catalogMessage); } catch {}
-          } else if (!anySlotHandled) {
-            const noMoreMessage: import("@doomscrolls/shared").InteractResponseServerMessage = {
-              type: "interact_response",
-              objectId: message.objectId,
-              message: t("objective.no_more_notices" as never),
-            };
-            try { client.send("interact_response", noMoreMessage); } catch {}
-          }
-        }
-      }
-
-      // Task 180 — Handle loot container interaction
-      if (message.objectId === "nightmarket_loot_container_01") {
-        const containerResult = handleLootContainerInteraction(state, message.objectId);
-        const containerResponse: InteractResponseServerMessage = {
-          type: "interact_response",
-          objectId: message.objectId,
-          message: containerResult.message,
-        };
-        try {
-          client.send("interact_response", containerResponse);
-        } catch {
-          log.warn?.(
-            { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
-            "TownRoom loot container interact_response send failed.",
-          );
-        }
-        log.debug?.(
-          {
-            roomId: this.roomId,
-            roomName: this.roomName,
-            sessionId: client.sessionId,
-            objectId: message.objectId,
-            ok: containerResult.ok,
-          },
-          "TownRoom loot container interaction handled.",
-        );
-        return;
-      }
-
-      if (message.objectId === "nightmarket_stash_keeper_01") {
-        try {
-          const stashItems = await new ItemRepository().listStashItems(player.characterId.toString());
-          const stashListed: import("@doomscrolls/shared").StashItemsListedServerMessage = {
-            type: "stash_items_listed",
-            objectId: message.objectId,
-            serviceId: "nightmarket_stash_keeper",
-            items: stashItems.map((item) => toItemInstanceDto(item)),
-          };
-          try {
-            client.send("stash_items_listed", stashListed);
-          } catch {}
-        } catch {
-          const rejected: import("@doomscrolls/shared").StashItemsListRejectedServerMessage = {
-            type: "stash_items_list_rejected",
-            objectId: message.objectId,
-            serviceId: "nightmarket_stash_keeper",
-            reason: "list_failed",
-          };
-          try {
-            client.send("stash_items_list_rejected", rejected);
-          } catch {}
-        }
-      }
 
       if (isWaypointObjectId(message.objectId)) {
         try {
@@ -1594,10 +1443,7 @@ export class TownRoom extends Room {
         return;
       }
 
-      if (
-        isCombatGateObjectId(message.objectId)
-        || message.objectId === "nightmarket_blackwire_return_01"
-      ) {
+      if (isCombatGateObjectId(message.objectId)) {
         try {
           if (isCombatGateObjectId(message.objectId) && (player as { pendingRoomHandoff?: boolean }).pendingRoomHandoff === true) {
             const rejected: import("@doomscrolls/shared").TownCombatHandoffRejectedServerMessage = {
@@ -2288,7 +2134,7 @@ export class TownRoom extends Room {
       }
 
       const spawnPoint = contentRegistry.spawnPoints.get(
-        NIGHTMARKET_DEFAULT_SPAWN_POINT_ID as SpawnPointContentId,
+        DEFAULT_TOWN_SPAWN_POINT_ID as SpawnPointContentId,
       );
       if (spawnPoint === undefined) {
         return;

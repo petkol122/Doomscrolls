@@ -11,13 +11,13 @@ import { TEST_CHARACTER_ID, TEST_USER_ID } from "../support/fixtures";
 /**
  * Core 0.24 -- the first genuine end-to-end proof that dying in a
  * combat zone works as designed. `test/combat/deathReturnsToTown.test.ts`
- * (Core 0.14) proved the Nightmarket handoff itself, but manually
+ * (Core 0.14) proved the town handoff itself, but manually
  * poked `player.hp = 0; player.lifeState = "downed"` to get there --
  * because before this build, no code path in CombatRoom could ever
  * actually bring a player's HP to 0 (see `docs/CORE_BUILD_0_24_PLAN.md`,
  * Question 3). This sibling test lets a real enemy attack land the
  * killing blow through the real landing code path, then confirms the
- * same 0.14 death-to-Nightmarket handoff still fires from a real
+ * same 0.14 death-to-town handoff still fires from a real
  * death, not just a simulated one.
  */
 describe("CombatRoom death-to-town handoff from a real retaliation kill", () => {
@@ -35,7 +35,7 @@ describe("CombatRoom death-to-town handoff from a real retaliation kill", () => 
     await colyseus.shutdown();
   });
 
-  it("a real enemy hit that brings hp to 0 downs the player, and respawn still redirects to Nightmarket", async () => {
+  it("a real enemy hit that brings hp to 0 downs the player, and respawn still redirects to town", async () => {
     const client = await colyseus.sdk.joinOrCreate("combat", {
       userId: TEST_USER_ID,
       characterId: TEST_CHARACTER_ID,
@@ -91,6 +91,6 @@ describe("CombatRoom death-to-town handoff from a real retaliation kill", () => 
     );
     expect(approved.fromRoomKind).toBe("combat");
     expect(approved.toRoomKind).toBe("town");
-    expect(approved.targetZoneId).toBe("nightmarket");
+    expect(approved.targetZoneId).toBe("namesti_republiky");
   });
 });

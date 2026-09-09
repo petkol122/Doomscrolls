@@ -22,12 +22,28 @@ export const makePassive = makeOverlayPassive;
 // contextmenu handlers and replaces them with bubble-phase equivalents.
 // pointerdown and mousedown are still stopped in capture phase so the Phaser
 // world canvas never receives pointer events from panel elements.
+function isTextEntryTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+    return true;
+  }
+  return target.isContentEditable;
+}
+
 export function makeInteractiveAndStopWorldInput<T extends HTMLElement>(element: T): T {
   element.style.pointerEvents = "auto";
 
   const stopAndPrevent = (event: Event): void => {
     event.stopPropagation();
-    if (event.cancelable) {
+    // `preventDefault()` on mousedown also cancels the browser's default
+    // focus action -- if the target is a text input, that silently blocks
+    // it from ever gaining focus (and thus from ever receiving typed
+    // input), even though the click itself looks like it landed. Skip
+    // preventDefault there; stopPropagation alone still keeps the click
+    // from reaching the Phaser world canvas.
+    if (event.cancelable && !isTextEntryTarget(event.target)) {
       event.preventDefault();
     }
   };

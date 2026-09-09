@@ -5,11 +5,9 @@ import type {
   RoomJoinValidationResult,
 } from "./RoomJoinValidationTypes";
 import { contentRegistry } from "@doomscrolls/content";
-import { NIGHTMARKET_DEFAULT_SPAWN_POINT_ID } from "./rooms/resolveTownSpawnPoint";
+import { resolveSafeFallbackTownZoneId } from "./rooms/resolveTownSpawnPoint";
 
 const ALLOWED_ROOM_KINDS: ReadonlySet<RoomKind> = new Set<RoomKind>(["town", "combat"]);
-
-const SAFE_FALLBACK_TOWN_ZONE_ID = "nightmarket" as ZoneId;
 
 function resolveRoomKindForZone(zoneId: ZoneId | undefined): RoomKind | null {
   if (zoneId === undefined || zoneId.length === 0) {
@@ -26,15 +24,6 @@ function resolveRoomKindForZone(zoneId: ZoneId | undefined): RoomKind | null {
   }
 
   return null;
-}
-
-function resolveSafeFallbackTownZoneId(): ZoneId {
-  const fallbackSpawn = contentRegistry.spawnPoints.get(NIGHTMARKET_DEFAULT_SPAWN_POINT_ID as never);
-  if (fallbackSpawn !== undefined && typeof fallbackSpawn.zoneId === "string" && fallbackSpawn.zoneId.length > 0) {
-    return fallbackSpawn.zoneId as ZoneId;
-  }
-
-  return SAFE_FALLBACK_TOWN_ZONE_ID;
 }
 
 /**

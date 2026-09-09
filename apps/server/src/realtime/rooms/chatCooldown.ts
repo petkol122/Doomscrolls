@@ -16,7 +16,7 @@
 // `connectedPlayerRegistry.ts`'s `unregisterConnectedPlayer` for the
 // identical class of problem. Without this, `TownRoom` in particular
 // (long-lived, never disposed, reused across every player who ever
-// visits Nightmarket) would leak one entry per player who ever chatted.
+// visits a town room) would leak one entry per player who ever chatted.
 // ---------------------------------------------------------------------------
 
 const nextChatMessageAtBySessionId = new Map<string, number>();

@@ -90,6 +90,7 @@ These came up in other conversations and are worth pointing back to from here, b
 - **Real/fictional two-layer naming.** The idea that the world map shows real place names, and entering a zone reveals its "cursed"/fictional identity underneath — a naming/presentation layer distinct from the geography-and-scale structure this document commits to.
 - **Evil/normal-realm mirror concept.** A paired-realm idea (a normal version and a corrupted/evil mirrored version of the same geography) — distinct from, and not required by, the instanced-zone structure above.
 - **Whether continuous-world traversal is ever revisited.** Section 1 commits to the instanced-zone model for the foreseeable future; whether a continuous-traversal mode is ever added later (for some subset of the world, or some specific travel mechanic) is an open question, not a planned reversal.
+- **A real walk/run/sprint movement system with a stamina resource** (Diablo/WoW-style). Today's safe-zone speed boost (`SAFE_ZONE_MOVEMENT_SPEED_MULTIPLIER` in `resolvePlayerMovementSpeed.ts`) is a flat always-on multiplier, not a player-toggled sprint. A real sprint mechanic is a separate, larger design conversation — stamina regen rules, whether it shares a resource with anything else, and the UI for it — and is explicitly out of scope for whatever build introduced the flat multiplier.
 
 ---
 

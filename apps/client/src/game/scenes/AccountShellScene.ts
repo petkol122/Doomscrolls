@@ -118,9 +118,6 @@ export class AccountShellScene extends Phaser.Scene {
         this.selectedCharacterId,
         () => {
           void this.handleEnterWorld();
-        },
-        () => {
-          this.handleViewWorldMap();
         }
       )
     );
@@ -193,24 +190,6 @@ export class AccountShellScene extends Phaser.Scene {
         status.style.color = "#ff9c8a";
       }
     }
-  }
-
-  /**
-   * Core 0.32 — secondary, optional entry point alongside "Enter World"
-   * (untouched above). Does not join anything itself; `WorldMapScene`
-   * performs the real join only once the player clicks the Pilsen
-   * marker, via the same `enterWorldForCharacter` helper.
-   */
-  private handleViewWorldMap(): void {
-    if (this.account === null || this.selectedCharacterId === null) {
-      return;
-    }
-
-    this.destroyOverlay();
-    this.scene.start("WorldMapScene", {
-      account: this.account,
-      characterId: this.selectedCharacterId,
-    });
   }
 
   private async submitCreateCharacter(elements: CharacterCreateFormElements): Promise<void> {

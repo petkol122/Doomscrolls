@@ -348,7 +348,7 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
     "crate", "lamp", "debris", "junk", "ambient_rat", "ambient_pig",
     "ambient_chicken", "loot_container", "vendor", "town_service",
     "waypoint", "combat_edge", "combat_return_gate", "area_label", "path_marker", "boundary_marker",
-    "safe_area_marker", "rest_area_marker"
+    "safe_area_marker", "rest_area_marker", "building_footprint", "street_surface", "water_surface"
   ] as const;
 
   for (const prop of registry.worldProps.all) {
@@ -376,6 +376,23 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
         errors.push({ category: "worldProp", id: prop.id, message: "loot_container props must set lootTableId." });
       } else if (!registry.lootTables.has(prop.lootTableId)) {
         errors.push({ category: "worldProp", id: prop.id, message: `Unknown lootTableId: ${prop.lootTableId}` });
+      }
+    }
+
+    // A building_footprint/street_surface/water_surface must carry its
+    // own real outline -- these kinds are rendered as an arbitrary
+    // polygon, not one of the fixed-size primitive shapes every other
+    // kind uses.
+    if (prop.kind === "building_footprint" || prop.kind === "street_surface" || prop.kind === "water_surface") {
+      if (prop.points === undefined || prop.points.length < 3) {
+        errors.push({ category: "worldProp", id: prop.id, message: `${prop.kind} props must set points with at least 3 vertices.` });
+      } else {
+        for (const point of prop.points) {
+          if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+            errors.push({ category: "worldProp", id: prop.id, message: `${prop.kind} points must be finite numbers.` });
+            break;
+          }
+        }
       }
     }
   }

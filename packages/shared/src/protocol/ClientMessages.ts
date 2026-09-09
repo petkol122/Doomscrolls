@@ -159,6 +159,19 @@ export interface RequestChatClientMessage {
   readonly text: string;
 }
 
+/**
+ * Global chat -- reaches every connected player regardless of which
+ * room (Town zone or Combat zone) they're currently in, unlike
+ * `RequestChatClientMessage` which only reaches the sender's own room.
+ * Same shape and validation rules (trim, non-empty, length cap) as
+ * room-local chat; only the `type` (and therefore the routing/scope)
+ * differs.
+ */
+export interface RequestGlobalChatClientMessage {
+  readonly type: "request_global_chat";
+  readonly text: string;
+}
+
 export interface TransitionZoneClientMessage {
   readonly type: "transition_zone";
   readonly targetZoneId: ZoneId;
@@ -272,6 +285,7 @@ export type ClientRoomMessage =
   | RetrieveCorpseClientMessage
   | ForceRecoverCorpseClientMessage
   | RequestChatClientMessage
+  | RequestGlobalChatClientMessage
   | TransitionZoneClientMessage
   | DropInventoryItemClientMessage
   | RequestInteractClientMessage

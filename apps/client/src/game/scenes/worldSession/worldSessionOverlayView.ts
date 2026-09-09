@@ -109,6 +109,7 @@ export function createWorldSessionOverlayView(
   skillTargeting: WorldSessionSkillTargetingState,
   lastSkillRejectedReason: string | null,
   onProjectionModeChange: (mode: WorldProjectionMode) => void,
+  onShowDebugOverlayChange: (show: boolean) => void,
   onRespawn: () => void,
   onResetObjective: (slot: 1 | 2) => void,
   onLeaveWorld: () => void,
@@ -141,6 +142,7 @@ export function createWorldSessionOverlayView(
       selectedInventoryItemId = itemId;
     },
     onProjectionModeChange,
+    onShowDebugOverlayChange,
   );
   const hudRefs = createStableHudContent(
     character,
@@ -173,7 +175,7 @@ export function createWorldSessionOverlayView(
   hudPanel.appendChild(hudRefs.root);
   syncUtilityView(utilityRefs, character, room, debugState, getUtilityState, onUtilityStateChange, getEquipmentLoadout, onEquipItem, onUnequipItem, () => selectedInventoryItemId, (itemId) => {
     selectedInventoryItemId = itemId;
-  }, onProjectionModeChange);
+  }, onProjectionModeChange, onShowDebugOverlayChange);
   syncHudView(hudRefs, character, room, skillTargeting, lastSkillRejectedReason, onResetObjective, onRespawn);
   currentStatusPanel = statusPanel;
 
@@ -191,7 +193,7 @@ export function createWorldSessionOverlayView(
     syncHudView(hudRefs, nextCharacter, nextRoom, nextSkillTargeting, nextLastSkillRejectedReason, onResetObjective, onRespawn);
     syncUtilityView(utilityRefs, nextCharacter, nextRoom, nextDebugState, getUtilityState, onUtilityStateChange, getEquipmentLoadout, onEquipItem, onUnequipItem, () => selectedInventoryItemId, (itemId) => {
       selectedInventoryItemId = itemId;
-    }, onProjectionModeChange);
+    }, onProjectionModeChange, onShowDebugOverlayChange);
   };
 
   return {
@@ -413,7 +415,7 @@ function renderHudContent(
 
   if (selfPresence?.lifeState === "downed") {
     // Core 0.14 -- CombatRoom's downed state now sends the player back
-    // to Nightmarket on respawn (a real death consequence) instead of
+    // to town on respawn (a real death consequence) instead of
     // healing them in place; the copy here reflects that so the button
     // isn't describing a different mechanic than the one it triggers.
     // TownRoom's downed state is unaffected (its own corpse-recovery
@@ -462,6 +464,7 @@ function createStableUtilityContent(
   getSelectedItemId: () => InventorySummaryItem["itemInstanceId"] | null,
   onSelectItem: (itemId: InventorySummaryItem["itemInstanceId"]) => void,
   onProjectionModeChange: (mode: WorldProjectionMode) => void,
+  onShowDebugOverlayChange: (show: boolean) => void,
 ): UtilityViewRefs {
   // Core 0.25 -- corner icon toolbar, not a stacked list of bordered
   // buttons. `root` only lays out the icons in a row; each icon's own
@@ -544,6 +547,7 @@ function createStableUtilityContent(
     formatTownRoomState(room.state),
     debugState,
     onProjectionModeChange,
+    onShowDebugOverlayChange,
     utilityState.debug,
     (open) => {
       onUtilityStateChange?.({ ...getUtilityState(), debug: open });
@@ -575,6 +579,7 @@ function syncUtilityView(
   getSelectedItemId: () => InventorySummaryItem["itemInstanceId"] | null,
   onSelectItem: (itemId: InventorySummaryItem["itemInstanceId"]) => void,
   onProjectionModeChange: (mode: WorldProjectionMode) => void,
+  onShowDebugOverlayChange: (show: boolean) => void,
 ): void {
   const utilityState = getUtilityState();
   const controlsSection = toIconMenuItem(
@@ -635,6 +640,7 @@ function syncUtilityView(
     formatTownRoomState(room.state),
     debugState,
     onProjectionModeChange,
+    onShowDebugOverlayChange,
     utilityState.debug,
     (open) => {
       onUtilityStateChange?.({ ...getUtilityState(), debug: open });
@@ -877,6 +883,38 @@ function createObjectivesSection(
 
   details.appendChild(content);
   return details;
+}
+
+function createDebugOverlayToggleSection(
+  debugState: WorldSessionDebugState,
+  onShowDebugOverlayChange: (show: boolean) => void,
+): HTMLElement {
+  const wrapper = createSectionBlock(t("world_session.debug_overlay_title"), [], { compact: true });
+
+  const label = document.createElement("label");
+  label.style.display = "flex";
+  label.style.alignItems = "center";
+  label.style.gap = "6px";
+  label.style.fontSize = "12px";
+  label.style.color = "#d8c6a3";
+  label.style.cursor = "pointer";
+  makeInteractive(label);
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.checked = debugState.showDebugOverlay;
+  checkbox.addEventListener("change", () => {
+    onShowDebugOverlayChange(checkbox.checked);
+  });
+  makeInteractive(checkbox);
+
+  const labelText = document.createElement("span");
+  labelText.textContent = t("world_session.debug_overlay_toggle");
+
+  label.append(checkbox, labelText);
+  wrapper.appendChild(label);
+
+  return wrapper;
 }
 
 function createProjectionSection(
@@ -1201,6 +1239,19 @@ function createVitalityClusterRow(
   row.appendChild(createHpOrb(hpSummary, hpRatio, lifeState));
   row.appendChild(createBeltStrip(flaskCharges, maxFlaskCharges));
   row.appendChild(createResourceOrbStub());
+
+  // Core 0.4x -- the HP orb, belt strip (flask slot included -- it's
+  // used via the [Q] hotkey, not a click handler) and resource stub are
+  // all read-only display, with no click handler anywhere in this row.
+  // Without this, the row's default `pointer-events: auto` silently ate
+  // every mouse event (move/up/down) the moment the cursor crossed its
+  // bounding box, which sits directly over the bottom of the same
+  // click-to-move viewport -- a live report caught held-movement drags
+  // canceling and plain clicks never registering whenever the cursor
+  // passed under this HUD. `makePassive` lets all of it pass through to
+  // the world canvas underneath, exactly like every other decorative-
+  // only panel in this file already does.
+  makePassive(row);
 
   return row;
 }
@@ -1622,7 +1673,7 @@ function createObjectiveTrackerCard(
   card.appendChild(trackerLine);
 
   const subtitleLine = document.createElement("div");
-  subtitleLine.textContent = objective.location ?? "Nightmarket";
+  subtitleLine.textContent = objective.location ?? "Town";
   subtitleLine.style.fontSize = "10px";
   subtitleLine.style.color = "#a88d63";
   card.appendChild(subtitleLine);
@@ -1695,7 +1746,13 @@ function createObjectiveTrackerCard(
     event.stopPropagation();
     onResetObjective?.(slot);
   });
-  makeInteractive(clearButton);
+  // Core 0.4x -- this card now sits inside the passive floating HUD
+  // wrapper (see applyWorldSessionOverlayFloatingHudStyles), so the
+  // button must both opt back in to pointer events AND stop
+  // pointerdown/mousedown in capture phase itself; a bubble-phase
+  // stopPropagation on "click" alone is too late to stop Phaser's
+  // window-level pointerdown listener from also firing click-to-move.
+  makeInteractiveAndStopWorldInput(clearButton);
   card.appendChild(clearButton);
 
   return card;
@@ -1750,7 +1807,7 @@ function resolveObjectiveTrackerViewModel(
     target: objective.target,
     completed: objective.completed,
     ...(isReadyToTurnIn ? { readyToTurnIn: true } : {}),
-    location: subtitle ?? "The Nightmarket",
+    location: subtitle ?? "Town",
     ...(objective.xpReward !== undefined && { xpReward: objective.xpReward }),
     ...(objective.copperReward !== undefined && { copperReward: objective.copperReward }),
   };
@@ -1967,6 +2024,7 @@ function createDebugPanel(
   roomState: ReturnType<typeof formatTownRoomState>,
   debugState: WorldSessionDebugState,
   onProjectionModeChange: (mode: WorldProjectionMode) => void,
+  onShowDebugOverlayChange: (show: boolean) => void,
   isOpen: boolean = false,
   onOpenChange?: (open: boolean) => void,
 ): HTMLElement {
@@ -2001,6 +2059,7 @@ function createDebugPanel(
     createInfoLine(t("world_session.zone_id"), roomState.zoneId),
     createInfoLine(t("world_session.connected_players"), String(roomState.playerCount)),
   ], { compact: true }));
+  content.appendChild(createDebugOverlayToggleSection(debugState, onShowDebugOverlayChange));
   content.appendChild(createMovementDebugSection(room, debugState));
   content.appendChild(createPresenceSection(room));
   content.appendChild(createProjectionSection(debugState, onProjectionModeChange));

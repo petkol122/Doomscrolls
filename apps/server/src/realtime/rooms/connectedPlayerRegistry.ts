@@ -55,6 +55,23 @@ export function sendToConnectedPlayer(characterId: string, type: string, payload
   }
 }
 
+/**
+ * Global Chat -- pushes to every currently connected client process-wide,
+ * regardless of which room (Town zone or Combat zone) it is joined to.
+ * This is the only place in the codebase that reaches "everyone", since
+ * Colyseus's own `room.broadcast()` only reaches clients on one room
+ * instance and CombatRoom is genuinely sharded per zone.
+ */
+export function broadcastToAllConnectedPlayers(type: string, payload: unknown): void {
+  for (const entry of connectedPlayersByCharacterId.values()) {
+    try {
+      entry.client.send(type, payload);
+    } catch {
+      // The client disconnected mid-iteration; nothing to do.
+    }
+  }
+}
+
 interface LivePlayerCombatStats {
   readonly damage: number;
   readonly armor: number;

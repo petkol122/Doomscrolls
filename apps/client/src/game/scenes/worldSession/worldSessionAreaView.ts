@@ -1,6 +1,6 @@
 import type { Room } from "@colyseus/sdk";
 import { t } from "@doomscrolls/localization";
-import { contentRegistry } from "@doomscrolls/content";
+import { contentRegistry, type ZoneContentId } from "@doomscrolls/content";
 import type { RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
 import Phaser from "phaser";
 
@@ -75,6 +75,48 @@ import {
   type WorldSessionCursorFeedback,
 } from "./worldSessionCursorFeedback";
 
+// Core 0.4x -- hoisted to module scope so `resolveEntityScaleFactor` can
+// use the exact same baseline zoom as `createWorldSessionAreaView`'s own
+// DEFAULT_CAMERA_ZOOM local. Fixed-pixel entity art (player placeholder)
+// was originally tuned to look right at this default zoom, not at a
+// fully-zoomed-out "whole zone visible" view -- see resolveEntityScaleFactor.
+//
+// Raised from 1.5 -- at 1.5x a real-world zone's whole ~66% width filled
+// the viewport, which read as too small/toy-scale once real building
+// footprints shipped. 2.5x shows ~40% of zone width by default, closer to
+// a human-scale "you're standing in a city block" view of the buildings.
+const AREA_DEFAULT_CAMERA_ZOOM = 2.5;
+// Core 0.4x -- hoisted alongside AREA_DEFAULT_CAMERA_ZOOM so this module's
+// standalone `createAreaProjectionContext` (which has no access to
+// createWorldSessionAreaView's own locals) clamps to the exact same range
+// as the zoom controls (scroll wheel / +-/ keys) below.
+const AREA_MIN_CAMERA_ZOOM = 0.25;
+const AREA_MAX_CAMERA_ZOOM = 24;
+
+/**
+ * Core 0.4x -- the player placeholder's authored shapes (ring 34px wide,
+ * torso 22px, etc. -- see worldSessionPlayerPlaceholderView.ts) were
+ * never sized against real-world building scale; once Namesti
+ * Republiky's real building footprints/streets shipped (Core 0.35), the
+ * player read as disproportionately large next to them (a live look at
+ * default zoom measured the player's ring at roughly 14% of the
+ * cathedral block's on-screen width -- clearly ARPG-oversized, not just
+ * "readable"). This shrinks the base marker size on top of
+ * `resolveEntityScaleFactor`'s zoom-consistency scaling, targeting
+ * roughly half that -- a first pass, tunable after another live look.
+ */
+const PLAYER_MARKER_BASE_SCALE = 0.5;
+
+// Core 0.4x follow-up -- resolveEntityScaleFactor grows linearly with
+// camera zoom (zoom / AREA_DEFAULT_CAMERA_ZOOM), unbounded up to
+// AREA_MAX_CAMERA_ZOOM (24x). The label was intentionally left
+// unshrunk by PLAYER_MARKER_BASE_SCALE so it stays readable while
+// zoomed out, but that also means it keeps growing past the point of
+// readability once zoomed in a lot -- name/HP text ballooning to cover
+// a large chunk of the screen. Cap how far the label scale is allowed
+// to climb; the body sprite still scales freely.
+const PLAYER_LABEL_MAX_SCALE = 1.5;
+
 interface PositionSnapshot {
   readonly x: number;
   readonly y: number;
@@ -127,6 +169,7 @@ interface AreaProjectionContext {
   readonly bounds: WorldProjectionBounds;
   readonly viewport: WorldProjectionViewport;
   readonly projectionMode: WorldProjectionMode;
+  readonly rotationDeg: number;
 }
 
 interface AreaWorldProjectionState {
@@ -152,6 +195,7 @@ export interface WorldSessionDebugState {
   readonly projectionMode: WorldProjectionMode;
   readonly isMovementInputEnabled: boolean;
   readonly zoom: number;
+  readonly showDebugOverlay: boolean;
 }
 
 export interface WorldSessionSkillTargetingState {
@@ -166,6 +210,7 @@ export interface WorldSessionAreaView {
   readonly refreshFromRoomState: (room: Room<DoomscrollsRoomState>) => void;
   readonly getDebugState: () => WorldSessionDebugState;
   readonly setProjectionMode: (mode: WorldProjectionMode) => void;
+  readonly setShowDebugOverlay: (show: boolean) => void;
   readonly showEnemyFloatingDamage: (enemyId: string, text: string) => void;
   readonly showPlayerFloatingDamage: (text: string) => void;
   readonly showEnemyTelegraph: (enemyId: string, attackKind?: "normal" | "heavy") => void;
@@ -256,10 +301,20 @@ export function createWorldSessionAreaView(
   //   projection lands inside the visible viewport (+ small padding),
   // - and the same projection snapshot must drive render, hover, and click.
   const ENTITY_VIEWPORT_PADDING_PX = 36;
-  const MIN_CAMERA_ZOOM = 0.55;
-  const MAX_CAMERA_ZOOM = 1.9;
-  const DEFAULT_CAMERA_ZOOM = 1.0;
-  const CAMERA_ZOOM_STEP = 0.1;
+  // Core 0.4x -- widened considerably in both directions (was 0.55-1.9)
+  // so the city can feel bigger: zoomed all the way in for a close-up
+  // view, zoomed all the way out past "whole zone visible" to see the
+  // city compact with room around it. The zoom-out half only works
+  // because `createAreaProjectionContext` below was changed to actually
+  // expand the visible area past the zone's own bounds instead of
+  // clamping to "whole zone visible" (which made anything below 1.0 a
+  // no-op previously).
+  const MIN_CAMERA_ZOOM = AREA_MIN_CAMERA_ZOOM;
+  const MAX_CAMERA_ZOOM = AREA_MAX_CAMERA_ZOOM;
+  const DEFAULT_CAMERA_ZOOM = AREA_DEFAULT_CAMERA_ZOOM;
+  // Widened proportionally with the zoom range (was 0.1 across a 1.35
+  // span; this keeps a similar ~15 steps across the new 3.75 span).
+  const CAMERA_ZOOM_STEP = 0.25;
   const layout = resolveWorldSessionAreaLayout(scene);
   const container = scene.add.container(0, 0);
   const worldContainer = scene.add.container(0, 0);
@@ -373,6 +428,7 @@ export function createWorldSessionAreaView(
   let previousPosition: PositionSnapshot | null = null;
   let lastClickTarget: ClickTargetSnapshot | null = null;
   let projectionMode: WorldProjectionMode = defaultWorldProjection;
+  let showDebugOverlay = true;
   let selfScreenPosition: { readonly x: number; readonly y: number } | null = null;
   let cameraZoom = DEFAULT_CAMERA_ZOOM;
   let selfWorldPosition: { readonly x: number; readonly y: number } | null = null;
@@ -410,6 +466,7 @@ export function createWorldSessionAreaView(
       bounds: { minX: 0, maxX: 1, minY: 0, maxY: 1 },
       viewport: { originX: layout.originX, originY: layout.originY, width: layout.width, height: layout.height },
       projectionMode,
+      rotationDeg: 0,
     },
     offset: { x: 0, y: 0 },
     focusPosition: null,
@@ -462,21 +519,23 @@ export function createWorldSessionAreaView(
     clearPendingInteract();
   };
 
-  const resolveWorldTargetFromPointer = (
-    pointer: Phaser.Input.Pointer,
+  const resolveWorldTargetFromScreenPoint = (
+    screenX: number,
+    screenY: number,
     worldOffset: WorldContainerOffset,
     worldProjection: AreaProjectionContext,
   ): ClickTargetSnapshot | null => {
-    if (worldProjection.projectionMode !== "debug_top_down" || !isPointerInsideViewport(pointer.x, pointer.y)) {
+    if (worldProjection.projectionMode !== "debug_top_down" || !isPointerInsideViewport(screenX, screenY)) {
       return null;
     }
 
     const screenPoint = screenToWorldActiveProjection(
-      pointer.x - worldOffset.x,
-      pointer.y - worldOffset.y,
+      screenX - worldOffset.x,
+      screenY - worldOffset.y,
       worldProjection.bounds,
       worldProjection.viewport,
       worldProjection.projectionMode,
+      worldProjection.rotationDeg,
     );
 
     return {
@@ -501,7 +560,15 @@ export function createWorldSessionAreaView(
       return;
     }
     cameraZoom = nextZoom;
-    roomStateDirty = true;
+    // Core 0.4x -- deliberately does NOT set roomStateDirty. A zoom
+    // change only needs reprojecting existing objects (the
+    // updateProjection calls + drawBounds that already run on every
+    // refreshFromRoomState, dirty or not) -- it never needs the
+    // expensive destroy/recreate-everything path gated by
+    // roomStateDirty. Setting it here used to force a full rebuild of
+    // every static prop/interactable (now ~250 real building/street
+    // objects since Core 0.35) on every single scroll-wheel tick,
+    // visibly flickering the map each time you zoomed.
     refreshFromRoomState(latestRoom);
     onDebugStateChange?.();
   };
@@ -568,7 +635,7 @@ export function createWorldSessionAreaView(
 
     let groundTarget: { targetX: number; targetY: number } | null = null;
     if (projectionMode === "debug_top_down") {
-      const projected = resolveWorldTargetFromPointer(pointer, worldOffset, worldProjection);
+      const projected = resolveWorldTargetFromScreenPoint(pointer.x, pointer.y, worldOffset, worldProjection);
       if (projected !== null) {
         groundTarget = { targetX: projected.x, targetY: projected.y };
       }
@@ -827,7 +894,22 @@ export function createWorldSessionAreaView(
       return;
     }
 
-    const target = resolveWorldTargetFromPointer(pointer, currentProjectionState.offset, currentProjectionState.projection);
+    // Clamp to the viewport bounds rather than dropping the held target: the
+    // playable viewport is inset from the window edges (see
+    // resolveWorldSessionAreaLayout's SCREEN_MARGIN_*), so a drag toward a
+    // screen edge/corner routinely pushes the pointer just outside it while
+    // the mouse button is still down. Cancelling on that (as
+    // resolveWorldTargetFromScreenPoint does for a fresh click) made held
+    // walking randomly stop near the edges/corners instead of continuing
+    // toward them.
+    const clampedX = Math.min(Math.max(pointer.x, layout.originX), layout.originX + layout.width);
+    const clampedY = Math.min(Math.max(pointer.y, layout.originY), layout.originY + layout.height);
+    const target = resolveWorldTargetFromScreenPoint(
+      clampedX,
+      clampedY,
+      currentProjectionState.offset,
+      currentProjectionState.projection,
+    );
     if (target === null) {
       clearHeldMovementTarget();
       return;
@@ -867,8 +949,9 @@ export function createWorldSessionAreaView(
     latestRoom = nextRoom;
     const zoneId = typeof nextRoom.state?.zoneId === "string" && nextRoom.state.zoneId.length > 0
       ? nextRoom.state.zoneId
-      : "nightmarket";
+      : "namesti_republiky";
     const bounds = resolveWorldAreaBounds(zoneId);
+    const rotationDeg = contentRegistry.zones.get(zoneId as ZoneContentId)?.northRotationDeg ?? 0;
     const presence = getTownRoomPresence(nextRoom.state as unknown as Record<string, unknown>);
     selfSessionId = nextRoom.sessionId;
     const self = presence?.players.find((player) => player.sessionId === nextRoom.sessionId) ?? null;
@@ -881,6 +964,7 @@ export function createWorldSessionAreaView(
       projectionMode,
       cameraZoom,
       currentFocusPosition,
+      rotationDeg,
     );
     const worldOffset = resolveWorldContainerOffset(layout, worldProjection, currentFocusPosition);
 
@@ -904,22 +988,38 @@ export function createWorldSessionAreaView(
       bounds: worldProjection.bounds,
       viewport: worldProjection.viewport,
       projectionMode: worldProjection.projectionMode,
+      rotationDeg: worldProjection.rotationDeg,
     });
     groundTileView.updateProjection({
       zoneId,
       bounds: worldProjection.bounds,
       viewport: worldProjection.viewport,
       projectionMode: worldProjection.projectionMode,
+      rotationDeg: worldProjection.rotationDeg,
     });
     interactablesView.updateProjection(nextRoom, worldProjection);
+
+    // Core 0.4x -- moved out of the roomStateDirty block below: this is a
+    // Graphics redraw (clear + 2 rect draws), not object churn, and it
+    // depends on the current camera projection the same way the
+    // updateProjection calls above do. It used to only redraw when
+    // roomStateDirty was true, which was fine while zoom changes also
+    // set that flag (see setZoom's own comment), but now that zoom no
+    // longer forces the expensive rebuild below, this needs to run
+    // unconditionally too or the boundary rectangle would go stale
+    // while zooming/panning.
+    drawBounds(worldFrame, layout, bounds, worldProjection);
 
     // [B] EXPENSIVE: Only when roomStateDirty. Destroys and recreates
     //     static props, interactables, and redraws graphics. This is the
     //     main cost guard — when dirty is false this block is skipped
-    //     entirely and no Phaser objects are touched.
+    //     entirely and no Phaser objects are touched. Zoom/pan changes
+    //     do NOT set roomStateDirty (see setZoom) -- they're fully
+    //     served by the cheap updateProjection calls + drawBounds above,
+    //     so scrolling the wheel no longer destroys/recreates all ~250
+    //     real building/street prop objects on every tick.
     if (roomStateDirty) {
       drawViewportFrame(frame, layout);
-      drawBounds(worldFrame, layout, bounds, worldProjection);
       boundsLabel.setText(
         `zone=${zoneId} bounds: x=${bounds.minX}..${bounds.maxX}, y=${bounds.minY}..${bounds.maxY}`,
       );
@@ -929,12 +1029,14 @@ export function createWorldSessionAreaView(
         bounds: worldProjection.bounds,
         viewport: worldProjection.viewport,
         projectionMode: worldProjection.projectionMode,
+        rotationDeg: worldProjection.rotationDeg,
       });
       groundTileView.refresh({
         zoneId,
         bounds: worldProjection.bounds,
         viewport: worldProjection.viewport,
         projectionMode: worldProjection.projectionMode,
+        rotationDeg: worldProjection.rotationDeg,
       });
 
       interactablesView.refresh(nextRoom, worldProjection);
@@ -1139,6 +1241,7 @@ export function createWorldSessionAreaView(
             worldProjection.bounds,
             worldProjection.viewport,
             projectionMode,
+            worldProjection.rotationDeg,
           );
           corpseScreenPositions.set(player.sessionId, {
             sessionId: player.sessionId,
@@ -1254,6 +1357,7 @@ export function createWorldSessionAreaView(
           worldProjection.bounds,
           worldProjection.viewport,
           projectionMode,
+          worldProjection.rotationDeg,
         );
 
         let otherView = otherPlayerPlaceholders.get(player.sessionId);
@@ -1266,6 +1370,9 @@ export function createWorldSessionAreaView(
           otherPlayerPlaceholders.set(player.sessionId, otherView);
         }
         otherView.setPosition(otherScreenPosition.x, otherScreenPosition.y);
+        const otherEntityScale = resolveEntityScaleFactor(bounds, worldProjection.bounds);
+        otherView.setScale(otherEntityScale * PLAYER_MARKER_BASE_SCALE);
+        otherView.setLabelScale(Math.min(otherEntityScale, PLAYER_LABEL_MAX_SCALE));
         otherView.setInfo(player.displayName, player.hp, player.maxHp);
       }
     }
@@ -1315,12 +1422,16 @@ export function createWorldSessionAreaView(
       worldProjection.bounds,
       worldProjection.viewport,
       projectionMode,
+      worldProjection.rotationDeg,
     );
     const pixelX = playerScreenPosition.x + worldOffset.x;
     const pixelY = playerScreenPosition.y + worldOffset.y;
     selfScreenPosition = { x: pixelX, y: pixelY };
 
     playerPlaceholder.setPosition(playerScreenPosition.x, playerScreenPosition.y);
+    const selfEntityScale = resolveEntityScaleFactor(bounds, worldProjection.bounds);
+    playerPlaceholder.setScale(selfEntityScale * PLAYER_MARKER_BASE_SCALE);
+    playerPlaceholder.setLabelScale(Math.min(selfEntityScale, PLAYER_LABEL_MAX_SCALE));
     playerPlaceholder.setInfo(self.displayName, self.hp, self.maxHp);
     playerPlaceholder.setApproachLabel(self.pendingActionType ?? null);
 
@@ -1331,6 +1442,7 @@ export function createWorldSessionAreaView(
         worldProjection.bounds,
         worldProjection.viewport,
         projectionMode,
+        worldProjection.rotationDeg,
       );
       const targetPixelX = targetScreenPosition.x + worldOffset.x;
       const targetPixelY = targetScreenPosition.y + worldOffset.y;
@@ -1458,6 +1570,34 @@ export function createWorldSessionAreaView(
     onDebugStateChange?.();
   };
 
+  // Debug overlay: the grid/zone-boundary graphics (`frame`, `worldFrame`)
+  // and the technical text readouts (title, click instructions, bounds/
+  // position/status labels, the non-authoritative click-target marker/line)
+  // sit on top of the actual game and were never meant to be permanent --
+  // toggleable from the Debug Panel so it's possible to see the real game
+  // underneath without losing the info entirely.
+  const setDebugOverlayVisibility = (visible: boolean): void => {
+    frame.setVisible(visible);
+    worldFrame.setVisible(visible);
+    title.setVisible(visible);
+    instruction.setVisible(visible);
+    boundsLabel.setVisible(visible);
+    positionLabel.setVisible(visible);
+    statusLabel.setVisible(visible);
+    targetLabel.setVisible(visible);
+    targetMarker.setVisible(visible);
+    lineGraphic.setVisible(visible);
+  };
+
+  const setShowDebugOverlay = (show: boolean): void => {
+    if (showDebugOverlay === show) {
+      return;
+    }
+    showDebugOverlay = show;
+    setDebugOverlayVisibility(showDebugOverlay);
+    onDebugStateChange?.();
+  };
+
   const showEnemyFloatingDamage = (enemyId: string, text: string): void => {
     const screenPos = enemyScreenPositions.get(enemyId);
     if (screenPos === undefined) {
@@ -1517,8 +1657,10 @@ export function createWorldSessionAreaView(
       projectionMode,
       isMovementInputEnabled: projectionMode === "debug_top_down",
       zoom: cameraZoom,
+      showDebugOverlay,
     }),
     setProjectionMode,
+    setShowDebugOverlay,
     showEnemyFloatingDamage,
     showPlayerFloatingDamage,
     showEnemyHitFlash,
@@ -1599,7 +1741,23 @@ export function createWorldSessionAreaView(
       corpseGlowTweens.clear();
       floatingDamageView.destroy();
       cursorFeedback.destroy();
-      restAreaIndicator.setText("");
+      // Root cause (see docs/WORLDSESSIONSCENE_TEARDOWN_CRASH_INVESTIGATION.md):
+      // Phaser's own internal Phaser.GameObjects.DisplayList#shutdown is
+      // registered on Phaser.Scenes.Events.SHUTDOWN during every scene
+      // start(), always BEFORE this view's own create()-registered
+      // teardown listener -- so by the time this destroy() runs,
+      // restAreaIndicator (added to worldContainer, a top-level scene
+      // child) has ALREADY been destroyed by Phaser itself. Every other
+      // call in this function is a `.destroy()` call, which Phaser
+      // GameObjects self-guard against double-invocation (`if
+      // (!this.scene) return;`), so those are harmlessly redundant. This
+      // was the one exception: `.setText()` is a mutation, not a
+      // destroy, and is not self-guarded -- calling it on an
+      // already-destroyed Text throws inside Phaser's own frame/texture
+      // code. It served no purpose even in the case it doesn't crash
+      // (clearing text immediately before the object's own destruction
+      // moments later has no visible effect either way), so removed
+      // rather than guarded.
       selfScreenPosition = null;
       container.destroy(true);
     },
@@ -1781,6 +1939,7 @@ function projectWorldLootToArea(
       projection.bounds,
       projection.viewport,
       projection.projectionMode,
+      projection.rotationDeg,
     ),
   };
 }
@@ -1830,6 +1989,7 @@ function projectEnemyToArea(
     projection.bounds,
     projection.viewport,
     projection.projectionMode,
+    projection.rotationDeg,
   );
 
   return {
@@ -1877,22 +2037,38 @@ function createAreaProjectionContext(
   projectionMode: WorldProjectionMode,
   zoom: number,
   focusPosition: { readonly x: number; readonly y: number } | null,
+  rotationDeg: number,
 ): AreaProjectionContext {
-  const clampedZoom = Math.min(Math.max(zoom, 0.55), 1.9);
+  const clampedZoom = Math.min(Math.max(zoom, AREA_MIN_CAMERA_ZOOM), AREA_MAX_CAMERA_ZOOM);
   const fullWidth = bounds.maxX - bounds.minX;
   const fullHeight = bounds.maxY - bounds.minY;
-  const visibleWidth = Math.min(fullWidth, fullWidth / clampedZoom);
-  const visibleHeight = Math.min(fullHeight, fullHeight / clampedZoom);
+  const visibleWidth = fullWidth / clampedZoom;
+  const visibleHeight = fullHeight / clampedZoom;
 
   let minX = bounds.minX;
   let minY = bounds.minY;
 
-  if (focusPosition !== null) {
+  // Core 0.4x -- zoom below 1x now genuinely shows more than the whole
+  // zone (visibleWidth/Height > full) instead of clamping to "whole zone
+  // visible" (which made every zoom value below 1x an identical no-op
+  // view). In that case there's no meaningful focus-position framing --
+  // there's more empty space than zone on every side -- so just center
+  // the zone in the viewport instead of running the focus-clamp logic
+  // below, which assumes visible <= full and would otherwise fight
+  // itself (clamping past one edge un-clamps the other).
+  if (visibleWidth >= fullWidth) {
+    minX = bounds.minX - (visibleWidth - fullWidth) / 2;
+  } else if (focusPosition !== null) {
     minX = focusPosition.x - visibleWidth / 2;
-    minY = focusPosition.y - visibleHeight / 2;
     if (minX < bounds.minX) { minX = bounds.minX; }
-    if (minY < bounds.minY) { minY = bounds.minY; }
     if (minX + visibleWidth > bounds.maxX) { minX = bounds.maxX - visibleWidth; }
+  }
+
+  if (visibleHeight >= fullHeight) {
+    minY = bounds.minY - (visibleHeight - fullHeight) / 2;
+  } else if (focusPosition !== null) {
+    minY = focusPosition.y - visibleHeight / 2;
+    if (minY < bounds.minY) { minY = bounds.minY; }
     if (minY + visibleHeight > bounds.maxY) { minY = bounds.maxY - visibleHeight; }
   }
 
@@ -1906,6 +2082,7 @@ function createAreaProjectionContext(
   return {
     bounds: cameraBounds,
     projectionMode,
+    rotationDeg,
     viewport: {
       originX: layout.originX,
       originY: layout.originY,
@@ -1913,6 +2090,40 @@ function createAreaProjectionContext(
       height: layout.height,
     },
   };
+}
+
+/**
+ * Core 0.4x -- fixed-pixel-size entities (the player placeholder) don't
+ * get bigger/smaller on screen from projection math alone the way
+ * multi-vertex geometry (buildings, ground tiles) does: those grow
+ * because their own world-space vertices are projected individually, so
+ * a zoomed-in camera naturally spreads them further apart on screen.
+ * A single anchored point has no such effect. This derives the same
+ * effective zoom ratio (`fullBounds` width / the current, possibly
+ * zoomed-in, `cameraBounds` width -- equal to the height ratio too,
+ * since `createAreaProjectionContext` divides both axes by the same
+ * `clampedZoom`) so a fixed-size sprite can be scaled to match.
+ *
+ * Normalized against `AREA_DEFAULT_CAMERA_ZOOM`, not against the fully-
+ * zoomed-out "whole zone visible" view (zoom effectively 1x) -- the
+ * placeholder's fixed pixel sizes were originally tuned to look right at
+ * the actual default zoom (1.5x), so 1.0 returned here must mean "at
+ * default zoom", not "at zoom 1x". Getting this baseline wrong is
+ * exactly what made the player render oversized at the (1.5x) default
+ * zoom after this function was first added.
+ */
+function resolveEntityScaleFactor(
+  fullBounds: WorldProjectionBounds,
+  cameraBounds: WorldProjectionBounds,
+): number {
+  const fullWidth = fullBounds.maxX - fullBounds.minX;
+  const cameraWidth = cameraBounds.maxX - cameraBounds.minX;
+  if (!Number.isFinite(fullWidth) || !Number.isFinite(cameraWidth) || cameraWidth <= 0) {
+    return 1;
+  }
+
+  const defaultVisibleWidth = Math.min(fullWidth, fullWidth / AREA_DEFAULT_CAMERA_ZOOM);
+  return defaultVisibleWidth / cameraWidth;
 }
 
 function drawViewportFrame(graphics: Phaser.GameObjects.Graphics, layout: WorldSessionAreaLayout): void {
@@ -1968,6 +2179,7 @@ function resolveWorldContainerOffset(
     projection.bounds,
     projection.viewport,
     projection.projectionMode,
+    projection.rotationDeg,
   );
 
   return {
@@ -1986,6 +2198,7 @@ function projectWorldRectToScreen(
     projection.bounds,
     projection.viewport,
     projection.projectionMode,
+    projection.rotationDeg,
   );
   const topRight = worldToScreenActiveProjection(
     zoneBounds.maxX,
@@ -1993,6 +2206,7 @@ function projectWorldRectToScreen(
     projection.bounds,
     projection.viewport,
     projection.projectionMode,
+    projection.rotationDeg,
   );
   const bottomLeft = worldToScreenActiveProjection(
     zoneBounds.minX,
@@ -2000,6 +2214,7 @@ function projectWorldRectToScreen(
     projection.bounds,
     projection.viewport,
     projection.projectionMode,
+    projection.rotationDeg,
   );
   const bottomRight = worldToScreenActiveProjection(
     zoneBounds.maxX,
@@ -2007,6 +2222,7 @@ function projectWorldRectToScreen(
     projection.bounds,
     projection.viewport,
     projection.projectionMode,
+    projection.rotationDeg,
   );
 
   return {

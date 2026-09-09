@@ -1,10 +1,10 @@
 import type { AreaContentDefinition } from "./types";
 
 // Core 0.32 — World Map Foundation. Pilsen (Plzeň) is the one real
-// area this build proves the architecture with -- the existing
-// Nightmarket + 4 combat zones migrate under it (see zones.ts's new
-// `areaId` field). Coordinates are the real city center (WGS84),
-// matching the feasibility spike in docs/CORE_BUILD_0_32_PLAN.md.
+// area this build proves the architecture with -- Namesti Republiky
+// + 4 combat zones live under it (see zones.ts's `areaId` field).
+// Coordinates are the real city center (WGS84), matching the
+// feasibility spike in docs/CORE_BUILD_0_32_PLAN.md.
 export const areas = [
   {
     id: "pilsen",

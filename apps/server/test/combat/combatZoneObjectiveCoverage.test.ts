@@ -49,7 +49,7 @@ describe("CombatRoom combat-zone objective coverage", () => {
     // Directly seed an active skitter_hunt objective into slot 1 --
     // the notice board (and request_start_board_objective) only exists
     // in TownRoom; this mirrors what join-time restoration would carry
-    // over for a character who started it in Nightmarket, without
+    // over for a character who started it in town, without
     // re-testing the start flow itself (already covered elsewhere).
     player.hasObjective = true;
     player.objectiveId = "skitter_hunt";

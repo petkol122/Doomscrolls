@@ -9,7 +9,7 @@ export const objectives: readonly ObjectiveContentDefinition[] = [
     requiredKills: 3,
     xpReward: 5,
     copperReward: 3,
-    zoneId: "nightmarket",
+    zoneId: "blackwire_sewers",
   },
   {
     id: "break_the_brute",
@@ -19,7 +19,7 @@ export const objectives: readonly ObjectiveContentDefinition[] = [
     requiredKills: 1,
     xpReward: 10,
     copperReward: 6,
-    zoneId: "nightmarket",
+    zoneId: "blackwire_sewers",
   },
   {
     id: "sewer_cleanup",
@@ -29,7 +29,7 @@ export const objectives: readonly ObjectiveContentDefinition[] = [
     requiredKills: 5,
     xpReward: 8,
     copperReward: 5,
-    zoneId: "nightmarket",
+    zoneId: "blackwire_sewers",
   },
   // Core 0.15 -- combat-zone coverage. Kill-progress tracking already
   // fires in CombatRoom (advanceObjectiveProgress is wired into both
@@ -74,7 +74,7 @@ export const objectives: readonly ObjectiveContentDefinition[] = [
     requiredKills: 2,
     xpReward: 3,
     copperReward: 2,
-    zoneId: "nightmarket",
+    zoneId: "blackwire_sewers",
     repeatable: true,
   },
   // Core 0.16 -- Cinderworks zone coverage, same shape as 0.15's

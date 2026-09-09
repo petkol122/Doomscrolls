@@ -26,6 +26,7 @@ export interface WorldSessionInteractablesView {
       readonly bounds: WorldProjectionBounds;
       readonly viewport: WorldProjectionViewport;
       readonly projectionMode: WorldProjectionMode;
+      readonly rotationDeg?: number;
     },
   ) => void;
   readonly updateProjection: (
@@ -34,6 +35,7 @@ export interface WorldSessionInteractablesView {
       readonly bounds: WorldProjectionBounds;
       readonly viewport: WorldProjectionViewport;
       readonly projectionMode: WorldProjectionMode;
+      readonly rotationDeg?: number;
     },
   ) => void;
   readonly findClickedInteractable: (
@@ -142,6 +144,7 @@ export function createWorldSessionInteractablesView(
       readonly bounds: WorldProjectionBounds;
       readonly viewport: WorldProjectionViewport;
       readonly projectionMode: WorldProjectionMode;
+      readonly rotationDeg?: number;
     },
   ): void => {
     clearAll();
@@ -170,6 +173,7 @@ export function createWorldSessionInteractablesView(
         projection.bounds,
         projection.viewport,
         projection.projectionMode,
+        projection.rotationDeg,
       );
       const pixelX = projectedPosition.x;
       const pixelY = projectedPosition.y;
@@ -206,6 +210,7 @@ export function createWorldSessionInteractablesView(
       readonly bounds: WorldProjectionBounds;
       readonly viewport: WorldProjectionViewport;
       readonly projectionMode: WorldProjectionMode;
+      readonly rotationDeg?: number;
     },
   ): void => {
     const state = room.state as unknown as Record<string, unknown>;
@@ -230,6 +235,7 @@ export function createWorldSessionInteractablesView(
         projection.bounds,
         projection.viewport,
         projection.projectionMode,
+        projection.rotationDeg,
       );
       const pixelX = projectedPosition.x;
       const pixelY = projectedPosition.y;

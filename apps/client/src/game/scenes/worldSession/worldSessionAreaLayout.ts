@@ -7,10 +7,10 @@ export interface WorldSessionAreaLayout {
   readonly height: number;
 }
 
-const SCREEN_MARGIN_LEFT = 20;
-const SCREEN_MARGIN_RIGHT = 20;
-const SCREEN_MARGIN_TOP = 32;
-const SCREEN_MARGIN_BOTTOM = 24;
+const SCREEN_MARGIN_LEFT = 0;
+const SCREEN_MARGIN_RIGHT = 0;
+const SCREEN_MARGIN_TOP = 0;
+const SCREEN_MARGIN_BOTTOM = 0;
 const MIN_AREA_WIDTH = 960;
 const MIN_AREA_HEIGHT = 560;
 

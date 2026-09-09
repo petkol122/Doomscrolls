@@ -6,7 +6,7 @@ type ObjectiveRepositoryClient = PrismaClient | Prisma.TransactionClient;
 /**
  * Repository for character-scoped persistent objective state.
  *
- * This is a targeted persistence layer for the single Nightmarket notice
+ * This is a targeted persistence layer for the single town notice
  * board objective flow from Tasks 333A–333C. It is NOT a full quest journal
  * system; it supports only one objective per character at a time. Once a
  * proper quest manager is implemented, this repository should be replaced

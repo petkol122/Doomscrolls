@@ -3,7 +3,7 @@ import type { SpawnPointContentDefinition, SpawnPointContentId } from "@doomscro
 import { t } from "@doomscrolls/localization";
 import type { CharacterClassKey, CharacterId, ZoneId } from "@doomscrolls/shared";
 import { PlayerPresence } from "./PlayerPresence";
-import { NIGHTMARKET_DEFAULT_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
+import { DEFAULT_TOWN_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
 import { resolvePlayerInitialPosition } from "./validateCharacterLocation";
 import { restoreFlaskToFull } from "./healingFlaskConfig";
 import { writeObjectiveSlot, type ObjectiveSlot } from "./advanceObjectiveProgress";
@@ -168,12 +168,12 @@ function resolveTownSpawnPointDefinition(
   resolvedZoneId: ZoneId,
 ): SpawnPointContentDefinition {
   const definition = contentRegistry.spawnPoints.get(
-    NIGHTMARKET_DEFAULT_SPAWN_POINT_ID as SpawnPointContentId,
+    DEFAULT_TOWN_SPAWN_POINT_ID as SpawnPointContentId,
   );
 
   if (definition === undefined) {
     throw new Error(
-      `Missing spawn point content definition: ${NIGHTMARKET_DEFAULT_SPAWN_POINT_ID}`,
+      `Missing spawn point content definition: ${DEFAULT_TOWN_SPAWN_POINT_ID}`,
     );
   }
 

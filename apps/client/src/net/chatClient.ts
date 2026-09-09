@@ -1,8 +1,11 @@
 import type { Room } from "@colyseus/sdk";
 import type {
   ChatMessageServerMessage,
+  GlobalChatMessageServerMessage,
   RequestChatClientMessage,
   RequestChatRejectedServerMessage,
+  RequestGlobalChatClientMessage,
+  RequestGlobalChatRejectedServerMessage,
   RoomState,
 } from "@doomscrolls/shared";
 
@@ -89,6 +92,95 @@ export function registerChatMessageListeners(
     }
     callbacks.onRejected(raw);
   });
+}
+
+// ---------------------------------------------------------------------------
+// Global Chat.
+//
+// Mirrors `sendChatMessage` / `registerChatMessageListeners` above --
+// same client-side early guard, same "the server is the sole authority"
+// rule. Only the message types differ: `request_global_chat` /
+// `global_chat_message` / `request_global_chat_rejected` reach (and
+// come from) every connected player, not just the sender's own room.
+// ---------------------------------------------------------------------------
+
+export function sendGlobalChatMessage(
+  room: Room<RoomState> | null | undefined,
+  text: string,
+): SendChatMessageResult {
+  if (!room) {
+    return { dispatched: false, reason: "no_room" };
+  }
+  if (room.connection?.isOpen !== true) {
+    return { dispatched: false, reason: "room_not_joined" };
+  }
+
+  const trimmed = text.trim();
+  if (trimmed.length === 0) {
+    return { dispatched: false, reason: "empty_message" };
+  }
+  if (trimmed.length > MAX_CHAT_MESSAGE_LENGTH) {
+    return { dispatched: false, reason: "message_too_long" };
+  }
+
+  const message: RequestGlobalChatClientMessage = {
+    type: "request_global_chat",
+    text: trimmed,
+  };
+
+  room.send(message.type, message);
+  return { dispatched: true };
+}
+
+export function registerGlobalChatMessageListeners(
+  room: Room<RoomState>,
+  callbacks: {
+    readonly onMessage: (message: GlobalChatMessageServerMessage) => void;
+    readonly onRejected: (message: RequestGlobalChatRejectedServerMessage) => void;
+  },
+): void {
+  room.onMessage("global_chat_message", (raw: unknown) => {
+    if (!isGlobalChatMessageServerMessage(raw)) {
+      return;
+    }
+    callbacks.onMessage(raw);
+  });
+
+  room.onMessage("request_global_chat_rejected", (raw: unknown) => {
+    if (!isRequestGlobalChatRejectedServerMessage(raw)) {
+      return;
+    }
+    callbacks.onRejected(raw);
+  });
+}
+
+function isGlobalChatMessageServerMessage(value: unknown): value is GlobalChatMessageServerMessage {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  if (candidate.type !== "global_chat_message") {
+    return false;
+  }
+  return (
+    typeof candidate.sessionId === "string"
+    && typeof candidate.displayName === "string"
+    && typeof candidate.text === "string"
+    && typeof candidate.sentAt === "number"
+  );
+}
+
+function isRequestGlobalChatRejectedServerMessage(
+  value: unknown,
+): value is RequestGlobalChatRejectedServerMessage {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  if (candidate.type !== "request_global_chat_rejected") {
+    return false;
+  }
+  return typeof candidate.reason === "string";
 }
 
 function isChatMessageServerMessage(value: unknown): value is ChatMessageServerMessage {

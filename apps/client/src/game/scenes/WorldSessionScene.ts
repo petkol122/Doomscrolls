@@ -26,12 +26,10 @@ import { createWorldSessionAreaBannerView, type WorldSessionAreaBannerView } fro
 import { createWorldSessionFeedbackView, type WorldSessionFeedbackView } from "./worldSession/worldSessionFeedbackView";
 import { createWorldSessionOverlayView } from "./worldSession/worldSessionOverlayView";
 import {
-  createVendorInteractionPanel,
   type VendorInteractionPanel,
   type InventoryItemView,
 } from "./worldSession/vendorInteractionPanel";
 import {
-  createTownServiceInteractionPanel,
   type TownServiceInteractionPanel,
 } from "./worldSession/townServiceInteractionPanel";
 import {
@@ -43,7 +41,6 @@ import {
   type WorldSessionTravelOverlayKind,
 } from "./worldSession/worldSessionTravelOverlayView";
 import {
-  createStashInteractionPanel,
   type StashInteractionPanel,
 } from "./worldSession/stashInteractionPanel";
 import {
@@ -84,7 +81,7 @@ import {
   registerEquipmentListener,
 } from "./worldSession/worldSessionEquipmentView";
 import type { WorldSessionUtilityPanelOpenState } from "./worldSession/worldSessionOverlayView";
-import { queueZoneGroundTileLoad, queueEnemyHpBarLoad } from "../visualAssetLoader";
+import { queueZoneGroundTileLoad, queueEnemyHpBarLoad, queuePlayerSpriteLoad } from "../visualAssetLoader";
 
 function formatItemRarityLabel(rarity?: string): string | null {
   if (rarity === undefined || rarity.length === 0) {
@@ -180,6 +177,11 @@ export class WorldSessionScene extends Phaser.Scene {
     // worldSessionEnemyPlaceholderView.ts), so it loads unconditionally.
     queueEnemyHpBarLoad(this);
 
+    // Core 0.4x follow-up -- the player-sprite pack renders both the
+    // local and every other-player placeholder in every room kind, so
+    // it loads unconditionally, same as the HP bar above.
+    queuePlayerSpriteLoad(this);
+
     // Core 0.22 -- queue the current zone's ground-tile texture (if it
     // has one) so it's loaded before create() builds the world view.
     // The room is already joined and its state already synced by the
@@ -252,99 +254,7 @@ export class WorldSessionScene extends Phaser.Scene {
       }
     });
 
-    registerInteractResponseListener(this.room, (message: string, objectId?: string, availableObjectives?: readonly AvailableObjectiveEntry[]) => {
-      // Task 348 — Notice board catalog: when available objectives are
-      // returned, show the catalog panel instead of the fallback notice.
-      if (objectId === "nightmarket_notice_board_01" && availableObjectives !== undefined && availableObjectives.length > 0) {
-        this.noticeBoardPanel?.show(message, availableObjectives);
-        return;
-      }
-      if (objectId === "nightmarket_notice_board_01" && availableObjectives !== undefined && availableObjectives.length === 0) {
-        this.noticeBoardPanel?.hide();
-        this.feedbackView?.showNotice(message);
-        return;
-      }
-      if (objectId === "nightmarket_notice_board_01") {
-        this.noticeBoardPanel?.hide();
-      }
-      if (objectId === "nightmarket_vendor_01") {
-        const character = this.account !== null && this.characterId !== null
-          ? this.account.characters.find((c) => c.id === this.characterId) ?? null
-          : null;
-        const moneyCopper = character?.moneyCopper ?? 0;
-        // Task 204 — basic sell-disabled vendor stock preview.
-        const stockEntries = contentRegistry.vendorStocks.all.filter(
-          (entry) => entry.vendorId === "nightmarket_suspicious_vendor",
-        );
-        // Vendor name from content/town-service definition
-        const vendorService = contentRegistry.townServices.get("nightmarket_suspicious_vendor");
-        const vendorName = vendorService !== undefined
-          ? t(vendorService.labelKey as never)
-          : "Vendor";
-        // Build inventory items view for sell section
-        const inventoryItemsForSell = this.buildInventoryItemsForSell(character);
-        this.vendorPanel?.destroy();
-        this.vendorPanel = createVendorInteractionPanel(vendorName, moneyCopper, "nightmarket_suspicious_vendor", {
-          stockEntries,
-          inventoryItems: inventoryItemsForSell,
-          onBuy: (vid, stockEntryId) => {
-            if (this.room !== null) {
-              this.room.send("request_buy_vendor_item", {
-                type: "request_buy_vendor_item",
-                vendorId: vid,
-                stockEntryId,
-              });
-            }
-          },
-          onSell: (vid, itemInstanceId) => {
-            if (this.room !== null) {
-              this.room.send("request_sell_item", {
-                type: "request_sell_item",
-                vendorId: vid,
-                itemInstanceId,
-              });
-            }
-          },
-        });
-        this.vendorPanel.show();
-        return;
-      }
-      // Task 205 — Stash keeper / future town-service placeholder panel.
-      if (objectId === "nightmarket_stash_keeper_01") {
-        this.stashPanel?.destroy();
-        this.stashPanel = createStashInteractionPanel({
-          onStore: (itemInstanceId) => {
-            this.room?.send("request_store_inventory_item_in_stash", {
-              type: "request_store_inventory_item_in_stash",
-              serviceId: "nightmarket_stash_keeper",
-              itemInstanceId,
-            });
-          },
-          onTake: (itemInstanceId) => {
-            this.room?.send("request_take_stash_item_to_inventory", {
-              type: "request_take_stash_item_to_inventory",
-              serviceId: "nightmarket_stash_keeper",
-              itemInstanceId,
-            });
-          },
-        });
-        const character = this.account !== null && this.characterId !== null
-          ? this.account.characters.find((c) => c.id === this.characterId) ?? null
-          : null;
-        this.stashPanel.setInventoryItems(this.buildInventoryItemsForStash(character));
-        this.stashPanel.show();
-        return;
-      }
-      // Task 208 — Trainer town-service placeholder panel.
-      if (objectId === "nightmarket_trainer_01") {
-        const service = contentRegistry.townServices.get("nightmarket_trainer");
-        if (service !== undefined) {
-          this.townServicePanel?.destroy();
-          this.townServicePanel = createTownServiceInteractionPanel(service);
-          this.townServicePanel.show();
-          return;
-        }
-      }
+    registerInteractResponseListener(this.room, (message: string, _objectId?: string, _availableObjectives?: readonly AvailableObjectiveEntry[]) => {
       this.feedbackView?.showNotice(message);
     }, (message: ObjectiveUpdatedServerMessage) => {
       // Clear stale completion/ready-to-turn-in notice when a new in-progress objective arrives.
@@ -360,7 +270,7 @@ export class WorldSessionScene extends Phaser.Scene {
         const roomState = this.room?.state as { roomKind?: unknown } | undefined;
         const roomKind = typeof roomState?.roomKind === "string" ? roomState.roomKind : "town";
         const readyText = roomKind === "combat"
-          ? t("objective.ready_to_turn_in_return_nightmarket" as never, { title: message.label })
+          ? t("objective.ready_to_turn_in_return_town" as never, { title: message.label })
           : t("objective.ready_to_turn_in_notice_board" as never, { title: message.label });
         const rewardText = xp > 0 && copper > 0
           ? t("objective.complete_reward", { xpReward: xp, copperReward: copper })
@@ -1020,6 +930,7 @@ export class WorldSessionScene extends Phaser.Scene {
       projectionMode: defaultWorldProjection,
       isMovementInputEnabled: true,
       zoom: 1,
+      showDebugOverlay: true,
     };
     const skillTargeting = this.worldAreaView?.getSkillTargetingState() ?? {
       hoveredEnemyId: null,
@@ -1073,6 +984,9 @@ export class WorldSessionScene extends Phaser.Scene {
       this.latestSkillRejectedReason,
       (mode) => {
         this.handleProjectionModeChange(mode);
+      },
+      (show) => {
+        this.handleShowDebugOverlayChange(show);
       },
       () => {
         this.handleRespawn();
@@ -1164,6 +1078,11 @@ export class WorldSessionScene extends Phaser.Scene {
 
   private handleProjectionModeChange(mode: WorldProjectionMode): void {
     this.worldAreaView?.setProjectionMode(mode);
+    this.renderOverlay();
+  }
+
+  private handleShowDebugOverlayChange(show: boolean): void {
+    this.worldAreaView?.setShowDebugOverlay(show);
     this.renderOverlay();
   }
 
@@ -1359,9 +1278,9 @@ export class WorldSessionScene extends Phaser.Scene {
     } catch {
       try {
         const nextClient = createRealtimeClient();
-        const fallbackRoom = await joinTownRoom(nextClient, sessionToken as never, this.characterId, "nightmarket" as never);
+        const fallbackRoom = await joinTownRoom(nextClient, sessionToken as never, this.characterId, "namesti_republiky" as never);
         this.room = fallbackRoom;
-        this.feedbackView?.showNotice("Recovered to Nightmarket.");
+        this.feedbackView?.showNotice("Recovered to town.");
         this.scene.restart({
           account: this.account,
           characterId: this.characterId,
@@ -1390,7 +1309,7 @@ export class WorldSessionScene extends Phaser.Scene {
     this.pendingRoomHandoff = true;
     this.room.send("request_combat_return", {
       type: "request_combat_return",
-      objectId: "combat_return_to_nightmarket",
+      objectId: "combat_return_to_town",
     });
   }
 
