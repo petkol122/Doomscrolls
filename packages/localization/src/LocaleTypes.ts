@@ -254,6 +254,8 @@ export const REQUIRED_LOCALIZATION_KEYS = [
   "world_session.awaiting_movement_speed",
   "world_session.last_click_target",
   "world_session.awaiting_click_target",
+  "world_session.debug_overlay_title",
+  "world_session.debug_overlay_toggle",
   "world_session.projection_title",
   "world_session.projection_notice",
   "world_session.projection_top_down",

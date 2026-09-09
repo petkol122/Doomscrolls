@@ -48,13 +48,34 @@ import type { VisualAssetContentDefinition } from "./types";
  * HP bar's are.
  */
 export const visualAssets: readonly VisualAssetContentDefinition[] = [
+  // Core 0.4x follow-up -- isobricks.png was a single non-tileable
+  // isometric-brick icon (a diamond outline on a mostly-empty square
+  // canvas). worldSessionGroundTileView.ts tiles ground art as a plain
+  // square grid (no isometric stagger), so that icon repeated verbatim
+  // as a visible, seam-heavy diamond lattice across the whole zone
+  // floor. ground_plaza_stone.png is a procedurally generated,
+  // edge-to-edge seamless stone-paving texture sized for the same grid.
   {
     id: "ground_stone",
     category: "ground_tile",
-    path: "/assets/isobricks.png",
-    sourceWidth: 500,
-    sourceHeight: 500
+    path: "/assets/ground_plaza_stone.png",
+    sourceWidth: 256,
+    sourceHeight: 256
   },
+
+  // ── Player sprite (sewer-dweller-male, 8-directional rotations) ──
+  // Core 0.4x follow-up -- replaces the vector-shape player placeholder
+  // body with real pixel-art per screen-facing octant. Still a
+  // placeholder pack (not final character art), but a real sprite
+  // instead of drawn primitives. All 8 frames share a 68x68 canvas.
+  { id: "player_sewer_dweller_male_south", category: "player_sprite", path: "/assets/sprites/characters/player/sewer-dweller-male/rotations/south.png", sourceWidth: 68, sourceHeight: 68 },
+  { id: "player_sewer_dweller_male_south_east", category: "player_sprite", path: "/assets/sprites/characters/player/sewer-dweller-male/rotations/south-east.png", sourceWidth: 68, sourceHeight: 68 },
+  { id: "player_sewer_dweller_male_east", category: "player_sprite", path: "/assets/sprites/characters/player/sewer-dweller-male/rotations/east.png", sourceWidth: 68, sourceHeight: 68 },
+  { id: "player_sewer_dweller_male_north_east", category: "player_sprite", path: "/assets/sprites/characters/player/sewer-dweller-male/rotations/north-east.png", sourceWidth: 68, sourceHeight: 68 },
+  { id: "player_sewer_dweller_male_north", category: "player_sprite", path: "/assets/sprites/characters/player/sewer-dweller-male/rotations/north.png", sourceWidth: 68, sourceHeight: 68 },
+  { id: "player_sewer_dweller_male_north_west", category: "player_sprite", path: "/assets/sprites/characters/player/sewer-dweller-male/rotations/north-west.png", sourceWidth: 68, sourceHeight: 68 },
+  { id: "player_sewer_dweller_male_west", category: "player_sprite", path: "/assets/sprites/characters/player/sewer-dweller-male/rotations/west.png", sourceWidth: 68, sourceHeight: 68 },
+  { id: "player_sewer_dweller_male_south_west", category: "player_sprite", path: "/assets/sprites/characters/player/sewer-dweller-male/rotations/south-west.png", sourceWidth: 68, sourceHeight: 68 },
 
   // ── Enemy HP bar (bdragon1727 health-bar pack) ──
   // Frames 0-5 share a consistent 48x32 footprint (a full, tapering-color

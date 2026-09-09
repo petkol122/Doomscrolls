@@ -34,6 +34,43 @@ export function queueZoneGroundTileLoad(scene: Phaser.Scene, zoneId: string): vo
 }
 
 /**
+ * Semantic keys for the player sprite's 8 directional frames
+ * (sewer-dweller-male placeholder pack). Shared between the loader below
+ * and worldSessionPlayerPlaceholderView.ts so the two never drift from
+ * each other's copy of these strings.
+ */
+export const PLAYER_SPRITE_ASSET_IDS = {
+  south: "player_sewer_dweller_male_south",
+  south_east: "player_sewer_dweller_male_south_east",
+  east: "player_sewer_dweller_male_east",
+  north_east: "player_sewer_dweller_male_north_east",
+  north: "player_sewer_dweller_male_north",
+  north_west: "player_sewer_dweller_male_north_west",
+  west: "player_sewer_dweller_male_west",
+  south_west: "player_sewer_dweller_male_south_west",
+} as const;
+
+/**
+ * Queues all 8 player-sprite direction frames for Phaser to load. Not
+ * zone-gated -- every room kind renders the local and other-player
+ * placeholders through the same view, so the pack loads unconditionally
+ * (mirrors queueEnemyHpBarLoad below). No-ops per frame whose registry
+ * row is missing or whose texture is already loaded.
+ */
+export function queuePlayerSpriteLoad(scene: Phaser.Scene): void {
+  for (const assetId of Object.values(PLAYER_SPRITE_ASSET_IDS)) {
+    const asset = contentRegistry.visualAssets.get(assetId);
+    if (asset === undefined) {
+      continue;
+    }
+    if (scene.textures.exists(asset.id)) {
+      continue;
+    }
+    scene.load.image(asset.id, asset.path);
+  }
+}
+
+/**
  * Semantic key for the enemy HP bar spritesheet (bdragon1727's health-bar
  * pack). Shared between the loader below and worldSessionEnemyPlaceholderView.ts
  * so the two never drift from each other's copy of the string.

@@ -37,7 +37,10 @@ import { createRoomLogger } from "./roomLogger";
 import { validateMovementIntent } from "./movementIntentValidation";
 import { applyMovementIntent } from "./applyMovementIntent";
 import { resolveZoneBounds } from "./resolveZoneBounds";
-import { resolvePlayerMovementSpeed } from "./resolvePlayerMovementSpeed";
+import { resolveZoneBuildingFootprints } from "./resolveZoneBuildingFootprints";
+import { isPointInsideAnyPolygon } from "./pointInPolygon";
+import { computeBuildingAvoidancePath } from "./buildingAvoidancePathfinding";
+import { resolvePlayerMovementSpeed, resolveSafeZoneMovementSpeedMultiplier } from "./resolvePlayerMovementSpeed";
 import { resolvePlayerDamage } from "./resolvePlayerDamage";
 import { resolvePlayerArmor } from "./resolvePlayerArmor";
 import { mitigateIncomingDamage } from "./incomingDamageMitigation";
@@ -61,6 +64,8 @@ import { applyTownRestRefill } from "./townRestRefill";
 import { registerConnectedPlayer, unregisterConnectedPlayer } from "./connectedPlayerRegistry";
 import { registerChatHandler } from "./chatHandler";
 import { clearChatCooldown } from "./chatCooldown";
+import { registerGlobalChatHandler, sendGlobalChatHistory } from "./globalChatHandler";
+import { clearGlobalChatCooldown } from "./globalChatCooldown";
 import { buildEquipmentLoadout } from "../../character/buildEquipmentLoadout";
 import { applyTownRestAreaRefillForAll } from "./townRestAreaTrigger";
 import type {
@@ -81,7 +86,7 @@ import { validatePickupWorldLootIntent } from "./pickupWorldLootValidation";
 import { clearPendingAction, setPendingAction } from "./pendingActionState";
 import { resolvePlayerInitialPosition } from "./validateCharacterLocation";
 import { contentRegistry, NOTICE_BOARD_OBJECTIVE_SEQUENCE } from "@doomscrolls/content";
-import type { SpawnPointContentId, ObjectiveId } from "@doomscrolls/content";
+import type { SpawnPointContentId, ObjectiveId, ZoneContentId, WorldPropPoint } from "@doomscrolls/content";
 import { DEFAULT_TOWN_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
 import { resolveTownZoneId } from "./resolveTownZoneId";
 import { CharacterRepository, ObjectiveRepository } from "../../persistence/repositories";
@@ -688,6 +693,16 @@ export class TownRoom extends Room {
   private vendorSellHandlerRegistered = false;
   private stashTransferHandlerRegistered = false;
   private chatHandlerRegistered = false;
+  private globalChatHandlerRegistered = false;
+  /**
+   * Core 0.4x -- building_footprint polygons for this room's zone,
+   * resolved once at creation (a room's zone never changes mid-session)
+   * and reused by both the `request_move` handler (reject a target
+   * that lands inside a building) and the simulation tick (stop a
+   * player who would otherwise be stepped into one). See
+   * `resolveZoneBuildingFootprints.ts`.
+   */
+  private buildingFootprints: readonly (readonly WorldPropPoint[])[] = [];
 
   public override async onCreate(options: TownRoomJoinOptions): Promise<void> {
     const log = createRoomLogger(
@@ -696,7 +711,23 @@ export class TownRoom extends Room {
 
     const zoneId = resolveTownZoneId(options.requestedZoneId);
 
+    if (
+      options.requestedZoneId !== undefined &&
+      options.requestedZoneId !== zoneId
+    ) {
+      log.warn?.(
+        {
+          roomId: this.roomId,
+          roomName: this.roomName,
+          requestedZoneId: options.requestedZoneId,
+          resolvedZoneId: zoneId,
+        },
+        "TownRoom created with a redirected zoneId: requested zone is not a registered town-type zone.",
+      );
+    }
+
     this.setState(new TownRoomState(zoneId));
+    this.buildingFootprints = resolveZoneBuildingFootprints(zoneId);
 
     // Task 057 — Initialize interactable objects
     initializeTownInteractables(this.state as TownRoomState, zoneId);
@@ -722,10 +753,22 @@ export class TownRoom extends Room {
       this.chatHandlerRegistered = true;
       registerChatHandler(this, log);
     }
+    if (!this.globalChatHandlerRegistered) {
+      this.globalChatHandlerRegistered = true;
+      registerGlobalChatHandler(this, log);
+    }
+    // Core 0.4x -- resolved once at room creation (the room's zone never
+    // changes mid-session) from the zone's classification, not its id,
+    // so any future safe_hub zone gets faster town movement automatically.
+    const movementSpeedMultiplier = resolveSafeZoneMovementSpeedMultiplier(
+      contentRegistry.zones.get(zoneId as ZoneContentId)?.classification,
+    );
     this.setSimulationInterval((deltaMs: number) => {
       const state = this.state as TownRoomState;
       stepTownRoomMovement(state, deltaMs, {
         now: Date.now(),
+        movementSpeedMultiplier,
+        buildingFootprints: this.buildingFootprints,
         onPendingActionReady: (sessionId, payload) => {
           const targetClient = this.clients.find((client) => client.sessionId === sessionId);
           if (targetClient === undefined) {
@@ -977,6 +1020,7 @@ export class TownRoom extends Room {
       // swallow send failures; the next equip/unequip will still sync it
     }
 
+    await sendGlobalChatHistory(_client, safeLog);
 
     safeLog.info?.(
       {
@@ -1014,6 +1058,7 @@ export class TownRoom extends Room {
       unregisterConnectedPlayer(presence.characterId, _client);
     }
     clearChatCooldown(_client.sessionId);
+    clearGlobalChatCooldown(_client.sessionId);
 
     // A combat-zone handoff already persisted the correct destination
     // zone/position (and HP/flask snapshot) via `updateCharacterRoomIntent`
@@ -1143,14 +1188,55 @@ export class TownRoom extends Room {
         return;
       }
 
+      if (
+        this.buildingFootprints.length > 0 &&
+        isPointInsideAnyPolygon(result.targetX, result.targetY, this.buildingFootprints)
+      ) {
+        const rejection: RequestMoveRejectedServerMessage = {
+          type: "request_move_rejected",
+          reason: "target_inside_building",
+          ...(result.clientTime !== undefined ? { clientTime: result.clientTime } : {}),
+        };
+        try {
+          client.send("request_move_rejected", rejection);
+        } catch {
+          // Swallow send errors; see the shape/range rejection above.
+        }
+        log.warn?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            targetX: result.targetX,
+            targetY: result.targetY,
+          },
+          "TownRoom request_move rejected: target lands inside a building footprint.",
+        );
+        return;
+      }
+
+      // Core 0.4x -- route around any building between the player and
+      // the clicked target (Diablo/WoW-style glide instead of stopping
+      // dead at the first wall); a clear straight line is returned
+      // as-is. See `computeBuildingAvoidancePath`.
+      const path = computeBuildingAvoidancePath(
+        player?.x ?? result.targetX,
+        player?.y ?? result.targetY,
+        result.targetX,
+        result.targetY,
+        this.buildingFootprints,
+      );
+      const [firstWaypoint, ...remainingWaypoints] = path;
+
       // Store the validated movement target. The room simulation tick
       // advances position later; Colyseus schema synchronization handles
       // the broadcast automatically.
       const applied = applyMovementIntent(
         state,
         client.sessionId,
-        result.targetX,
-        result.targetY,
+        firstWaypoint?.x ?? result.targetX,
+        firstWaypoint?.y ?? result.targetY,
+        remainingWaypoints,
       );
 
       if (applied !== null) {

@@ -42,16 +42,32 @@ export type ChatMessageValidationResult =
     };
 
 interface RequestChatShape {
-  readonly type: "request_chat";
+  readonly type: "request_chat" | "request_global_chat";
   readonly text: string;
 }
 
 export function validateChatMessage(
   input: ChatMessageValidationInput,
 ): ChatMessageValidationResult {
-  const message = input.message;
+  return validateChatMessageShaped(input.message, "request_chat");
+}
 
-  if (!isRequestChatShaped(message)) {
+/**
+ * Global-chat counterpart of {@link validateChatMessage}. Same trim /
+ * non-empty / length-cap rules -- only the expected `type` differs, so
+ * this shares the body rather than duplicating it.
+ */
+export function validateGlobalChatMessage(
+  input: ChatMessageValidationInput,
+): ChatMessageValidationResult {
+  return validateChatMessageShaped(input.message, "request_global_chat");
+}
+
+function validateChatMessageShaped(
+  message: unknown,
+  expectedType: RequestChatShape["type"],
+): ChatMessageValidationResult {
+  if (!isRequestChatShaped(message, expectedType)) {
     return { ok: false, reason: "invalid_shape" };
   }
 
@@ -67,12 +83,15 @@ export function validateChatMessage(
   return { ok: true, text: trimmed };
 }
 
-function isRequestChatShaped(value: unknown): value is RequestChatShape {
+function isRequestChatShaped(
+  value: unknown,
+  expectedType: RequestChatShape["type"],
+): value is RequestChatShape {
   if (typeof value !== "object" || value === null) {
     return false;
   }
   const candidate = value as Record<string, unknown>;
-  if (candidate.type !== "request_chat") {
+  if (candidate.type !== expectedType) {
     return false;
   }
   if (typeof candidate.text !== "string") {

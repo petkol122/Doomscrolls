@@ -33,7 +33,7 @@ export type ZoneClassification = "safe_hub" | "combat" | "test_hybrid";
 export type SpawnPointContentId = "namesti_republiky_spawn";
 export type CombatInteractableId = "combat_return_to_town" | "static_yard_return_to_town" | "cinderworks_return_to_town" | "saltmere_docks_return_to_town";
 export type EquipmentSlotCategory = "weapon" | "armor" | "accessory" | "belt" | "flask";
-export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken" | "loot_container" | "vendor" | "town_service" | "waypoint" | "combat_edge" | "combat_return_gate" | "area_label" | "path_marker" | "boundary_marker" | "safe_area_marker" | "rest_area_marker" | "building_footprint" | "street_surface";
+export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken" | "loot_container" | "vendor" | "town_service" | "waypoint" | "combat_edge" | "combat_return_gate" | "area_label" | "path_marker" | "boundary_marker" | "safe_area_marker" | "rest_area_marker" | "building_footprint" | "street_surface" | "water_surface";
 export type VisualAssetCategory = "ground_tile" | "enemy_sprite" | "player_sprite" | "prop_sprite" | "item_icon" | "hp_bar" | "rarity_frame";
 export type VendorId = never;
 export type TownServiceId = never;
@@ -195,6 +195,20 @@ export interface ZoneContentDefinition extends LocalizedContentDefinition {
    * this field is how a zone opts in once its tiles are mapped.
    */
   readonly groundTileKey?: string;
+  /**
+   * Core 0.36 -- optional camera-rotation correction (degrees, clockwise)
+   * for real-world-grounded zones whose Overpass lat/lon -> world-unit
+   * conversion didn't come out with geographic north pointing straight up
+   * on screen. Applied once, at render/projection time
+   * (`worldProjection.ts`'s `worldToScreenDebugTopDown`/
+   * `screenToWorldDebugTopDown`), around the current camera bounds'
+   * center -- it never touches `bounds`, `WORLD_UNITS_PER_METER`, or any
+   * prop's stored `x`/`y`. Absent = 0 = unchanged. namesti_republiky
+   * deliberately leaves this unset: its own conversion already places
+   * +X=east/+Y=south, which the existing top-down projection already
+   * renders with north up (see docs/CORE_BUILD_0_33_PLAN.md).
+   */
+  readonly northRotationDeg?: number;
 }
 
 /**
@@ -321,8 +335,9 @@ export interface WorldPropContentDefinition {
    */
   readonly lootTableId?: LootTableId;
   /**
-   * Core 0.35 -- required for `kind: "building_footprint"` and
-   * `"street_surface"` (see ContentValidation.ts): the prop's real-world
+   * Core 0.35 -- required for `kind: "building_footprint"`,
+   * `"street_surface"`, and (Core 0.37) `"water_surface"` (see
+   * ContentValidation.ts): the prop's real-world
    * outline as a closed polygon, in the same absolute zone-local world
    * units as `x`/`y`. `x`/`y` remain the shape's own centroid (label
    * anchor, depth-sort key); `points` is the actual geometry the client

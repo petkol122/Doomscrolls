@@ -13,6 +13,29 @@ import type { SpawnPointContentDefinition, SpawnPointContentId } from "@doomscro
 export const DEFAULT_TOWN_SPAWN_POINT_ID: SpawnPointContentId = "namesti_republiky_spawn";
 
 /**
+ * Hardcoded last-resort town zone id, used only if the default spawn
+ * point itself is missing from the content registry (which would be a
+ * content bug, not a stale-data case).
+ */
+const SAFE_FALLBACK_TOWN_ZONE_ID = "namesti_republiky" as ZoneId;
+
+/**
+ * The zone a join should redirect to when its requested/persisted zone
+ * id no longer resolves to a registered town-type zone (e.g. a zone was
+ * renamed/removed in content but a client or DB row still references the
+ * old id). Single source of truth shared by every join path that needs
+ * this redirect, so they can't drift out of sync with each other.
+ */
+export function resolveSafeFallbackTownZoneId(): ZoneId {
+  const fallbackSpawn = contentRegistry.spawnPoints.get(DEFAULT_TOWN_SPAWN_POINT_ID as never);
+  if (fallbackSpawn !== undefined && typeof fallbackSpawn.zoneId === "string" && fallbackSpawn.zoneId.length > 0) {
+    return fallbackSpawn.zoneId as ZoneId;
+  }
+
+  return SAFE_FALLBACK_TOWN_ZONE_ID;
+}
+
+/**
  * Resolve the spawn point for a TownRoom join.
  *
  * - Looks up the default town spawn point in the content registry.

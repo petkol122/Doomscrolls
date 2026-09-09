@@ -398,6 +398,8 @@ export const en = {
   "world_session.awaiting_movement_speed": "Waiting for synced movement speed...",
   "world_session.last_click_target": "Last click target",
   "world_session.awaiting_click_target": "No click target sent yet.",
+  "world_session.debug_overlay_title": "Debug overlay",
+  "world_session.debug_overlay_toggle": "Show debug grid/labels over the world",
   "world_session.projection_title": "Projection preview",
   "world_session.projection_notice": "Dev-only visual toggle. Isometric preview changes rendering projection only; server world x/y and gameplay stay top-down-authoritative.",
   "world_session.projection_top_down": "Debug top-down",
@@ -451,6 +453,8 @@ export const en = {
   "world_session.travel_overlay.timeout": "Travel response took too long.",
   "world_session.chat_input_placeholder": "Press Enter to chat...",
   "world_session.chat_empty": "No messages yet.",
+  "world_session.chat_channel_local": "Local",
+  "world_session.chat_channel_global": "Global",
 
   "world_area.title": "World Area",
   "world_area.click_instruction": "Click inside to move.",

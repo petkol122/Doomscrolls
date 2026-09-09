@@ -20,6 +20,16 @@ export const zones = [
     // center; +X = east, +Y = south (the pre-existing square itself does
     // not encode true compass orientation, so this convention governs
     // only content added from Core 0.35 onward).
+    //
+    // Core 0.37 — southeast expansion. Bounds enlarged again to reach the
+    // real Radbuza river and Anglické nábřeží (the real riverside
+    // embankment street), plus ~270 more real building footprints along
+    // the way, all fetched from Overpass API using the same origin/
+    // conversion as Core 0.35 (origin = relation 337496's real center,
+    // 49.7472443°N 13.3775812°E == world (2500,1800); +X=east, +Y=south;
+    // WORLD_UNITS_PER_METER). New content's real bounding box is
+    // x: -2878..19983, y: -3714..14679 -- union'd with the Core 0.35
+    // bounds below and padded for boundary-marker breathing room.
     id: "namesti_republiky",
     zoneId: zoneId("namesti_republiky"),
     nameKey: "zone.namesti_republiky.name",
@@ -33,7 +43,7 @@ export const zones = [
     transitionZoneIds: [],
     mapKey: "map_namesti_republiky_placeholder",
     areaId: "pilsen",
-    bounds: { minX: -2238, maxX: 7303, minY: -3330, maxY: 6935 },
+    bounds: { minX: -3200, maxX: 20300, minY: -4000, maxY: 15000 },
     groundTileKey: "ground_stone"
   },
   {

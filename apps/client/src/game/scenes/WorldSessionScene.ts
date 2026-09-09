@@ -81,7 +81,7 @@ import {
   registerEquipmentListener,
 } from "./worldSession/worldSessionEquipmentView";
 import type { WorldSessionUtilityPanelOpenState } from "./worldSession/worldSessionOverlayView";
-import { queueZoneGroundTileLoad, queueEnemyHpBarLoad } from "../visualAssetLoader";
+import { queueZoneGroundTileLoad, queueEnemyHpBarLoad, queuePlayerSpriteLoad } from "../visualAssetLoader";
 
 function formatItemRarityLabel(rarity?: string): string | null {
   if (rarity === undefined || rarity.length === 0) {
@@ -176,6 +176,11 @@ export class WorldSessionScene extends Phaser.Scene {
     // kind (both TownRoom and CombatRoom enemies render through the same
     // worldSessionEnemyPlaceholderView.ts), so it loads unconditionally.
     queueEnemyHpBarLoad(this);
+
+    // Core 0.4x follow-up -- the player-sprite pack renders both the
+    // local and every other-player placeholder in every room kind, so
+    // it loads unconditionally, same as the HP bar above.
+    queuePlayerSpriteLoad(this);
 
     // Core 0.22 -- queue the current zone's ground-tile texture (if it
     // has one) so it's loaded before create() builds the world view.
@@ -925,6 +930,7 @@ export class WorldSessionScene extends Phaser.Scene {
       projectionMode: defaultWorldProjection,
       isMovementInputEnabled: true,
       zoom: 1,
+      showDebugOverlay: true,
     };
     const skillTargeting = this.worldAreaView?.getSkillTargetingState() ?? {
       hoveredEnemyId: null,
@@ -978,6 +984,9 @@ export class WorldSessionScene extends Phaser.Scene {
       this.latestSkillRejectedReason,
       (mode) => {
         this.handleProjectionModeChange(mode);
+      },
+      (show) => {
+        this.handleShowDebugOverlayChange(show);
       },
       () => {
         this.handleRespawn();
@@ -1069,6 +1078,11 @@ export class WorldSessionScene extends Phaser.Scene {
 
   private handleProjectionModeChange(mode: WorldProjectionMode): void {
     this.worldAreaView?.setProjectionMode(mode);
+    this.renderOverlay();
+  }
+
+  private handleShowDebugOverlayChange(show: boolean): void {
+    this.worldAreaView?.setShowDebugOverlay(show);
     this.renderOverlay();
   }
 

@@ -60,6 +60,8 @@ import { CharacterService } from "../../character/CharacterService";
 import { registerConnectedPlayer, unregisterConnectedPlayer } from "./connectedPlayerRegistry";
 import { registerChatHandler } from "./chatHandler";
 import { clearChatCooldown } from "./chatCooldown";
+import { registerGlobalChatHandler, sendGlobalChatHistory } from "./globalChatHandler";
+import { clearGlobalChatCooldown } from "./globalChatCooldown";
 import { buildEquipmentLoadout } from "../../character/buildEquipmentLoadout";
 import { contentRegistry as roomContentRegistry } from "@doomscrolls/content";
 import { isPositionInsideZoneBounds } from "./validateCharacterLocation";
@@ -315,6 +317,7 @@ export class CombatRoom extends Room {
   private dodgeHandlerRegistered = false;
   private healingFlaskHandlerRegistered = false;
   private chatHandlerRegistered = false;
+  private globalChatHandlerRegistered = false;
 
   /**
    * Enemy-kill XP/objective-progress writes are fired without being
@@ -361,6 +364,10 @@ export class CombatRoom extends Room {
     if (!this.chatHandlerRegistered) {
       this.chatHandlerRegistered = true;
       registerChatHandler(this, log);
+    }
+    if (!this.globalChatHandlerRegistered) {
+      this.globalChatHandlerRegistered = true;
+      registerGlobalChatHandler(this, log);
     }
 
     this.setSimulationInterval((deltaMs: number) => {
@@ -547,6 +554,8 @@ export class CombatRoom extends Room {
       // swallow send failures; the next equip/unequip will still sync it
     }
 
+    await sendGlobalChatHistory(_client, safeLog);
+
     safeLog.info?.(
       {
         roomId: this.roomId,
@@ -578,6 +587,7 @@ export class CombatRoom extends Room {
       unregisterConnectedPlayer(presence.characterId, _client);
     }
     clearChatCooldown(_client.sessionId);
+    clearGlobalChatCooldown(_client.sessionId);
 
     // A `request_combat_return` handoff already persisted the correct
     // destination (town) position via `updateCharacterRoomIntent`

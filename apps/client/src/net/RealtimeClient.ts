@@ -5,6 +5,7 @@ import type { RoomJoinAuthPayload, RoomState } from "@doomscrolls/shared";
 import { contentRegistry } from "@doomscrolls/content";
 import { clientEnv } from "../config/env";
 import { bufferEquipmentUpdatesFor } from "./equipmentUpdateBuffer";
+import { bufferGlobalChatHistoryFor } from "./globalChatHistoryBuffer";
 
 export type RealtimeClient = Client;
 
@@ -35,6 +36,7 @@ export async function joinTownRoom(
 
   const room = await client.joinOrCreate("town", payload);
   bufferEquipmentUpdatesFor(room);
+  bufferGlobalChatHistoryFor(room);
   return room;
 }
 
@@ -53,6 +55,7 @@ export async function joinCombatRoom(
 
   const room = await client.joinOrCreate("combat", payload);
   bufferEquipmentUpdatesFor(room);
+  bufferGlobalChatHistoryFor(room);
   return room;
 }
 

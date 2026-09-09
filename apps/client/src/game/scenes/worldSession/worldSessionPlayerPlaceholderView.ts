@@ -7,8 +7,41 @@ export type ApproachActionLabel = "attack" | "interact" | "pickup" | null;
 
 import Phaser from "phaser";
 import { DEFAULT_PLAYER_TINT, type PlayerPlaceholderTint } from "./classTint";
+import { PLAYER_SPRITE_ASSET_IDS } from "../../visualAssetLoader";
 
 const HIDDEN_POSITION = -9999;
+
+// Core 0.4x follow-up -- picks the sprite frame whose screen-facing octant
+// best matches the direction the placeholder actually moved between the
+// last two setPosition() calls. Order matches the 8 compass points at
+// 45-degree steps starting from due "east" (angle 0), which is what
+// Math.atan2(dy, dx) returns for a rightward-only screen delta.
+const DIRECTION_ORDER = [
+  PLAYER_SPRITE_ASSET_IDS.east,
+  PLAYER_SPRITE_ASSET_IDS.south_east,
+  PLAYER_SPRITE_ASSET_IDS.south,
+  PLAYER_SPRITE_ASSET_IDS.south_west,
+  PLAYER_SPRITE_ASSET_IDS.west,
+  PLAYER_SPRITE_ASSET_IDS.north_west,
+  PLAYER_SPRITE_ASSET_IDS.north,
+  PLAYER_SPRITE_ASSET_IDS.north_east,
+] as const;
+
+// Below this many screen pixels of movement between frames, treat it as
+// jitter/noise rather than an actual facing change (keeps the sprite
+// stable while standing still instead of flickering between frames).
+const MIN_FACING_MOVE_PX = 0.75;
+
+// Above this many screen pixels, treat the jump as a teleport/show-hide
+// snap (see HIDDEN_POSITION) rather than real movement, and skip the
+// facing update entirely.
+const MAX_FACING_MOVE_PX = 250;
+
+function resolveDirectionAssetId(dx: number, dy: number): string {
+  const angle = Math.atan2(dy, dx);
+  const index = (Math.round(angle / (Math.PI / 4)) % 8 + 8) % 8;
+  return DIRECTION_ORDER[index] ?? PLAYER_SPRITE_ASSET_IDS.south;
+}
 
 // Task 207 -- resolve the visible "Moving to ..." label text from
 // the server-owned pendingActionType, or empty string to hide the
@@ -23,6 +56,16 @@ function getApproachLabelText(label: ApproachActionLabel): string {
 
 export interface WorldSessionPlayerPlaceholderView {
   readonly setPosition: (x: number, y: number) => void;
+  // Core 0.4x -- scales the whole placeholder container so it grows/shrinks
+  // with camera zoom the same way projected polygon geometry (buildings,
+  // ground tiles) already does. 1 = the original fixed pixel size.
+  readonly setScale: (scale: number) => void;
+  // Core 0.4x follow-up -- separate scale for the name/HP label so it
+  // keeps growing with camera zoom even though the body sprite is
+  // deliberately shrunk by PLAYER_MARKER_BASE_SCALE (see caller). Without
+  // this the label inherited the body's shrink and stayed too small to
+  // read at high zoom.
+  readonly setLabelScale: (scale: number) => void;
   readonly setInfo: (displayName?: string, hp?: number, maxHp?: number) => void;
   readonly setMarkerDirection: (angle: number) => void;
   // Task 207 -- small visual hint that the player is currently
@@ -49,19 +92,20 @@ export function createWorldSessionPlayerPlaceholderView(
   const ring = scene.add.ellipse(0, 10, 34, 18, 0x12304d, 0.28);
   ring.setStrokeStyle(2, tint.ringStrokeColor, 0.55);
 
-  const legs = scene.add.triangle(0, 10, -8, 0, 8, 0, 0, 12, tint.legsColor, 0.98);
-  legs.setStrokeStyle(2, 0xb8e4ff, 0.8);
+  // Core 0.4x follow-up -- replaces the drawn legs/torso/shoulders/head
+  // primitives with the real sewer-dweller-male placeholder sprite. The
+  // texture is swapped between the 8 pre-loaded direction frames as the
+  // placeholder moves (see setPosition below); still a placeholder pack,
+  // but real pixel art instead of vector shapes.
+  const body = scene.add.image(0, -1, PLAYER_SPRITE_ASSET_IDS.south);
+  body.setDisplaySize(44, 44);
 
-  const torso = scene.add.ellipse(0, -1, 22, 26, tint.torsoColor, 1);
-  torso.setStrokeStyle(2, 0xd8ecff, 0.95);
-
-  const shoulders = scene.add.rectangle(0, -2, 28, 7, tint.shoulderColor, 0.95);
-  shoulders.setStrokeStyle(1, 0xe5f4ff, 0.7);
-
-  const head = scene.add.circle(0, -15, 6, 0xf3efe5, 0.95);
-  head.setStrokeStyle(2, 0xd8ecff, 0.7);
-
-  const marker = scene.add.triangle(0, -14, 0, 0, 10, 0, 5, -10, 0xd6c29d, 1);
+  // Task 207's approach-label / marker triangle doubled as a "which way
+  // am I facing" hint back when the body was a faceless blob; now the
+  // sprite itself shows facing, so this is kept only as the small
+  // floating compass arrow toward the current click-move target, moved
+  // clear of the head.
+  const marker = scene.add.triangle(0, -32, 0, 0, 10, 0, 5, -10, 0xd6c29d, 1);
   marker.setStrokeStyle(1, 0x2b241c, 0.9);
 
   // Task 207 -- short label rendered just under the player
@@ -85,8 +129,8 @@ export function createWorldSessionPlayerPlaceholderView(
     .setVisible(false);
 
   // Task 311 — brief red tint overlay for damage flash. Added on top of
-  // the torso so flashDamage() can tween it without touching the base
-  // torso fill/stroke state used by normal visual refresh.
+  // the body sprite so flashDamage() can tween it without touching the
+  // sprite texture/state used by normal facing updates.
   const damageFlashOverlay = scene.add.ellipse(0, -1, 24, 28, 0xff2222, 0);
   damageFlashOverlay.setDepth(1);
 
@@ -104,7 +148,17 @@ export function createWorldSessionPlayerPlaceholderView(
     .setOrigin(0.5)
     .setVisible(false);
 
-  container.add([shadow, ring, legs, torso, shoulders, marker, head, damageFlashOverlay, core, infoText, approachLabelText]);
+  container.add([shadow, ring, body, marker, damageFlashOverlay, core]);
+
+  // Core 0.4x follow-up -- name/HP label and the approach-action label
+  // live in their own container so they can be scaled independently of
+  // the body (see setLabelScale). Kept as a sibling of `container` (not
+  // nested inside it) so its scale isn't compounded with the body's
+  // PLAYER_MARKER_BASE_SCALE shrink.
+  const labelContainer = scene.add.container(HIDDEN_POSITION, HIDDEN_POSITION);
+  labelContainer.setDepth(501);
+  parentContainer?.add(labelContainer);
+  labelContainer.add([infoText, approachLabelText]);
 
   const setInfo = (displayName?: string, hp?: number, maxHp?: number): void => {
     const safeName = typeof displayName === "string" ? displayName.trim() : "";
@@ -130,6 +184,7 @@ export function createWorldSessionPlayerPlaceholderView(
 
   const hide = (): void => {
     container.setPosition(HIDDEN_POSITION, HIDDEN_POSITION);
+    labelContainer.setPosition(HIDDEN_POSITION, HIDDEN_POSITION);
   };
 
   // Task 311 — brief red flash on the player body when server-confirmed
@@ -154,10 +209,32 @@ export function createWorldSessionPlayerPlaceholderView(
     });
   };
 
+  let lastFacingX: number | null = null;
+  let lastFacingY: number | null = null;
+
   return {
     setPosition: (x: number, y: number) => {
       container.setPosition(x, y);
       container.setDepth(500 + y);
+      labelContainer.setPosition(x, y);
+      labelContainer.setDepth(501 + y);
+
+      if (lastFacingX !== null && lastFacingY !== null) {
+        const dx = x - lastFacingX;
+        const dy = y - lastFacingY;
+        const distance = Math.hypot(dx, dy);
+        if (distance >= MIN_FACING_MOVE_PX && distance <= MAX_FACING_MOVE_PX) {
+          body.setTexture(resolveDirectionAssetId(dx, dy));
+        }
+      }
+      lastFacingX = x;
+      lastFacingY = y;
+    },
+    setScale: (scale: number) => {
+      container.setScale(Number.isFinite(scale) && scale > 0 ? scale : 1);
+    },
+    setLabelScale: (scale: number) => {
+      labelContainer.setScale(Number.isFinite(scale) && scale > 0 ? scale : 1);
     },
     setInfo,
     setMarkerDirection: (angle: number) => {
@@ -176,6 +253,7 @@ export function createWorldSessionPlayerPlaceholderView(
         damageFlashTween = null;
       }
       container.destroy(true);
+      labelContainer.destroy(true);
     },
   };
 }

@@ -63,6 +63,13 @@ export class PlayerPresence extends Schema {
   @type("boolean") public hasMovementTarget: boolean;
   @type("number") public targetX: number;
   @type("number") public targetY: number;
+  // Core 0.4x -- remaining building-avoidance waypoints beyond the
+  // current targetX/targetY, flattened as "x1,y1,x2,y2,...". Populated
+  // by `computeBuildingAvoidancePath` via `applyMovementIntent` when a
+  // click-to-move target isn't directly reachable in a straight line;
+  // `stepTownRoomMovement` advances through them one at a time as each
+  // is reached. Empty string = no further waypoints queued.
+  @type("string") public pathWaypoints: string;
   @type("boolean") public hasPendingAction: boolean;
   @type("string") public pendingActionType: string;
   @type("string") public pendingTargetId: string;
@@ -153,6 +160,7 @@ export class PlayerPresence extends Schema {
     this.hasMovementTarget = false;
     this.targetX = x;
     this.targetY = y;
+    this.pathWaypoints = "";
     this.hasPendingAction = false;
     this.pendingActionType = "";
     this.pendingTargetId = "";

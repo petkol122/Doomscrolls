@@ -113,6 +113,7 @@ model Character {
   corpses   Corpse[]
   waypointActivations CharacterWaypointActivation[]
   objectives          CharacterObjective[]
+  chatMessages        ChatMessage[]
 
   @@unique([userId, characterNameNormalized])
   @@index([userId])
@@ -231,6 +232,20 @@ model CharacterObjective {
   character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
 
   @@unique([characterId, objectiveId])
+  @@index([characterId])
+}
+
+model ChatMessage {
+  id          String   @id @default(uuid())
+  channel     String   @default("global")
+  characterId String
+  displayName String
+  text        String
+  createdAt   DateTime @default(now())
+
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@index([channel, createdAt])
   @@index([characterId])
 }
 
