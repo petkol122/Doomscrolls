@@ -11,29 +11,10 @@ This repository is not a throwaway prototype. It is a production-minded foundati
 ## Current Milestone
 
 ```text
-Core Build 0.1
+Core Build 0.33
 ```
 
-Core Build 0.1 goal:
-
-```text
-register account
-login
-create profile/settings
-create character
-enter hub
-enter combat zone
-move
-attack
-kill enemy
-gain XP
-drop loot
-pick up loot
-persist inventory
-corpse death/respawn foundation
-disconnect/reconnect
-continue with saved state
-```
+Core Build 0.1 shipped the original playable-loop goal (register, login, create character, enter hub, enter combat zone, move, attack, kill enemy, gain XP, drop/pick up loot, persist inventory, corpse death/respawn foundation, disconnect/reconnect). Every build since has added on top of that foundation; see `docs/CORE_BUILD_0_<N>_RELEASE_NOTES.md` for each build's scope. Highlights since 0.1: two classes (Gravewalker, Ironclad), four combat zones (Blackwire Sewers, Static Yard, Cinderworks, Saltmere Docks), full rarity/itemization depth including an epic tier and Bone Splinter skill, isometric art integration, real multiplayer player visibility in town and combat rooms, room-local chat, and Nightmarket's real-world (Plzeň-grounded) map expansion. Work in progress beyond 0.33 (not yet cut into a numbered build): a real-world map foundation pass, global chat persistence, and building collision.
 
 No fake mechanics. No client-only gameplay outcomes. No hardcoded game content inside systems.
 
@@ -669,27 +650,7 @@ docs/LOCAL_INFRASTRUCTURE.md
 
 ## Current Priority
 
-Do not start with combat or graphics.
-
-Start with foundation:
-
-```text
-repo
-workspace
-CI
-shared types
-localization
-content registry
-local infrastructure
-server foundation
-Prisma schema
-auth
-profile
-settings
-character creation
-```
-
-Only then implement rooms, movement, combat, loot, inventory and corpse/death.
+The repo/workspace/CI/auth/character-creation foundation described below is long complete. For what is actually being worked on next, check `docs/TECH_DEBT.md` and the most recent `docs/CORE_BUILD_0_<N>_PLAN.md` / `_RELEASE_NOTES.md` pair (currently 0.33) rather than this section.
 
 ---
 
