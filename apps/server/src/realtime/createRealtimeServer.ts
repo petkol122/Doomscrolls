@@ -120,7 +120,13 @@ export async function createRealtimeServer({ app, httpServer, logger }: CreateRe
   // The room is a placeholder only - no state schema, no player entity,
   // no gameplay, no client connection wiring. Future dedicated tasks are
   // expected to add the real state, validation, and client join flow.
-  realtimeServer.define(TOWN_ROOM_NAME, TownRoom);
+  //
+  // Core 0.1: `.filterBy(["requestedZoneId"])` -- same reasoning as the
+  // CombatRoom hotfix below. Now that multiple "town" zones exist
+  // (namesti_republiky, pilsen_namesti, pilsen_cathedral_interior) and
+  // zone-transition doors hand players between them, joinOrCreate must
+  // not reuse an already-open town room for the wrong zone.
+  realtimeServer.define(TOWN_ROOM_NAME, TownRoom).filterBy(["requestedZoneId"]);
   // Task 263: register the thin CombatRoom foundation. The room is a
   // minimal Colyseus shell — no enemy state, no map, no movement, no
   // combat, no loot, no client message handlers. Future dedicated

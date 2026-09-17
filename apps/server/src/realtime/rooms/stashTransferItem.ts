@@ -6,18 +6,12 @@ import { toItemInstanceDto } from "../../persistence/mappers/itemMapper";
 import { InventoryRepository } from "../../persistence/repositories/InventoryRepository";
 import { ItemRepository } from "../../persistence/repositories/ItemRepository";
 import { getSharedPrismaClient } from "../../persistence/prisma";
+import { canPlaceItemAt, findFirstAvailableSlot, type PlacementItem } from "./itemGridPlacement";
 
 const STASH_SERVICE_ID = "nightmarket_stash_keeper";
 const STASH_PAGE_COUNT = 1;
 const STASH_GRID_WIDTH = 10;
 const STASH_GRID_HEIGHT = 12;
-
-type PlacementItem = {
-  readonly definitionId: ItemDefinitionId;
-  readonly pageIndex: number | null;
-  readonly x: number | null;
-  readonly y: number | null;
-};
 
 export type StoreInventoryItemInStashResult =
   | { readonly ok: true; readonly itemInstanceId: string; readonly stashItems: readonly ItemInstance[] }
@@ -26,74 +20,6 @@ export type StoreInventoryItemInStashResult =
 export type TakeStashItemToInventoryResult =
   | { readonly ok: true; readonly itemInstanceId: string; readonly stashItems: readonly ItemInstance[] }
   | { readonly ok: false; readonly reason: import("@doomscrolls/shared").RequestTakeStashItemToInventoryRejectedReason };
-
-function rectanglesOverlap(
-  a: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
-  b: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
-): boolean {
-  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
-}
-
-function canPlaceItemAt(
-  config: { readonly pageCount: number; readonly gridWidth: number; readonly gridHeight: number },
-  existingItems: readonly PlacementItem[],
-  pageIndex: number,
-  x: number,
-  y: number,
-  targetSize: { readonly width: number; readonly height: number },
-): boolean {
-  if (
-    pageIndex < 0 ||
-    pageIndex >= config.pageCount ||
-    x < 0 ||
-    y < 0 ||
-    x + targetSize.width > config.gridWidth ||
-    y + targetSize.height > config.gridHeight
-  ) {
-    return false;
-  }
-
-  for (const existingItem of existingItems) {
-    if (existingItem.pageIndex !== pageIndex || existingItem.x === null || existingItem.y === null) {
-      continue;
-    }
-    const existingDefinition = contentRegistry.items.get(existingItem.definitionId);
-    if (existingDefinition === undefined) {
-      continue;
-    }
-    if (
-      rectanglesOverlap(
-        { x, y, width: targetSize.width, height: targetSize.height },
-        {
-          x: existingItem.x,
-          y: existingItem.y,
-          width: existingDefinition.size.width,
-          height: existingDefinition.size.height,
-        },
-      )
-    ) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function findFirstAvailableSlot(
-  config: { readonly pageCount: number; readonly gridWidth: number; readonly gridHeight: number },
-  existingItems: readonly PlacementItem[],
-  targetSize: { readonly width: number; readonly height: number },
-): { readonly pageIndex: number; readonly x: number; readonly y: number } | null {
-  for (let pageIndex = 0; pageIndex < config.pageCount; pageIndex += 1) {
-    for (let y = 0; y <= config.gridHeight - targetSize.height; y += 1) {
-      for (let x = 0; x <= config.gridWidth - targetSize.width; x += 1) {
-        if (canPlaceItemAt(config, existingItems, pageIndex, x, y, targetSize)) {
-          return { pageIndex, x, y };
-        }
-      }
-    }
-  }
-  return null;
-}
 
 function toDtoItems(items: Awaited<ReturnType<ItemRepository["listStashItems"]>>): readonly ItemInstance[] {
   return items.map((item) => toItemInstanceDto(item));

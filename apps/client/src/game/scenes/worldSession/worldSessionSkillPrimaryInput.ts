@@ -15,7 +15,8 @@ import { shouldIgnoreWorldSessionCombatHotkey } from "./worldSessionCombatHotkey
 // Core 0.14 -- World Session Primary Skill Input (Heavy Strike).
 //
 // Mirrors worldSessionSkillTertiaryInput.ts exactly: a small,
-// self-contained module owning one keyboard hotkey (`1`) and forwarding
+// self-contained module owning one keyboard hotkey (`Z` -- moved off
+// `1` in Milestone 0.3 so keys 1-4 could become the flask belt) and forwarding
 // a server-authoritative intent. Like the tertiary slot, this targets
 // whatever enemy is already hovered/selected and relies on transient
 // feedback notices only -- no persistent HUD cooldown card, the same
@@ -75,20 +76,20 @@ export function attachWorldSessionSkillPrimaryInput(
   };
 
   const keyboard = scene.input.keyboard;
-  let oneKey: Phaser.Input.Keyboard.Key | null = null;
+  let zKey: Phaser.Input.Keyboard.Key | null = null;
   let handleWindowKeyDown: ((event: KeyboardEvent) => void) | null = null;
 
   if (keyboard !== null) {
-    oneKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE);
-    oneKey.on("down", sendSkill);
+    zKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Z);
+    zKey.on("down", sendSkill);
   }
 
   handleWindowKeyDown = (event: KeyboardEvent): void => {
     if (event.repeat) {
       return;
     }
-    const isOneKey = event.code === "Digit1" || event.key === "1";
-    if (!isOneKey) {
+    const isZKey = event.code === "KeyZ" || event.key === "z" || event.key === "Z";
+    if (!isZKey) {
       return;
     }
     sendSkill();
@@ -104,8 +105,8 @@ export function attachWorldSessionSkillPrimaryInput(
       callbacks.onRejectedFeedback(message);
     },
     destroy: () => {
-      if (oneKey !== null) {
-        oneKey.off("down", sendSkill);
+      if (zKey !== null) {
+        zKey.off("down", sendSkill);
       }
       if (handleWindowKeyDown !== null) {
         window.removeEventListener("keydown", handleWindowKeyDown);

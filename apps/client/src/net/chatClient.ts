@@ -22,7 +22,7 @@ const MAX_CHAT_MESSAGE_LENGTH = 240;
 // ---------------------------------------------------------------------------
 // Core 0.29 -- Room-Local Chat.
 //
-// Mirrors the shape of `dodgeIntentClient` / `healingFlaskIntentClient`:
+// Mirrors the shape of `dodgeIntentClient` / `flaskBeltIntentClient`:
 //
 //   - the only sanctioned way for the client UI to send a `request_chat`
 //     intent is through `sendChatMessage(room, text)`;

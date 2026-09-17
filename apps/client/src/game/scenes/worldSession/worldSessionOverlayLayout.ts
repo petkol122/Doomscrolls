@@ -10,9 +10,14 @@ export function applyWorldSessionOverlayRootStyles(root: HTMLDivElement): void {
   // Core 0.29 -- the middle-left cell was empty ("." in the old
   // template); the chat log docks there, bottom-anchored (see
   // `applyWorldSessionOverlayChatStyles`), sitting directly above the
-  // orb cluster and clear of the corner-menu column entirely on the
-  // right.
-  root.style.gridTemplateAreas = '"status utility" "chat utility" "hud hud"';
+  // orb cluster and clear of the right-hand dock column entirely.
+  //
+  // Core 0.4 HUD Overhaul -- the old "utility" column (top-right Micro
+  // Menu icon bar) moved down into the bottom HUD dock
+  // (`createHudSection` in worldSessionOverlayView.ts); this column is
+  // now the persistent, collapsible Quest/Objective Tracker dock (see
+  // `applyWorldSessionOverlayQuestStyles`).
+  root.style.gridTemplateAreas = '"status quest" "chat quest" "hud hud"';
   root.style.alignItems = "start";
   // Root overlay stays passive so ground clicks still reach the Phaser canvas
   // through empty space. Interactive children opt back in via
@@ -23,30 +28,37 @@ export function applyWorldSessionOverlayRootStyles(root: HTMLDivElement): void {
   root.style.boxSizing = "border-box";
 }
 
-export function applyWorldSessionOverlayUtilityStyles(panel: HTMLElement): void {
+/** Core 0.4 HUD Overhaul -- the right-hand Quest/Objective Tracker dock,
+ * replacing the old top-right Micro Menu icon column. Spans both the
+ * status and chat rows (same grid area used across two template rows),
+ * so it reads as one tall panel docked to the right edge. */
+export function applyWorldSessionOverlayQuestStyles(panel: HTMLElement): void {
   makeOverlayPassive(panel);
-  panel.style.gridArea = "utility";
-  // Core 0.25 -- corner icon toolbar, not a stacked list of card panels.
-  // Each icon's flyout panel is positioned absolutely off itself (see
-  // `toIconMenuItem` in worldSessionOverlayView.ts), so this row only
-  // needs to lay out the icons themselves.
+  panel.style.gridArea = "quest";
   panel.style.display = "flex";
-  panel.style.flexDirection = "row";
-  panel.style.gap = "8px";
+  panel.style.flexDirection = "column";
   panel.style.justifySelf = "end";
-  panel.style.justifyContent = "flex-end";
-  panel.style.width = "auto";
-  panel.style.maxWidth = "calc(100vw - 28px)";
+  panel.style.alignSelf = "start";
+  panel.style.width = "min(260px, calc(100vw - 28px))";
+  panel.style.maxWidth = "100%";
+  panel.style.boxSizing = "border-box";
 }
 
+/** Core 0.4 HUD Overhaul -- hosts the Player Unit Frame and, beside it,
+ * the Dynamic Target Frame (shown only while an enemy/NPC is
+ * hovered/selected). A flex row rather than the old single-child grid
+ * so the target frame can sit immediately to the frame's right without
+ * needing its own grid column. */
 export function applyWorldSessionOverlayStatusStyles(panel: HTMLElement): void {
   makeOverlayPassive(panel);
   panel.style.gridArea = "status";
-  panel.style.display = "grid";
-  panel.style.alignContent = "start";
+  panel.style.display = "flex";
+  panel.style.flexDirection = "row";
+  panel.style.alignItems = "flex-start";
   panel.style.gap = "8px";
   panel.style.justifySelf = "start";
-  panel.style.width = "min(260px, calc(100vw - 28px))";
+  panel.style.width = "auto";
+  panel.style.maxWidth = "calc(100vw - 28px)";
 }
 
 /** Core 0.29 -- docks the chat log to the bottom-left, above the orb

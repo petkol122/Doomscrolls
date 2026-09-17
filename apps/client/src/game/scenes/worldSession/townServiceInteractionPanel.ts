@@ -25,7 +25,7 @@ export function createTownServiceInteractionPanel(
   const show = (): void => {
     hideExisting();
 
-    // Task 242 — town-service modal backdrop. See vendorInteractionPanel
+    // Task 242 — town-service modal backdrop. See worldSessionVendorView
     // for the rationale: `pointer-events: auto` alone is not enough.
     // We install capture-phase pointerdown / mousedown / click /
     // contextmenu stoppers so any click in the modal area never

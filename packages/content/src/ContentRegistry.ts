@@ -1,6 +1,8 @@
+import { affixes } from "./data/affixes";
 import { areas } from "./data/areas";
 import { classes } from "./data/classes";
 import { continents } from "./data/continents";
+import { currencies } from "./data/currencies";
 import { enemies } from "./data/enemies";
 import { equipmentSlots } from "./data/equipmentSlots";
 import { items } from "./data/items";
@@ -8,8 +10,10 @@ import { levelTables } from "./data/levelTables";
 import { lootTables } from "./data/lootTables";
 import { lore } from "./data/lore";
 import { objectives } from "./data/objectives";
+import { quests } from "./data/quests";
 import { origins } from "./data/origins";
 import { passives } from "./data/passives";
+import { professions } from "./data/professions";
 import { skills } from "./data/skills";
 import { spawnPoints } from "./data/spawnPoints";
 import { vendorStocks } from "./data/vendorStocks";
@@ -20,17 +24,21 @@ import { visualAssets } from "./data/visualAssets";
 import { worlds } from "./data/worlds";
 import { zones } from "./data/zones";
 import type {
+  AffixContentDefinition,
   AreaContentDefinition,
   CharacterClassContentDefinition,
   ContinentContentDefinition,
+  CurrencyContentDefinition,
   EnemyContentDefinition,
   EquipmentSlotContentDefinition,
   ItemContentDefinition,
   LevelTableDefinition,
   LootTableDefinition,
   ObjectiveContentDefinition,
+  QuestContentDefinition,
   OriginContentDefinition,
   PassiveContentDefinition,
+  ProfessionContentDefinition,
   SkillContentDefinition,
   SpawnPointContentDefinition,
   TownServiceContentDefinition,
@@ -52,14 +60,18 @@ export interface ContentCollection<TDefinition extends { readonly id: string }> 
 }
 
 export interface ContentRegistryInput {
+  readonly affixes: readonly AffixContentDefinition[];
   readonly origins: readonly OriginContentDefinition[];
   readonly passives: readonly PassiveContentDefinition[];
+  readonly professions: readonly ProfessionContentDefinition[];
   readonly classes: readonly CharacterClassContentDefinition[];
+  readonly currencies: readonly CurrencyContentDefinition[];
   readonly skills: readonly SkillContentDefinition[];
   readonly enemies: readonly EnemyContentDefinition[];
   readonly items: readonly ItemContentDefinition[];
   readonly lootTables: readonly LootTableDefinition[];
   readonly objectives: readonly ObjectiveContentDefinition[];
+  readonly quests: readonly QuestContentDefinition[];
   readonly zones: readonly ZoneContentDefinition[];
   readonly levelTables: readonly LevelTableDefinition[];
   readonly equipmentSlots: readonly EquipmentSlotContentDefinition[];
@@ -107,14 +119,18 @@ function createCollection<TDefinition extends { readonly id: string }>(
 }
 
 export class ContentRegistry {
+  public readonly affixes: ContentCollection<AffixContentDefinition>;
   public readonly origins: ContentCollection<OriginContentDefinition>;
   public readonly passives: ContentCollection<PassiveContentDefinition>;
+  public readonly professions: ContentCollection<ProfessionContentDefinition>;
   public readonly classes: ContentCollection<CharacterClassContentDefinition>;
+  public readonly currencies: ContentCollection<CurrencyContentDefinition>;
   public readonly skills: ContentCollection<SkillContentDefinition>;
   public readonly enemies: ContentCollection<EnemyContentDefinition>;
   public readonly items: ContentCollection<ItemContentDefinition>;
   public readonly lootTables: ContentCollection<LootTableDefinition>;
   public readonly objectives: ContentCollection<ObjectiveContentDefinition>;
+  public readonly quests: ContentCollection<QuestContentDefinition>;
   public readonly zones: ContentCollection<ZoneContentDefinition>;
   public readonly levelTables: ContentCollection<LevelTableDefinition>;
   public readonly equipmentSlots: ContentCollection<EquipmentSlotContentDefinition>;
@@ -130,14 +146,18 @@ export class ContentRegistry {
   public readonly areas: ContentCollection<AreaContentDefinition>;
 
   public constructor(input: ContentRegistryInput) {
+    this.affixes = createCollection("affix", input.affixes);
     this.origins = createCollection("origin", input.origins);
     this.passives = createCollection("passive", input.passives);
+    this.professions = createCollection("profession", input.professions);
     this.classes = createCollection("class", input.classes);
+    this.currencies = createCollection("currency", input.currencies);
     this.skills = createCollection("skill", input.skills);
     this.enemies = createCollection("enemy", input.enemies);
     this.items = createCollection("item", input.items);
     this.lootTables = createCollection("loot table", input.lootTables);
     this.objectives = createCollection("objective", input.objectives);
+    this.quests = createCollection("quest", input.quests);
     this.zones = createCollection("zone", input.zones);
     this.levelTables = createCollection("level table", input.levelTables);
     this.equipmentSlots = createCollection("equipment slot", input.equipmentSlots);
@@ -155,14 +175,18 @@ export class ContentRegistry {
 }
 
 export const contentRegistry = new ContentRegistry({
+  affixes,
   origins,
   passives,
+  professions,
   classes,
+  currencies,
   skills,
   enemies,
   items,
   lootTables,
   objectives,
+  quests,
   zones,
   levelTables,
   equipmentSlots,

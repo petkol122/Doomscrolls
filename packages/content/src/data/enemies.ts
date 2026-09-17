@@ -37,6 +37,10 @@ export const enemies = [
     heavyAttackWindupMs: 1500,
     heavyAttackCooldownMs: 2400,
     heavyAttackChance: 0.34,
+    // Core 0.2 — a landed Brute smash briefly stuns its target.
+    heavyAttackAppliesEffect: "stun",
+    heavyAttackEffectDurationMs: 800,
+    heavyAttackEffectMagnitude: 0,
     aggroRange: 7.5,
     leashRange: 11,
     xp: 15,

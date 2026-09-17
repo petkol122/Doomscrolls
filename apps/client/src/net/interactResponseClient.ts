@@ -12,6 +12,15 @@ export type AvailableObjectiveEntry = {
   readonly descriptionKey: string;
 };
 
+export type InteractQuestInfo = {
+  readonly questId: string;
+  readonly status: "available" | "accepted" | "completed";
+  readonly titleKey: string;
+  readonly descriptionKey: string;
+  readonly xpReward: number;
+  readonly copperReward: number;
+};
+
 /**
  * Task 057 — Interactable Object Foundation Batch
  *
@@ -20,7 +29,12 @@ export type AvailableObjectiveEntry = {
  */
 export function registerInteractResponseListener(
   room: Room<RoomState>,
-  onResponse: (message: string, objectId?: string, availableObjectives?: readonly AvailableObjectiveEntry[]) => void,
+  onResponse: (
+    message: string,
+    objectId?: string,
+    availableObjectives?: readonly AvailableObjectiveEntry[],
+    questInfo?: InteractQuestInfo,
+  ) => void,
   onObjectiveUpdated?: (message: ObjectiveUpdatedServerMessage) => void,
 ): void {
   room.onMessage("interact_response", (raw: unknown) => {
@@ -31,7 +45,8 @@ export function registerInteractResponseListener(
     const availableObjectives = Array.isArray(msg.availableObjectives)
       ? (msg.availableObjectives as readonly AvailableObjectiveEntry[])
       : undefined;
-    onResponse(msg.message, msg.objectId, availableObjectives);
+    const questInfo = msg.questInfo !== undefined ? (msg.questInfo as InteractQuestInfo) : undefined;
+    onResponse(msg.message, msg.objectId, availableObjectives, questInfo);
   });
 
   room.onMessage("deferred_action_queued", (raw: unknown) => {

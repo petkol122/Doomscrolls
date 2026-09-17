@@ -33,6 +33,15 @@ export interface InventorySummaryItem extends InventoryGridItem {
     readonly height: number;
   };
   readonly statModifiers?: readonly StatModifier[];
+  /** Milestone 0.3 -- localized names of any affixes rolled onto this
+   *  specific item instance (see `affixRollEngine.ts`), for display
+   *  alongside `statModifiers` -- empty/absent for a "normal" instance. */
+  readonly affixNames?: readonly string[];
+  /** Milestone 0.3 -- Stackable Item Quantities. How many units this
+   *  instance represents; always present (defaults to 1 for non-stackable
+   *  items) so the client can render a quantity badge/tooltip line
+   *  uniformly instead of treating `undefined` as a special case. */
+  readonly quantity: number;
 }
 
 export interface InventoryGrid {
@@ -47,3 +56,13 @@ export interface MoveInventoryItemPayload {
   readonly targetX: number;
   readonly targetY: number;
 }
+
+/**
+ * Milestone 0.2 — Inventory Grid Repositioning. Safe, server-owned
+ * rejection reasons for `move_inventory_item`.
+ */
+export type MoveInventoryItemRejectedReason =
+  | "item_unavailable"
+  | "item_not_owned"
+  | "item_not_in_inventory"
+  | "invalid_placement";

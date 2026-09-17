@@ -7,18 +7,23 @@
  *
  * The client never decides the sell price.
  */
-import { contentRegistry } from "@doomscrolls/content";
+import { contentRegistry, type ItemContentDefinition } from "@doomscrolls/content";
 import type { RequestSellItemRejectedReason } from "@doomscrolls/shared";
 import { ItemLocationType, Prisma, type PrismaClient } from "@prisma/client";
 
+import { resolveItemDefinitionValueCzk } from "../../character/calculatePlayerNetWorth";
 import { CharacterRepository } from "../../persistence/repositories/CharacterRepository";
 import { ItemRepository } from "../../persistence/repositories/ItemRepository";
 import { getSharedPrismaClient } from "../../persistence/prisma";
 
 /**
- * Sell price ratio: the player receives 50 % of the vendor buy price
- * when selling an item that appears in a vendor stock list. Items that
- * do not appear in any vendor stock list sell for a fallback of 1 copper.
+ * Sell price ratio: the player receives 50 % of an item's value when
+ * selling it. Items that appear in a vendor stock list use 50 % of that
+ * vendor's buy price; every other item falls back to 50 % of its Net
+ * Worth value (`baseValueCzk`/rarity fallback, see
+ * `resolveItemDefinitionValueCzk`) so salvage/loot materials that no
+ * vendor stocks still sell for a sensible amount instead of a flat
+ * 1-copper floor.
  */
 const SELL_PRICE_RATIO = 0.5;
 const MIN_SELL_PRICE = 1;
@@ -40,18 +45,21 @@ export type VendorSellItemResult =
  * Compute the server-authoritative sell price for an item definition.
  *
  * Looks up the first matching vendor stock entry and returns 50 % of
- * that price (minimum 1 copper). Items not in any stock list sell for
- * the minimum fallback.
+ * that price. Items not in any stock list fall back to 50 % of the
+ * item's Net Worth value instead of a flat floor, so salvage/loot
+ * materials (never vendor-stocked) still sell for a meaningful amount.
+ * Always at least 1 copper.
  */
-function computeSellPrice(definitionId: string): number {
+function computeSellPrice(itemDefinition: ItemContentDefinition): number {
   const stockEntries = contentRegistry.vendorStocks.all;
   for (const entry of stockEntries) {
-    if (entry.itemId === definitionId) {
+    if (entry.itemId === itemDefinition.id) {
       const raw = Math.floor(entry.priceCopper * SELL_PRICE_RATIO);
       return Math.max(MIN_SELL_PRICE, raw);
     }
   }
-  return MIN_SELL_PRICE;
+  const raw = Math.floor(resolveItemDefinitionValueCzk(itemDefinition) * SELL_PRICE_RATIO);
+  return Math.max(MIN_SELL_PRICE, raw);
 }
 
 /**
@@ -94,7 +102,7 @@ export async function executeVendorSellItem(input: {
   }
 
   // 5. Compute server-authoritative sell price
-  const sellPriceCopper = computeSellPrice(item.definitionId);
+  const sellPriceCopper = computeSellPrice(itemDefinition);
   if (!Number.isFinite(sellPriceCopper) || sellPriceCopper < MIN_SELL_PRICE) {
     return { ok: false, reason: "invalid_price" };
   }

@@ -8,14 +8,18 @@ import type {
 
 import { t } from "@doomscrolls/localization";
 
-import { sendSkillSlotIntent } from "../../../net/skillSlotIntentClient";
+import {
+  sendSkillSlotIntent,
+  sendGroundTargetedSkillSlotIntent,
+  sendSelfTargetedSkillSlotIntent,
+} from "../../../net/skillSlotIntentClient";
 import { shouldIgnoreWorldSessionCombatHotkey } from "./worldSessionCombatHotkeyFocus";
 
 // ---------------------------------------------------------------------------
 // Core 0.7 -- World Session Tertiary Skill Input (Bone Splinter).
 //
 // Mirrors the dodge/flask input modules (worldSessionDodgeInput.ts,
-// worldSessionHealingFlaskInput.ts): a small, self-contained module that
+// worldSessionFlaskBeltInput.ts): a small, self-contained module that
 // owns one keyboard hotkey and forwards a server-authoritative intent.
 // Unlike the secondary skill slot (right-click on an enemy, with a
 // persistent HUD cooldown card), the tertiary slot targets whatever
@@ -36,6 +40,21 @@ import { shouldIgnoreWorldSessionCombatHotkey } from "./worldSessionCombatHotkey
 
 export interface WorldSessionSkillTertiaryTargetProvider {
   readonly getTargetEnemyId: () => string | null;
+  /**
+   * Milestone 0.2 -- Server-Authoritative Projectiles & Ground-Targeted
+   * AoE Skills. Groundbreaker (Ironclad's tertiary) is now `ground_aoe`;
+   * Bone Splinter (Gravewalker's tertiary) stays `target`. This same
+   * input handler serves both classes, so the caller decides per-cast
+   * which targeting mode applies for the active character's class.
+   */
+  readonly isGroundTargeted: () => boolean;
+  readonly getGroundTargetPoint: () => { readonly x: number; readonly y: number } | null;
+  /**
+   * Milestone 0.3 -- Street Alchemist Class Archetype. adrenaline_stim
+   * is `self_buff`: neither an enemy nor a ground point is needed, so
+   * this takes priority over both checks below when true.
+   */
+  readonly isSelfTargeted: () => boolean;
 }
 
 export interface WorldSessionSkillTertiaryInputCallbacks {
@@ -58,6 +77,31 @@ export function attachWorldSessionSkillTertiaryInput(
 ): WorldSessionSkillTertiaryInput {
   const sendSkill = (): void => {
     if (shouldIgnoreWorldSessionCombatHotkey()) {
+      return;
+    }
+
+    if (provider.isSelfTargeted()) {
+      const result = sendSelfTargetedSkillSlotIntent(room, "tertiary");
+      if (result.dispatched) {
+        callbacks.onSentFeedback(t("world_area.skill_tertiary_sent"));
+      }
+      return;
+    }
+
+    if (provider.isGroundTargeted()) {
+      const point = provider.getGroundTargetPoint();
+      if (point === null) {
+        callbacks.onRejectedFeedback({
+          type: "request_use_skill_slot_rejected",
+          slot: "tertiary",
+          reason: "invalid_ground_target",
+        });
+        return;
+      }
+      const result = sendGroundTargetedSkillSlotIntent(room, "tertiary", point.x, point.y);
+      if (result.dispatched) {
+        callbacks.onSentFeedback(t("world_area.skill_tertiary_sent"));
+      }
       return;
     }
 

@@ -1,6 +1,7 @@
 import { contentRegistry } from "@doomscrolls/content";
-import { EnemyPresence, type ZoneId } from "@doomscrolls/shared";
+import type { ZoneId } from "@doomscrolls/shared";
 import { createRng } from "./serverRng";
+import { buildPocketEnemies } from "./spawnPocketEnemies";
 
 import type { TownRoomState } from "./TownRoomState";
 
@@ -34,32 +35,7 @@ export function initializeTownEnemies(
       continue;
     }
 
-    const enemyContent = contentRegistry.enemies.require(zone.enemyId);
-
-    for (let i = 0; i < zone.count; i++) {
-      const x = rng.nextInt(zone.minX, zone.maxX + 1);
-      const y = rng.nextInt(zone.minY, zone.maxY + 1);
-      const id = `${zone.id}_${i}`;
-
-      const enemy = new EnemyPresence();
-      enemy.id = id;
-      enemy.enemyId = enemyContent.id;
-      enemy.label = enemyContent.nameKey;
-      enemy.spawnX = x;
-      enemy.spawnY = y;
-      enemy.x = x;
-      enemy.y = y;
-      enemy.state = "idle";
-      enemy.targetPlayerSessionId = "";
-      enemy.hp = enemyContent.maxHp;
-      enemy.maxHp = enemyContent.maxHp;
-      enemy.defeated = false;
-      enemy.nextAttackAtMs = 0;
-      enemy.respawnAtMs = 0;
-      enemy.attackLandingAtMs = 0;
-      enemy.attackKind = "normal";
-      enemy.nextHeavyAttackAtMs = 0;
-
+    for (const enemy of buildPocketEnemies(zone, rng)) {
       state.enemies.set(enemy.id, enemy);
     }
   }

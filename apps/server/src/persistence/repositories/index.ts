@@ -16,6 +16,8 @@ export type { CreateInventoryConfig } from "./InventoryRepository";
 export { ItemRepository } from "./ItemRepository";
 export type { CreateItemInstanceData, UpdateItemLocationData } from "./ItemRepository";
 
+export { StashItemRepository } from "./StashItemRepository";
+
 export { ProfileRepository } from "./ProfileRepository";
 export type { CreateProfileData, UpdateProfileData } from "./ProfileRepository";
 
@@ -29,6 +31,9 @@ export { UserRepository } from "./UserRepository";
 export type { CreateUserData } from "./UserRepository";
 
 export { ObjectiveRepository } from "./ObjectiveRepository";
+
+export { QuestRepository } from "./QuestRepository";
+export type { PersistedQuestState } from "./QuestRepository";
 
 export { ChatRepository } from "./ChatRepository";
 export type { CreateChatMessageData } from "./ChatRepository";

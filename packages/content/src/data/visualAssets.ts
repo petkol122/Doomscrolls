@@ -100,50 +100,50 @@ export const visualAssets: readonly VisualAssetContentDefinition[] = [
 
   // ── Item icons (Glionox items16) ──
   // Weapons
-  { id: "item_starter_pipe_placeholder", category: "item_icon", path: "/assets/items/item1.png", sourceWidth: 16, sourceHeight: 16 },
-  { id: "item_tideworn_cutlass_placeholder", category: "item_icon", path: "/assets/items/item9.png", sourceWidth: 16, sourceHeight: 16 },
-  { id: "item_condemned_cleaver_placeholder", category: "item_icon", path: "/assets/items/item3.png", sourceWidth: 16, sourceHeight: 16 },
-  { id: "item_livewire_lance_placeholder", category: "item_icon", path: "/assets/items/item22.png", sourceWidth: 16, sourceHeight: 16 },
-  { id: "item_slagforged_maul_placeholder", category: "item_icon", path: "/assets/items/item61.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_starter_pipe_placeholder", category: "item_icon", path: "/assets/sprites/items/item1.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_tideworn_cutlass_placeholder", category: "item_icon", path: "/assets/sprites/items/item9.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_condemned_cleaver_placeholder", category: "item_icon", path: "/assets/sprites/items/item3.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_livewire_lance_placeholder", category: "item_icon", path: "/assets/sprites/items/item22.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_slagforged_maul_placeholder", category: "item_icon", path: "/assets/sprites/items/item61.png", sourceWidth: 16, sourceHeight: 16 },
 
   // Head
-  { id: "item_scavenged_hood_placeholder", category: "item_icon", path: "/assets/items/item212.png", sourceWidth: 16, sourceHeight: 16 },
-  { id: "item_brinemask_visor_placeholder", category: "item_icon", path: "/assets/items/item219.png", sourceWidth: 16, sourceHeight: 16 },
-  { id: "item_scavenger_king_helm_placeholder", category: "item_icon", path: "/assets/items/item874.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_scavenged_hood_placeholder", category: "item_icon", path: "/assets/sprites/items/item212.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_brinemask_visor_placeholder", category: "item_icon", path: "/assets/sprites/items/item219.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_scavenger_king_helm_placeholder", category: "item_icon", path: "/assets/sprites/items/item874.png", sourceWidth: 16, sourceHeight: 16 },
 
   // Chest
-  { id: "item_sewer_jacket_placeholder", category: "item_icon", path: "/assets/items/item229.png", sourceWidth: 16, sourceHeight: 16 },
-  { id: "item_saltcrust_vest_placeholder", category: "item_icon", path: "/assets/items/item237.png", sourceWidth: 16, sourceHeight: 16 },
-  { id: "item_warden_plate_placeholder", category: "item_icon", path: "/assets/items/item235.png", sourceWidth: 16, sourceHeight: 16 },
-  { id: "item_chargeplate_vest_placeholder", category: "item_icon", path: "/assets/items/item234.png", sourceWidth: 16, sourceHeight: 16 },
-  { id: "item_cinderplate_hauberk_placeholder", category: "item_icon", path: "/assets/items/item240.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_sewer_jacket_placeholder", category: "item_icon", path: "/assets/sprites/items/item229.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_saltcrust_vest_placeholder", category: "item_icon", path: "/assets/sprites/items/item237.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_warden_plate_placeholder", category: "item_icon", path: "/assets/sprites/items/item235.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_chargeplate_vest_placeholder", category: "item_icon", path: "/assets/sprites/items/item234.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_cinderplate_hauberk_placeholder", category: "item_icon", path: "/assets/sprites/items/item240.png", sourceWidth: 16, sourceHeight: 16 },
 
   // Hands
-  { id: "item_wraptape_gloves_placeholder", category: "item_icon", path: "/assets/items/item243.png", sourceWidth: 16, sourceHeight: 16 },
-  { id: "item_brinewrap_gloves_placeholder", category: "item_icon", path: "/assets/items/item254.png", sourceWidth: 16, sourceHeight: 16 },
-  { id: "item_static_wraps_placeholder", category: "item_icon", path: "/assets/items/item246.png", sourceWidth: 16, sourceHeight: 16 },
-  { id: "item_cinderfist_gauntlets_placeholder", category: "item_icon", path: "/assets/items/item245.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_wraptape_gloves_placeholder", category: "item_icon", path: "/assets/sprites/items/item243.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_brinewrap_gloves_placeholder", category: "item_icon", path: "/assets/sprites/items/item254.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_static_wraps_placeholder", category: "item_icon", path: "/assets/sprites/items/item246.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_cinderfist_gauntlets_placeholder", category: "item_icon", path: "/assets/sprites/items/item245.png", sourceWidth: 16, sourceHeight: 16 },
 
   // Feet
-  { id: "item_sewer_treads_placeholder", category: "item_icon", path: "/assets/items/item261.png", sourceWidth: 16, sourceHeight: 16 },
-  { id: "item_voltbound_treads_placeholder", category: "item_icon", path: "/assets/items/item256.png", sourceWidth: 16, sourceHeight: 16 },
-  { id: "item_voltbound_greaves_placeholder", category: "item_icon", path: "/assets/items/item265.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_sewer_treads_placeholder", category: "item_icon", path: "/assets/sprites/items/item261.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_voltbound_treads_placeholder", category: "item_icon", path: "/assets/sprites/items/item256.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_voltbound_greaves_placeholder", category: "item_icon", path: "/assets/sprites/items/item265.png", sourceWidth: 16, sourceHeight: 16 },
 
   // Rings
-  { id: "item_frayed_signet_placeholder", category: "item_icon", path: "/assets/items/item872.png", sourceWidth: 16, sourceHeight: 16 },
-  { id: "item_rustbound_ring_placeholder", category: "item_icon", path: "/assets/items/item873.png", sourceWidth: 16, sourceHeight: 16 },
-  { id: "item_voidglass_band_placeholder", category: "item_icon", path: "/assets/items/item894.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_frayed_signet_placeholder", category: "item_icon", path: "/assets/sprites/items/item872.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_rustbound_ring_placeholder", category: "item_icon", path: "/assets/sprites/items/item873.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_voidglass_band_placeholder", category: "item_icon", path: "/assets/sprites/items/item894.png", sourceWidth: 16, sourceHeight: 16 },
 
   // Flasks
-  { id: "item_starter_blood_flask_placeholder", category: "item_icon", path: "/assets/items/item913.png", sourceWidth: 16, sourceHeight: 16 },
-  { id: "item_sealed_blood_flask_placeholder", category: "item_icon", path: "/assets/items/item903.png", sourceWidth: 16, sourceHeight: 16 },
-  { id: "item_vital_reserve_flask_placeholder", category: "item_icon", path: "/assets/items/item902.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_starter_blood_flask_placeholder", category: "item_icon", path: "/assets/sprites/items/item913.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_sealed_blood_flask_placeholder", category: "item_icon", path: "/assets/sprites/items/item903.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_vital_reserve_flask_placeholder", category: "item_icon", path: "/assets/sprites/items/item902.png", sourceWidth: 16, sourceHeight: 16 },
 
   // Materials
-  { id: "item_blackwire_scrap_placeholder", category: "item_icon", path: "/assets/items/item574.png", sourceWidth: 16, sourceHeight: 16 },
-  { id: "item_tarnished_coin_placeholder", category: "item_icon", path: "/assets/items/item1156.png", sourceWidth: 16, sourceHeight: 16 },
-  { id: "item_cinder_ash_placeholder", category: "item_icon", path: "/assets/items/item586.png", sourceWidth: 16, sourceHeight: 16 },
-  { id: "item_brine_salt_placeholder", category: "item_icon", path: "/assets/items/item596.png", sourceWidth: 16, sourceHeight: 16 }
+  { id: "item_blackwire_scrap_placeholder", category: "item_icon", path: "/assets/sprites/items/item574.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_tarnished_coin_placeholder", category: "item_icon", path: "/assets/sprites/items/item1156.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_cinder_ash_placeholder", category: "item_icon", path: "/assets/sprites/items/item586.png", sourceWidth: 16, sourceHeight: 16 },
+  { id: "item_brine_salt_placeholder", category: "item_icon", path: "/assets/sprites/items/item596.png", sourceWidth: 16, sourceHeight: 16 }
 
   // Not mapped -- no reasonable match found in the pack, keep placeholder:
   // item_scrap_cloth_placeholder (no cloth/fabric icon found), the three

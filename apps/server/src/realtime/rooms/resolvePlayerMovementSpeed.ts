@@ -1,8 +1,11 @@
 /**
  * Safe server runtime fallback for town-room movement when character-derived
  * stats are unavailable or invalid.
+ * Milestone 0.3 scale/speed pass -- cut ~22% from 220 so crossing Namesti
+ * Republiky on foot feels grounded instead of instant (paired with the
+ * ~20% entity-scale reduction in worldSessionAreaView.ts/worldSessionEnemyPlaceholderView.ts).
  */
-export const TOWN_MOVEMENT_SPEED_FALLBACK_UNITS_PER_SECOND = 220;
+export const TOWN_MOVEMENT_SPEED_FALLBACK_UNITS_PER_SECOND = 172;
 
 /**
  * Converts the character-derived moveSpeed stat into practical runtime
@@ -18,8 +21,12 @@ export const TOWN_MOVEMENT_SPEED_FALLBACK_UNITS_PER_SECOND = 220;
  * used for enemy aggro/leash ranges -- mixing the two up is exactly the
  * bug Core 0.24 found and fixed for enemy moveSpeed (see
  * `docs/CORE_BUILD_0_31_RELEASE_NOTES.md`).
+ * Milestone 0.3 scale/speed pass -- baseline cut ~22% (220 -> 172); this
+ * only tunes the PLAYER scale, not `ENEMY_MOVEMENT_SPEED_UNITS_PER_SECOND_MULTIPLIER`
+ * in TownRoom.ts, which stays at 220 so combat pacing against enemies is
+ * unaffected.
  */
-export const TOWN_MOVEMENT_SPEED_UNITS_PER_SECOND_MULTIPLIER = 220;
+export const TOWN_MOVEMENT_SPEED_UNITS_PER_SECOND_MULTIPLIER = 172;
 
 /**
  * Core 0.4x -- how much faster movement is in a safe_hub-classified zone
@@ -40,7 +47,9 @@ export const TOWN_MOVEMENT_SPEED_UNITS_PER_SECOND_MULTIPLIER = 220;
  * same world-units-per-second cross more screen distance per second, so
  * the two changes compound. Dropped to 2x (~16s for the same loop) to
  * bring travel pacing back down while keeping some speed-up over combat.
- * Still a first pass, tunable from here.
+ * Still a first pass, tunable from here. (Base multiplier above was later
+ * cut 220 -> 172; this ratio wasn't re-tuned against it, so travel times
+ * above are now proportionally slower too.)
  */
 export const SAFE_ZONE_MOVEMENT_SPEED_MULTIPLIER = 2;
 

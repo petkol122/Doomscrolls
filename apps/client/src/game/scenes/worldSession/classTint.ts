@@ -37,6 +37,18 @@ const CLASS_TINTS: Readonly<Record<CharacterClassKey, PlayerPlaceholderTint>> = 
     legsColor: 0x7a3f1a,
     ringStrokeColor: 0xffcf9f,
   },
+  netrunner: {
+    torsoColor: 0x0b5c6b,
+    shoulderColor: 0x35e6ff,
+    legsColor: 0x0a3a44,
+    ringStrokeColor: 0x8ff5ff,
+  },
+  street_alchemist: {
+    torsoColor: 0x5a9e2f,
+    shoulderColor: 0x9ed46a,
+    legsColor: 0x35601a,
+    ringStrokeColor: 0xc7ff8f,
+  },
 };
 
 export function resolvePlayerTint(classKey: CharacterClassKey | undefined): PlayerPlaceholderTint {

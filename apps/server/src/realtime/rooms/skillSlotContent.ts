@@ -1,6 +1,8 @@
 import { contentRegistry } from "@doomscrolls/content";
+import type { SkillTargetingMode } from "@doomscrolls/content";
 import type { CharacterClassKey } from "@doomscrolls/shared";
 import type { PlayerPresence } from "./PlayerPresence";
+import { applyStatusEffect } from "./statusEffects";
 
 /**
  * Core 0.7 -- content-driven skill slot resolution.
@@ -29,6 +31,45 @@ export interface SkillSlotDefinition {
   readonly range: number;
   readonly damage: number;
   readonly cooldownMs: number;
+  /** Core 0.1 Foundation -- mana cost deducted before a cast is accepted. */
+  readonly manaCost: number;
+  readonly maxRank: number;
+  readonly damagePerRank: number;
+  /**
+   * Core 0.2 -- Status Effects & Debuff System. Optional status effect
+   * this skill applies to its target on a successful cast, alongside its
+   * own damage. Absent = damage-only, unchanged pre-0.2 behavior.
+   */
+  readonly appliesEffect?: "bleed" | "slow" | "stun" | "burn" | "emp_dot" | "haste";
+  readonly effectDurationMs?: number;
+  readonly effectMagnitude?: number;
+  /**
+   * Milestone 0.3 -- Street Alchemist Class Archetype. Optional second
+   * status effect applied alongside `appliesEffect` (see
+   * `SkillContentDefinition.appliesSecondaryEffect`).
+   */
+  readonly appliesSecondaryEffect?: "bleed" | "slow" | "stun" | "burn" | "emp_dot" | "haste";
+  readonly secondaryEffectDurationMs?: number;
+  readonly secondaryEffectMagnitude?: number;
+  /**
+   * Milestone 0.2 -- Server-Authoritative Projectiles & Ground-Targeted
+   * AoE Skills. `targeting` decides whether the cast handler expects a
+   * `targetEnemyId` ("target"), a ground point ("ground_aoe"), or neither
+   * ("self_buff" -- see `SkillTargetingMode`); `isProjectile`/
+   * `projectileSpeed` mark a "target" skill as travel-time; `aoeRadius`
+   * is set only for "ground_aoe" skills.
+   */
+  readonly targeting: SkillTargetingMode;
+  readonly isProjectile?: boolean;
+  readonly projectileSpeed?: number;
+  readonly aoeRadius?: number;
+  /**
+   * Milestone 0.3 -- Netrunner Urban-Magic Class Archetype. See
+   * `SkillContentDefinition.spawnsTurret`.
+   */
+  readonly spawnsTurret?: boolean;
+  readonly turretDurationMs?: number;
+  readonly turretAttackIntervalMs?: number;
 }
 
 /**
@@ -57,6 +98,35 @@ export function resolveSkillSlotDefinition(
     range: skill.range,
     damage: skill.baseDamage,
     cooldownMs: skill.cooldownMs,
+    manaCost: skill.manaCost,
+    maxRank: skill.maxRank,
+    damagePerRank: skill.damagePerRank,
+    targeting: skill.targeting,
+    ...(skill.appliesEffect !== undefined
+      ? {
+          appliesEffect: skill.appliesEffect,
+          effectDurationMs: skill.effectDurationMs,
+          effectMagnitude: skill.effectMagnitude,
+        }
+      : {}),
+    ...(skill.appliesSecondaryEffect !== undefined
+      ? {
+          appliesSecondaryEffect: skill.appliesSecondaryEffect,
+          secondaryEffectDurationMs: skill.secondaryEffectDurationMs,
+          secondaryEffectMagnitude: skill.secondaryEffectMagnitude,
+        }
+      : {}),
+    ...(skill.isProjectile === true
+      ? { isProjectile: true, projectileSpeed: skill.projectileSpeed }
+      : {}),
+    ...(skill.aoeRadius !== undefined ? { aoeRadius: skill.aoeRadius } : {}),
+    ...(skill.spawnsTurret === true
+      ? {
+          spawnsTurret: true,
+          turretDurationMs: skill.turretDurationMs,
+          turretAttackIntervalMs: skill.turretAttackIntervalMs,
+        }
+      : {}),
   };
 }
 
@@ -76,9 +146,70 @@ export function resolveSkillSlotDefinition(
 export function resolveSkillCastDamage(
   skillDefinition: Pick<SkillSlotDefinition, "damage">,
   playerDamage: number,
+  /**
+   * Core 0.1 Foundation -- the caster's current rank in this skill slot
+   * (1..maxRank). Each rank above 1 adds `damagePerRank` flat bonus
+   * damage. Defaults to 1 (no bonus) so every existing call site that
+   * predates skill ranks keeps behaving exactly as before.
+   */
+  rank: number = 1,
+  damagePerRank: number = 0,
 ): number {
   const damageBonus = Math.max(0, playerDamage - 1);
-  return skillDefinition.damage + damageBonus;
+  const rankBonus = Math.max(0, Math.floor(rank) - 1) * Math.max(0, damagePerRank);
+  return skillDefinition.damage + damageBonus + rankBonus;
+}
+
+/**
+ * Core 0.2 -- applies a skill's optional status effect (see
+ * `SkillSlotDefinition.appliesEffect`) to `target` on a successful cast.
+ * A no-op when the skill is damage-only. Shared by every skill-cast call
+ * site (immediate + deferred move-to-cast, both rooms) so the effect
+ * only needs to be defined once in content.
+ */
+export function applySkillEffectIfDefined(
+  target: { statusEffects: string },
+  skillDefinition: Pick<
+    SkillSlotDefinition,
+    | "appliesEffect"
+    | "effectDurationMs"
+    | "effectMagnitude"
+    | "appliesSecondaryEffect"
+    | "secondaryEffectDurationMs"
+    | "secondaryEffectMagnitude"
+  >,
+  now: number,
+): void {
+  if (
+    skillDefinition.appliesEffect !== undefined &&
+    Number.isFinite(skillDefinition.effectDurationMs) &&
+    Number.isFinite(skillDefinition.effectMagnitude)
+  ) {
+    applyStatusEffect(
+      target,
+      skillDefinition.appliesEffect,
+      now,
+      skillDefinition.effectDurationMs as number,
+      skillDefinition.effectMagnitude as number,
+    );
+  }
+
+  // Milestone 0.3 -- Street Alchemist's aerosol_flash layers a second
+  // effect (Slow) on top of its primary one (Burn); every other skill
+  // leaves this undefined and is unaffected.
+  if (
+    skillDefinition.appliesSecondaryEffect !== undefined &&
+    Number.isFinite(skillDefinition.secondaryEffectDurationMs) &&
+    Number.isFinite(skillDefinition.secondaryEffectMagnitude)
+  ) {
+    applyStatusEffect(
+      target,
+      skillDefinition.appliesSecondaryEffect,
+      now,
+      skillDefinition.secondaryEffectDurationMs as number,
+      skillDefinition.secondaryEffectMagnitude as number,
+    );
+  }
 }
 
 export function getSkillSlotCooldownAt(player: PlayerPresence, slot: SkillSlotId): number {
@@ -98,6 +229,47 @@ export function setSkillSlotCooldownAt(player: PlayerPresence, slot: SkillSlotId
   } else {
     player.nextTertiarySkillSlotAt = value;
   }
+}
+
+/** Core 0.1 Foundation -- read a player's current rank for a skill slot. */
+export function getSkillSlotRank(player: PlayerPresence, slot: SkillSlotId): number {
+  const value = slot === "primary"
+    ? player.primarySkillRank
+    : slot === "secondary"
+      ? player.secondarySkillRank
+      : player.tertiarySkillRank;
+  return Number.isFinite(value) && value >= 1 ? Math.floor(value) : 1;
+}
+
+export function setSkillSlotRank(player: PlayerPresence, slot: SkillSlotId, rank: number): void {
+  if (slot === "primary") {
+    player.primarySkillRank = rank;
+  } else if (slot === "secondary") {
+    player.secondarySkillRank = rank;
+  } else {
+    player.tertiarySkillRank = rank;
+  }
+}
+
+/**
+ * Core 0.1 Foundation -- whether the player's current mana pool covers
+ * a skill's manaCost. A cost of 0 (the primary/basic-attack slot) is
+ * always affordable regardless of the pool's current state.
+ */
+export function hasSufficientMana(player: PlayerPresence, manaCost: number): boolean {
+  if (!Number.isFinite(manaCost) || manaCost <= 0) {
+    return true;
+  }
+  return Number.isFinite(player.mana) && player.mana >= manaCost;
+}
+
+/** Deducts a skill's manaCost from the player's pool, floored at 0. */
+export function deductMana(player: PlayerPresence, manaCost: number): void {
+  if (!Number.isFinite(manaCost) || manaCost <= 0) {
+    return;
+  }
+  const current = Number.isFinite(player.mana) ? player.mana : 0;
+  player.mana = Math.max(0, current - manaCost);
 }
 
 export function pendingActionTypeForSkillSlot(slot: SkillSlotId): "skill_primary" | "skill_secondary" | "skill_tertiary" {

@@ -199,6 +199,13 @@ export class ApiClient {
     return this.toCharacterDetails(response);
   }
 
+  public async deleteCharacter(sessionToken: string, characterId: CharacterId): Promise<void> {
+    await this.request<void>(`/characters/${characterId}`, {
+      method: "DELETE",
+      sessionToken
+    });
+  }
+
   private async request<TResponse>(path: string, options: RequestOptions): Promise<TResponse> {
     const requestUrl = new URL(path, this.apiUrl);
 
@@ -222,6 +229,10 @@ export class ApiClient {
 
     if (!response.ok) {
       throw await this.createErrorFromResponse(response);
+    }
+
+    if (response.status === 204) {
+      return undefined as TResponse;
     }
 
     return (await response.json()) as TResponse;
@@ -334,7 +345,7 @@ export class ApiClient {
 }
 
 interface RequestOptions {
-  readonly method: "GET" | "POST";
+  readonly method: "GET" | "POST" | "DELETE";
   readonly body?: unknown;
   readonly sessionToken?: string;
 }

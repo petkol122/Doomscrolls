@@ -13,7 +13,10 @@ export const SUPPORTED_CORE_0_1_EQUIPMENT_SLOTS = [
   "ring_1",
   "amulet",
   "belt",
-  "flask_1"
+  "flask_1",
+  "flask_2",
+  "flask_3",
+  "flask_4"
 ] as const satisfies readonly EquipmentSlot[];
 
 export const SUPPORTED_STAT_MODIFIER_TARGETS = [
@@ -73,7 +76,9 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
 
   validateUniqueIds("origin", registry.origins.all, errors);
   validateUniqueIds("passive", registry.passives.all, errors);
+  validateUniqueIds("profession", registry.professions.all, errors);
   validateUniqueIds("class", registry.classes.all, errors);
+  validateUniqueIds("currency", registry.currencies.all, errors);
   validateUniqueIds("skill", registry.skills.all, errors);
   validateUniqueIds("enemy", registry.enemies.all, errors);
   validateUniqueIds("item", registry.items.all, errors);
@@ -86,6 +91,7 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
   validateUniqueIds("worldProp", registry.worldProps.all, errors);
   validateUniqueIds("visualAsset", registry.visualAssets.all, errors);
   validateUniqueIds("objective", registry.objectives.all, errors);
+  validateUniqueIds("quest", registry.quests.all, errors);
   validateUniqueIds("townService", registry.townServices.all, errors);
   validateUniqueIds("vendorStock", registry.vendorStocks.all, errors);
   validateUniqueIds("lore", registry.lore.all, errors);
@@ -115,6 +121,22 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
 
   for (const passive of registry.passives.all) {
     validateLocalizedDefinition("passive", passive, errors);
+  }
+
+  // ── Milestone 0.3 -- Profession Training System ──
+  for (const profession of registry.professions.all) {
+    validateLocalizedDefinition("profession", profession, errors);
+
+    let previousTier = 0;
+    for (const tierDef of profession.tiers) {
+      if (tierDef.tier !== previousTier + 1) {
+        errors.push({ category: "profession", id: profession.id, message: `Tiers must be sequential starting at 1: got tier ${tierDef.tier} after ${previousTier}.` });
+      }
+      if (tierDef.costCopper <= 0) {
+        errors.push({ category: "profession", id: profession.id, message: `Tier ${tierDef.tier} costCopper must be positive.` });
+      }
+      previousTier = tierDef.tier;
+    }
   }
 
   for (const characterClass of registry.classes.all) {
@@ -326,6 +348,24 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
     if (!Number.isFinite(spawnZone.minX) || !Number.isFinite(spawnZone.maxX) || !Number.isFinite(spawnZone.minY) || !Number.isFinite(spawnZone.maxY)) {
       errors.push({ category: "spawnZone", id: spawnZone.id, message: "Bounds values must be finite numbers." });
     }
+
+    for (const member of spawnZone.pack ?? []) {
+      if (!registry.enemies.has(member.enemyId)) {
+        errors.push({ category: "spawnZone", id: spawnZone.id, message: `Unknown pack member enemy id: ${member.enemyId}` });
+      }
+      if (member.count < 1) {
+        errors.push({ category: "spawnZone", id: spawnZone.id, message: "Pack member count must be at least 1." });
+      }
+    }
+
+    for (const [field, value] of [
+      ["leaderEliteChance", spawnZone.leaderEliteChance],
+      ["leaderChampionChance", spawnZone.leaderChampionChance],
+    ] as const) {
+      if (value !== undefined && (!Number.isFinite(value) || value < 0 || value > 1)) {
+        errors.push({ category: "spawnZone", id: spawnZone.id, message: `${field} must be between 0 and 1.` });
+      }
+    }
   }
 
   // ── Spawn point validation ──
@@ -348,7 +388,8 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
     "crate", "lamp", "debris", "junk", "ambient_rat", "ambient_pig",
     "ambient_chicken", "loot_container", "vendor", "town_service",
     "waypoint", "combat_edge", "combat_return_gate", "area_label", "path_marker", "boundary_marker",
-    "safe_area_marker", "rest_area_marker", "building_footprint", "street_surface", "water_surface"
+    "safe_area_marker", "rest_area_marker", "building_footprint", "street_surface", "water_surface",
+    "zone_transition", "quest_giver"
   ] as const;
 
   for (const prop of registry.worldProps.all) {
@@ -376,6 +417,24 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
         errors.push({ category: "worldProp", id: prop.id, message: "loot_container props must set lootTableId." });
       } else if (!registry.lootTables.has(prop.lootTableId)) {
         errors.push({ category: "worldProp", id: prop.id, message: `Unknown lootTableId: ${prop.lootTableId}` });
+      }
+    }
+
+    // A zone_transition door must declare which real zone it leads to.
+    if (prop.kind === "zone_transition") {
+      if (prop.targetZoneId === undefined) {
+        errors.push({ category: "worldProp", id: prop.id, message: "zone_transition props must set targetZoneId." });
+      } else if (!registry.zones.has(prop.targetZoneId)) {
+        errors.push({ category: "worldProp", id: prop.id, message: `Unknown targetZoneId: ${prop.targetZoneId}` });
+      }
+    }
+
+    // A quest_giver must declare which real quest it offers/turns in.
+    if (prop.kind === "quest_giver") {
+      if (prop.questId === undefined) {
+        errors.push({ category: "worldProp", id: prop.id, message: "quest_giver props must set questId." });
+      } else if (!registry.quests.has(prop.questId)) {
+        errors.push({ category: "worldProp", id: prop.id, message: `Unknown questId: ${prop.questId}` });
       }
     }
 
@@ -466,6 +525,23 @@ export function validateContentRegistry(registry: ContentRegistry): ContentValid
 
     if (objective.zoneId !== undefined && !registry.zones.has(objective.zoneId)) {
       errors.push({ category: "objective", id: objective.id, message: `Unknown zone id: ${objective.zoneId}` });
+    }
+  }
+
+  // ── Quest validation ──
+  for (const quest of registry.quests.all) {
+    for (const key of [quest.titleKey, quest.descriptionKey, quest.greetingKey, quest.turnInKey, quest.completedKey]) {
+      if (en[key] === undefined) {
+        errors.push({ category: "quest", id: quest.id, message: `Missing English localization key: ${key}` });
+      }
+    }
+
+    if (quest.xpReward < 0) {
+      errors.push({ category: "quest", id: quest.id, message: "xpReward must be non-negative." });
+    }
+
+    if (quest.copperReward < 0) {
+      errors.push({ category: "quest", id: quest.id, message: "copperReward must be non-negative." });
     }
   }
 

@@ -73,13 +73,33 @@ export interface PlayerPresenceEntry {
    */
   readonly movementSpeed?: number;
   /**
-   * Server-owned basic healing flask charges count, when present.
-   * Optional because older / partial state objects may not carry the field
-   * yet; callers must treat absence as "unknown".
+   * Milestone 0.3 -- 4-Slot Flask Belt. One entry per belt slot (index
+   * 0 = flask_1 ... index 3 = flask_4), read from the server's
+   * `flaskCharges1..4`/`maxFlaskCharges1..4`/`nextFlaskAt1..4`/
+   * `flaskEffectType1..4` presence fields. Optional because older /
+   * partial state objects may not carry the fields yet; callers must
+   * treat absence as "unknown", not "empty belt". A slot with
+   * `maxCharges === 0` is genuinely empty (no flask equipped).
    */
-  readonly flaskCharges?: number;
-  readonly maxFlaskCharges?: number;
+  readonly flaskBelt?: readonly FlaskBeltSlotEntry[];
   readonly nextSkillSlotAt?: number;
+  /**
+   * Core 0.1 Foundation -- Mana/Resource System. Server-owned pool,
+   * regenerated passively on the room tick and deducted on skill cast.
+   * Optional because older / partial state objects may not carry the
+   * field yet; callers must treat absence as "unknown", not zero mana.
+   */
+  readonly mana?: number;
+  readonly maxMana?: number;
+  /**
+   * Core 0.1 Foundation -- Skill Point Allocation. `skillPoints` is the
+   * unallocated total; the three `*SkillRank` fields are the current
+   * rank of each of the player's class's skill slots.
+   */
+  readonly skillPoints?: number;
+  readonly primarySkillRank?: number;
+  readonly secondarySkillRank?: number;
+  readonly tertiarySkillRank?: number;
   readonly objective?: {
     readonly id: string;
     readonly label: string;
@@ -105,6 +125,22 @@ export interface PlayerPresenceEntry {
   }[];
   readonly hasCorpse?: boolean;
   readonly corpsePosition?: PlayerPosition;
+  /**
+   * Core 0.2 -- server-owned active status effects, flattened as
+   * "type:expiresAtMs:magnitude:nextTickAtMs" entries joined by "|".
+   * Optional because older / partial state objects may not carry the
+   * field yet. Parse with `parseActiveStatusEffectTypes`.
+   */
+  readonly statusEffects?: string;
+}
+
+/** Milestone 0.3 -- 4-Slot Flask Belt. One belt slot's display-relevant server state. */
+export interface FlaskBeltSlotEntry {
+  readonly charges: number;
+  readonly maxCharges: number;
+  readonly nextReadyAt: number;
+  /** `""` = no flask equipped in this slot. */
+  readonly effectType: string;
 }
 
 export interface TownRoomPresence {
@@ -149,11 +185,14 @@ export function getTownRoomPresence(
     const withMovementSpeed = applyOptionalMovementSpeed(withPosition, value);
     const withFlask = applyOptionalFlaskState(withMovementSpeed, value);
     const withSkillSlot = applyOptionalSkillSlotCooldown(withFlask, value);
-    const withObjective = applyOptionalObjective(withSkillSlot, value, 1);
+    const withMana = applyOptionalManaState(withSkillSlot, value);
+    const withSkillPoints = applyOptionalSkillPoints(withMana, value);
+    const withObjective = applyOptionalObjective(withSkillPoints, value, 1);
     const withObjective2 = applyOptionalObjective(withObjective, value, 2);
     const withCompletedObjectives = applyOptionalCompletedObjectives(withObjective2, value);
     const withCorpse = applyOptionalCorpse(withCompletedObjectives, value);
-    players.push(withCorpse);
+    const withStatusEffects = applyOptionalStatusEffects(withCorpse, value);
+    players.push(withStatusEffects);
   }
 
   return {
@@ -272,7 +311,12 @@ function applyOptionalClassKey(
   value: Record<string, unknown>,
 ): PlayerPresenceEntry {
   const rawClassKey = value.classKey;
-  if (rawClassKey !== "gravewalker" && rawClassKey !== "ironclad") {
+  if (
+    rawClassKey !== "gravewalker" &&
+    rawClassKey !== "ironclad" &&
+    rawClassKey !== "netrunner" &&
+    rawClassKey !== "street_alchemist"
+  ) {
     return entry;
   }
   return { ...entry, classKey: rawClassKey };
@@ -342,23 +386,46 @@ function applyOptionalMovementSpeed(
   return { ...entry, movementSpeed: rawMovementSpeed };
 }
 
+/**
+ * Milestone 0.3 -- 4-Slot Flask Belt. The server packs all 4 slots
+ * into one `flaskBelt` string (Colyseus's 64-field-per-schema cap
+ * ruled out one flat field per slot property -- see
+ * `PlayerPresence.ts`/`flaskBeltConfig.ts`), one
+ * "effectType,effectValue,charges,maxCharges,nextReadyAt" segment per
+ * slot joined by "|". This mirrors that same parsing on the client.
+ */
 function applyOptionalFlaskState(
   entry: PlayerPresenceEntry,
   value: Record<string, unknown>,
 ): PlayerPresenceEntry {
-  const rawCharges = value.flaskCharges;
-  const rawMax = value.maxFlaskCharges;
-  if (typeof rawCharges !== "number" || typeof rawMax !== "number") {
+  const raw = value.flaskBelt;
+  if (typeof raw !== "string" || raw.length === 0) {
     return entry;
   }
-  if (!Number.isFinite(rawCharges) || !Number.isFinite(rawMax)) {
+
+  const segments = raw.split("|");
+  if (segments.length !== 4) {
     return entry;
   }
-  return {
-    ...entry,
-    flaskCharges: Math.max(0, rawCharges),
-    maxFlaskCharges: Math.max(0, rawMax),
-  };
+
+  const slots: FlaskBeltSlotEntry[] = [];
+  for (const segment of segments) {
+    const parts = segment.split(",");
+    const effectType = parts[0] ?? "";
+    const charges = Number(parts[2]);
+    const maxCharges = Number(parts[3]);
+    const nextReadyAt = Number(parts[4]);
+    if (!Number.isFinite(charges) || !Number.isFinite(maxCharges) || !Number.isFinite(nextReadyAt)) {
+      return entry;
+    }
+    slots.push({
+      charges: Math.max(0, charges),
+      maxCharges: Math.max(0, maxCharges),
+      nextReadyAt: Math.max(0, nextReadyAt),
+      effectType,
+    });
+  }
+  return { ...entry, flaskBelt: slots };
 }
 
 function applyOptionalSkillSlotCooldown(
@@ -373,6 +440,61 @@ function applyOptionalSkillSlotCooldown(
     ...entry,
     nextSkillSlotAt: Math.max(0, rawNextSkillSlotAt),
   };
+}
+
+function applyOptionalManaState(
+  entry: PlayerPresenceEntry,
+  value: Record<string, unknown>,
+): PlayerPresenceEntry {
+  const rawMana = value.mana;
+  const rawMaxMana = value.maxMana;
+  if (typeof rawMana !== "number" || typeof rawMaxMana !== "number") {
+    return entry;
+  }
+  if (!Number.isFinite(rawMana) || !Number.isFinite(rawMaxMana)) {
+    return entry;
+  }
+  return {
+    ...entry,
+    mana: Math.max(0, rawMana),
+    maxMana: Math.max(0, rawMaxMana),
+  };
+}
+
+function applyOptionalSkillPoints(
+  entry: PlayerPresenceEntry,
+  value: Record<string, unknown>,
+): PlayerPresenceEntry {
+  const rawSkillPoints = value.skillPoints;
+  const rawPrimaryRank = value.primarySkillRank;
+  const rawSecondaryRank = value.secondarySkillRank;
+  const rawTertiaryRank = value.tertiarySkillRank;
+  if (
+    typeof rawSkillPoints !== "number"
+    || typeof rawPrimaryRank !== "number"
+    || typeof rawSecondaryRank !== "number"
+    || typeof rawTertiaryRank !== "number"
+  ) {
+    return entry;
+  }
+  return {
+    ...entry,
+    skillPoints: Math.max(0, Math.floor(rawSkillPoints)),
+    primarySkillRank: Math.max(1, Math.floor(rawPrimaryRank)),
+    secondarySkillRank: Math.max(1, Math.floor(rawSecondaryRank)),
+    tertiarySkillRank: Math.max(1, Math.floor(rawTertiaryRank)),
+  };
+}
+
+function applyOptionalStatusEffects(
+  entry: PlayerPresenceEntry,
+  value: Record<string, unknown>,
+): PlayerPresenceEntry {
+  const rawStatusEffects = value.statusEffects;
+  if (typeof rawStatusEffects !== "string") {
+    return entry;
+  }
+  return { ...entry, statusEffects: rawStatusEffects };
 }
 
 function applyOptionalCorpse(

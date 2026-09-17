@@ -1,5 +1,6 @@
 import { contentRegistry as defaultContentRegistry, type ContentRegistry } from "@doomscrolls/content";
 import {
+  equipmentSlotToFlaskBeltSlot,
   type CharacterId,
   type EquipmentSlot,
   type EquipmentUpdatedServerMessage,
@@ -9,13 +10,19 @@ import {
 } from "@doomscrolls/shared";
 import { ItemLocationType, type PrismaClient } from "@prisma/client";
 import { getSharedPrismaClient } from "../persistence/prisma";
+import { findFirstAvailableSlot, type PlacementItem } from "../realtime/rooms/itemGridPlacement";
 import { ItemRepository } from "../persistence/repositories/ItemRepository";
 import { InventoryRepository } from "../persistence/repositories/InventoryRepository";
 import { CharacterRepository } from "../persistence/repositories/CharacterRepository";
 import { EquipmentError, EquipmentErrorCode } from "./EquipmentErrors";
 import { CharacterStatsService } from "./CharacterStatsService";
-import { sendToConnectedPlayer, updateConnectedPlayerLiveCombatStats } from "../realtime/rooms/connectedPlayerRegistry";
+import {
+  getConnectedPlayerPresence,
+  sendToConnectedPlayer,
+  updateConnectedPlayerLiveCombatStats,
+} from "../realtime/rooms/connectedPlayerRegistry";
 import { resolvePlayerMovementSpeed } from "../realtime/rooms/resolvePlayerMovementSpeed";
+import { syncFlaskBeltSlotFromEquippedItem } from "../realtime/rooms/flaskBeltConfig";
 import { buildEquipmentLoadout } from "./buildEquipmentLoadout";
 
 interface InventorySlotCoordinates {
@@ -32,31 +39,44 @@ export class EquipmentService {
     private readonly content: ContentRegistry = defaultContentRegistry,
   ) {}
 
+  /**
+   * Finds the first inventory slot `targetSize` fits into without
+   * overlapping any existing item's real footprint. Delegates to the
+   * same rectangle-packing helper `moveInventoryItem.ts`/
+   * `stashTransferItem.ts` use (`itemGridPlacement.ts`) -- this used to
+   * be its own single-cell-only occupancy check (recording only each
+   * existing item's origin cell, and never accounting for the size of
+   * the item being placed), which let a multi-cell item like the 2x3
+   * Sewer Jacket get placed on top of -- or itself be overlapped by --
+   * a neighboring item.
+   */
   private async findFirstFreeInventorySlot(
     inventory: { readonly pageCount: number; readonly gridWidth: number; readonly gridHeight: number },
     itemRepo: ItemRepository,
     characterId: string,
+    targetSize: { readonly width: number; readonly height: number },
     excludedItemIds: readonly string[] = [],
   ): Promise<InventorySlotCoordinates> {
     const excludedItemIdSet = new Set(excludedItemIds);
     const allInventoryItems = await itemRepo.listInventoryItems(characterId);
-    const occupiedPositions = new Set(
-      allInventoryItems
-        .filter((i) => !excludedItemIdSet.has(i.id))
-        .map((i) => `${i.inventoryPage}_${i.inventoryX}_${i.inventoryY}`),
+    const otherItems: PlacementItem[] = allInventoryItems
+      .filter((i) => !excludedItemIdSet.has(i.id))
+      .map((i) => ({
+        definitionId: i.definitionId as ItemDefinitionId,
+        pageIndex: i.inventoryPage ?? null,
+        x: i.inventoryX ?? null,
+        y: i.inventoryY ?? null,
+      }));
+
+    const slot = findFirstAvailableSlot(
+      { pageCount: inventory.pageCount, gridWidth: inventory.gridWidth, gridHeight: inventory.gridHeight },
+      otherItems,
+      targetSize,
     );
-
-    for (let pageIndex = 0; pageIndex < inventory.pageCount; pageIndex++) {
-      for (let y = 0; y < inventory.gridHeight; y++) {
-        for (let x = 0; x < inventory.gridWidth; x++) {
-          if (!occupiedPositions.has(`${pageIndex}_${x}_${y}`)) {
-            return { pageIndex, x, y };
-          }
-        }
-      }
+    if (slot === null) {
+      throw new EquipmentError(EquipmentErrorCode.INVENTORY_FULL);
     }
-
-    throw new EquipmentError(EquipmentErrorCode.INVENTORY_FULL);
+    return slot;
   }
 
   /**
@@ -127,7 +147,17 @@ export class EquipmentService {
 
       if (existingItemInSlot) {
         // Slot occupied -- need to move old item back to inventory first
-        const freeSlot = await this.findFirstFreeInventorySlot(inventory, txItemRepo, characterIdStr, [item.id]);
+        const existingItemDefinition = this.content.items.get(existingItemInSlot.definitionId as never);
+        if (!existingItemDefinition) {
+          throw new EquipmentError(EquipmentErrorCode.INTERNAL_ERROR);
+        }
+        const freeSlot = await this.findFirstFreeInventorySlot(
+          inventory,
+          txItemRepo,
+          characterIdStr,
+          existingItemDefinition.size,
+          [item.id],
+        );
 
         // Move old equipped item to inventory
         await txItemRepo.updateItemLocation(existingItemInSlot.id, {
@@ -163,6 +193,7 @@ export class EquipmentService {
       await this.recalculateEquippedCharacterStats(characterIdStr, txItemRepo, txCharacterRepo);
     });
 
+    this.syncLiveFlaskBeltSlot(characterIdStr, requestedSlot, definition.useEffect);
     await this.notifyEquipmentUpdated(characterIdStr);
   }
 
@@ -200,7 +231,12 @@ export class EquipmentService {
         throw new EquipmentError(EquipmentErrorCode.ITEM_NOT_FOUND);
       }
 
-      const freeSlot = await this.findFirstFreeInventorySlot(inventory, txItemRepo, characterIdStr);
+      const itemDefinition = this.content.items.get(itemInSlot.definitionId as never);
+      if (!itemDefinition) {
+        throw new EquipmentError(EquipmentErrorCode.INTERNAL_ERROR);
+      }
+
+      const freeSlot = await this.findFirstFreeInventorySlot(inventory, txItemRepo, characterIdStr, itemDefinition.size);
 
       await txItemRepo.updateItemLocation(itemInSlot.id, {
         locationType: ItemLocationType.INVENTORY,
@@ -219,7 +255,34 @@ export class EquipmentService {
       await this.recalculateEquippedCharacterStats(characterIdStr, txItemRepo, txCharacterRepo);
     });
 
+    this.syncLiveFlaskBeltSlot(characterIdStr, requestedSlot, undefined);
     await this.notifyEquipmentUpdated(characterIdStr);
+  }
+
+  /**
+   * Milestone 0.3 -- 4-Slot Flask Belt. When the just-equipped/unequipped
+   * slot is one of `flask_1`..`flask_4`, re-derives that belt slot's max
+   * charges/effect on the character's live `PlayerPresence` (if
+   * connected) straight from the item now occupying it -- `useEffect`
+   * undefined means "empty" (unequip, or an item with no use effect).
+   * A freshly equipped flask always starts full; this only ever runs on
+   * an equip/unequip transition, never on a reconnect (join already
+   * restores persisted charges via `syncFlaskBeltFromEquipment`).
+   */
+  private syncLiveFlaskBeltSlot(
+    characterId: string,
+    slot: EquipmentSlot,
+    useEffect: { readonly type: string; readonly value: number; readonly charges: number } | undefined,
+  ): void {
+    const flaskSlot = equipmentSlotToFlaskBeltSlot(slot);
+    if (flaskSlot === undefined) {
+      return;
+    }
+    const presence = getConnectedPlayerPresence(characterId);
+    if (presence === undefined) {
+      return;
+    }
+    syncFlaskBeltSlotFromEquippedItem(presence, flaskSlot, useEffect);
   }
 
   private async notifyEquipmentUpdated(characterId: string): Promise<void> {

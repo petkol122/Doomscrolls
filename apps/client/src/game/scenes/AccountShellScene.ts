@@ -14,25 +14,30 @@ import { ApiClient, ApiClientError, type AccountState, type ApiErrorCode } from 
 import { enterWorldForCharacter } from "../../net/RealtimeClient";
 
 import { createAccountHeader } from "./accountShell/accountShellAccountHeader";
-import { createInfoLine } from "./accountShell/accountShellDom";
-import { createCharacterList } from "./accountShell/characterListView";
+import { createButton } from "./accountShell/accountShellDom";
+import { createCharacterRoster } from "./accountShell/characterListView";
+import { createCharacterPedestal } from "./accountShell/characterPedestalView";
 import {
   createCharacterCreateForm,
   setCreateStatus,
   type CharacterCreateFormElements
 } from "./accountShell/characterCreateFormView";
+import { createCharacterDeleteConfirmModal } from "./accountShell/characterDeleteConfirmModal";
 import { applyOverlayPanelStyles, applyOverlayRootStyles } from "./accountShell/accountShellOverlayStyling";
-import { createWorldEntryStub } from "./accountShell/worldEntryView";
 
 interface AccountShellSceneData {
   readonly account: AccountState;
 }
 
+type AccountShellMode = "select" | "create";
+
 export class AccountShellScene extends Phaser.Scene {
   private overlay: HTMLDivElement | null = null;
+  private deleteConfirmOverlay: HTMLElement | null = null;
   private account: AccountState | null = null;
   private apiClient: ApiClient | null = null;
   private selectedCharacterId: CharacterId | null = null;
+  private mode: AccountShellMode = "select";
 
   public constructor() {
     super("AccountShellScene");
@@ -101,64 +106,76 @@ export class AccountShellScene extends Phaser.Scene {
     applyOverlayPanelStyles(panel);
     root.appendChild(panel);
 
-    panel.appendChild(createAccountHeader(account));
+    const header = document.createElement("div");
+    header.style.display = "flex";
+    header.style.alignItems = "flex-start";
+    header.style.justifyContent = "space-between";
+    header.appendChild(createAccountHeader(account));
 
-    panel.appendChild(createInfoLine(t("profile.display_name"), account.profile.displayName));
-    panel.appendChild(createInfoLine(t("profile.avatar"), account.profile.avatarKey));
-
-    const loaded = document.createElement("p");
-    loaded.textContent = t("auth.account_loaded");
-    loaded.style.margin = "18px 0";
-    loaded.style.color = "#b9d49a";
-    panel.appendChild(loaded);
-
-    panel.appendChild(
-      createWorldEntryStub(
-        account.characters,
-        this.selectedCharacterId,
-        () => {
-          void this.handleEnterWorld();
-        }
-      )
-    );
-
-    panel.appendChild(
-      createCharacterList(
-        account.characters,
-        this.selectedCharacterId,
-        (id) => {
-          this.selectedCharacterId = id;
-          storeSelectedCharacterId(id);
-          if (this.account !== null) {
-            this.renderAccountOverlay(this.account);
-          }
-        }
-      )
-    );
-
-    panel.appendChild(
-      createCharacterCreateForm((elements) => {
-        void this.submitCreateCharacter(elements);
-      })
-    );
-
-    const logout = document.createElement("button");
-    logout.type = "button";
-    logout.textContent = t("auth.logout");
-    logout.style.padding = "11px 14px";
-    logout.style.border = "1px solid #8d6a35";
-    logout.style.borderRadius = "8px";
-    logout.style.background = "#5a311f";
-    logout.style.color = "#ffe6bd";
-    logout.style.cursor = "pointer";
-    logout.style.font = "inherit";
+    const logout = createButton(t("auth.logout"), "ghost");
+    logout.style.marginTop = "0";
     logout.addEventListener("click", () => {
       clearStoredSessionToken();
       clearStoredSelectedCharacterId();
       this.destroyOverlay();
       this.scene.start("AuthScene");
     });
-    panel.appendChild(logout);
+    header.appendChild(logout);
+    panel.appendChild(header);
+
+    if (this.mode === "create") {
+      panel.appendChild(
+        createCharacterCreateForm(
+          account.characters,
+          (elements) => {
+            void this.submitCreateCharacter(elements);
+          },
+          () => {
+            this.mode = "select";
+            this.renderAccountOverlay(account);
+          }
+        )
+      );
+    } else {
+      const layout = document.createElement("div");
+      layout.style.display = "grid";
+      layout.style.gridTemplateColumns = "minmax(220px, 280px) 1fr";
+      layout.style.gap = "20px";
+      layout.style.marginTop = "18px";
+
+      const rosterPane = document.createElement("div");
+      rosterPane.style.maxHeight = "min(60vh, 520px)";
+      rosterPane.style.display = "flex";
+      rosterPane.style.flexDirection = "column";
+      rosterPane.appendChild(
+        createCharacterRoster(account.characters, this.selectedCharacterId, (id) => {
+          this.selectedCharacterId = id;
+          storeSelectedCharacterId(id);
+          this.renderAccountOverlay(account);
+        })
+      );
+      layout.appendChild(rosterPane);
+
+      const selectedCharacter =
+        account.characters.find((character) => character.id === this.selectedCharacterId) ?? null;
+
+      layout.appendChild(
+        createCharacterPedestal(selectedCharacter, {
+          onEnterWorld: () => {
+            void this.handleEnterWorld();
+          },
+          onDeleteCharacter: (character) => {
+            this.showDeleteConfirm(character);
+          },
+          onCreateCharacter: () => {
+            this.mode = "create";
+            this.renderAccountOverlay(account);
+          }
+        })
+      );
+
+      panel.appendChild(layout);
+    }
 
     document.body.appendChild(root);
     return root;
@@ -188,6 +205,55 @@ export class AccountShellScene extends Phaser.Scene {
       if (status !== null) {
         status.textContent = t("world_entry.join_failed");
         status.style.color = "#ff9c8a";
+      }
+    }
+  }
+
+  private showDeleteConfirm(character: CharacterSummary): void {
+    this.destroyDeleteConfirmOverlay();
+    this.deleteConfirmOverlay = createCharacterDeleteConfirmModal(
+      character,
+      () => {
+        void this.handleDeleteCharacter(character.id);
+      },
+      () => {
+        this.destroyDeleteConfirmOverlay();
+      }
+    );
+    document.body.appendChild(this.deleteConfirmOverlay);
+  }
+
+  private destroyDeleteConfirmOverlay(): void {
+    this.deleteConfirmOverlay?.remove();
+    this.deleteConfirmOverlay = null;
+  }
+
+  private async handleDeleteCharacter(characterId: CharacterId): Promise<void> {
+    this.destroyDeleteConfirmOverlay();
+
+    if (this.apiClient === null) {
+      return;
+    }
+
+    const sessionToken = readStoredSessionToken();
+    if (sessionToken === null) {
+      return;
+    }
+
+    try {
+      await this.apiClient.deleteCharacter(sessionToken, characterId);
+
+      if (this.selectedCharacterId === characterId) {
+        this.selectedCharacterId = null;
+        clearStoredSelectedCharacterId();
+      }
+
+      const account = await this.apiClient.getMe(sessionToken);
+      this.account = account;
+      this.renderAccountOverlay(account);
+    } catch {
+      if (this.account !== null) {
+        this.renderAccountOverlay(this.account);
       }
     }
   }
@@ -222,6 +288,7 @@ export class AccountShellScene extends Phaser.Scene {
 
       this.selectedCharacterId = createdCharacter.id;
       storeSelectedCharacterId(createdCharacter.id);
+      this.mode = "select";
 
       const account = await this.apiClient.getMe(sessionToken);
       this.account = account;
@@ -278,5 +345,6 @@ export class AccountShellScene extends Phaser.Scene {
   private destroyOverlay(): void {
     this.overlay?.remove();
     this.overlay = null;
+    this.destroyDeleteConfirmOverlay();
   }
 }

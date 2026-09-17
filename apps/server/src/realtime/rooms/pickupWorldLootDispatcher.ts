@@ -109,6 +109,8 @@ export async function dispatchPickedUpWorldLoot(input: {
     characterId: input.characterId,
     itemDefinitionId: rawItemId,
     itemLabel: input.worldLoot.label,
+    ...(input.worldLoot.rarityTier !== undefined ? { rarityTier: input.worldLoot.rarityTier } : {}),
+    ...(input.worldLoot.rolledAffixesJson !== undefined ? { rolledAffixesJson: input.worldLoot.rolledAffixesJson } : {}),
   });
 
   if (!pickupResult.ok) {
@@ -128,6 +130,9 @@ export async function dispatchPickedUpWorldLoot(input: {
     message: pickupResult.message,
     itemLabel: input.worldLoot.label,
     ...(input.worldLoot.rarity === undefined ? {} : { rarity: input.worldLoot.rarity }),
+    ...(input.worldLoot.rarityTier === undefined || input.worldLoot.rarityTier.length === 0
+      ? {}
+      : { rarityTier: input.worldLoot.rarityTier }),
   };
 
   return { ok: true, isCurrency: false, accepted, currencyMessage: null };

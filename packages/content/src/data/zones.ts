@@ -47,6 +47,60 @@ export const zones = [
     groundTileKey: "ground_stone"
   },
   {
+    // Cathedral hub build — Pilsen's Namesti hub and its cathedral
+    // interior, linked by a pair of zone_transition doors (see
+    // worldProps.ts: cathedral_entrance / cathedral_exit).
+    id: "pilsen_namesti",
+    zoneId: zoneId("pilsen_namesti"),
+    nameKey: "zone.pilsen_namesti.name",
+    descriptionKey: "zone.pilsen_namesti.description",
+    roomType: "town",
+    classification: "safe_hub",
+    maxPlayers: 30,
+    enemyIds: [],
+    // Milestone 0.2 — Waypoint & Fast Travel: an on-foot road link to the
+    // new pilsen_bory city hub, alongside the existing cathedral link.
+    transitionZoneIds: ["pilsen_cathedral_interior", "pilsen_bory"],
+    mapKey: "map_pilsen_namesti_placeholder",
+    areaId: "pilsen",
+    bounds: { minX: 0, maxX: 1000, minY: 0, maxY: 1000 },
+    groundTileKey: "ground_stone"
+  },
+  {
+    id: "pilsen_cathedral_interior",
+    zoneId: zoneId("pilsen_cathedral_interior"),
+    nameKey: "zone.pilsen_cathedral_interior.name",
+    descriptionKey: "zone.pilsen_cathedral_interior.description",
+    roomType: "town",
+    classification: "safe_hub",
+    maxPlayers: 30,
+    enemyIds: [],
+    transitionZoneIds: ["pilsen_namesti"],
+    mapKey: "map_pilsen_cathedral_interior_placeholder",
+    areaId: "pilsen",
+    bounds: { minX: 0, maxX: 600, minY: 0, maxY: 600 },
+    groundTileKey: "ground_stone"
+  },
+  {
+    // Milestone 0.2 — Waypoint & Fast Travel: a second outdoor city hub,
+    // reachable on foot from Pilsen Namesti and home to its own waypoint
+    // shrine (bory_waypoint). No combat/vendor content yet -- deliberately
+    // a bare hub, matching how pilsen_namesti itself launched.
+    id: "pilsen_bory",
+    zoneId: zoneId("pilsen_bory"),
+    nameKey: "zone.pilsen_bory.name",
+    descriptionKey: "zone.pilsen_bory.description",
+    roomType: "town",
+    classification: "safe_hub",
+    maxPlayers: 30,
+    enemyIds: [],
+    transitionZoneIds: ["pilsen_namesti"],
+    mapKey: "map_pilsen_bory_placeholder",
+    areaId: "pilsen",
+    bounds: { minX: 0, maxX: 1200, minY: 0, maxY: 1200 },
+    groundTileKey: "ground_stone"
+  },
+  {
     id: "blackwire_sewers",
     zoneId: zoneId("blackwire_sewers"),
     nameKey: "zone.blackwire_sewers.name",

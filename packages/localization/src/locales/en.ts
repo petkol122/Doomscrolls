@@ -27,6 +27,14 @@ export const en = {
   "class.ironclad.description":
     "A slab of scavenged plating that solves most disagreements by standing closer than the other side is comfortable with.",
 
+  "class.netrunner.name": "Netrunner",
+  "class.netrunner.description":
+    "A techwear operative running a customized deck rig, bleeding enemy systems dry with malware DoTs and automated turrets.",
+
+  "class.street_alchemist.name": "Street Alchemist",
+  "class.street_alchemist.description":
+    "An underground street chemist utilizing volatile aerosol sprays, adrenaline stims, and elemental combat brews.",
+
   "enemy.trashboar_runt.name": "Trashboar Runt",
   "enemy.trashboar_runt.description":
     "A sewer-fed mutant with a bad temper, worse hygiene and enough tusk to ruin your evening.",
@@ -68,6 +76,18 @@ export const en = {
   "zone.namesti_republiky.description":
     "The historic main square at the heart of Pilsen.",
 
+  "zone.pilsen_namesti.name": "Pilsen Namesti",
+  "zone.pilsen_namesti.description":
+    "The town square hub, anchored by the cathedral entrance to its north.",
+
+  "zone.pilsen_cathedral_interior.name": "Cathedral Interior",
+  "zone.pilsen_cathedral_interior.description":
+    "The quiet, vaulted interior of Pilsen's cathedral.",
+
+  "zone.pilsen_bory.name": "Pilsen Bory",
+  "zone.pilsen_bory.description":
+    "A second city hub reachable on foot from Namesti, home to its own waypoint shrine.",
+
   "zone.blackwire_sewers.name": "Blackwire Sewers",
   "zone.blackwire_sewers.description":
     "Maintenance tunnels tangled with illegal cabling, occult runoff and hungry things in the dark.",
@@ -95,6 +115,12 @@ export const en = {
   "item.starter_blood_flask.name": "Starter Blood Flask",
   "item.starter_blood_flask.description":
     "A reusable healing flask filled with something red enough to be useful.",
+  "item.starter_mana_draught.name": "Starter Mana Draught",
+  "item.starter_mana_draught.description":
+    "A bitter tonic that steadies a fraying mind long enough for one more cast.",
+  "item.starter_stamina_tonic.name": "Starter Stamina Tonic",
+  "item.starter_stamina_tonic.description":
+    "A sharp, fizzing shot that loosens tired legs enough for one more dodge.",
 
   "item.blackwire_scrap.name": "Blackwire Scrap",
   "item.blackwire_scrap.description":
@@ -108,6 +134,16 @@ export const en = {
   "item.tarnished_coin.name": "Tarnished Coin",
   "item.tarnished_coin.description":
     "A corroded coin stamped with a face nobody remembers. Still clinks when dropped.",
+
+  "item.iron_scrap.name": "Iron Scrap",
+  "item.iron_scrap.description":
+    "Salvaged scrap metal from tearing down common and magic-tier gear. The pawn shop always wants more.",
+  "item.arcane_dust.name": "Arcane Dust",
+  "item.arcane_dust.description":
+    "A fine residue left behind after salvaging rare or legendary gear -- still faintly warm to the touch.",
+  "item.hostinec_stew.name": "Hostinec Stew",
+  "item.hostinec_stew.description":
+    "A hearty bowl from the pub's kitchen. Warms you up and patches a few wounds along the way.",
 
   "item.scavenged_hood.name": "Scavenged Hood",
   "item.scavenged_hood.description":
@@ -212,6 +248,18 @@ export const en = {
   "item.cinderbound_girdle.description":
     "Forged in one piece and never fully cooled. Holds a fight together better than the charm ever could.",
 
+  // Milestone 0.3 -- Server-Authoritative Item Rarity & Random Affix Engine.
+  "affix.sturdy.name": "Sturdy",
+  "affix.glinting.name": "Glinting",
+  "affix.heavy.name": "Heavy",
+  "affix.of_the_fox.name": "of the Fox",
+  "affix.of_iron.name": "of Iron",
+  "affix.of_vigor.name": "of Vigor",
+  "item_rarity.normal": "Normal",
+  "item_rarity.magic": "Magic",
+  "item_rarity.rare": "Rare",
+  "item_rarity.legendary": "Legendary",
+
   "skill.heavy_strike.name": "Heavy Strike",
   "skill.heavy_strike.description":
     "A deliberate attack that solves immediate problems through blunt force.",
@@ -227,6 +275,18 @@ export const en = {
   "skill.groundbreaker.name": "Groundbreaker",
   "skill.groundbreaker.description":
     "The heaviest single hit available to anyone, at the cost of the longest recharge in the game.",
+  "skill.malware_surge.name": "Malware Surge",
+  "skill.malware_surge.description":
+    "A deck-rig projectile that lodges a malicious payload in its target, corrupting their systems over time.",
+  "skill.overclock_turret.name": "Overclock Turret",
+  "skill.overclock_turret.description":
+    "Deploys a stationary turret that auto-fires at nearby enemies for a short time before burning out.",
+  "skill.aerosol_flash.name": "Aerosol Flash",
+  "skill.aerosol_flash.description":
+    "A chemical spray that ignites everyone caught in its radius and leaves them coughing and slowed.",
+  "skill.adrenaline_stim.name": "Adrenaline Stim",
+  "skill.adrenaline_stim.description":
+    "A self-injected stim that sharpens reflexes, boosting attack speed and movement speed for a few seconds.",
 
   // ── Notice Board Objective Flow ──
   // Task 337: Improved feedback clarity — start message mentions the
@@ -338,6 +398,7 @@ export const en = {
   "auth.no_characters": "No characters yet.",
   "auth.api_url_missing": "Client API URL is not configured. Set VITE_API_URL to use account auth.",
   "auth.loading_session": "Checking saved session...",
+  "auth.remember_account": "Remember this account on this device",
 
   "profile.display_name": "Display name",
   "profile.avatar": "Avatar",
@@ -355,14 +416,43 @@ export const en = {
   "character.class": "Class",
   "character.level": "Level",
   "character.xp": "XP",
+  "character.zone": "Zone",
   "world_session.level_xp_format": "{level} • {xp} XP",
   "character.create_success": "Character created.",
+  "character.delete": "Delete",
+  "character.delete_confirm_title": "Delete character?",
+  "character.delete_confirm_body": "This permanently deletes {characterName}. This cannot be undone.",
+  "character.delete_confirm_action": "Delete forever",
+  "character.delete_cancel": "Cancel",
+  "character.delete_failed": "Could not delete character.",
+
+  "stat.power": "Power",
+  "stat.speed": "Speed",
+  "stat.mind": "Mind",
+  "stat.toughness": "Toughness",
 
   "money.money_label": "Money",
   "money.money_empty": "0c",
   "money.gold_short": "g",
   "money.silver_short": "s",
   "money.copper_short": "c",
+
+  "currency.czk.name": "Czech Koruna",
+  "currency.czk.description": "Pilsen's street currency -- vendors, rent and back-alley deals all run on Kč.",
+  "currency.eur.name": "Euro",
+  "currency.eur.description": "The common currency across most European Metro hubs.",
+  "currency.usd.name": "US Dollar",
+  "currency.usd.description": "Widely accepted in cross-region trades and Netrunner markets.",
+  "currency.rmb.name": "Renminbi",
+  "currency.rmb.description": "Chinese Metro currency, dominant across the Asian Monastic Hubs' trade districts.",
+  "currency.jpy.name": "Japanese Yen",
+  "currency.jpy.description": "Used across Japan's Cyber-Pop districts and vending networks.",
+  "currency.gold_bullion.name": "Gold Bullion",
+  "currency.gold_bullion.description": "Physical gold, hoarded by Street Alchemists as a hedge against regional currency swings.",
+  "currency.street_cred.name": "Street Cred",
+  "currency.street_cred.description": "Reputation earned through deeds, not deals -- spends only on Transmog cosmetics, never on power.",
+
+  "hud.net_worth_label": "Net Worth",
 
   "world_entry.title": "Selected character",
   "world_entry.enter_world": "Enter World",
@@ -421,11 +511,11 @@ export const en = {
   "world_session.controls": "Controls",
   "world_session.control_move": "Click ground: move",
   "world_session.control_attack": "Click enemy: attack / approach",
-  "world_session.control_skill_primary": "1: Heavy Strike",
+  "world_session.control_skill_primary": "Z: Heavy Strike",
   "world_session.control_skill_secondary": "Right click: Grave Spark",
   "world_session.control_skill_tertiary": "E: Bone Splinter",
   "world_session.control_dodge": "Space: dodge",
-  "world_session.control_flask": "Q: healing flask",
+  "world_session.control_flask": "Flask belt",
   "world_session.skill_slot_secondary": "Right Click",
   "world_session.skill_slot_secondary_hint": "Server-synced secondary skill slot",
   "world_session.skill_slot_secondary_empty": "No skill learned",
@@ -441,9 +531,24 @@ export const en = {
   "world_session.skill_target_move_to_cast": "Out of range: RMB keeps move-to-cast active.",
   "world_session.flask_charges": "Flask charges",
   "world_session.awaiting_flask": "Waiting for synced flask state...",
-  // Future: Diablo-like right orb resource (mana/class resource) — placeholder until class resource system lands
-  "world_session.resource": "Resource",
-  "world_session.resource_placeholder": "Coming later",
+  // Core 0.1 Foundation -- Mana/Resource System. Real orb, wired to
+  // synced `mana`/`maxMana` presence fields.
+  "world_session.resource": "Mana",
+  "world_session.resource_placeholder": "--",
+  "skill_panel.title": "Skills",
+  "skill_panel.points_available": "Unallocated points",
+  "skill_panel.no_class": "No class data available.",
+  "skill_panel.slot_primary": "Primary",
+  "skill_panel.slot_secondary": "Secondary",
+  "skill_panel.slot_tertiary": "Tertiary",
+  "skill_panel.rank": "Rank",
+  "skill_panel.mana_cost": "Mana cost",
+  "skill_panel.allocate": "Allocate",
+  "skill_panel.maxed": "Maxed",
+  "skill_panel.no_points_available": "No skill points available.",
+  "skill_panel.rank_already_maxed": "That skill is already at max rank.",
+  "skill_panel.allocate_unavailable": "Could not allocate skill point.",
+  "skill_panel.gained_points": "+{gainedSkillPoints} skill point(s) available.",
   "world_session.belt_slot_soon": "Soon",
   "world_session.belt_slot_soon_hint": "Additional belt slot — not available yet",
   "world_session.travel_overlay.route_title": "Traveling",
@@ -518,18 +623,21 @@ export const en = {
     "Press Space in this scene to dodge in the last movement direction. Server decides cooldown and outcome.",
   "world_area.dodge_no_direction": "No recent movement direction; dodge ignored.",
 
-  "world_area.flask_sent": "Healing flask used.",
+  "world_area.flask_sent": "Flask {slot} used.",
   "world_area.flask_healed": "Healed +{healed} HP ({hp} remaining).",
-  "world_area.flask_full_hp": "Already at full HP.",
-  "world_area.flask_no_charges": "No flask charges left.",
-  "world_area.flask_on_cooldown": "Flask is on cooldown.",
-  "world_area.flask_downed": "Cannot use flask while downed.",
+  "world_area.flask_mana_restored": "Restored +{restored} mana ({mana} remaining).",
+  "world_area.flask_stamina_restored": "Dodge cooldown reduced.",
+  "world_area.flask_slot_empty": "That flask slot is empty.",
+  "world_area.flask_no_charges": "No charges left in that flask.",
+  "world_area.flask_on_cooldown": "That flask is on cooldown.",
+  "world_area.flask_downed": "Cannot use a flask while downed.",
   "world_area.flask_unavailable": "Flask unavailable.",
   "world_area.skill_sent": "Grave Spark sent.",
   "world_area.skill_moving_closer": "Moving closer to cast Grave Spark.",
   "world_area.skill_too_far": "Grave Spark target too far.",
   "world_area.skill_on_cooldown": "Grave Spark is on cooldown.",
   "world_area.skill_unlearned": "Skill slot not learned yet.",
+  "world_area.skill_insufficient_mana": "Not enough mana.",
   "world_area.corpse_recovered": "Corpse recovered.",
   "world_area.corpse_composure_restored": "Composure restored.",
   "world_area.corpse_interact_out_of_range": "Moving to corpse.",
@@ -553,7 +661,32 @@ export const en = {
   "equipment.slot.ring_1": "Ring",
   "equipment.slot.amulet": "Amulet",
   "equipment.slot.belt": "Belt",
-  "equipment.slot.flask_1": "Flask",
+  "equipment.slot.flask_1": "Flask 1",
+  "equipment.slot.flask_2": "Flask 2",
+  "equipment.slot.flask_3": "Flask 3",
+  "equipment.slot.flask_4": "Flask 4",
+
+  "character_window.title": "Character",
+  "character_window.tab.equipment": "Equipment",
+  "character_window.tab.attributes": "Attributes",
+  "character_window.tab.currencies": "Currencies",
+  "character_window.tab.reputation": "Reputation",
+  "character_window.slot.empty": "Empty",
+  "character_window.attributes.power": "Power",
+  "character_window.attributes.speed": "Speed",
+  "character_window.attributes.mind": "Mind",
+  "character_window.attributes.toughness": "Toughness",
+  "character_window.attributes.armor": "Armor",
+  "character_window.attributes.move_speed": "Move Speed",
+  "character_window.attributes.attack_speed": "Attack Speed",
+  "character_window.attributes.crit_chance": "Crit Chance",
+  "character_window.attributes.haste": "Haste",
+  "character_window.attributes.resistances": "Resistances",
+  "character_window.attributes.hp_regen": "HP Regen",
+  "character_window.attributes.mp_regen": "MP Regen",
+  "character_window.attributes.not_tracked": "Not tracked yet",
+  "character_window.currencies.net_worth": "Net Worth",
+  "character_window.reputation.empty": "No faction standings yet -- reputation tracking arrives in a future update.",
 
   "error.generic": "Something went wrong.",
   "error.server_unavailable": "Server unavailable. Please try again when the backend is running.",
@@ -587,6 +720,49 @@ export const en = {
   "town_service.vendor_panel.sell_rejected.item_not_sellable": "Cannot sell this item.",
   "town_service.vendor_panel.sell_rejected.item_equipped": "Unequip before selling.",
   "town_service.vendor_panel.sell_rejected.invalid_price": "Item unavailable.",
+
+  "town_service.vendor_panel.tab_buy_sell": "Buy & Sell",
+  "town_service.vendor_panel.tab_salvage": "Salvage & Tech Teardown",
+  "town_service.vendor_panel.tab_training": "Training & Licenses",
+
+  "town_service.vendor_panel.salvage_header": "Salvage Gear",
+  "town_service.vendor_panel.salvage_empty": "Nothing to salvage.",
+  "town_service.vendor_panel.salvage_action": "Salvage",
+  "town_service.vendor_panel.salvage_success": "Salvaged {itemLabel} into {materialLabel}.",
+  "town_service.vendor_panel.salvage_rejected.vendor_unavailable": "Vendor unavailable.",
+  "town_service.vendor_panel.salvage_rejected.item_not_owned": "Item not found.",
+  "town_service.vendor_panel.salvage_rejected.item_equipped": "Unequip before salvaging.",
+  "town_service.vendor_panel.salvage_rejected.item_not_salvageable": "Cannot salvage this item.",
+
+  "town_service.material_withdraw.title": "Withdraw {materialLabel}",
+  "town_service.material_withdraw.balance": "Balance: {balance}",
+  "town_service.material_withdraw.confirm": "Withdraw",
+  "town_service.material_withdraw.cancel": "Cancel",
+  "town_service.material_withdraw.success": "Withdrew {quantity}x {materialLabel}.",
+  "town_service.material_withdraw.rejected.invalid_amount": "Invalid amount.",
+  "town_service.material_withdraw.rejected.insufficient_material": "Not enough {materialLabel}.",
+  "town_service.material_withdraw.rejected.inventory_full": "Inventory full.",
+  "town_service.material_withdraw.rejected.character_not_found": "Could not withdraw right now.",
+
+  "town_service.vendor_panel.training_header": "Professions",
+  "town_service.vendor_panel.training_action": "Train",
+  "town_service.vendor_panel.training_unlocked": "Unlocked",
+  "town_service.vendor_panel.training_not_trainable": "Not trainable yet",
+  "town_service.vendor_panel.training_success": "Trained {professionLabel} to Tier {tier}.",
+  "town_service.vendor_panel.training_rejected.vendor_unavailable": "Vendor unavailable.",
+  "town_service.vendor_panel.training_rejected.profession_unavailable": "This training is not available.",
+  "town_service.vendor_panel.training_rejected.not_enough_currency": "Not enough copper.",
+  "town_service.vendor_panel.training_rejected.already_max_tier": "Already at maximum tier.",
+
+  "profession.salvaging.name": "Salvaging",
+  "profession.salvaging.description": "Break down unwanted gear into scrap and dust instead of selling it for a pittance.",
+  "profession.fishing.name": "Fishing",
+  "profession.fishing.description": "Cast a line in the quieter corners of Pilsen and see what bites.",
+  "profession.cooking.name": "Cooking",
+  "profession.cooking.description": "Turn raw ingredients into something worth eating around a campfire.",
+  "profession.gunsmithing.name": "Gunsmithing",
+  "profession.gunsmithing.description": "Maintain and modify firearms -- licensing not yet available.",
+
   "town_service.suspicious_vendor.name": "Suspicious Vendor",
   "town_service.suspicious_vendor.unavailable": "Vendor trading is not available yet.",
   "town_service.stash_keeper.name": "Stash Keeper",
@@ -611,6 +787,29 @@ export const en = {
   "town_service.stash_keeper.rejected.stash_full": "Stash full.",
   "town_service.stash_keeper.rejected.invalid_stash_placement": "Invalid stash placement.",
   "town_service.stash_keeper.rejected.stash_unavailable": "Stash unavailable.",
+
+  // Milestone 0.2 — Account Stash Foundation: an account-wide item store
+  // (keyed by userId, not character), separate from the per-character
+  // Stash Keeper above. Deposit/withdraw from any character on the account.
+  "account_stash.name": "Account Stash",
+  "account_stash.panel_title": "Account Stash",
+  "account_stash.foundation_notice": "Shared across every character on this account. Only unmodified stackable items can be stored.",
+  "account_stash.empty": "No items stored yet.",
+  "account_stash.inventory_header": "Inventory",
+  "account_stash.stash_header": "Account Stash",
+  "account_stash.deposit_action": "Deposit",
+  "account_stash.withdraw_action": "Withdraw",
+  "account_stash.deposit_success": "Item deposited to account stash.",
+  "account_stash.withdraw_success": "Item withdrawn from account stash.",
+  "account_stash.load_failed": "Could not load account stash items.",
+  "account_stash.rejected.item_unavailable": "Item unavailable.",
+  "account_stash.rejected.item_not_owned": "Item not found.",
+  "account_stash.rejected.item_not_in_inventory": "Item is not in inventory.",
+  "account_stash.rejected.item_equipped": "Unequip before storing.",
+  "account_stash.rejected.item_not_stashable": "This item cannot be stored in the account stash.",
+  "account_stash.rejected.item_not_in_stash": "Item is not in the account stash.",
+  "account_stash.rejected.inventory_full": "Inventory full.",
+  "account_stash.rejected.stash_unavailable": "Account stash unavailable.",
   "ui.close": "Close",
 
   "town_service.trainer.name": "Trainer",
@@ -622,6 +821,7 @@ export const en = {
   "town_service.waypoint.panel_subtitle": "Choose a discovered destination.",
   "town_service.waypoint.opened": "Waypoint opened.",
   "town_service.waypoint.discovered": "Waypoint discovered.",
+  "town_service.waypoint.discovered_named": "Waypoint Discovered: {name}",
   "town_service.waypoint.already_discovered": "Waypoint already discovered.",
   "town_service.waypoint.empty": "No waypoint destinations available.",
   "town_service.waypoint.progress": "Waypoints discovered: {discovered}/{total}",
@@ -659,9 +859,27 @@ export const en = {
   "world_prop.area.saltmere_docks_edge.label": "Saltmere Docks Edge",
   "world_prop.notice_board.label": "Notice Board",
   "world_prop.suspicious_vendor.label": "Suspicious Vendor",
+  "world_prop.army_surplus_pawn.label": "Army Surplus & Pawn",
+  "town_service.army_surplus_pawn.name": "Army Surplus & Pawn",
+  "town_service.army_surplus_pawn.unavailable": "The pawn shop counter is closed right now.",
+
+  "world_prop.lekarna_vendor.label": "Lékárna",
+  "town_service.lekarna_vendor.name": "Lékárna",
+  "town_service.lekarna_vendor.unavailable": "The pharmacy counter is closed right now.",
+  "world_prop.cisarsky_dum_vendor.label": "Císařský dům",
+  "town_service.cisarsky_dum_vendor.name": "Císařský dům",
+  "town_service.cisarsky_dum_vendor.unavailable": "The pawnbroker's counter is closed right now.",
+  "world_prop.tech_hub_vendor.label": "Tech Hub",
+  "town_service.tech_hub_vendor.name": "Tech Hub",
+  "town_service.tech_hub_vendor.unavailable": "The tech counter is closed right now.",
+  "world_prop.hostinec_pub_vendor.label": "Hostinec Pub",
+  "town_service.hostinec_pub_vendor.name": "Hostinec Pub",
+  "town_service.hostinec_pub_vendor.unavailable": "The kitchen is closed right now.",
   "world_prop.stash_keeper.label": "Stash Keeper",
   "world_prop.trainer.label": "Trainer",
   "world_prop.waypoint.label": "Waypoint",
+  "world_prop.namesti_waypoint.label": "Namesti Waypoint",
+  "world_prop.bory_waypoint.label": "Bory Waypoint",
   "world_prop.blackwire_waypoint.label": "Blackwire Waypoint",
   "world_prop.blackwire_gate.label": "Blackwire Gate",
   "world_prop.static_yard_waypoint.label": "Static Yard Waypoint",
@@ -741,7 +959,18 @@ export const en = {
 
   "lore.enemy_drowned_hauler.title": "The Route Nobody Cancelled",
   "lore.enemy_drowned_hauler.body":
-    "Somewhere there's a manifest with the Hauler's name on it, and a cargo run that was supposed to end a long time ago. It never got the cancellation notice, and it stopped needing air before it stopped needing to finish the route. It'll haul whatever's nearest to the pier onto its shoulders, cargo or otherwise, because as far as it's concerned the job's still open."
+    "Somewhere there's a manifest with the Hauler's name on it, and a cargo run that was supposed to end a long time ago. It never got the cancellation notice, and it stopped needing air before it stopped needing to finish the route. It'll haul whatever's nearest to the pier onto its shoulders, cargo or otherwise, because as far as it's concerned the job's still open.",
+
+  // Core 0.1 — Persistent Quest & Dialogue System foundation.
+  "quest.clear_the_rats.title": "Clear the Rats",
+  "quest.clear_the_rats.description":
+    "The old caretaker wants the rats driven off before they gnaw through anything else.",
+  "quest.clear_the_rats.greeting":
+    "Those rats have been at the stores again. Would you clear them out for me?",
+  "quest.clear_the_rats.turn_in":
+    "Any luck with those rats? Come back once they're dealt with.",
+  "quest.clear_the_rats.completed":
+    "Quiet at last. Thank you for taking care of that."
 } as const satisfies LocalizationDictionary;
 
 export type LocalizationKey = keyof typeof en;

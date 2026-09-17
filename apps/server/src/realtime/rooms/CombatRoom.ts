@@ -4,6 +4,8 @@ import {
   type DamageAppliedServerMessage,
   type EnemyAttackResolvedServerMessage,
   type EntityId,
+  type EnemyPresence,
+  type ProjectilePresence,
   type EnemyAttackTelegraphServerMessage,
   type RequestAttackAcceptedServerMessage,
   type RequestAttackClientMessage,
@@ -14,8 +16,8 @@ import {
   type RequestPickupWorldLootRejectedServerMessage,
   type RequestDodgeAcceptedServerMessage,
   type RequestDodgeRejectedServerMessage,
-  type RequestUseHealingFlaskAcceptedServerMessage,
-  type RequestUseHealingFlaskRejectedServerMessage,
+  type RequestUseFlaskSlotAcceptedServerMessage,
+  type RequestUseFlaskSlotRejectedServerMessage,
   type XpGainedServerMessage,
   type UserId,
   type ZoneId,
@@ -25,7 +27,9 @@ import type { CombatRoomJoinOptions } from "./combatRoomTypes";
 import { CombatRoomState } from "./CombatRoomState";
 import { createRoomLogger } from "./roomLogger";
 import { buildCombatPlayerPresence } from "./buildCombatPlayerPresence";
+import type { PlayerPresence } from "./PlayerPresence";
 import { initializeCombatEnemies } from "./initializeCombatEnemies";
+import { getEnemyRarityMultiplier } from "./enemyRarity";
 import { validateMovementIntent } from "./movementIntentValidation";
 import { applyMovementIntent } from "./applyMovementIntent";
 import { resolvePlayerMovementSpeed } from "./resolvePlayerMovementSpeed";
@@ -34,15 +38,27 @@ import { resolvePlayerArmor } from "./resolvePlayerArmor";
 import { mitigateIncomingDamage } from "./incomingDamageMitigation";
 import { resolveAttackCooldownMs } from "./attackCooldown";
 import { stepTownRoomMovement, TOWN_MOVEMENT_TICK_RATE_MS } from "./stepTownRoomMovement";
+import { resolveZoneBuildingFootprints } from "./resolveZoneBuildingFootprints";
+import { isPointInsideAnyPolygon } from "./pointInPolygon";
+import { computeBuildingAvoidancePath } from "./buildingAvoidancePathfinding";
+import type { WorldPropPoint } from "@doomscrolls/content";
 import { validateAttackIntent } from "./attackIntentValidation";
 import { consumeAttackCooldown } from "./attackCooldown";
 import { applyEnemyDamage } from "./applyEnemyDamage";
-import { restoreFlaskToFull } from "./healingFlaskConfig";
+import { getSlowMultiplier, isStunned } from "./statusEffects";
+import { applyStatusEffectTicks as runStatusEffectTicks } from "./applyStatusEffectTicks";
+import {
+  buildFlaskChargesJsonForPresence,
+  getFlaskSlotCharges,
+  getFlaskSlotMaxCharges,
+  restoreFlaskBeltToFull,
+  setFlaskSlotCharges,
+} from "./flaskBeltConfig";
 import { validateDodgeIntent } from "./dodgeIntentValidation";
 import { applyDodgeIntent } from "./applyDodgeIntent";
 import { consumeDodgeCooldown, isDodgeReady } from "./dodgeCooldown";
-import { validateHealingFlaskIntent } from "./healingFlaskValidation";
-import { applyHealingFlaskIntent } from "./applyHealingFlaskIntent";
+import { validateFlaskSlotIntent } from "./flaskSlotValidation";
+import { applyFlaskSlotIntent } from "./applyFlaskSlotIntent";
 import type { TownRoomState } from "./TownRoomState";
 import { clearPendingAction, setPendingAction } from "./pendingActionState";
 import {
@@ -50,10 +66,12 @@ import {
   ENEMY_RETURN_ARRIVAL_DISTANCE,
   ENEMY_RETURN_REACQUIRE_BUFFER,
   clearEnemyTargetAndReturn,
-  moveEnemyTowardPoint,
-  moveEnemyTowardTarget,
   resetEnemyCombatState,
 } from "./enemyAiHelpers";
+import {
+  stepEnemyTowardPointWithAvoidance,
+  stepEnemyTowardTargetWithAvoidance,
+} from "./enemyPathfinding";
 import { applyWanderMovement } from "./wanderEnemies";
 import { contentRegistry } from "@doomscrolls/content";
 import { CharacterService } from "../../character/CharacterService";
@@ -63,6 +81,7 @@ import { clearChatCooldown } from "./chatCooldown";
 import { registerGlobalChatHandler, sendGlobalChatHistory } from "./globalChatHandler";
 import { clearGlobalChatCooldown } from "./globalChatCooldown";
 import { buildEquipmentLoadout } from "../../character/buildEquipmentLoadout";
+import { syncFlaskBeltFromEquipment } from "../../character/syncFlaskBeltFromEquipment";
 import { contentRegistry as roomContentRegistry } from "@doomscrolls/content";
 import { isPositionInsideZoneBounds } from "./validateCharacterLocation";
 import { initializeCombatInteractables } from "./initializeCombatInteractables";
@@ -76,16 +95,25 @@ import { CharacterStatsService } from "../../character/CharacterStatsService";
 import { advanceObjectiveProgressAllSlots } from "./advanceObjectiveProgress";
 import { resolveCombatZoneReturnSpawnId } from "./waypointService";
 import {
+  applySkillEffectIfDefined,
+  deductMana,
   getSkillSlotCooldownAt,
+  getSkillSlotRank,
+  hasSufficientMana,
   resolveSkillCastDamage,
   resolveSkillSlotDefinition,
   setSkillSlotCooldownAt,
 } from "./skillSlotContent";
+import { regenerateMana } from "./manaRegen";
 import type {
   RequestUseSkillSlotAcceptedServerMessage,
   RequestUseSkillSlotClientMessage,
   RequestUseSkillSlotRejectedServerMessage,
 } from "@doomscrolls/shared";
+// Milestone 0.2 -- Server-Authoritative Projectiles & Ground-Targeted AoE Skills.
+import { spawnProjectile, stepProjectiles } from "./projectileSimulation";
+import { resolveGroundAoeCast, cleanupExpiredGroundEffects } from "./groundAoeResolution";
+import { spawnTurret, stepTurrets, type TurretShot } from "./turretSimulation";
 
 const characterStatsService = new CharacterStatsService();
 
@@ -101,11 +129,18 @@ const ENEMY_ATTACK_WINDUP_MS = 300;
 type ContentEnemyId = Parameters<typeof contentRegistry.enemies.get>[0];
 
 type ProgressionUpdateResult =
-  | { readonly ok: true; readonly maxHp: number; readonly hp: number; readonly gainedMaxHp: number }
+  | {
+      readonly ok: true;
+      readonly maxHp: number;
+      readonly hp: number;
+      readonly gainedMaxHp: number;
+      readonly gainedSkillPoints: number;
+      readonly totalSkillPoints: number;
+    }
   | { readonly ok: false };
 
 async function applyProgressionUpdate(
-  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number; damage?: number; armor?: number },
+  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number; damage?: number; armor?: number; skillPoints?: number },
   progression: { readonly xp: number; readonly level: number; readonly leveledUp: boolean },
 ): Promise<ProgressionUpdateResult> {
   const characterRepository = new CharacterRepository();
@@ -128,6 +163,8 @@ async function applyProgressionUpdate(
 
   const previousMaxHp = Number.isFinite(player.maxHp) ? Math.max(0, player.maxHp ?? 0) : 0;
   const previousHp = Number.isFinite(player.hp) ? Math.max(0, player.hp ?? 0) : character.currentHp;
+  const previousLevel = Math.max(1, Math.floor(character.level));
+  const levelsGained = Math.max(0, progression.level - previousLevel);
   const recalculated = characterStatsService.calculateEquippedStats(
     characterStatsService.calculateLevelScaledStats(origin.baseStats, characterClass.baseStats, progression.level).primary,
     modifiers,
@@ -137,8 +174,9 @@ async function applyProgressionUpdate(
   const gainedMaxHp = Math.max(0, nextMaxHp - previousMaxHp);
   const nextHp = Math.min(nextMaxHp, previousHp + gainedMaxHp);
 
+  let updatedCharacter;
   try {
-    await characterRepository.updateProgressionState(player.characterId, {
+    updatedCharacter = await characterRepository.updateProgressionState(player.characterId, {
       xp: progression.xp,
       level: progression.level,
       currentHp: nextHp,
@@ -146,6 +184,7 @@ async function applyProgressionUpdate(
         ...recalculated.primary,
         ...recalculated.derived,
       },
+      levelsGained,
     });
   } catch {
     return { ok: false };
@@ -165,12 +204,15 @@ async function applyProgressionUpdate(
   if ("armor" in player) {
     player.armor = recalculated.derived.armor;
   }
+  if ("skillPoints" in player && player.skillPoints !== undefined) {
+    player.skillPoints = updatedCharacter.skillPoints;
+  }
 
-  return { ok: true, maxHp: nextMaxHp, hp: nextHp, gainedMaxHp };
+  return { ok: true, maxHp: nextMaxHp, hp: nextHp, gainedMaxHp, gainedSkillPoints: levelsGained, totalSkillPoints: updatedCharacter.skillPoints };
 }
 
 async function grantFlatXpReward(
-  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number },
+  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number; skillPoints?: number },
   xpReward: number,
   sendToClient: (type: string, payload: unknown) => void,
 ): Promise<void> {
@@ -200,12 +242,15 @@ async function grantFlatXpReward(
     hp: progressionUpdate.hp,
     maxHp: progressionUpdate.maxHp,
     gainedMaxHp: progressionUpdate.gainedMaxHp,
+    ...(progressionUpdate.gainedSkillPoints > 0
+      ? { gainedSkillPoints: progressionUpdate.gainedSkillPoints, totalSkillPoints: progressionUpdate.totalSkillPoints }
+      : {}),
   };
   sendToClient("xp_gained", xpGained);
 }
 
 async function grantEnemyDefeatXp(
-  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number },
+  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number; skillPoints?: number },
   enemyId: string,
   sendToClient: (type: string, payload: unknown) => void,
 ): Promise<void> {
@@ -215,6 +260,32 @@ async function grantEnemyDefeatXp(
   }
 
   await grantFlatXpReward(player, enemyDefinition.xp, sendToClient);
+}
+
+/**
+ * Milestone 0.3 -- 4-Slot Flask Belt: Multi-Flask Charge Kill
+ * Replenishment. On a mob kill, every equipped belt slot (charges
+ * clamped to its own max) is replenished by a yield scaled by the
+ * mob's content-defined level and its rolled rarity tier -- a higher-
+ * level or rarer kill (champion/elite) refills more than a base
+ * normal-tier kill of the same enemy. Slots with no flask equipped
+ * (max charges 0) are unaffected.
+ */
+function replenishFlaskBeltOnKill(player: PlayerPresence, enemyId: string, rarity: string): void {
+  const enemyDefinition = contentRegistry.enemies.get(enemyId as ContentEnemyId);
+  const level = enemyDefinition?.level ?? 1;
+  const levelFactor = 1 + Math.floor(Math.max(0, level - 1) / 5);
+  const rarityFactor = getEnemyRarityMultiplier(rarity).bonusLootRolls + 1;
+  const yieldAmount = levelFactor * rarityFactor;
+
+  for (const slot of [1, 2, 3, 4] as const) {
+    const maxCharges = getFlaskSlotMaxCharges(player, slot);
+    if (maxCharges <= 0) {
+      continue;
+    }
+    const replenished = Math.min(maxCharges, getFlaskSlotCharges(player, slot) + yieldAmount);
+    setFlaskSlotCharges(player, slot, replenished);
+  }
 }
 
 function toWorldUnits(contentUnits: number, fallback: number): number {
@@ -315,7 +386,7 @@ export class CombatRoom extends Room {
   private pickupWorldLootHandlerRegistered = false;
   private skillSlotHandlerRegistered = false;
   private dodgeHandlerRegistered = false;
-  private healingFlaskHandlerRegistered = false;
+  private flaskSlotHandlerRegistered = false;
   private chatHandlerRegistered = false;
   private globalChatHandlerRegistered = false;
 
@@ -334,12 +405,25 @@ export class CombatRoom extends Room {
    */
   private readonly pendingWrites = new Set<Promise<void>>();
 
+  /**
+   * Core 0.1 Foundation -- Server-Authoritative Pathfinding & Enemy
+   * Collision. Combat zones carry no `building_footprint` props today
+   * (see `resolveZoneBuildingFootprints`), so this always resolves to
+   * an empty array right now and every avoidance check it feeds
+   * short-circuits at zero cost -- but resolving it the same way
+   * `TownRoom` does means a combat zone that later gains obstacle
+   * geometry gets working player/enemy collision for free.
+   */
+  private buildingFootprints: readonly (readonly WorldPropPoint[])[] = [];
+
   public override async onCreate(options: CombatRoomJoinOptions): Promise<void> {
     const log = createRoomLogger(
       (this as unknown as { logger?: unknown }).logger,
     );
 
     const zoneId: ZoneId = options.requestedZoneId ?? ("blackwire_sewers" as ZoneId);
+
+    this.buildingFootprints = resolveZoneBuildingFootprints(zoneId);
 
     const state = new CombatRoomState(zoneId);
     this.setState(state);
@@ -360,7 +444,7 @@ export class CombatRoom extends Room {
      this.registerPickupWorldLootHandler(log);
     this.registerSkillSlotHandler(log);
     this.registerDodgeHandler(log);
-    this.registerHealingFlaskHandler(log);
+    this.registerFlaskSlotHandler(log);
     if (!this.chatHandlerRegistered) {
       this.chatHandlerRegistered = true;
       registerChatHandler(this, log);
@@ -371,6 +455,7 @@ export class CombatRoom extends Room {
     }
 
     this.setSimulationInterval((deltaMs: number) => {
+      this.applyStatusEffectTicks(state, Date.now());
       // The CombatRoomState has the same `playerPresence` shape
       // (and the same `enemies` MapSchema) as `TownRoomState`, so
       // the same movement step helper is safe to reuse here
@@ -378,10 +463,28 @@ export class CombatRoom extends Room {
       stepTownRoomMovement(
         state as unknown as Parameters<typeof stepTownRoomMovement>[0],
         deltaMs,
-        { now: Date.now() },
+        { now: Date.now(), buildingFootprints: this.buildingFootprints },
       );
       this.applyCombatEnemyAggroDamage(Date.now(), deltaMs);
       this.respawnCombatEnemies(state, Date.now());
+
+      // Milestone 0.2 -- resolve projectile travel/impact and expire
+      // ground-effect visual markers, after enemies have moved this
+      // tick so homing projectiles chase current positions.
+      stepProjectiles(state, deltaMs, Date.now(), (projectile, enemy) => {
+        this.handleProjectileImpact(state, projectile, enemy, Date.now(), log);
+      });
+      cleanupExpiredGroundEffects(state, Date.now());
+
+      // Milestone 0.3 -- Netrunner's overclock_turret: auto-fire any
+      // active turrets at nearby enemies on their own attack cadence.
+      stepTurrets(state, Date.now(), (shot) => {
+        this.handleTurretShot(state, shot, Date.now(), log);
+      });
+
+      state.playerPresence.forEach((player) => {
+        regenerateMana(player, deltaMs);
+      });
     }, TOWN_MOVEMENT_TICK_RATE_MS);
 
     log.info(
@@ -527,11 +630,15 @@ export class CombatRoom extends Room {
       resolvedZoneId,
       hp: currentHp,
       maxHp,
-      restoredFlaskCharges: undefined,
       movementSpeed,
       attackCooldownMs,
       damage,
       armor,
+      mind: result.character.stats?.primary.mind ?? 0,
+      skillPoints: result.character.skillPoints,
+      primarySkillRank: result.character.primarySkillRank,
+      secondarySkillRank: result.character.secondarySkillRank,
+      tertiarySkillRank: result.character.tertiarySkillRank,
       restoredLocationZoneId: result.character.lastLocationZoneId ?? undefined,
       restoredLocationX: result.character.lastLocationX ?? undefined,
       restoredLocationY: result.character.lastLocationY ?? undefined,
@@ -552,6 +659,15 @@ export class CombatRoom extends Room {
       _client.send("equipment_updated", { type: "equipment_updated", equipment });
     } catch {
       // swallow send failures; the next equip/unequip will still sync it
+    }
+
+    // Milestone 0.3 -- populate the flask belt from equipped items +
+    // persisted charges now that the equipment lookup above resolved.
+    try {
+      const flaskState = await new CharacterRepository().findFlaskChargesJsonForUser(characterId.toString(), resolvedUserId);
+      await syncFlaskBeltFromEquipment(presence, characterId.toString(), flaskState?.flaskChargesJson);
+    } catch {
+      // leave the belt empty; the next equip/unequip will populate it
     }
 
     await sendGlobalChatHistory(_client, safeLog);
@@ -609,7 +725,7 @@ export class CombatRoom extends Room {
           presence.x,
           presence.y,
           Math.max(0, Math.min(presence.maxHp, presence.hp)),
-          Math.max(0, Math.min(presence.maxFlaskCharges, Math.floor(presence.flaskCharges))),
+          buildFlaskChargesJsonForPresence(presence),
         );
       } catch (error: unknown) {
         safeLog.warn?.(
@@ -715,16 +831,47 @@ export class CombatRoom extends Room {
         return;
       }
 
+      if (
+        this.buildingFootprints.length > 0 &&
+        isPointInsideAnyPolygon(result.targetX, result.targetY, this.buildingFootprints)
+      ) {
+        const rejection: RequestMoveRejectedServerMessage = {
+          type: "request_move_rejected",
+          reason: "target_inside_building",
+          ...(result.clientTime !== undefined ? { clientTime: result.clientTime } : {}),
+        };
+        try {
+          client.send("request_move_rejected", rejection);
+        } catch {}
+        return;
+      }
+
+      const player = state.playerPresence.get(client.sessionId);
+
       // CombatRoom reuses the same `applyMovementIntent` helper as
       // `TownRoom` because the state shape (`playerPresence` keyed
       // by sessionId with the same movement fields) is identical.
       // The cast keeps the helper room-state-agnostic; no new
-      // helper body is introduced here.
+      // helper body is introduced here. Core 0.1 Foundation -- also
+      // reuses the same building-avoidance path computation as
+      // TownRoom (see `computeBuildingAvoidancePath`); a no-op today
+      // since combat zones carry no building footprints, but correct
+      // as soon as one does.
+      const path = computeBuildingAvoidancePath(
+        player?.x ?? result.targetX,
+        player?.y ?? result.targetY,
+        result.targetX,
+        result.targetY,
+        this.buildingFootprints,
+      );
+      const [firstWaypoint, ...remainingWaypoints] = path;
+
       applyMovementIntent(
         state as unknown as Parameters<typeof applyMovementIntent>[0],
         client.sessionId,
-        result.targetX,
-        result.targetY,
+        firstWaypoint?.x ?? result.targetX,
+        firstWaypoint?.y ?? result.targetY,
+        remainingWaypoints,
       );
 
       log.debug?.(
@@ -796,6 +943,7 @@ export class CombatRoom extends Room {
         : [];
 
       if (damageResult.defeated) {
+        replenishFlaskBeltOnKill(player, validation.enemy.enemyId, validation.enemy.rarity);
         this.trackPendingWrite(
           grantEnemyDefeatXp(player, validation.enemy.enemyId, (type, payload) => {
             try {
@@ -960,30 +1108,31 @@ export class CombatRoom extends Room {
   }
 
   /**
-   * Core 0.12 -- `request_use_healing_flask` handler for CombatRoom.
-   *
-   * Audit finding: `request_use_healing_flask` was previously
-   * registered only in TownRoom.ts, so a player could not use their
-   * healing flask at all in Blackwire Sewers or Static Yard, despite
-   * CombatRoom already tracking and persisting flask charges
-   * end-to-end (join restoration, respawn restoration, onLeave
-   * persistence). This is a direct port of TownRoom's handler,
-   * reusing `validateHealingFlaskIntent`/`applyHealingFlaskIntent`
-   * unchanged -- no new heal logic, no itemization wiring (flask
-   * heal-amount itemization is explicitly cut from this build; see
-   * docs/CORE_BUILD_0_12_PLAN.md).
+   * Milestone 0.3 -- `request_use_flask_slot` handler for CombatRoom.
+   * Generalizes the old single-slot healing-flask handler to the
+   * 4-slot flask belt: the slot's effect (heal / mana restore / dodge
+   * cooldown reset), charges and cooldown are all resolved from the
+   * item cached on the presence at equip time (see
+   * `applyFlaskSlotIntent`/`flaskBeltConfig.ts`), not a hardcoded
+   * heal amount.
    */
-  private registerHealingFlaskHandler(
+  private registerFlaskSlotHandler(
     log: ReturnType<typeof createRoomLogger>,
   ): void {
-    if (this.healingFlaskHandlerRegistered) {
+    if (this.flaskSlotHandlerRegistered) {
       return;
     }
-    this.healingFlaskHandlerRegistered = true;
+    this.flaskSlotHandlerRegistered = true;
 
-    this.onMessage("request_use_healing_flask", (client: Client, raw: unknown) => {
+    this.onMessage("request_use_flask_slot", (client: Client, raw: unknown) => {
       const state = this.state as CombatRoomState;
       const player = state.playerPresence.get(client.sessionId);
+
+      const validation = validateFlaskSlotIntent({ message: raw });
+      if (!validation.ok) {
+        return;
+      }
+      const slot = validation.message.slot;
 
       if (player === undefined) {
         log.warn?.(
@@ -992,45 +1141,37 @@ export class CombatRoom extends Room {
             roomName: this.roomName,
             sessionId: client.sessionId,
           },
-          "CombatRoom request_use_healing_flask rejected: player not found.",
+          "CombatRoom request_use_flask_slot rejected: player not found.",
         );
         return;
       }
 
-      const validation = validateHealingFlaskIntent({ message: raw });
-      if (!validation.ok) {
-        const rejection: RequestUseHealingFlaskRejectedServerMessage = {
-          type: "request_use_healing_flask_rejected",
-          reason: validation.reason,
-        };
-        try {
-          client.send("request_use_healing_flask_rejected", rejection);
-        } catch {}
-        return;
-      }
-
       const now = Date.now();
-      const result = applyHealingFlaskIntent({ player, now });
+      const result = applyFlaskSlotIntent({ player, slot, now });
       if (!result.ok) {
-        const rejection: RequestUseHealingFlaskRejectedServerMessage = {
-          type: "request_use_healing_flask_rejected",
+        const rejection: RequestUseFlaskSlotRejectedServerMessage = {
+          type: "request_use_flask_slot_rejected",
+          slot,
           reason: result.reason,
         };
         try {
-          client.send("request_use_healing_flask_rejected", rejection);
+          client.send("request_use_flask_slot_rejected", rejection);
         } catch {}
         return;
       }
 
-      const accepted: RequestUseHealingFlaskAcceptedServerMessage = {
-        type: "request_use_healing_flask_accepted",
+      const accepted: RequestUseFlaskSlotAcceptedServerMessage = {
+        type: "request_use_flask_slot_accepted",
+        slot,
+        effectType: result.effectType,
         healedAmount: result.healedAmount,
         remainingHp: result.remainingHp,
-        flaskCharges: result.flaskCharges,
-        nextFlaskAt: result.nextFlaskAt,
+        remainingMana: result.remainingMana,
+        charges: result.charges,
+        nextReadyAt: result.nextReadyAt,
       };
       try {
-        client.send("request_use_healing_flask_accepted", accepted);
+        client.send("request_use_flask_slot_accepted", accepted);
       } catch {}
 
       log.debug?.(
@@ -1038,12 +1179,11 @@ export class CombatRoom extends Room {
           roomId: this.roomId,
           roomName: this.roomName,
           sessionId: client.sessionId,
-          healedAmount: result.healedAmount,
-          remainingHp: result.remainingHp,
-          flaskCharges: result.flaskCharges,
-          nextFlaskAt: result.nextFlaskAt,
+          slot,
+          effectType: result.effectType,
+          charges: result.charges,
         },
-        "CombatRoom request_use_healing_flask accepted and HP / charges synced.",
+        "CombatRoom request_use_flask_slot accepted and belt state synced.",
       );
     });
   }
@@ -1109,6 +1249,202 @@ export class CombatRoom extends Room {
         return;
       }
 
+      // Milestone 0.3 -- Street Alchemist Class Archetype. A self_buff
+      // cast (e.g. adrenaline_stim) has no enemy/ground target at all:
+      // it applies its status effect to the caster and resolves
+      // instantly, same shape as the ground_aoe branch below minus the
+      // point/range validation.
+      if (skillDefinition.targeting === "self_buff") {
+        if (!hasSufficientMana(player, skillDefinition.manaCost)) {
+          const rejection: RequestUseSkillSlotRejectedServerMessage = {
+            ...rejectionBase,
+            reason: "insufficient_mana",
+          };
+          try { client.send(rejection.type, rejection); } catch {}
+          return;
+        }
+
+        setSkillSlotCooldownAt(player, slot, now + skillDefinition.cooldownMs);
+        deductMana(player, skillDefinition.manaCost);
+        applySkillEffectIfDefined(player, skillDefinition, now);
+
+        const selfBuffNextReadyAt = getSkillSlotCooldownAt(player, slot);
+        const selfBuffAccepted: RequestUseSkillSlotAcceptedServerMessage = {
+          type: "request_use_skill_slot_accepted",
+          slot,
+          targetEnemyId: "",
+          damage: 0,
+          remainingHp: 0,
+          defeated: false,
+          nextReadyAt: selfBuffNextReadyAt,
+          remainingMana: player.mana,
+        };
+        try { client.send(selfBuffAccepted.type, selfBuffAccepted); } catch {}
+        return;
+      }
+
+      // Milestone 0.2 -- Server-Authoritative Projectiles & Ground-Targeted
+      // AoE Skills. A ground_aoe cast targets a point, not an enemy: it
+      // resolves every hit instantly here rather than going through the
+      // targetEnemyId path below.
+      if (skillDefinition.targeting === "ground_aoe") {
+        const targetX = typeof message?.targetX === "number" ? message.targetX : NaN;
+        const targetY = typeof message?.targetY === "number" ? message.targetY : NaN;
+        if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) {
+          const rejection: RequestUseSkillSlotRejectedServerMessage = {
+            ...rejectionBase,
+            reason: "invalid_ground_target",
+          };
+          try { client.send(rejection.type, rejection); } catch {}
+          return;
+        }
+
+        if (Math.hypot(targetX - player.x, targetY - player.y) > skillDefinition.range) {
+          const rejection: RequestUseSkillSlotRejectedServerMessage = {
+            ...rejectionBase,
+            reason: "out_of_range",
+          };
+          try { client.send(rejection.type, rejection); } catch {}
+          return;
+        }
+
+        if (!hasSufficientMana(player, skillDefinition.manaCost)) {
+          const rejection: RequestUseSkillSlotRejectedServerMessage = {
+            ...rejectionBase,
+            reason: "insufficient_mana",
+          };
+          try { client.send(rejection.type, rejection); } catch {}
+          return;
+        }
+
+        setSkillSlotCooldownAt(player, slot, now + skillDefinition.cooldownMs);
+        deductMana(player, skillDefinition.manaCost);
+        const aoeRank = getSkillSlotRank(player, slot);
+        const aoeCastDamage = resolveSkillCastDamage(skillDefinition, player.damage, aoeRank, skillDefinition.damagePerRank);
+
+        // Milestone 0.3 -- Netrunner's overclock_turret deploys a
+        // stationary turret at the targeted point instead of resolving
+        // an instant AoE hit; see `SkillSlotDefinition.spawnsTurret`.
+        if (skillDefinition.spawnsTurret === true) {
+          spawnTurret(state, {
+            skillId: skillDefinition.skillId,
+            ownerSessionId: client.sessionId,
+            x: targetX,
+            y: targetY,
+            attackRange: skillDefinition.aoeRadius ?? 0,
+            attackDamage: aoeCastDamage,
+            attackIntervalMs: skillDefinition.turretAttackIntervalMs ?? 800,
+            durationMs: skillDefinition.turretDurationMs ?? 6000,
+            now,
+          });
+
+          const turretNextReadyAt = getSkillSlotCooldownAt(player, slot);
+          const turretAccepted: RequestUseSkillSlotAcceptedServerMessage = {
+            type: "request_use_skill_slot_accepted",
+            slot,
+            targetEnemyId: "",
+            damage: 0,
+            remainingHp: 0,
+            defeated: false,
+            nextReadyAt: turretNextReadyAt,
+            remainingMana: player.mana,
+          };
+          try { client.send(turretAccepted.type, turretAccepted); } catch {}
+          return;
+        }
+
+        const { hits } = resolveGroundAoeCast(state, {
+          skillId: skillDefinition.skillId,
+          ownerSessionId: client.sessionId,
+          x: targetX,
+          y: targetY,
+          radius: skillDefinition.aoeRadius ?? 0,
+          damage: aoeCastDamage,
+          appliesEffect: skillDefinition.appliesEffect,
+          effectDurationMs: skillDefinition.effectDurationMs,
+          effectMagnitude: skillDefinition.effectMagnitude,
+          appliesSecondaryEffect: skillDefinition.appliesSecondaryEffect,
+          secondaryEffectDurationMs: skillDefinition.secondaryEffectDurationMs,
+          secondaryEffectMagnitude: skillDefinition.secondaryEffectMagnitude,
+          now,
+        });
+
+        for (const hit of hits) {
+          const damageApplied: DamageAppliedServerMessage = {
+            type: "damage_applied",
+            targetEntityId: hit.enemy.id as unknown as EntityId,
+            sourceEntityId: client.sessionId as unknown as EntityId,
+            damage: hit.damageResult.appliedDamage,
+            remainingHp: hit.damageResult.remainingHp,
+          };
+          try { client.send(damageApplied.type, damageApplied); } catch {}
+
+          if (hit.damageResult.defeated) {
+            spawnWorldLootOnEnemyDefeat(state as never, hit.enemy, now);
+            replenishFlaskBeltOnKill(player, hit.enemy.enemyId, hit.enemy.rarity);
+            this.trackPendingWrite(
+              grantEnemyDefeatXp(player, hit.enemy.enemyId, (type, payload) => {
+                try { client.send(type, payload); } catch {}
+              }),
+              log,
+              "grantEnemyDefeatXp",
+            );
+            const progressResults = advanceObjectiveProgressAllSlots(player, hit.enemy.enemyId, (updated) => {
+              this.trackPendingWrite(
+                new ObjectiveRepository().updateProgress(
+                  updated.characterId.toString(),
+                  updated.objectiveId,
+                  updated.currentProgress,
+                ),
+                log,
+                "objectiveProgress.updateProgress",
+              );
+            });
+            for (const progressResult of progressResults) {
+              try {
+                client.send("objective_updated", {
+                  type: "objective_updated",
+                  slot: progressResult.slot,
+                  objectiveId: progressResult.objectiveId,
+                  label: progressResult.label,
+                  descriptionKey: progressResult.descriptionKey,
+                  current: progressResult.current,
+                  target: progressResult.target,
+                  completed: progressResult.completed,
+                  ...(progressResult.completed ? { readyToTurnIn: true } : {}),
+                });
+              } catch {}
+            }
+          }
+        }
+
+        const aoeNextReadyAt = getSkillSlotCooldownAt(player, slot);
+        const aoeAccepted: RequestUseSkillSlotAcceptedServerMessage = {
+          type: "request_use_skill_slot_accepted",
+          slot,
+          targetEnemyId: "",
+          damage: 0,
+          remainingHp: 0,
+          defeated: false,
+          nextReadyAt: aoeNextReadyAt,
+          remainingMana: player.mana,
+        };
+        try { client.send(aoeAccepted.type, aoeAccepted); } catch {}
+
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            slot,
+            hitCount: hits.length,
+            nextReadyAt: aoeNextReadyAt,
+          },
+          "CombatRoom request_use_skill_slot (ground_aoe) accepted and resolved instantly.",
+        );
+        return;
+      }
+
       const targetEnemyId = typeof message?.targetEnemyId === "string" && message.targetEnemyId.length > 0
         ? message.targetEnemyId
         : undefined;
@@ -1151,15 +1487,80 @@ export class CombatRoom extends Room {
         return;
       }
 
+      // Core 0.1 Foundation -- Mana/Resource System.
+      if (!hasSufficientMana(player, skillDefinition.manaCost)) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "insufficient_mana",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
       setSkillSlotCooldownAt(player, slot, now + skillDefinition.cooldownMs);
-      const castDamage = resolveSkillCastDamage(skillDefinition, player.damage);
+      deductMana(player, skillDefinition.manaCost);
+      const rank = getSkillSlotRank(player, slot);
+      const castDamage = resolveSkillCastDamage(skillDefinition, player.damage, rank, skillDefinition.damagePerRank);
+
+      // Milestone 0.2 -- a projectile skill travels instead of hitting
+      // instantly: spawn it and defer damage/effect/XP/loot/objective
+      // rewards to the impact callback (see `handleProjectileImpact`,
+      // wired into `stepProjectiles` in the simulation tick).
+      if (skillDefinition.isProjectile === true) {
+        spawnProjectile(state, {
+          skillId: skillDefinition.skillId,
+          ownerSessionId: client.sessionId,
+          originX: player.x,
+          originY: player.y,
+          targetX: enemy.x,
+          targetY: enemy.y,
+          targetEnemyId: enemy.id,
+          speed: skillDefinition.projectileSpeed ?? 480,
+          damage: castDamage,
+          appliesEffect: skillDefinition.appliesEffect,
+          effectDurationMs: skillDefinition.effectDurationMs,
+          effectMagnitude: skillDefinition.effectMagnitude,
+          now,
+        });
+
+        const projectileNextReadyAt = getSkillSlotCooldownAt(player, slot);
+        const projectileAccepted: RequestUseSkillSlotAcceptedServerMessage = {
+          type: "request_use_skill_slot_accepted",
+          slot,
+          targetEnemyId: "",
+          damage: 0,
+          remainingHp: 0,
+          defeated: false,
+          nextReadyAt: projectileNextReadyAt,
+          remainingMana: player.mana,
+        };
+        try { client.send(projectileAccepted.type, projectileAccepted); } catch {}
+
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            slot,
+            targetEnemyId: enemy.id,
+            nextReadyAt: projectileNextReadyAt,
+          },
+          "CombatRoom request_use_skill_slot (projectile) accepted; damage deferred to impact.",
+        );
+        return;
+      }
+
       const damageResult = applyEnemyDamage(enemy, castDamage);
+      if (!damageResult.defeated) {
+        applySkillEffectIfDefined(enemy, skillDefinition, now);
+      }
 
       const spawnedLootList = damageResult.defeated
         ? spawnWorldLootOnEnemyDefeat(state as never, enemy, now)
         : [];
 
       if (damageResult.defeated) {
+        replenishFlaskBeltOnKill(player, enemy.enemyId, enemy.rarity);
         this.trackPendingWrite(
           grantEnemyDefeatXp(player, enemy.enemyId, (type, payload) => {
             try { client.send(type, payload); } catch {}
@@ -1205,6 +1606,7 @@ export class CombatRoom extends Room {
         remainingHp: damageResult.remainingHp,
         defeated: damageResult.defeated,
         nextReadyAt,
+        remainingMana: player.mana,
       };
       try { client.send(accepted.type, accepted); } catch {}
 
@@ -1225,6 +1627,192 @@ export class CombatRoom extends Room {
         "CombatRoom request_use_skill_slot accepted and synced skill combat rewards/state.",
       );
     });
+  }
+
+  /**
+   * Milestone 0.2 -- resolves a homing projectile's impact: applies
+   * damage/effect and (on kill) the same XP/loot/objective-progress
+   * rewards the instant-cast path grants inline, then sends
+   * `damage_applied` to the projectile owner's client. Looked up by
+   * `ownerSessionId` (not a handler's `client`) since impact happens on
+   * a later simulation tick, possibly after the casting message handler
+   * has returned. A no-op "miss" when the owner or enemy is gone.
+   */
+  private handleProjectileImpact(
+    state: CombatRoomState,
+    projectile: ProjectilePresence,
+    enemy: EnemyPresence | undefined,
+    now: number,
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (enemy === undefined) {
+      return;
+    }
+    const player = state.playerPresence.get(projectile.ownerSessionId);
+    if (player === undefined) {
+      return;
+    }
+    const ownerClient = this.clients.find((client) => client.sessionId === projectile.ownerSessionId);
+
+    const damageResult = applyEnemyDamage(enemy, projectile.damage);
+    if (!damageResult.defeated && projectile.appliesEffect.length > 0) {
+      applySkillEffectIfDefined(enemy, {
+        appliesEffect: projectile.appliesEffect as "bleed" | "slow" | "stun" | "burn" | "emp_dot",
+        effectDurationMs: projectile.effectDurationMs,
+        effectMagnitude: projectile.effectMagnitude,
+      }, now);
+    }
+
+    if (ownerClient !== undefined) {
+      const damageApplied: DamageAppliedServerMessage = {
+        type: "damage_applied",
+        targetEntityId: enemy.id as unknown as EntityId,
+        sourceEntityId: projectile.ownerSessionId as unknown as EntityId,
+        damage: damageResult.appliedDamage,
+        remainingHp: damageResult.remainingHp,
+      };
+      try { ownerClient.send(damageApplied.type, damageApplied); } catch {}
+    }
+
+    const spawnedLootList = damageResult.defeated
+      ? spawnWorldLootOnEnemyDefeat(state as never, enemy, now)
+      : [];
+
+    if (damageResult.defeated && ownerClient !== undefined) {
+      replenishFlaskBeltOnKill(player, enemy.enemyId, enemy.rarity);
+      this.trackPendingWrite(
+        grantEnemyDefeatXp(player, enemy.enemyId, (type, payload) => {
+          try { ownerClient.send(type, payload); } catch {}
+        }),
+        log,
+        "grantEnemyDefeatXp",
+      );
+
+      const progressResults = advanceObjectiveProgressAllSlots(player, enemy.enemyId, (updated) => {
+        this.trackPendingWrite(
+          new ObjectiveRepository().updateProgress(
+            updated.characterId.toString(),
+            updated.objectiveId,
+            updated.currentProgress,
+          ),
+          log,
+          "objectiveProgress.updateProgress",
+        );
+      });
+      for (const progressResult of progressResults) {
+        try {
+          ownerClient.send("objective_updated", {
+            type: "objective_updated",
+            slot: progressResult.slot,
+            objectiveId: progressResult.objectiveId,
+            label: progressResult.label,
+            descriptionKey: progressResult.descriptionKey,
+            current: progressResult.current,
+            target: progressResult.target,
+            completed: progressResult.completed,
+            ...(progressResult.completed ? { readyToTurnIn: true } : {}),
+          });
+        } catch {}
+      }
+    }
+
+    log.debug?.(
+      {
+        roomId: this.roomId,
+        roomName: this.roomName,
+        projectileId: projectile.id,
+        targetEnemyId: enemy.id,
+        appliedDamage: damageResult.appliedDamage,
+        defeated: damageResult.defeated,
+        worldLootCount: spawnedLootList.length,
+      },
+      "CombatRoom projectile impact resolved.",
+    );
+  }
+
+  /**
+   * Milestone 0.3 -- resolves one automated turret shot: applies damage
+   * and (on kill) the same XP/loot/objective-progress rewards a direct
+   * skill cast grants, then sends `damage_applied` to the turret owner's
+   * client. A no-op reward-wise if the owner has disconnected -- the
+   * shot still lands (the enemy stays damaged), matching how a
+   * projectile impact behaves after its caster leaves mid-flight.
+   */
+  private handleTurretShot(
+    state: CombatRoomState,
+    shot: TurretShot,
+    now: number,
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    const { enemy, damageResult } = shot;
+    const player = state.playerPresence.get(shot.turret.ownerSessionId);
+    const ownerClient = this.clients.find((client) => client.sessionId === shot.turret.ownerSessionId);
+
+    if (ownerClient !== undefined) {
+      const damageApplied: DamageAppliedServerMessage = {
+        type: "damage_applied",
+        targetEntityId: enemy.id as unknown as EntityId,
+        sourceEntityId: shot.turret.ownerSessionId as unknown as EntityId,
+        damage: damageResult.appliedDamage,
+        remainingHp: damageResult.remainingHp,
+      };
+      try { ownerClient.send(damageApplied.type, damageApplied); } catch {}
+    }
+
+    const spawnedLootList = damageResult.defeated
+      ? spawnWorldLootOnEnemyDefeat(state as never, enemy, now)
+      : [];
+
+    if (damageResult.defeated && player !== undefined && ownerClient !== undefined) {
+      replenishFlaskBeltOnKill(player, enemy.enemyId, enemy.rarity);
+      this.trackPendingWrite(
+        grantEnemyDefeatXp(player, enemy.enemyId, (type, payload) => {
+          try { ownerClient.send(type, payload); } catch {}
+        }),
+        log,
+        "grantEnemyDefeatXp",
+      );
+
+      const progressResults = advanceObjectiveProgressAllSlots(player, enemy.enemyId, (updated) => {
+        this.trackPendingWrite(
+          new ObjectiveRepository().updateProgress(
+            updated.characterId.toString(),
+            updated.objectiveId,
+            updated.currentProgress,
+          ),
+          log,
+          "objectiveProgress.updateProgress",
+        );
+      });
+      for (const progressResult of progressResults) {
+        try {
+          ownerClient.send("objective_updated", {
+            type: "objective_updated",
+            slot: progressResult.slot,
+            objectiveId: progressResult.objectiveId,
+            label: progressResult.label,
+            descriptionKey: progressResult.descriptionKey,
+            current: progressResult.current,
+            target: progressResult.target,
+            completed: progressResult.completed,
+            ...(progressResult.completed ? { readyToTurnIn: true } : {}),
+          });
+        } catch {}
+      }
+    }
+
+    log.debug?.(
+      {
+        roomId: this.roomId,
+        roomName: this.roomName,
+        turretId: shot.turret.id,
+        targetEnemyId: enemy.id,
+        appliedDamage: damageResult.appliedDamage,
+        defeated: damageResult.defeated,
+        worldLootCount: spawnedLootList.length,
+      },
+      "CombatRoom turret shot resolved.",
+    );
   }
 
   private registerPickupWorldLootHandler(
@@ -1342,19 +1930,21 @@ export class CombatRoom extends Room {
           targetX: returnSpawn.x,
           targetY: returnSpawn.y,
         });
+
+        player.hp = player.maxHp;
+        player.lifeState = "alive";
+        player.hasMovementTarget = false;
+        player.statusEffects = "";
+        restoreFlaskBeltToFull(player);
+
         await new CharacterService().updateCharacterRoomIntent(
           player.characterId,
           "namesti_republiky",
           returnSpawn.x,
           returnSpawn.y,
           player.maxHp,
-          player.maxFlaskCharges,
+          buildFlaskChargesJsonForPresence(player),
         );
-
-        player.hp = player.maxHp;
-        player.lifeState = "alive";
-        player.hasMovementTarget = false;
-        restoreFlaskToFull(player);
 
         const approved: import("@doomscrolls/shared").CombatTownReturnApprovedServerMessage = {
           type: "combat_town_return_approved",
@@ -1454,7 +2044,7 @@ export class CombatRoom extends Room {
           returnSpawn.x,
           returnSpawn.y,
           Math.max(0, Math.min(player.maxHp, player.hp)),
-          Math.max(0, Math.min(player.maxFlaskCharges, Math.floor(player.flaskCharges))),
+          buildFlaskChargesJsonForPresence(player),
         );
 
         const approved: import("@doomscrolls/shared").CombatTownReturnApprovedServerMessage = {
@@ -1576,7 +2166,9 @@ export class CombatRoom extends Room {
       const enemyAggroRange = toWorldUnits(enemyDefinition?.aggroRange ?? 0, 120);
       const enemyLeashRange = toWorldUnits(enemyDefinition?.leashRange ?? 0, 180);
       const enemyAttackCooldownMs = enemyDefinition?.attackCooldownMs ?? 1200;
-      const enemyAttackDamage = enemyDefinition?.damage ?? 2;
+      // Core 0.1 Foundation -- Champion/Elite enemies deal scaled damage
+      // (see enemyRarity.ts / TownRoom's identical application).
+      const enemyAttackDamage = (enemyDefinition?.damage ?? 2) * getEnemyRarityMultiplier(enemy.rarity).damage;
       const distanceFromSpawn = Math.hypot(enemy.x - enemy.spawnX, enemy.y - enemy.spawnY);
 
       if (enemy.defeated || enemy.hp <= 0) {
@@ -1585,6 +2177,13 @@ export class CombatRoom extends Room {
         enemy.nextAttackAtMs = 0;
         return;
       }
+
+      // Core 0.2 -- a stunned enemy can neither move nor attack this tick.
+      if (isStunned(enemy, now)) {
+        return;
+      }
+
+      const slowMultiplier = getSlowMultiplier(enemy, now);
 
       const currentTargetSessionId = enemy.targetPlayerSessionId;
 
@@ -1601,11 +2200,12 @@ export class CombatRoom extends Room {
       }
 
       if (enemy.targetPlayerSessionId.length === 0 && enemy.state === "returning") {
-        moveEnemyTowardPoint(
+        stepEnemyTowardPointWithAvoidance(
           enemy,
           { x: enemy.spawnX, y: enemy.spawnY },
-          enemyMoveSpeed,
+          enemyMoveSpeed * slowMultiplier,
           deltaMs,
+          this.buildingFootprints,
         );
 
         const remainingDistanceToSpawn = Math.hypot(enemy.x - enemy.spawnX, enemy.y - enemy.spawnY);
@@ -1641,7 +2241,7 @@ export class CombatRoom extends Room {
           || !canReacquireWhileReturning
         ) {
           enemy.state = "idle";
-          applyWanderMovement(enemy, enemyMoveSpeed, deltaMs, now);
+          applyWanderMovement(enemy, enemyMoveSpeed * slowMultiplier, deltaMs, now);
           return;
         }
 
@@ -1675,11 +2275,12 @@ export class CombatRoom extends Room {
       // cleared until landing, so the existing miss branch below is
       // actually reachable. See docs/CORE_BUILD_0_24_PLAN.md.
       if (enemy.attackLandingAtMs === 0) {
-        moveEnemyTowardTarget(
+        stepEnemyTowardTargetWithAvoidance(
           enemy,
           targetPlayer,
-          enemyMoveSpeed,
+          enemyMoveSpeed * slowMultiplier,
           deltaMs,
+          this.buildingFootprints,
         );
       }
 
@@ -1824,6 +2425,19 @@ export class CombatRoom extends Room {
       enemy.respawnAtMs = 0;
       enemy.attackKind = "normal";
       enemy.nextHeavyAttackAtMs = 0;
+      enemy.statusEffects = "";
     });
+  }
+
+  /**
+   * Core 0.2 -- Server-Authoritative Status Effects & Debuff System.
+   * CombatRoom's per-tick hook into the shared `applyStatusEffectTicks`
+   * helper. CombatRoom has no corpse system, so a DoT-caused player
+   * death just flips `lifeState` to "downed" (matching the existing
+   * enemy-attack death handling above) -- no `onPlayerDowned` callback
+   * needed beyond what the helper already does.
+   */
+  private applyStatusEffectTicks(state: CombatRoomState, now: number): void {
+    runStatusEffectTicks(state, now);
   }
 }

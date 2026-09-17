@@ -4,6 +4,7 @@ import { contentRegistry } from "@doomscrolls/content";
 
 import type { TownRoomEnemySnapshot } from "../../../net/townRoomEnemies";
 import { ENEMY_HP_BAR_ASSET_ID } from "../../visualAssetLoader";
+import { parseActiveStatusEffectTypes, type StatusEffectType } from "../../../net/statusEffects";
 
 // Core 0.23 -- bdragon1727's health-bar strip (see visualAssets.ts) has 8
 // frames, but only frames 0-5 share a consistent footprint; frames 6-7 are
@@ -98,23 +99,28 @@ interface VariantVisual {
 // color families, one per zone (sewer/Blackwire = red-rust, Static Yard =
 // electric blue, Cinderworks = molten orange, Saltmere Docks = brine teal),
 // so every one of the 12 real enemy types reads as visually its own thing.
+// Milestone 0.3 scale/speed pass -- every dimension here (except
+// labelFontSize, kept readable) cut ~20% from its original value so
+// enemies shrink in step with the player marker (see
+// `PLAYER_MARKER_BASE_SCALE` in worldSessionAreaView.ts), making
+// building footprints around Namesti Republiky read as grander.
 const SIZE_HEAVY = {
-  bodyWidth: 32, bodyHeight: 30, coreRadius: 6, coreOffsetY: -4,
-  ringWidth: 48, ringHeight: 22, ringOffsetY: 10,
-  shadowWidth: 40, shadowHeight: 18, shadowOffsetY: 12,
-  labelFontSize: "13px", defeatedCrossSize: 22, defeatedCrossThickness: 4, defeatedOutlineRadius: 14,
+  bodyWidth: 26, bodyHeight: 24, coreRadius: 5, coreOffsetY: -3,
+  ringWidth: 38, ringHeight: 18, ringOffsetY: 8,
+  shadowWidth: 32, shadowHeight: 14, shadowOffsetY: 10,
+  labelFontSize: "13px", defeatedCrossSize: 18, defeatedCrossThickness: 3, defeatedOutlineRadius: 11,
 };
 const SIZE_SKIRMISHER = {
-  bodyWidth: 20, bodyHeight: 20, coreRadius: 4, coreOffsetY: -1,
-  ringWidth: 30, ringHeight: 14, ringOffsetY: 8,
-  shadowWidth: 26, shadowHeight: 11, shadowOffsetY: 10,
-  labelFontSize: "11px", defeatedCrossSize: 14, defeatedCrossThickness: 3, defeatedOutlineRadius: 9,
+  bodyWidth: 16, bodyHeight: 16, coreRadius: 3, coreOffsetY: -1,
+  ringWidth: 24, ringHeight: 11, ringOffsetY: 6,
+  shadowWidth: 21, shadowHeight: 9, shadowOffsetY: 8,
+  labelFontSize: "11px", defeatedCrossSize: 11, defeatedCrossThickness: 2, defeatedOutlineRadius: 7,
 };
 const SIZE_COMMON = {
-  bodyWidth: 24, bodyHeight: 24, coreRadius: 5, coreOffsetY: -2,
-  ringWidth: 36, ringHeight: 16, ringOffsetY: 10,
-  shadowWidth: 30, shadowHeight: 14, shadowOffsetY: 12,
-  labelFontSize: "12px", defeatedCrossSize: 18, defeatedCrossThickness: 3, defeatedOutlineRadius: 11,
+  bodyWidth: 19, bodyHeight: 19, coreRadius: 4, coreOffsetY: -2,
+  ringWidth: 29, ringHeight: 13, ringOffsetY: 8,
+  shadowWidth: 24, shadowHeight: 11, shadowOffsetY: 10,
+  labelFontSize: "12px", defeatedCrossSize: 14, defeatedCrossThickness: 2, defeatedOutlineRadius: 9,
 };
 
 // A genuinely unrecognized spriteKey, not a stand-in for any real enemy.
@@ -217,12 +223,41 @@ function resolveVariantVisual(spriteKey: string): VariantVisual {
   return VARIANT_VISUALS[spriteKey] ?? DEFAULT_VARIANT_VISUAL;
 }
 
+// Core 0.1 Foundation -- Enemy Rarity Tiers visual feedback. Gold ring +
+// label tint for Champion, magenta for Elite; normal enemies get neither
+// (the existing per-enemy idle ring/label styling is untouched).
+const RARITY_ACCENT: Readonly<Record<Exclude<TownRoomEnemySnapshot["rarity"], "normal">, { readonly ringColor: number; readonly labelColor: string; readonly tag: string }>> = {
+  champion: { ringColor: 0xffd23f, labelColor: "#ffd23f", tag: "★" },
+  elite: { ringColor: 0xd23fff, labelColor: "#e79bff", tag: "⚔" },
+};
+
+// Core 0.2 -- Status Effects & Debuff System. Small icon glyph per
+// effect type, rendered above the HP bar. Purely visual -- the server
+// remains the sole authority for what's actually active.
+const STATUS_EFFECT_ICONS: Readonly<Record<StatusEffectType, string>> = {
+  bleed: "🩸",
+  slow: "🐌",
+  stun: "💫",
+  burn: "🔥",
+  emp_dot: "⚡",
+};
+
+function formatStatusEffectIcons(types: readonly StatusEffectType[]): string {
+  return types.map((type) => STATUS_EFFECT_ICONS[type]).join(" ");
+}
+
 function getHpRatio(enemy: TownRoomEnemySnapshot): number {
   if (enemy.maxHp <= 0) {
     return 0;
   }
 
   return Phaser.Math.Clamp(enemy.hp / enemy.maxHp, 0, 1);
+}
+
+function resolveRarityAccent(
+  rarity: TownRoomEnemySnapshot["rarity"],
+): (typeof RARITY_ACCENT)[keyof typeof RARITY_ACCENT] | null {
+  return rarity === "normal" ? null : RARITY_ACCENT[rarity];
 }
 
 export interface WorldSessionEnemyPlaceholderView {
@@ -308,6 +343,14 @@ export function createWorldSessionEnemyPlaceholderView(
   // selected by HP ratio -- see resolveHpBarFrame above.
   const hpBarSprite = scene.add.sprite(0, -31, ENEMY_HP_BAR_ASSET_ID, 0);
   hpBarSprite.setDisplaySize(HP_BAR_DISPLAY_WIDTH, HP_BAR_DISPLAY_HEIGHT);
+
+  // Core 0.2 -- small icon row for active status effects (bleed/slow/
+  // stun/burn), shown just above the HP bar. Purely visual.
+  const statusEffectsText = scene.add
+    .text(0, -56, "", {
+      fontSize: "13px",
+    })
+    .setOrigin(0.5);
 
   const labelText = scene.add
     .text(0, 22, t(enemy.label), {
@@ -407,6 +450,7 @@ export function createWorldSessionEnemyPlaceholderView(
     core,
     hpBarSprite,
     hpText,
+    statusEffectsText,
     labelText,
     stateText,
     telegraphMarker,
@@ -447,12 +491,15 @@ export function createWorldSessionEnemyPlaceholderView(
     const visual = resolveVariantVisual(nextSpriteKey);
     const hpRatio = getHpRatio(nextEnemy);
     hpBarSprite.setFrame(resolveHpBarFrame(hpRatio));
+    const rarityAccent = resolveRarityAccent(nextEnemy.rarity);
 
     if (nextSpriteKey !== lastSpriteKey) {
       shadow.setSize(visual.shadowWidth, visual.shadowHeight);
       shadow.setPosition(0, visual.shadowOffsetY);
       ring.setSize(visual.ringWidth, visual.ringHeight);
       ring.setPosition(0, visual.ringOffsetY);
+      rarityRing.setSize(visual.ringWidth + 20, visual.ringHeight + 14);
+      rarityRing.setPosition(0, visual.ringOffsetY);
       body.setSize(visual.bodyWidth, visual.bodyHeight);
       body.setPosition(0, 0);
       core.setRadius(visual.coreRadius);
@@ -491,7 +538,9 @@ export function createWorldSessionEnemyPlaceholderView(
         }),
       );
       hpBarSprite.setVisible(false);
+      statusEffectsText.setVisible(false);
       aggroExclaim.setVisible(false);
+      rarityRing.setVisible(false);
       defeatedCrossOutline.setVisible(true);
       defeatedCrossOutline.setPosition(0, 2);
       defeatedCrossV.setVisible(true);
@@ -512,6 +561,9 @@ export function createWorldSessionEnemyPlaceholderView(
     defeatedCrossV.setVisible(false);
     defeatedCrossH.setVisible(false);
     hpBarSprite.setVisible(true);
+    const activeStatusEffects = parseActiveStatusEffectTypes(nextEnemy.statusEffects, Date.now());
+    statusEffectsText.setText(formatStatusEffectIcons(activeStatusEffects));
+    statusEffectsText.setVisible(activeStatusEffects.length > 0);
     shadow.setFillStyle(0x000000, 0.28);
     if (nextEnemy.state === "chasing") {
       // Universal chase glow, not type-tinted -- "this is hostile right
@@ -545,8 +597,16 @@ export function createWorldSessionEnemyPlaceholderView(
     }
     body.setInteractive({ useHandCursor: true });
     stateText.setText(formatStateText(nextEnemy));
-    labelText.setColor("#ffffff");
-    labelText.setText(t(nextEnemy.label));
+    if (rarityAccent !== null) {
+      rarityRing.setVisible(true);
+      rarityRing.setStrokeStyle(3, rarityAccent.ringColor, 0.9);
+      labelText.setColor(rarityAccent.labelColor);
+      labelText.setText(`${rarityAccent.tag} ${t(nextEnemy.label)}`);
+    } else {
+      rarityRing.setVisible(false);
+      labelText.setColor("#ffffff");
+      labelText.setText(t(nextEnemy.label));
+    }
     if (lastDefeated === true && nextEnemy.defeated === false) {
       respawnedAtMs = Date.now();
     }
@@ -696,6 +756,22 @@ export function createWorldSessionEnemyPlaceholderView(
     });
   };
 
+  // Core 0.1 Foundation -- Champion/Elite rarity ring. A separate
+  // ellipse layered outside the existing ring, like hoverRing below, so
+  // it survives every chasing/returning/idle/defeated ring recolor in
+  // applyEnemyVisualState untouched. Hidden for "normal" rarity.
+  const rarityRing = scene.add.ellipse(
+    0,
+    initialVisual.ringOffsetY,
+    initialVisual.ringWidth + 20,
+    initialVisual.ringHeight + 14,
+    0x000000,
+    0,
+  );
+  rarityRing.setStrokeStyle(3, 0xffffff, 0.9);
+  rarityRing.setVisible(false);
+  container.addAt(rarityRing, container.getIndex(ring));
+
   // Task 314 — hover highlight ring. A separate ellipse shown on top
   // of the existing ring when the player's cursor is over this enemy.
   // It does not interfere with chasing/returning/idle visual state.
@@ -732,6 +808,7 @@ export function createWorldSessionEnemyPlaceholderView(
     setHovered,
     destroy: () => {
       hoverRing.destroy();
+      rarityRing.destroy();
       if (telegraphTween !== null) {
         telegraphTween.stop();
         telegraphTween = null;

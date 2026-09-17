@@ -15,6 +15,7 @@ import { CharacterRepository } from "../../persistence/repositories/CharacterRep
 import { InventoryRepository } from "../../persistence/repositories/InventoryRepository";
 import { ItemRepository } from "../../persistence/repositories/ItemRepository";
 import { getSharedPrismaClient } from "../../persistence/prisma";
+import { applyStackablePlacementPlan, planStackablePlacement, type StackablePlacementItem } from "./itemGridPlacement";
 
 export type VendorBuyItemResult =
   | {
@@ -93,36 +94,37 @@ export async function executeVendorBuyItem(input: {
         return { ok: false as const, reason: "inventory_full" as const };
       }
 
-      // List existing inventory items for collision check
+      // List existing inventory items -- topping up a matching stack
+      // first, then finding a slot for overflow
       const existingItems = await txItemRepo.listInventoryItems(characterId);
-      const slot = findFirstAvailableInventorySlot(
+      const stackableExistingItems: StackablePlacementItem[] = existingItems.map((item) => ({
+        itemInstanceId: item.id,
+        definitionId: item.definitionId as ItemDefinitionId,
+        pageIndex: item.inventoryPage,
+        x: item.inventoryX,
+        y: item.inventoryY,
+        quantity: item.quantity,
+      }));
+
+      const plan = planStackablePlacement(
         {
           pageCount: inventory.pageCount,
           gridWidth: inventory.gridWidth,
           gridHeight: inventory.gridHeight,
         },
-        existingItems.map((item) => ({
-          definitionId: item.definitionId as ItemDefinitionId,
-          inventoryPage: item.inventoryPage,
-          inventoryX: item.inventoryX,
-          inventoryY: item.inventoryY,
-        })),
-        itemDefinition.size,
+        stackableExistingItems,
+        itemDefinition,
+        1,
       );
 
-      if (slot === null) {
+      if (plan === null) {
         return { ok: false as const, reason: "inventory_full" as const };
       }
 
-      // Create item instance in inventory
-      await txItemRepo.createItemInstance({
+      await applyStackablePlacementPlan(txItemRepo, plan, {
         definitionId: stockEntry.itemId,
         ownerCharacterId: characterId,
         locationType: ItemLocationType.INVENTORY,
-        inventoryPage: slot.pageIndex,
-        inventoryX: slot.x,
-        inventoryY: slot.y,
-        quantity: 1,
         ...(itemDefinition.durabilityMax !== undefined
           ? {
               durabilityCurrent: itemDefinition.durabilityMax,
@@ -144,100 +146,4 @@ export async function executeVendorBuyItem(input: {
   } catch {
     return { ok: false, reason: "vendor_unavailable" };
   }
-}
-
-// ---------------------------------------------------------------------------
-// Inventory slot placement (duplicated from pickupWorldLootInventory.ts
-// to keep the room file thin; a shared helper can be extracted later)
-// ---------------------------------------------------------------------------
-
-function findFirstAvailableInventorySlot(
-  config: {
-    readonly pageCount: number;
-    readonly gridWidth: number;
-    readonly gridHeight: number;
-  },
-  existingItems: ReadonlyArray<{
-    readonly definitionId: ItemDefinitionId;
-    readonly inventoryPage: number | null;
-    readonly inventoryX: number | null;
-    readonly inventoryY: number | null;
-  }>,
-  targetSize: {
-    readonly width: number;
-    readonly height: number;
-  },
-): { readonly pageIndex: number; readonly x: number; readonly y: number } | null {
-  for (let pageIndex = 0; pageIndex < config.pageCount; pageIndex += 1) {
-    for (let y = 0; y <= config.gridHeight - targetSize.height; y += 1) {
-      for (let x = 0; x <= config.gridWidth - targetSize.width; x += 1) {
-        if (canPlaceItemAt(config, existingItems, pageIndex, x, y, targetSize)) {
-          return { pageIndex, x, y };
-        }
-      }
-    }
-  }
-  return null;
-}
-
-function canPlaceItemAt(
-  config: {
-    readonly gridWidth: number;
-    readonly gridHeight: number;
-  },
-  existingItems: ReadonlyArray<{
-    readonly definitionId: ItemDefinitionId;
-    readonly inventoryPage: number | null;
-    readonly inventoryX: number | null;
-    readonly inventoryY: number | null;
-  }>,
-  pageIndex: number,
-  x: number,
-  y: number,
-  targetSize: {
-    readonly width: number;
-    readonly height: number;
-  },
-): boolean {
-  if (x < 0 || y < 0 || x + targetSize.width > config.gridWidth || y + targetSize.height > config.gridHeight) {
-    return false;
-  }
-
-  for (const existingItem of existingItems) {
-    if (
-      existingItem.inventoryPage !== pageIndex ||
-      existingItem.inventoryX === null ||
-      existingItem.inventoryY === null
-    ) {
-      continue;
-    }
-
-    const existingDefinition = contentRegistry.items.get(existingItem.definitionId);
-    if (existingDefinition === undefined) {
-      continue;
-    }
-
-    if (
-      rectanglesOverlap(
-        { x, y, width: targetSize.width, height: targetSize.height },
-        {
-          x: existingItem.inventoryX,
-          y: existingItem.inventoryY,
-          width: existingDefinition.size.width,
-          height: existingDefinition.size.height,
-        },
-      )
-    ) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-function rectanglesOverlap(
-  a: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
-  b: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
-): boolean {
-  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
 }

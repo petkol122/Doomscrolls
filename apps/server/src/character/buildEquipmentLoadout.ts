@@ -13,6 +13,9 @@ const EMPTY_EQUIPMENT_LOADOUT: EquipmentLoadout = {
   amulet: null,
   belt: null,
   flask_1: null,
+  flask_2: null,
+  flask_3: null,
+  flask_4: null,
 };
 
 /**

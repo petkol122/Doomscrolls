@@ -12,15 +12,40 @@ import type {
   ItemInstanceId,
   OriginKey,
   PassiveKey,
+  StatModifier,
   UserId,
   ZoneId,
 } from "@doomscrolls/shared";
+import { buildCharacterWallet, buildMaterialBalances, parseMaterialBalancesJson, parseProfessionsJson, parseRolledAffixes, parseWalletBalancesJson, rolledAffixToStatModifier } from "@doomscrolls/shared";
 import { t } from "@doomscrolls/localization";
-import { contentRegistry } from "@doomscrolls/content";
+import { contentRegistry, type ItemContentDefinition } from "@doomscrolls/content";
+import { calculatePlayerNetWorth } from "../../character/calculatePlayerNetWorth";
 import type { Character, CharacterPassive, CharacterStats as PrismaCharacterStats, Inventory, ItemInstance } from "@prisma/client";
 import { ItemRepository } from "../repositories/ItemRepository";
 import { getSharedPrismaClient } from "../prisma";
 import { toIsoDateTimeString } from "./dateMapper";
+
+/**
+ * Milestone 0.3 -- Server-Authoritative Item Rarity & Random Affix
+ * Engine. Merges an item instance's rolled tier/affixes (persisted on
+ * the DB row, see `affixRollEngine.ts`) with its definition's fixed
+ * base rarity/statModifiers. A "normal" (0-affix) instance is
+ * indistinguishable from the old fixed-rarity behavior; magic/rare/
+ * legendary override the displayed rarity and append rolled stat
+ * modifiers on top of the base ones.
+ */
+function resolveInstanceRarityAndStats(
+  item: Pick<ItemInstance, "rarityTier" | "rolledAffixes">,
+  definition: ItemContentDefinition,
+): { readonly rarity: string; readonly statModifiers: readonly StatModifier[]; readonly affixNames: readonly string[] } {
+  const rolledAffixes = parseRolledAffixes(item.rolledAffixes);
+  const rarity = item.rarityTier.length > 0 && item.rarityTier !== "normal" ? item.rarityTier : definition.rarity;
+  const statModifiers = rolledAffixes.length === 0
+    ? definition.statModifiers
+    : [...definition.statModifiers, ...rolledAffixes.map(rolledAffixToStatModifier)];
+  const affixNames = rolledAffixes.map((affix) => t(affix.nameKey as never));
+  return { rarity, statModifiers, affixNames };
+}
 
 export function toCharacterStatsDto(character: Pick<Character, "currentHp">, stats: PrismaCharacterStats): CharacterStats {
   return {
@@ -52,6 +77,18 @@ export function toCharacterSummaryDto(character: Character): CharacterSummary {
     xp: character.xp,
     currentZoneId: character.currentZoneId as ZoneId,
     moneyCopper: character.moneyCopper,
+    // `walletBalancesJson` is declared on the Prisma schema but read via an index
+    // signature here so this compiles even before the generated Prisma client is
+    // refreshed for the new column (`npx prisma generate`).
+    wallet: buildCharacterWallet(
+      character.moneyCopper,
+      parseWalletBalancesJson((character as unknown as { walletBalancesJson?: string }).walletBalancesJson),
+    ),
+    // `materialBalancesJson` is declared on the Prisma schema but read via an
+    // index signature here for the same reason `walletBalancesJson` is above.
+    materialBalances: buildMaterialBalances(
+      parseMaterialBalancesJson((character as unknown as { materialBalancesJson?: string }).materialBalancesJson),
+    ),
     createdAt: toIsoDateTimeString(character.createdAt),
     updatedAt: toIsoDateTimeString(character.updatedAt),
   };
@@ -74,6 +111,7 @@ export async function toCharacterSummaryWithInventoryDto(
         continue;
       }
 
+      const { rarity, statModifiers, affixNames } = resolveInstanceRarityAndStats(item, definition);
       inventorySummaryItems.push({
         itemInstanceId: item.id as never,
         definitionId: definition.id,
@@ -82,24 +120,29 @@ export async function toCharacterSummaryWithInventoryDto(
         y: item.inventoryY,
         label: t(definition.nameKey),
         category: definition.category,
-        rarity: definition.rarity,
+        rarity,
         allowedEquipmentSlots: definition.allowedEquipmentSlots,
         size: {
           width: definition.size.width,
           height: definition.size.height,
         },
-        statModifiers: definition.statModifiers,
+        statModifiers,
+        quantity: item.quantity,
+        ...(affixNames.length > 0 ? { affixNames } : {}),
       });
     }
   }
 
   const equippedItems = await buildEquippedItemSummaries(character.id, itemRepository);
+  const summary = toCharacterSummaryDto(character);
 
   return {
-    ...toCharacterSummaryDto(character),
+    ...summary,
     ...(character.stats !== null ? { stats: toCharacterStatsDto(character, character.stats) } : {}),
     inventorySummaryItems,
     equippedItems,
+    netWorth: calculatePlayerNetWorth(summary.wallet, equippedItems),
+    professions: parseProfessionsJson((character as unknown as { professionsJson?: string }).professionsJson),
   };
 }
 
@@ -120,24 +163,27 @@ export async function buildEquippedItemSummaries(
       continue;
     }
 
+    const { rarity, statModifiers, affixNames } = resolveInstanceRarityAndStats(item, definition);
     summaries.push({
       itemInstanceId: item.id as ItemInstanceId,
       definitionId: definition.id as ItemDefinitionId,
       slot: item.equipmentSlot as EquipmentSlot,
       label: t(definition.nameKey),
       category: definition.category,
-      rarity: definition.rarity,
-      statModifiers: definition.statModifiers,
+      rarity,
+      statModifiers,
+      ...(affixNames.length > 0 ? { affixNames } : {}),
     });
   }
 
   return summaries;
 }
 
-export function toCharacterDetailsDto(
+export async function toCharacterDetailsDto(
   character: Character & { stats: PrismaCharacterStats; passives: readonly CharacterPassive[]; inventory: Inventory; items?: readonly ItemInstance[] },
   deathState: CharacterDeathState,
-): CharacterDetails {
+  itemRepository: ItemRepository = new ItemRepository(getSharedPrismaClient()),
+): Promise<CharacterDetails> {
   const inventorySummaryItems: InventorySummaryItem[] = [];
 
   if (character.items !== undefined) {
@@ -151,6 +197,7 @@ export function toCharacterDetailsDto(
         continue;
       }
 
+      const { rarity, statModifiers, affixNames } = resolveInstanceRarityAndStats(item, definition);
       inventorySummaryItems.push({
         itemInstanceId: item.id as never,
         definitionId: definition.id,
@@ -159,19 +206,24 @@ export function toCharacterDetailsDto(
         y: item.inventoryY,
         label: t(definition.nameKey),
         category: definition.category,
-        rarity: definition.rarity,
+        rarity,
         allowedEquipmentSlots: definition.allowedEquipmentSlots,
         size: {
           width: definition.size.width,
           height: definition.size.height,
         },
-        statModifiers: definition.statModifiers,
+        statModifiers,
+        quantity: item.quantity,
+        ...(affixNames.length > 0 ? { affixNames } : {}),
       });
     }
   }
 
+  const equippedItems = await buildEquippedItemSummaries(character.id, itemRepository);
+  const summary = toCharacterSummaryDto(character);
+
   return {
-    ...toCharacterSummaryDto(character),
+    ...summary,
     passiveKeys: character.passives.map((passive) => passive.passiveId as PassiveKey),
     stats: toCharacterStatsDto(character, character.stats),
     inventory: {
@@ -183,11 +235,20 @@ export function toCharacterDetailsDto(
       },
       items: inventorySummaryItems,
     },
+    equippedItems,
+    netWorth: calculatePlayerNetWorth(summary.wallet, equippedItems),
     deathState,
     ...(character.lastLocationZoneId !== null
       ? { lastLocationZoneId: character.lastLocationZoneId as ZoneId }
       : {}),
     ...(character.lastLocationX !== null ? { lastLocationX: character.lastLocationX } : {}),
     ...(character.lastLocationY !== null ? { lastLocationY: character.lastLocationY } : {}),
+    skillPoints: character.skillPoints,
+    primarySkillRank: character.primarySkillRank,
+    secondarySkillRank: character.secondarySkillRank,
+    tertiarySkillRank: character.tertiarySkillRank,
+    // `professionsJson` is declared on the Prisma schema but read via an index
+    // signature here for the same reason `walletBalancesJson` is above.
+    professions: parseProfessionsJson((character as unknown as { professionsJson?: string }).professionsJson),
   };
 }

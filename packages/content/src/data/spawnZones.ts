@@ -39,7 +39,9 @@ export const spawnZones = [
     maxY: 300,
   },
   {
-    // Single deeper brute anchor. Reuses existing heavy enemy content only.
+    // Core 0.1 Foundation -- multi-type pack: the Brute anchor becomes a
+    // pack leader flanked by 2 supporting Skitter runts, with a small
+    // chance to roll as Champion/Elite (see enemyRarity.ts).
     id: "blackwire_sewers_brute_anchor",
     zoneId: "blackwire_sewers",
     enemyId: "trashboar_brute" as EnemyId,
@@ -48,6 +50,9 @@ export const spawnZones = [
     maxX: 700,
     minY: 340,
     maxY: 470,
+    pack: [{ enemyId: "trashboar_skitter" as EnemyId, count: 2 }],
+    leaderEliteChance: 0.05,
+    leaderChampionChance: 0.15,
   },
   // ── Core 0.6 — Static Yard combat zone pockets ──
   {
@@ -77,6 +82,7 @@ export const spawnZones = [
   {
     // Core 0.19 — single heavy anchor, Static Yard's own Arc Sentinel
     // (replaces the reused Trashboar Brute).
+    // Core 0.1 Foundation -- small chance to roll Champion/Elite.
     id: "static_yard_sentinel_anchor",
     zoneId: "static_yard",
     enemyId: "arc_sentinel" as EnemyId,
@@ -85,6 +91,8 @@ export const spawnZones = [
     maxX: 740,
     minY: 150,
     maxY: 260,
+    leaderEliteChance: 0.05,
+    leaderChampionChance: 0.15,
   },
   {
     // Core 0.17 — Yard Drudge, Static Yard's own common/starter tier.
@@ -125,6 +133,7 @@ export const spawnZones = [
   },
   {
     // Single heavy anchor, Cinderworks' own Foundry Warden.
+    // Core 0.1 Foundation -- small chance to roll Champion/Elite.
     id: "cinderworks_warden_anchor",
     zoneId: "cinderworks",
     enemyId: "foundry_warden" as EnemyId,
@@ -133,6 +142,8 @@ export const spawnZones = [
     maxX: 740,
     minY: 150,
     maxY: 260,
+    leaderEliteChance: 0.05,
+    leaderChampionChance: 0.15,
   },
   {
     // Core 0.17 — Ash Rat, Cinderworks' own common/starter tier. Mid-room
@@ -172,6 +183,7 @@ export const spawnZones = [
   },
   {
     // Single heavy anchor, Saltmere Docks' own Drowned Hauler.
+    // Core 0.1 Foundation -- small chance to roll Champion/Elite.
     id: "saltmere_docks_hauler_anchor",
     zoneId: "saltmere_docks",
     enemyId: "drowned_hauler" as EnemyId,
@@ -180,6 +192,8 @@ export const spawnZones = [
     maxX: 740,
     minY: 150,
     maxY: 260,
+    leaderEliteChance: 0.05,
+    leaderChampionChance: 0.15,
   },
   {
     // Core 0.20 -- Saltmere Docks was the only post-0.16 combat zone

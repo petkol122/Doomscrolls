@@ -1,7 +1,7 @@
 import type { CharacterId, EntityId, ItemInstanceId, ZoneId } from "../ids";
 import type { Vector2 } from "../math/Vector2";
 import type { MoveInventoryItemPayload } from "../inventory/InventoryTypes";
-import type { EquipItemPayload, EquipmentSlot, UnequipItemPayload } from "../inventory/EquipmentTypes";
+import type { EquipItemPayload, FlaskBeltSlotNumber, UnequipItemPayload } from "../inventory/EquipmentTypes";
 
 export interface MoveToPointClientMessage {
   readonly type: "move_to_point";
@@ -11,11 +11,6 @@ export interface MoveToPointClientMessage {
 export interface AttackTargetClientMessage {
   readonly type: "attack_target";
   readonly targetEntityId: EntityId;
-}
-
-export interface UseBeltSlotClientMessage {
-  readonly type: "use_belt_slot";
-  readonly slot: Extract<EquipmentSlot, "flask_1">;
 }
 
 export interface PickupLootClientMessage {
@@ -101,16 +96,18 @@ export interface RequestDodgeClientMessage {
 }
 
 // ---------------------------------------------------------------------------
-// Task 096 — Basic Healing Flask Foundation.
+// Milestone 0.3 — 4-Slot Flask Belt.
 //
-// Minimal client intent to ask the server to consume a healing-flask charge.
-// The client never decides whether the flask is usable, never tells the
-// server how much to heal and never tracks flask charges locally for any
-// gameplay outcome: the server is the sole authority for charge counts,
-// cooldown, heal amount, and the resulting HP state.
+// Minimal client intent to ask the server to consume a charge from one of
+// the four flask belt slots (hotkeys 1-4). The client never decides
+// whether the slot is usable, never tells the server what effect it has
+// and never tracks charges locally for any gameplay outcome: the server
+// is the sole authority for charge counts, cooldown, the equipped item's
+// effect, and the resulting HP/mana/dodge-cooldown state.
 // ---------------------------------------------------------------------------
-export interface RequestUseHealingFlaskClientMessage {
-  readonly type: "request_use_healing_flask";
+export interface RequestUseFlaskSlotClientMessage {
+  readonly type: "request_use_flask_slot";
+  readonly slot: FlaskBeltSlotNumber;
 }
 
 /**
@@ -126,6 +123,13 @@ export interface RequestUseSkillSlotClientMessage {
   readonly type: "request_use_skill_slot";
   readonly slot: "primary" | "secondary" | "tertiary";
   readonly targetEnemyId?: string;
+  /**
+   * Milestone 0.2 -- Server-Authoritative Projectiles & Ground-Targeted
+   * AoE Skills. Used instead of `targetEnemyId` for a `ground_aoe` skill
+   * (the caster clicks a ground point rather than an enemy).
+   */
+  readonly targetX?: number;
+  readonly targetY?: number;
 }
 
 export interface RequestCorpseInteractClientMessage {
@@ -239,6 +243,43 @@ export interface RequestSellItemClientMessage {
 }
 
 /**
+ * Milestone 0.3 -- Pawn Shop / Army Surplus Vendor: Salvage & Tech
+ * Teardown. Client sends a salvage request with the vendor id and the
+ * item instance id of the inventory item to break down. The server
+ * validates ownership/equipment state and decides the resulting
+ * material -- no client-sent material choice is accepted.
+ */
+export interface RequestSalvageItemClientMessage {
+  readonly type: "request_salvage_item";
+  readonly vendorId: string;
+  readonly itemInstanceId: string;
+}
+
+/**
+ * Client sends a request to convert a chosen quantity of a salvage-
+ * material currency balance (see `MaterialTypes.ts`) back into a
+ * physical, tradeable inventory item stack. The server is the sole
+ * authority on whether the balance/inventory space allow it.
+ */
+export interface RequestWithdrawMaterialClientMessage {
+  readonly type: "request_withdraw_material";
+  readonly materialId: string;
+  readonly quantity: number;
+}
+
+/**
+ * Milestone 0.3 -- Profession Training System. Client sends an unlock/
+ * rank-up request naming the profession id; the server is the sole
+ * authority on the next tier's cost and whether the character can
+ * afford it.
+ */
+export interface RequestUnlockProfessionClientMessage {
+  readonly type: "request_unlock_profession";
+  readonly vendorId: string;
+  readonly professionId: string;
+}
+
+/**
  * Task 329 — Stash Foundation: Server-authoritative inventory -> stash transfer.
  */
 export interface RequestStoreInventoryItemInStashClientMessage {
@@ -259,6 +300,31 @@ export interface RequestTakeStashItemToInventoryClientMessage {
   readonly itemInstanceId: string;
 }
 
+/**
+ * Milestone 0.2 — Account Stash Foundation: deposit an inventory item
+ * into the account-wide stash (keyed by userId, shared across characters).
+ */
+export interface RequestDepositStashItemClientMessage {
+  readonly type: "request_deposit_stash_item";
+  readonly itemInstanceId: string;
+  readonly quantity?: number;
+}
+
+/**
+ * Milestone 0.2 — Account Stash Foundation: withdraw a stack from the
+ * account-wide stash into the current character's inventory.
+ */
+export interface RequestWithdrawStashItemClientMessage {
+  readonly type: "request_withdraw_stash_item";
+  readonly stashItemId: string;
+  readonly quantity?: number;
+}
+
+/** Milestone 0.2 — Request the current account-wide stash contents. */
+export interface RequestListAccountStashClientMessage {
+  readonly type: "request_list_account_stash";
+}
+
 export interface RequestWaypointTravelClientMessage {
   readonly type: "request_waypoint_travel";
   readonly waypointId: string;
@@ -269,10 +335,45 @@ export interface RequestCombatReturnClientMessage {
   readonly objectId: string;
 }
 
+/**
+ * Core 0.1 — Persistent Quest & Dialogue System foundation.
+ *
+ * The client sends the quest id it wants to accept from a quest-giver's
+ * dialogue. The server validates the quest exists and is not already
+ * accepted or completed before persisting it.
+ */
+export interface RequestAcceptQuestClientMessage {
+  readonly type: "request_accept_quest";
+  readonly questId: string;
+}
+
+/**
+ * The client sends the quest id it wants to turn in from a quest-giver's
+ * dialogue. The server validates the quest is accepted (and not already
+ * completed) before granting rewards and persisting completion.
+ */
+export interface RequestCompleteQuestClientMessage {
+  readonly type: "request_complete_quest";
+  readonly questId: string;
+}
+
+/**
+ * Core 0.1 Foundation — Skill Point Allocation.
+ *
+ * The client identifies which skill slot ("primary" | "secondary" |
+ * "tertiary") it wants to spend an unallocated skill point on. The
+ * server is the sole authority for whether the player has points
+ * available, resolves which real skill id that slot maps to for the
+ * player's own class, and persists the resulting rank.
+ */
+export interface RequestAllocateSkillPointClientMessage {
+  readonly type: "request_allocate_skill_point";
+  readonly slot: "primary" | "secondary" | "tertiary";
+}
+
 export type ClientRoomMessage =
   | MoveToPointClientMessage
   | AttackTargetClientMessage
-  | UseBeltSlotClientMessage
   | PickupLootClientMessage
   | MoveInventoryItemClientMessage
   | EquipItemClientMessage
@@ -292,11 +393,20 @@ export type ClientRoomMessage =
   | RequestResetObjectiveClientMessage
   | RequestStartBoardObjectiveClientMessage
   | RequestDodgeClientMessage
-  | RequestUseHealingFlaskClientMessage
+  | RequestUseFlaskSlotClientMessage
   | RequestUseSkillSlotClientMessage
   | RequestBuyVendorItemClientMessage
   | RequestSellItemClientMessage
+  | RequestSalvageItemClientMessage
+  | RequestWithdrawMaterialClientMessage
+  | RequestUnlockProfessionClientMessage
   | RequestStoreInventoryItemInStashClientMessage
   | RequestTakeStashItemToInventoryClientMessage
+  | RequestDepositStashItemClientMessage
+  | RequestWithdrawStashItemClientMessage
+  | RequestListAccountStashClientMessage
   | RequestWaypointTravelClientMessage
-  | RequestCombatReturnClientMessage;
+  | RequestCombatReturnClientMessage
+  | RequestAcceptQuestClientMessage
+  | RequestCompleteQuestClientMessage
+  | RequestAllocateSkillPointClientMessage;

@@ -35,6 +35,64 @@ export function sendSkillSlotIntent(
   return { dispatched: true };
 }
 
+/**
+ * Milestone 0.2 -- Server-Authoritative Projectiles & Ground-Targeted AoE
+ * Skills. Mirrors `sendSkillSlotIntent` but for a `ground_aoe` skill:
+ * sends a ground point (`targetX`/`targetY`) instead of `targetEnemyId`.
+ */
+export function sendGroundTargetedSkillSlotIntent(
+  room: Room<RoomState> | null | undefined,
+  slot: "primary" | "secondary" | "tertiary",
+  targetX: number,
+  targetY: number,
+): SendSkillSlotIntentResult {
+  if (!room) {
+    return { dispatched: false, reason: "no_room" };
+  }
+  if (room.connection?.isOpen !== true) {
+    return { dispatched: false, reason: "room_not_joined" };
+  }
+  if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) {
+    return { dispatched: false, reason: "no_target" };
+  }
+
+  const message: RequestUseSkillSlotClientMessage = {
+    type: "request_use_skill_slot",
+    slot,
+    targetX,
+    targetY,
+  };
+
+  room.send(message.type, message);
+  return { dispatched: true };
+}
+
+/**
+ * Milestone 0.3 -- Street Alchemist Class Archetype. Mirrors
+ * `sendSkillSlotIntent` but for a `self_buff` skill (e.g.
+ * adrenaline_stim): no target of any kind is sent, since the server
+ * applies the effect to the caster itself.
+ */
+export function sendSelfTargetedSkillSlotIntent(
+  room: Room<RoomState> | null | undefined,
+  slot: "primary" | "secondary" | "tertiary",
+): SendSkillSlotIntentResult {
+  if (!room) {
+    return { dispatched: false, reason: "no_room" };
+  }
+  if (room.connection?.isOpen !== true) {
+    return { dispatched: false, reason: "room_not_joined" };
+  }
+
+  const message: RequestUseSkillSlotClientMessage = {
+    type: "request_use_skill_slot",
+    slot,
+  };
+
+  room.send(message.type, message);
+  return { dispatched: true };
+}
+
 export function registerSkillSlotResponseListeners(
   room: Room<RoomState>,
   callbacks: {

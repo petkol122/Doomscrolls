@@ -63,6 +63,26 @@ export function createWorldSessionChatView(
   // (room-local, Core 0.29) stays the default so existing behavior is
   // unchanged; switching to Global sends to every connected player
   // instead, via `sendGlobalChatMessage`.
+  // Core 0.1 UI Overhaul Phase 1 -- collapse/expand toggle for the chat
+  // frame. Hides the log/input/channel-tabs rather than removing them,
+  // so a resumed session doesn't lose the typed draft or scroll state.
+  const frameHeader = document.createElement("div");
+  frameHeader.style.display = "flex";
+  frameHeader.style.justifyContent = "flex-end";
+
+  const collapseButton = document.createElement("button");
+  collapseButton.type = "button";
+  collapseButton.style.border = "1px solid #6b5738";
+  collapseButton.style.borderRadius = "4px";
+  collapseButton.style.background = "rgba(14, 11, 8, 0.85)";
+  collapseButton.style.color = "#a8926d";
+  collapseButton.style.fontSize = "10px";
+  collapseButton.style.fontFamily = "monospace";
+  collapseButton.style.padding = "1px 6px";
+  collapseButton.style.cursor = "pointer";
+  frameHeader.appendChild(collapseButton);
+  root.appendChild(frameHeader);
+
   const channelRow = document.createElement("div");
   channelRow.style.display = "flex";
   channelRow.style.gap = "4px";
@@ -139,9 +159,35 @@ export function createWorldSessionChatView(
   });
 
   inputRow.appendChild(input);
-  root.appendChild(channelRow);
-  root.appendChild(log);
-  root.appendChild(inputRow);
+
+  // Core 0.4 -- channel tabs/log/input share one `body` wrapper so
+  // collapsing can animate a single `max-height` (matching the Quest
+  // Tracker dock's collapse) instead of instantly toggling `.hidden`
+  // on three separate elements with no transition.
+  const body = document.createElement("div");
+  body.style.display = "flex";
+  body.style.flexDirection = "column";
+  body.style.gap = "4px";
+  body.style.overflow = "hidden";
+  body.style.transition = "max-height 0.22s ease, opacity 0.18s ease";
+  body.appendChild(channelRow);
+  body.appendChild(log);
+  body.appendChild(inputRow);
+  root.appendChild(body);
+
+  let isCollapsed = false;
+  const applyCollapsedState = (): void => {
+    collapseButton.textContent = isCollapsed ? "[+]" : "[_]";
+    collapseButton.title = isCollapsed ? "Expand chat" : "Collapse chat";
+    body.style.maxHeight = isCollapsed ? "0px" : "400px";
+    body.style.opacity = isCollapsed ? "0" : "1";
+  };
+  collapseButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    isCollapsed = !isCollapsed;
+    applyCollapsedState();
+  });
+  applyCollapsedState();
 
   let renderedMessageCount = 0;
 

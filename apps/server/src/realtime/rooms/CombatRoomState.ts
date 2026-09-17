@@ -1,5 +1,5 @@
 import { Schema, type, MapSchema } from "@colyseus/schema";
-import { EnemyPresence, type ZoneId } from "@doomscrolls/shared";
+import { EnemyPresence, ProjectilePresence, GroundEffectPresence, TurretPresence, type ZoneId } from "@doomscrolls/shared";
 import { PlayerPresence } from "./PlayerPresence";
 import { Interactable } from "./Interactable";
 import { WorldLoot } from "./WorldLoot";
@@ -31,6 +31,12 @@ export class CombatRoomState extends Schema {
   @type({ map: EnemyPresence }) public enemies = new MapSchema<EnemyPresence>();
   @type({ map: Interactable }) public interactables = new MapSchema<Interactable>();
   @type({ map: WorldLoot }) public worldLoot = new MapSchema<WorldLoot>();
+  // Milestone 0.2 -- Server-Authoritative Projectiles & Ground-Targeted
+  // AoE Skills.
+  @type({ map: ProjectilePresence }) public projectiles = new MapSchema<ProjectilePresence>();
+  @type({ map: GroundEffectPresence }) public groundEffects = new MapSchema<GroundEffectPresence>();
+  // Milestone 0.3 -- Netrunner Urban-Magic Class Archetype.
+  @type({ map: TurretPresence }) public turrets = new MapSchema<TurretPresence>();
 
   constructor(zoneId: ZoneId) {
     super();

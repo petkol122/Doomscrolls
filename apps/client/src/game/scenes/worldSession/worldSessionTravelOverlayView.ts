@@ -2,7 +2,7 @@ import { t } from "@doomscrolls/localization";
 
 const FADE_DURATION_MS = 150;
 
-export type WorldSessionTravelOverlayKind = "route" | "waypoint" | "handoff" | "return_handoff";
+export type WorldSessionTravelOverlayKind = "route" | "waypoint" | "handoff" | "return_handoff" | "zone_transition";
 
 export interface WorldSessionTravelOverlayView {
   readonly show: (kind: WorldSessionTravelOverlayKind) => void;
@@ -32,6 +32,13 @@ function resolveOverlayCopy(kind: WorldSessionTravelOverlayKind): {
     return {
       title: "Returning to Town",
       message: "Leaving combat and joining the town room. Arrival remains server-authoritative.",
+    };
+  }
+
+  if (kind === "zone_transition") {
+    return {
+      title: "Entering New Area",
+      message: "Crossing over. Arrival remains server-authoritative.",
     };
   }
 

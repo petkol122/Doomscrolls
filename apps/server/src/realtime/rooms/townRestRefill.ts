@@ -1,5 +1,5 @@
 import type { PlayerPresence } from "./PlayerPresence";
-import { restoreFlaskToFull } from "./healingFlaskConfig";
+import { restoreFlaskBeltToFull, sumFlaskBeltCharges } from "./flaskBeltConfig";
 
 // ---------------------------------------------------------------------------
 // Task 299 — Town Rest Refill Foundation.
@@ -60,17 +60,16 @@ export interface TownRestRefillResult {
  */
 export function applyTownRestRefill(player: PlayerPresence): TownRestRefillResult {
   const previousHp = player.hp;
-  const previousFlask = Math.floor(player.flaskCharges);
+  const previousFlask = sumFlaskBeltCharges(player);
 
   // Restore HP to max. The server owns maxHp from character stats
   // resolved at join time; we just clamp and assign.
   player.hp = Math.max(0, Math.floor(player.maxHp));
 
-  // Restore flask charges to full via the existing helper which
-  // resets charges, maxCharges and cooldown.
-  restoreFlaskToFull(player);
+  // Restore every equipped belt slot to full charges (empty slots stay empty).
+  restoreFlaskBeltToFull(player);
 
-  const restoredFlaskCharges = Math.floor(player.flaskCharges);
+  const restoredFlaskCharges = sumFlaskBeltCharges(player);
 
   const changed =
     player.hp !== previousHp ||

@@ -54,7 +54,7 @@ export class CharacterService {
       throw new CharacterError(CharacterErrorCode.CHARACTER_NOT_FOUND);
     }
 
-    return toCharacterDetailsDto({ ...character, stats: character.stats, inventory: character.inventory }, ALIVE_DEATH_STATE);
+    return await toCharacterDetailsDto({ ...character, stats: character.stats, inventory: character.inventory }, ALIVE_DEATH_STATE);
   }
 
   public async createCharacter(userId: UserId | string, input: CreateCharacterInput): Promise<CreateCharacterResult> {
@@ -115,7 +115,7 @@ export class CharacterService {
         throw new CharacterError(CharacterErrorCode.INTERNAL_ERROR);
       }
 
-      return toCharacterDetailsDto({ ...character, stats: character.stats, inventory: character.inventory }, ALIVE_DEATH_STATE);
+      return await toCharacterDetailsDto({ ...character, stats: character.stats, inventory: character.inventory }, ALIVE_DEATH_STATE);
     } catch (error: unknown) {
       if (isPrismaUniqueConstraintError(error)) {
         throw new CharacterError(CharacterErrorCode.CHARACTER_NAME_TAKEN);
@@ -129,13 +129,22 @@ export class CharacterService {
     }
   }
 
+  public async deleteCharacterForUser(characterId: CharacterId | string, userId: UserId | string): Promise<void> {
+    const characterRepository = new CharacterRepository(this.db);
+    const deleted = await characterRepository.deleteForUser(characterId.toString(), userId.toString());
+
+    if (!deleted) {
+      throw new CharacterError(CharacterErrorCode.CHARACTER_NOT_FOUND);
+    }
+  }
+
   public async updateCharacterLocation(
     characterId: CharacterId | string,
     zoneId: string,
     x: number,
     y: number,
     currentHp?: number,
-    currentFlaskCharges?: number,
+    flaskChargesJson?: string,
   ): Promise<void> {
     try {
       const characterRepository = new CharacterRepository(this.db);
@@ -145,7 +154,7 @@ export class CharacterService {
         x,
         y,
         currentHp,
-        currentFlaskCharges,
+        flaskChargesJson,
       );
     } catch (error: unknown) {
       if (error instanceof CharacterError) {
@@ -161,7 +170,7 @@ export class CharacterService {
     x: number,
     y: number,
     currentHp?: number,
-    currentFlaskCharges?: number,
+    flaskChargesJson?: string,
   ): Promise<void> {
     try {
       const characterRepository = new CharacterRepository(this.db);
@@ -171,7 +180,7 @@ export class CharacterService {
         x,
         y,
         currentHp,
-        currentFlaskCharges,
+        flaskChargesJson,
       );
       await characterRepository.updateCurrentZone(characterId.toString(), zoneId);
     } catch (error: unknown) {

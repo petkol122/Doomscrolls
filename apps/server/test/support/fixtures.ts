@@ -4,6 +4,7 @@ import type {
   UserId,
   ZoneId,
 } from "@doomscrolls/shared";
+import { buildCharacterWallet, ZERO_MATERIAL_BALANCES, ZERO_PROFESSION_TIERS } from "@doomscrolls/shared";
 
 export const TEST_USER_ID = "test-user-1" as UserId;
 export const TEST_CHARACTER_ID = "test-character-1" as CharacterId;
@@ -39,6 +40,8 @@ export function buildTestCharacterDetails(
     xp: 0,
     currentZoneId: "namesti_republiky" as ZoneId,
     moneyCopper: 0,
+    wallet: buildCharacterWallet(0),
+    materialBalances: ZERO_MATERIAL_BALANCES,
     stats: TEST_CHARACTER_STATS,
     createdAt: "2026-01-01T00:00:00.000Z" as CharacterDetails["createdAt"],
     updatedAt: "2026-01-01T00:00:00.000Z" as CharacterDetails["updatedAt"],
@@ -49,6 +52,11 @@ export function buildTestCharacterDetails(
       items: [],
     },
     deathState: { lifeState: "alive" },
+    skillPoints: 0,
+    primarySkillRank: 1,
+    secondarySkillRank: 1,
+    tertiarySkillRank: 1,
+    professions: ZERO_PROFESSION_TIERS,
     ...overrides,
   };
 }

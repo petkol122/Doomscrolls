@@ -20,6 +20,13 @@ export class WorldLoot extends Schema {
   @type("number") public currencyCopper: number;
   @type("number") public x: number;
   @type("number") public y: number;
+  // Milestone 0.3 -- Server-Authoritative Item Rarity & Random Affix
+  // Engine. Rolled once at drop time (see affixRollEngine.ts) and
+  // carried through pickup so the persisted ItemInstance gets the exact
+  // same roll the ground marker already reflected -- never re-rolled.
+  // `rarityTier` is "" for currency loot (no affix roll applies).
+  @type("string") public rarityTier: string;
+  @type("string") public rolledAffixesJson: string;
 
   constructor(
     id: WorldLootId,
@@ -29,6 +36,8 @@ export class WorldLoot extends Schema {
     x: number,
     y: number,
     currencyCopper = 0,
+    rarityTier = "",
+    rolledAffixesJson = "[]",
   ) {
     super();
     this.id = id;
@@ -38,5 +47,7 @@ export class WorldLoot extends Schema {
     this.currencyCopper = currencyCopper;
     this.x = x;
     this.y = y;
+    this.rarityTier = rarityTier;
+    this.rolledAffixesJson = rolledAffixesJson;
   }
 }
