@@ -21,11 +21,16 @@ import { clearPendingAction } from "./pendingActionState";
 import { dispatchPickedUpWorldLoot } from "./pickupWorldLootDispatcher";
 import { validatePickupWorldLootIntent } from "./pickupWorldLootValidation";
 import { spawnWorldLootOnEnemyDefeat } from "./spawnWorldLootOnEnemyDefeat";
+import { spawnProjectile } from "./projectileSimulation";
 import type { TownRoomState } from "./TownRoomState";
 import { tryResolveLevelProgression } from "./levelProgression";
 import { createRoomLogger } from "./roomLogger";
 import {
+  applySkillEffectIfDefined,
+  deductMana,
   getSkillSlotCooldownAt,
+  getSkillSlotRank,
+  hasSufficientMana,
   resolveSkillCastDamage,
   resolveSkillSlotDefinition,
   setSkillSlotCooldownAt,
@@ -43,7 +48,14 @@ const characterStatsService = new CharacterStatsService();
 const log = createRoomLogger(undefined);
 
 type ProgressionUpdateResult =
-  | { readonly ok: true; readonly maxHp: number; readonly hp: number; readonly gainedMaxHp: number }
+  | {
+      readonly ok: true;
+      readonly maxHp: number;
+      readonly hp: number;
+      readonly gainedMaxHp: number;
+      readonly gainedSkillPoints: number;
+      readonly totalSkillPoints: number;
+    }
   | { readonly ok: false };
 
 async function applyProgressionUpdate(
@@ -73,6 +85,8 @@ async function applyProgressionUpdate(
   });
 
   const previousMaxHp = Number.isFinite(player.maxHp) ? Math.max(0, player.maxHp) : 0;
+  const previousLevel = Math.max(1, Math.floor(character.level));
+  const levelsGained = Math.max(0, progression.level - previousLevel);
   const recalculated = characterStatsService.calculateEquippedStats(
     characterStatsService.calculateLevelScaledStats(origin.baseStats, characterClass.baseStats, progression.level).primary,
     modifiers,
@@ -82,8 +96,9 @@ async function applyProgressionUpdate(
   const gainedMaxHp = Math.max(0, nextMaxHp - previousMaxHp);
   const nextHp = Math.min(nextMaxHp, Math.max(0, player.hp) + gainedMaxHp);
 
+  let updatedCharacter;
   try {
-    await characterRepository.updateProgressionState(player.characterId, {
+    updatedCharacter = await characterRepository.updateProgressionState(player.characterId, {
       xp: progression.xp,
       level: progression.level,
       currentHp: nextHp,
@@ -91,6 +106,7 @@ async function applyProgressionUpdate(
         ...recalculated.primary,
         ...recalculated.derived,
       },
+      levelsGained,
     });
   } catch (error) {
     log.warn?.(
@@ -111,8 +127,9 @@ async function applyProgressionUpdate(
   player.hp = nextHp;
   player.damage = recalculated.derived.damage;
   player.armor = recalculated.derived.armor;
+  player.skillPoints = updatedCharacter.skillPoints;
 
-  return { ok: true, maxHp: nextMaxHp, hp: nextHp, gainedMaxHp };
+  return { ok: true, maxHp: nextMaxHp, hp: nextHp, gainedMaxHp, gainedSkillPoints: levelsGained, totalSkillPoints: updatedCharacter.skillPoints };
 }
 
 async function grantEnemyDefeatXp(player: PlayerPresence, enemyId: string, sendToClient: (type: string, payload: unknown) => void): Promise<void> {
@@ -174,6 +191,9 @@ async function grantEnemyDefeatXp(player: PlayerPresence, enemyId: string, sendT
     leveledUp: progression.leveledUp,
     hp: progressionUpdate.hp,
     maxHp: progressionUpdate.maxHp,
+    ...(progressionUpdate.gainedSkillPoints > 0
+      ? { gainedSkillPoints: progressionUpdate.gainedSkillPoints, totalSkillPoints: progressionUpdate.totalSkillPoints }
+      : {}),
   };
   sendToClient("xp_gained", xpGained);
 }
@@ -342,9 +362,65 @@ export async function tryExecutePendingAction(context: DeferredActionExecutionCo
       return;
     }
 
+    // Core 0.1 Foundation -- Mana/Resource System. Mirrors the
+    // immediate-cast handler's check so queuing a move-to-cast and
+    // walking into range can't bypass the mana gate.
+    if (!hasSufficientMana(player, skillDefinition.manaCost)) {
+      clearPendingAction(player);
+      const rejection: RequestUseSkillSlotRejectedServerMessage = {
+        type: "request_use_skill_slot_rejected",
+        slot: executeSlot,
+        reason: "insufficient_mana",
+      };
+      sendToClient(rejection.type, rejection);
+      return;
+    }
+
     setSkillSlotCooldownAt(player, executeSlot, now + skillDefinition.cooldownMs);
-    const castDamage = resolveSkillCastDamage(skillDefinition, player.damage);
+    deductMana(player, skillDefinition.manaCost);
+    const rank = getSkillSlotRank(player, executeSlot);
+    const castDamage = resolveSkillCastDamage(skillDefinition, player.damage, rank, skillDefinition.damagePerRank);
+
+    // Milestone 0.2 -- the queued move-closer-then-cast path can also
+    // resolve into a projectile skill: spawn it once in range instead of
+    // applying damage now; the impact callback (wired in TownRoom's
+    // simulation tick) grants damage/effect/XP/loot/objective rewards.
+    if (skillDefinition.isProjectile === true) {
+      spawnProjectile(state, {
+        skillId: skillDefinition.skillId,
+        ownerSessionId: player.sessionId,
+        originX: player.x,
+        originY: player.y,
+        targetX: enemy.x,
+        targetY: enemy.y,
+        targetEnemyId: enemy.id,
+        speed: skillDefinition.projectileSpeed ?? 480,
+        damage: castDamage,
+        appliesEffect: skillDefinition.appliesEffect,
+        effectDurationMs: skillDefinition.effectDurationMs,
+        effectMagnitude: skillDefinition.effectMagnitude,
+        now,
+      });
+
+      const accepted: RequestUseSkillSlotAcceptedServerMessage = {
+        type: "request_use_skill_slot_accepted",
+        slot: executeSlot,
+        targetEnemyId: "",
+        damage: 0,
+        remainingHp: 0,
+        defeated: false,
+        nextReadyAt: getSkillSlotCooldownAt(player, executeSlot),
+        remainingMana: player.mana,
+      };
+      sendToClient(accepted.type, accepted);
+      clearPendingAction(player);
+      return;
+    }
+
     const damageResult = applyEnemyDamage(enemy, castDamage);
+    if (!damageResult.defeated) {
+      applySkillEffectIfDefined(enemy, skillDefinition, now);
+    }
     if (damageResult.defeated) {
       spawnWorldLootOnEnemyDefeat(state, enemy, now);
       await grantEnemyDefeatXp(player, enemy.enemyId, sendToClient);
@@ -358,6 +434,7 @@ export async function tryExecutePendingAction(context: DeferredActionExecutionCo
       remainingHp: damageResult.remainingHp,
       defeated: damageResult.defeated,
       nextReadyAt: getSkillSlotCooldownAt(player, executeSlot),
+      remainingMana: player.mana,
     };
     sendToClient(accepted.type, accepted);
     clearPendingAction(player);

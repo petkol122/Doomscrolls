@@ -5,8 +5,8 @@ import type { CharacterClassKey, CharacterId, ZoneId } from "@doomscrolls/shared
 import { PlayerPresence } from "./PlayerPresence";
 import { DEFAULT_TOWN_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
 import { resolvePlayerInitialPosition } from "./validateCharacterLocation";
-import { restoreFlaskToFull } from "./healingFlaskConfig";
 import { writeObjectiveSlot, type ObjectiveSlot } from "./advanceObjectiveProgress";
+import { resolveMaxMana } from "./manaRegen";
 
 export interface PersistedObjectiveState {
   readonly objectiveId: string;
@@ -26,11 +26,20 @@ export interface BuildTownPlayerPresenceInput {
   readonly resolvedZoneId: ZoneId;
   readonly hp: number;
   readonly maxHp: number;
-  readonly restoredFlaskCharges: number | undefined;
   readonly movementSpeed: number;
   readonly attackCooldownMs: number;
   readonly damage: number;
   readonly armor: number;
+  /**
+   * Core 0.1 Foundation -- the joined character's `mind` primary stat,
+   * used to derive `maxMana`. Mana always starts full on join/respawn.
+   */
+  readonly mind: number;
+  /** Core 0.1 Foundation -- persisted unallocated skill points and skill-slot ranks. */
+  readonly skillPoints: number;
+  readonly primarySkillRank: number;
+  readonly secondarySkillRank: number;
+  readonly tertiarySkillRank: number;
   readonly restoredLocationZoneId: string | undefined;
   readonly restoredLocationX: number | undefined;
   readonly restoredLocationY: number | undefined;
@@ -91,20 +100,24 @@ export function buildTownPlayerPresence(
     input.damage,
     input.armor,
   );
-  // Restore the flask baseline before applying persisted state.
-  // `restoreFlaskToFull` intentionally sets `maxFlaskCharges` (3) and
-  // `nextFlaskAt` (0) as a side-effect, even though `flaskCharges` is
-  // then overridden by the persisted value below. This ensures the
-  // Colyseus schema always has a valid max-flask-cap baseline for HUD
-  // rendering, regardless of whether persisted state exists.
-  restoreFlaskToFull(presence);
-  const restoredFlaskCharges = Number.isFinite(input.restoredFlaskCharges)
-    ? Math.floor(input.restoredFlaskCharges ?? 0)
-    : presence.maxFlaskCharges;
-  presence.flaskCharges = Math.min(
-    presence.maxFlaskCharges,
-    Math.max(0, restoredFlaskCharges),
-  );
+  // Milestone 0.3 -- the flask belt starts empty (constructor default);
+  // the caller (TownRoom.onJoin) populates it from the character's
+  // equipped items + persisted charges via `syncFlaskBeltFromEquipment`
+  // right after this presence is built, once the equipped-items lookup
+  // resolves.
+
+  // Core 0.1 Foundation -- Mana/Resource System. Always full on join,
+  // never restored from a persisted partial value (see `PlayerPresence`
+  // field comment for why nothing is persisted).
+  presence.maxMana = resolveMaxMana(input.mind);
+  presence.mana = presence.maxMana;
+
+  // Core 0.1 Foundation -- Skill Point Allocation. Restored from the
+  // character's persisted totals.
+  presence.skillPoints = Math.max(0, Math.floor(input.skillPoints));
+  presence.primarySkillRank = Math.max(1, Math.floor(input.primarySkillRank));
+  presence.secondarySkillRank = Math.max(1, Math.floor(input.secondarySkillRank));
+  presence.tertiarySkillRank = Math.max(1, Math.floor(input.tertiarySkillRank));
 
   // Task 333D / Core 0.15 — Restore persisted objective state onto the
   // presence entry (both concurrent slots) so progress, completion and
@@ -164,9 +177,23 @@ export function applyPersistedObjectiveSlot(
   });
 }
 
+/**
+ * Milestone 0.2 -- only `namesti_republiky` has its own registered
+ * `SpawnPointContentDefinition` today. Every other town zone (Pilsen
+ * Namesti, the Cathedral interior, and now Pilsen Bory) is only ever
+ * entered via a `zone_transition` door or a waypoint, both of which
+ * already land the player at a fixed, content-independent position
+ * (see `TownRoom.ts`'s `ZONE_TRANSITION_DEFAULT_SPAWN_X/Y`). A fresh
+ * join into one of those zones (e.g. after a zone-transition handoff)
+ * reuses that same fallback instead of hard-failing for lack of a
+ * bespoke spawn point.
+ */
+const SECONDARY_ZONE_DEFAULT_SPAWN_X = 300;
+const SECONDARY_ZONE_DEFAULT_SPAWN_Y = 300;
+
 function resolveTownSpawnPointDefinition(
   resolvedZoneId: ZoneId,
-): SpawnPointContentDefinition {
+): Pick<SpawnPointContentDefinition, "spawnPointId" | "x" | "y"> {
   const definition = contentRegistry.spawnPoints.get(
     DEFAULT_TOWN_SPAWN_POINT_ID as SpawnPointContentId,
   );
@@ -178,9 +205,11 @@ function resolveTownSpawnPointDefinition(
   }
 
   if (definition.zoneId !== resolvedZoneId) {
-    throw new Error(
-      `Spawn point ${definition.id} is not bound to resolved zone ${resolvedZoneId}.`,
-    );
+    return {
+      spawnPointId: definition.spawnPointId,
+      x: SECONDARY_ZONE_DEFAULT_SPAWN_X,
+      y: SECONDARY_ZONE_DEFAULT_SPAWN_Y,
+    };
   }
 
   return definition;

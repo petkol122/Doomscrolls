@@ -1,4 +1,5 @@
 import type { ItemDefinitionId } from "@doomscrolls/shared";
+import { FLASK_BELT_SLOT_IDS } from "@doomscrolls/shared";
 import type { ContentLocalizationKey, ItemContentDefinition } from "./types";
 
 const itemId = (value: string): ItemDefinitionId => value as ItemDefinitionId;
@@ -42,12 +43,48 @@ export const items = [
     category: "flask",
     rarity: "common",
     size: { width: 1, height: 2 },
-    allowedEquipmentSlots: ["flask_1"],
+    allowedEquipmentSlots: FLASK_BELT_SLOT_IDS,
     stackable: false,
     maxStackSize: 1,
     statModifiers: [],
     useEffect: { type: "restoreHpInstant", value: 25, charges: 3 },
     iconKey: "item_starter_blood_flask_placeholder"
+  },
+  {
+    // Milestone 0.3 -- 4-Slot Flask Belt. The mana counterpart to
+    // starter_blood_flask -- same common-tier charges/value shape,
+    // restoring the mana pool instead of HP.
+    id: itemId("starter_mana_draught"),
+    nameKey: "item.starter_mana_draught.name" as ContentLocalizationKey,
+    descriptionKey: "item.starter_mana_draught.description" as ContentLocalizationKey,
+    category: "flask",
+    rarity: "common",
+    size: { width: 1, height: 2 },
+    allowedEquipmentSlots: FLASK_BELT_SLOT_IDS,
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [],
+    useEffect: { type: "restoreManaInstant", value: 20, charges: 3 },
+    iconKey: "item_starter_mana_draught_placeholder"
+  },
+  {
+    // Milestone 0.3 -- 4-Slot Flask Belt. The stamina/utility flask --
+    // this codebase has no stamina resource pool, so its effect instead
+    // shaves time off the dodge-roll cooldown (see
+    // `applyFlaskSlotIntent`'s "restoreStaminaInstant" branch); `value`
+    // is a millisecond reduction, not an HP/mana amount.
+    id: itemId("starter_stamina_tonic"),
+    nameKey: "item.starter_stamina_tonic.name" as ContentLocalizationKey,
+    descriptionKey: "item.starter_stamina_tonic.description" as ContentLocalizationKey,
+    category: "flask",
+    rarity: "common",
+    size: { width: 1, height: 2 },
+    allowedEquipmentSlots: FLASK_BELT_SLOT_IDS,
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [],
+    useEffect: { type: "restoreStaminaInstant", value: 1500, charges: 3 },
+    iconKey: "item_starter_stamina_tonic_placeholder"
   },
   {
     id: itemId("blackwire_scrap"),
@@ -575,7 +612,7 @@ export const items = [
     category: "flask",
     rarity: "rare",
     size: { width: 1, height: 2 },
-    allowedEquipmentSlots: ["flask_1"],
+    allowedEquipmentSlots: FLASK_BELT_SLOT_IDS,
     stackable: false,
     maxStackSize: 1,
     statModifiers: [],
@@ -592,7 +629,7 @@ export const items = [
     category: "flask",
     rarity: "epic",
     size: { width: 1, height: 2 },
-    allowedEquipmentSlots: ["flask_1"],
+    allowedEquipmentSlots: FLASK_BELT_SLOT_IDS,
     stackable: false,
     maxStackSize: 1,
     statModifiers: [],
@@ -636,5 +673,58 @@ export const items = [
     ],
     durabilityMax: 20,
     iconKey: "item_cinderbound_girdle_placeholder"
+  },
+
+  // ── Milestone 0.3 -- Pawn Shop / Army Surplus Vendor: Salvage & Tech
+  // Teardown materials. Every gear salvage yields one of these two,
+  // chosen by the salvaged item instance's rolled rarity tier (see
+  // `salvageItem.ts`): normal/magic -> iron_scrap, rare/legendary ->
+  // arcane_dust. ──
+  {
+    id: itemId("iron_scrap"),
+    nameKey: "item.iron_scrap.name" as ContentLocalizationKey,
+    descriptionKey: "item.iron_scrap.description" as ContentLocalizationKey,
+    category: "material",
+    rarity: "common",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: [],
+    stackable: true,
+    maxStackSize: 99,
+    statModifiers: [],
+    iconKey: "item_iron_scrap_placeholder"
+  },
+  {
+    id: itemId("arcane_dust"),
+    nameKey: "item.arcane_dust.name" as ContentLocalizationKey,
+    descriptionKey: "item.arcane_dust.description" as ContentLocalizationKey,
+    category: "material",
+    rarity: "rare",
+    size: { width: 1, height: 1 },
+    allowedEquipmentSlots: [],
+    stackable: true,
+    maxStackSize: 99,
+    statModifiers: [],
+    iconKey: "item_arcane_dust_placeholder"
+  },
+
+  // ── Milestone 0.3 -- Namesti Republiky Building Doorway Vendors:
+  // Hostinec Pub. The item system has no dedicated "food"/cooking
+  // category or passive-buff mechanic yet (only the flask_1-slot
+  // `restoreHpInstant` consumable pattern exists) -- rather than add a
+  // new category/mechanic out of scope for this pass, the pub's fare
+  // reuses that same working consumable pattern.
+  {
+    id: itemId("hostinec_stew"),
+    nameKey: "item.hostinec_stew.name" as ContentLocalizationKey,
+    descriptionKey: "item.hostinec_stew.description" as ContentLocalizationKey,
+    category: "flask",
+    rarity: "common",
+    size: { width: 1, height: 2 },
+    allowedEquipmentSlots: FLASK_BELT_SLOT_IDS,
+    stackable: false,
+    maxStackSize: 1,
+    statModifiers: [],
+    useEffect: { type: "restoreHpInstant", value: 20, charges: 2 },
+    iconKey: "item_hostinec_stew_placeholder"
   }
 ] as const satisfies readonly ItemContentDefinition[];

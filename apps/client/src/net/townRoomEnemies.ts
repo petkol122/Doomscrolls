@@ -1,10 +1,11 @@
 import type { LocalizationKey } from "@doomscrolls/localization";
-import type { EnemyState, EnemyAttackKind, RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
+import type { EnemyState, EnemyAttackKind, EnemyRarity, RoomState as DoomscrollsRoomState } from "@doomscrolls/shared";
 
 export interface TownRoomEnemySnapshot {
   readonly id: string;
   readonly enemyId: string;
   readonly label: LocalizationKey;
+  readonly rarity: EnemyRarity;
   readonly x: number;
   readonly y: number;
   readonly state: EnemyState;
@@ -14,6 +15,12 @@ export interface TownRoomEnemySnapshot {
   readonly defeated: boolean;
   readonly respawnAtMs: number;
   readonly attackKind: EnemyAttackKind;
+  /**
+   * Core 0.2 -- server-owned active status effects, flattened as
+   * "type:expiresAtMs:magnitude:nextTickAtMs" entries joined by "|".
+   * Empty string = none. Parse with `parseActiveStatusEffectTypes`.
+   */
+  readonly statusEffects: string;
 }
 
 export function getTownRoomEnemies(
@@ -35,6 +42,7 @@ export function getTownRoomEnemies(
     const id = enemy.id;
     const enemyId = enemy.enemyId;
     const label = enemy.label;
+    const rarity = enemy.rarity;
     const x = enemy.x;
     const y = enemy.y;
     const state = enemy.state;
@@ -44,6 +52,7 @@ export function getTownRoomEnemies(
     const defeated = enemy.defeated;
     const respawnAtMs = enemy.respawnAtMs;
     const attackKind = enemy.attackKind;
+    const statusEffects = typeof enemy.statusEffects === "string" ? enemy.statusEffects : "";
 
     if (
       typeof id !== "string" ||
@@ -72,10 +81,14 @@ export function getTownRoomEnemies(
       return;
     }
 
+    const normalizedRarity: EnemyRarity =
+      rarity === "champion" || rarity === "elite" ? rarity : "normal";
+
     results.push({
       id,
       enemyId,
       label: label as LocalizationKey,
+      rarity: normalizedRarity,
       x,
       y,
       state,
@@ -85,6 +98,7 @@ export function getTownRoomEnemies(
       defeated,
       respawnAtMs,
       attackKind,
+      statusEffects,
     });
   });
 

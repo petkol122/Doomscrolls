@@ -1,4 +1,5 @@
 import { ItemLocationType, type Prisma, type PrismaClient } from "@prisma/client";
+import { buildMaterialBalances, buildMaterialBalancesJson, parseMaterialBalancesJson, type MaterialBalances, type MaterialId } from "@doomscrolls/shared";
 import { getSharedPrismaClient } from "../prisma";
 
 type CharacterRepositoryClient = PrismaClient | Prisma.TransactionClient;
@@ -63,7 +64,6 @@ export interface CharacterProgressionContext {
   readonly id: string;
   readonly level: number;
   readonly currentHp: number;
-  readonly currentFlaskCharges: number;
   readonly originId: string;
   readonly classId: string;
 }
@@ -86,11 +86,24 @@ export class CharacterRepository {
     });
   }
 
-  public findCurrentFlaskChargesForUser(characterId: string, userId: string) {
+  public findFlaskChargesJsonForUser(characterId: string, userId: string) {
     return this.db.character.findFirst({
       where: { id: characterId, userId },
-      select: { currentFlaskCharges: true },
+      select: { flaskChargesJson: true },
     });
+  }
+
+  /**
+   * Milestone 0.2 — Account Stash Foundation: resolves the owning
+   * account's userId from a characterId so account-wide (not
+   * character-scoped) state can be looked up.
+   */
+  public async findOwnerUserId(characterId: string): Promise<string | null> {
+    const character = await this.db.character.findUnique({
+      where: { id: characterId },
+      select: { userId: true },
+    });
+    return character?.userId ?? null;
   }
 
   public listByUserId(userId: string) {
@@ -112,6 +125,15 @@ export class CharacterRepository {
     return this.db.character.findUnique({
       where: { userId_characterNameNormalized: { userId, characterNameNormalized } },
     });
+  }
+
+  /**
+   * Delete a character, scoped to its owning user so one account can never
+   * delete another account's character. Returns whether a row was deleted.
+   */
+  public async deleteForUser(characterId: string, userId: string): Promise<boolean> {
+    const result = await this.db.character.deleteMany({ where: { id: characterId, userId } });
+    return result.count > 0;
   }
 
   public createCharacterWithInitialState(data: CreateCharacterWithInitialStateData): Promise<CharacterWithInitialState> {
@@ -177,6 +199,45 @@ export class CharacterRepository {
     return this.db.character.update({ where: { id: characterId }, data: { xp, level } });
   }
 
+  /**
+   * Milestone 0.3 -- Profession Training System. Persists the full
+   * professions JSON blob after an unlock/rank-up.
+   */
+  public updateProfessionsJson(characterId: string, professionsJson: string) {
+    return this.db.character.update({ where: { id: characterId }, data: { professionsJson } });
+  }
+
+  /**
+   * Core 0.1 Foundation -- Skill Point Allocation.
+   *
+   * Persists the result of spending one unallocated skill point on a
+   * single skill slot: the decremented `skillPoints` total and the
+   * raised rank for that slot only (the other two ranks are left
+   * untouched by omitting them from `data`).
+   */
+  public updateSkillAllocation(
+    characterId: string,
+    input: {
+      readonly skillPoints: number;
+      readonly slot: "primary" | "secondary" | "tertiary";
+      readonly newRank: number;
+    },
+  ) {
+    const rankField = input.slot === "primary"
+      ? "primarySkillRank"
+      : input.slot === "secondary"
+        ? "secondarySkillRank"
+        : "tertiarySkillRank";
+
+    return this.db.character.update({
+      where: { id: characterId },
+      data: {
+        skillPoints: input.skillPoints,
+        [rankField]: input.newRank,
+      },
+    });
+  }
+
   public findProgressionContext(characterId: string): Promise<CharacterProgressionContext | null> {
     return this.db.character.findUnique({
       where: { id: characterId },
@@ -184,7 +245,6 @@ export class CharacterRepository {
         id: true,
         level: true,
         currentHp: true,
-        currentFlaskCharges: true,
         originId: true,
         classId: true,
       },
@@ -198,14 +258,23 @@ export class CharacterRepository {
       readonly level: number;
       readonly currentHp: number;
       readonly stats: CreateCharacterStatsData;
+      /**
+       * Core 0.1 Foundation -- how many levels this update actually
+       * gained (0 when no level-up occurred), so `skillPoints` can be
+       * incremented by 1 per level atomically alongside the rest of
+       * the progression write.
+       */
+      readonly levelsGained?: number;
     },
   ) {
+    const levelsGained = Number.isFinite(input.levelsGained) ? Math.max(0, input.levelsGained ?? 0) : 0;
     return this.db.character.update({
       where: { id: characterId },
       data: {
         xp: input.xp,
         level: input.level,
         currentHp: input.currentHp,
+        ...(levelsGained > 0 ? { skillPoints: { increment: levelsGained } } : {}),
         stats: {
           update: {
             power: input.stats.power,
@@ -229,7 +298,7 @@ export class CharacterRepository {
     lastLocationX: number,
     lastLocationY: number,
     currentHp?: number,
-    currentFlaskCharges?: number,
+    flaskChargesJson?: string,
   ) {
     return this.db.character.update({
       where: { id: characterId },
@@ -238,7 +307,7 @@ export class CharacterRepository {
         lastLocationX,
         lastLocationY,
         ...(currentHp !== undefined ? { currentHp } : {}),
-        ...(currentFlaskCharges !== undefined ? { currentFlaskCharges } : {}),
+        ...(flaskChargesJson !== undefined ? { flaskChargesJson } : {}),
       },
     });
   }
@@ -383,5 +452,96 @@ export class CharacterRepository {
       select: { moneyCopper: true },
     });
     return updated.moneyCopper;
+  }
+
+  /** Reads a character's current material balances (Iron Scrap / Arcane Dust, see `MaterialTypes.ts`). */
+  private async readMaterialBalances(
+    db: Prisma.TransactionClient | PrismaClient,
+    characterId: string,
+  ): Promise<MaterialBalances | null> {
+    const current = await db.character.findUnique({
+      where: { id: characterId },
+      select: { materialBalancesJson: true } as unknown as Prisma.CharacterSelect,
+    });
+    if (current === null) {
+      return null;
+    }
+    return buildMaterialBalances(
+      parseMaterialBalancesJson((current as unknown as { materialBalancesJson?: string }).materialBalancesJson),
+    );
+  }
+
+  private writeMaterialBalances(
+    db: Prisma.TransactionClient | PrismaClient,
+    characterId: string,
+    balances: MaterialBalances,
+  ) {
+    return db.character.update({
+      where: { id: characterId },
+      data: { materialBalancesJson: buildMaterialBalancesJson(balances) } as unknown as Prisma.CharacterUpdateInput,
+    });
+  }
+
+  /**
+   * Atomically add `delta` units of a salvage-material currency to a
+   * character's balance (see `salvageItem.ts`). Returns the new balances
+   * map on success, or `null` when the character could not be found.
+   */
+  public async incrementMaterialBalance(
+    characterId: string,
+    materialId: MaterialId,
+    delta: number,
+  ): Promise<MaterialBalances | null> {
+    if (!Number.isFinite(delta) || delta <= 0) {
+      return null;
+    }
+    const safeDelta = Math.max(0, Math.floor(delta));
+
+    const run = async (db: Prisma.TransactionClient | PrismaClient): Promise<MaterialBalances | null> => {
+      const current = await this.readMaterialBalances(db, characterId);
+      if (current === null) {
+        return null;
+      }
+      const next = { ...current, [materialId]: current[materialId] + safeDelta };
+      await this.writeMaterialBalances(db, characterId, next);
+      return next;
+    };
+
+    if ("$transaction" in this.db) {
+      return this.db.$transaction((tx: Prisma.TransactionClient) => run(tx));
+    }
+    return run(this.db);
+  }
+
+  /**
+   * Atomically subtract `delta` units of a salvage-material currency from
+   * a character's balance (see `withdrawMaterialItem.ts`). Returns the
+   * new balances map on success, or `null` when the character could not
+   * be found or its current balance is lower than `delta`.
+   */
+  public async decrementMaterialBalance(
+    characterId: string,
+    materialId: MaterialId,
+    delta: number,
+  ): Promise<MaterialBalances | null> {
+    if (!Number.isFinite(delta) || delta <= 0) {
+      return null;
+    }
+    const safeDelta = Math.max(0, Math.floor(delta));
+
+    const run = async (db: Prisma.TransactionClient | PrismaClient): Promise<MaterialBalances | null> => {
+      const current = await this.readMaterialBalances(db, characterId);
+      if (current === null || current[materialId] < safeDelta) {
+        return null;
+      }
+      const next = { ...current, [materialId]: current[materialId] - safeDelta };
+      await this.writeMaterialBalances(db, characterId, next);
+      return next;
+    };
+
+    if ("$transaction" in this.db) {
+      return this.db.$transaction((tx: Prisma.TransactionClient) => run(tx));
+    }
+    return run(this.db);
   }
 }

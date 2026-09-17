@@ -40,6 +40,7 @@ model User {
   settings   UserSettings?
   sessions   Session[]
   characters Character[]
+  stashItems StashItem[]
 
   @@index([usernameNormalized])
 }
@@ -96,11 +97,44 @@ model Character {
   xp                      Int      @default(0)
   currentZoneId           String
   currentHp               Int
-  currentFlaskCharges     Int      @default(3)
+  // Milestone 0.3 -- 4-Slot Flask Belt. JSON-encoded array of up to 4
+  // persisted charge counts, one per belt slot (index 0 = flask_1 ...
+  // index 3 = flask_4), matching the existing `walletBalancesJson`/
+  // `materialBalancesJson` JSON-column convention. Replaces the old
+  // single `currentFlaskCharges` counter now that charges are tracked
+  // per-slot. See `packages/shared/src/inventory/FlaskBeltPersistence.ts`.
+  flaskChargesJson        String   @default("[]")
+  // Core 0.1 Foundation -- Skill Point Allocation. Unallocated points
+  // (1 gained per level) and the persisted rank of each of the
+  // character's three skill slots. Every skill starts at rank 1
+  // (already castable); points raise a slot's rank up to that skill's
+  // content-defined maxRank. Mana is NOT persisted here -- it always
+  // resets to full on join/respawn (see PlayerPresence), so it needs
+  // no DB column.
+  skillPoints             Int      @default(0)
+  primarySkillRank        Int      @default(1)
+  secondarySkillRank      Int      @default(1)
+  tertiarySkillRank       Int      @default(1)
   lastLocationZoneId      String?
   lastLocationX           Float?
   lastLocationY           Float?
   moneyCopper             Int      @default(0)
+  // Milestone 0.3 -- Multi-Currency Wallet Engine. JSON-encoded map of
+  // non-CZK currency balances (eur/usd/rmb/jpy/gold_bullion/street_cred).
+  // `moneyCopper` above remains the CZK balance (see CurrencyTypes.ts
+  // `buildCharacterWallet`); stored as TEXT rather than a native Json
+  // column to match the existing `ItemInstance.rolledAffixes` convention.
+  walletBalancesJson      String   @default("{}")
+  // Milestone 0.3 -- Profession Training System. JSON-encoded map of
+  // profession id -> tier reached (see ProfessionTypes.ts
+  // `parseProfessionsJson`/`buildProfessionsJson`); stored as TEXT for
+  // the same reason as `walletBalancesJson` above.
+  professionsJson         String   @default("{}")
+  // Salvage-material currency balances (Iron Scrap / Arcane Dust). JSON-
+  // encoded map of MaterialId -> quantity (see MaterialTypes.ts
+  // `parseMaterialBalancesJson`/`buildMaterialBalances`); stored as TEXT
+  // for the same reason as `walletBalancesJson` above.
+  materialBalancesJson    String   @default("{}")
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
   lastPlayedAt            DateTime?
@@ -113,6 +147,7 @@ model Character {
   corpses   Corpse[]
   waypointActivations CharacterWaypointActivation[]
   objectives          CharacterObjective[]
+  quests              CharacterQuest[]
   chatMessages        ChatMessage[]
 
   @@unique([userId, characterNameNormalized])
@@ -201,6 +236,15 @@ model ItemInstance {
   quantity          Int              @default(1)
   durabilityCurrent Int?
   durabilityMax     Int?
+  // Milestone 0.3 -- Server-Authoritative Item Rarity & Random Affix
+  // Engine. Rolled once at drop time (see affixRollEngine.ts) and
+  // persisted unchanged from then on -- unlike `rarity` on the content
+  // definition (a fixed per-template tag), this is the per-instance
+  // rolled tier ("normal"|"magic"|"rare"|"legendary"). `rolledAffixes`
+  // is a JSON-encoded `RolledAffix[]` (see affixRollEngine.ts); "[]" for
+  // a normal-tier (0-affix) instance.
+  rarityTier        String           @default("normal")
+  rolledAffixes     String           @default("[]")
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
@@ -215,6 +259,31 @@ model ItemInstance {
   @@index([roomId])
   @@index([zoneId])
   @@index([corpseId])
+}
+
+/**
+ * Milestone 0.2 — Account Stash Foundation. A stash of stackable items
+ * shared across every character on the account (keyed by `userId`, not
+ * `characterId`) -- deliberately a separate, simpler model from
+ * `ItemInstance`'s per-character `STASH` location: only definitionId +
+ * quantity are kept, so unique-instance data (durability, rolled stats)
+ * is not preserved across a deposit. `slotIndex` is a stable ordering
+ * key, not a positional grid coordinate.
+ */
+model StashItem {
+  id           String   @id @default(uuid())
+  userId       String
+  definitionId String
+  quantity     Int      @default(1)
+  slotIndex    Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, slotIndex])
+  @@unique([userId, definitionId])
+  @@index([userId])
 }
 
 model CharacterObjective {
@@ -232,6 +301,30 @@ model CharacterObjective {
   character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
 
   @@unique([characterId, objectiveId])
+  @@index([characterId])
+}
+
+enum QuestStatus {
+  ACCEPTED
+  COMPLETED
+}
+
+/**
+ * Core 0.1 — Persistent Quest & Dialogue System foundation. Mirrors
+ * CharacterObjective's shape: one row per (character, quest), so
+ * accept/complete state survives scene restarts and rejoins.
+ */
+model CharacterQuest {
+  id          String      @id @default(uuid())
+  characterId String
+  questId     String
+  status      QuestStatus @default(ACCEPTED)
+  acceptedAt  DateTime    @default(now())
+  completedAt DateTime?
+
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, questId])
   @@index([characterId])
 }
 

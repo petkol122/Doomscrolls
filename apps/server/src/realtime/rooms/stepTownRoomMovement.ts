@@ -4,6 +4,7 @@ import type { TownRoomState } from "./TownRoomState";
 import { TOWN_MOVEMENT_SPEED_FALLBACK_UNITS_PER_SECOND } from "./resolvePlayerMovementSpeed";
 import { tryExecutePendingAction } from "./deferredActionExecution";
 import { isSegmentBlockedByAnyPolygon } from "./pointInPolygon";
+import { getHasteMultiplier, getSlowMultiplier, isStunned } from "./statusEffects";
 
 export const TOWN_MOVEMENT_TICK_RATE_MS = 50;
 export const TOWN_MOVEMENT_STOP_DISTANCE = 2;
@@ -55,9 +56,16 @@ export function stepTownRoomMovement(
       : 1;
 
   const buildingFootprints = options?.buildingFootprints ?? [];
+  const now = options?.now ?? Date.now();
   let movedPlayerCount = 0;
 
   state.playerPresence.forEach((presence) => {
+    // Core 0.2 -- a stunned player can neither move nor cast; skip both
+    // the movement step and pending-action execution for this tick.
+    if (isStunned(presence, now)) {
+      return;
+    }
+
     if (!presence.hasMovementTarget) {
       return;
     }
@@ -66,7 +74,11 @@ export function stepTownRoomMovement(
       Number.isFinite(presence.movementSpeed) && presence.movementSpeed > 0
         ? presence.movementSpeed
         : TOWN_MOVEMENT_SPEED_FALLBACK_UNITS_PER_SECOND;
-    const speed = baseSpeed * movementSpeedMultiplier;
+    // Milestone 0.3 -- Street Alchemist's adrenaline_stim haste buff
+    // stacks on top of the slow debuff multiplier here rather than
+    // fighting it: a hasted-but-slowed player nets whatever the two
+    // multipliers combine to.
+    const speed = baseSpeed * movementSpeedMultiplier * getSlowMultiplier(presence, now) * getHasteMultiplier(presence, now);
     const maxDistance = speed * (deltaMs / 1000);
 
     if (stepPresenceTowardTarget(presence, maxDistance, buildingFootprints)) {
@@ -77,7 +89,7 @@ export function stepTownRoomMovement(
       void tryExecutePendingAction({
         state,
         player: presence,
-        now: options.now ?? Date.now(),
+        now,
         sendToClient: (type, message) => {
           options.onPendingActionReady?.(presence.sessionId, { type, message });
         },

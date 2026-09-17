@@ -1,4 +1,5 @@
 import type { PlayerPresence } from "./PlayerPresence";
+import { getHasteMultiplier } from "./statusEffects";
 
 // Task 206 -- lower default attack cooldown for snappier Diablo-like
 // combat feel. Task 306 -- reduced from 700 ms to 600 ms as part of
@@ -31,7 +32,11 @@ export function consumeAttackCooldown(
   const cooldownMs = resolveAttackCooldownMs(player.attackCooldownMs);
   player.attackCooldownMs = cooldownMs;
   player.lastAttackAt = now;
-  player.nextAttackAt = now + cooldownMs;
+  // Milestone 0.3 -- a "haste" buff (e.g. adrenaline_stim) shortens the
+  // wait until the next attack without touching the stored base
+  // `attackCooldownMs`, so the buff expiring restores the un-hasted
+  // cadence automatically.
+  player.nextAttackAt = now + cooldownMs / getHasteMultiplier(player, now);
 
   return {
     cooldownMs,

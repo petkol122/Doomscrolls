@@ -118,3 +118,20 @@ export function updateConnectedPlayerLiveCombatStats(characterId: string, stats:
   player.movementSpeed = stats.movementSpeed;
   player.attackCooldownMs = stats.attackCooldownMs;
 }
+
+/**
+ * Milestone 0.3 -- 4-Slot Flask Belt. Reaches the character's live
+ * `PlayerPresence` (if currently connected) for callers that need to
+ * mutate more than the fixed combat-stat set above -- specifically
+ * `EquipmentService`, which re-derives a flask belt slot's max
+ * charges/effect straight from the just-equipped item on every
+ * equip/unequip touching `flask_1`..`flask_4`.
+ */
+export function getConnectedPlayerPresence(characterId: string): PlayerPresence | undefined {
+  const entry = connectedPlayersByCharacterId.get(characterId);
+  if (entry === undefined) {
+    return undefined;
+  }
+  const state = entry.room.state as unknown as RoomStateWithPlayerPresence;
+  return state.playerPresence.get(entry.client.sessionId);
+}

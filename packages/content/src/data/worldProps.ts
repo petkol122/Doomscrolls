@@ -1282,4 +1282,45 @@ export const worldProps = [
   { id: "street_namesti_republiky_1554429381", zoneId: "namesti_republiky", kind: "street_surface", label: "", x: 4463.3, y: -60.4, points: [{ x: 4450.8, y: 146.5 }, { x: 4518.2, y: -59 }, { x: 4653.9, y: -172.7 }, { x: 4565.9, y: -300.7 }, { x: 4395.6, y: -154.4 }, { x: 4298.4, y: 116.5 }] },
   { id: "street_namesti_republiky_1554429382", zoneId: "namesti_republiky", kind: "street_surface", label: "", x: 2621.2, y: -413.5, points: [{ x: 4167.8, y: -265.2 }, { x: 1700.4, y: -617.4 }, { x: 1342.8, y: -725.8 }, { x: 1288.6, y: -580.2 }, { x: 1665.4, y: -466 }, { x: 4146.4, y: -111.2 }] },
 
+  // ── Pilsen Namesti hub <-> Cathedral interior (cathedral hub build) ──
+  { id: "cathedral_entrance", zoneId: "pilsen_namesti", kind: "zone_transition", label: "Cathedral Entrance", x: 500, y: 200, targetZoneId: "pilsen_cathedral_interior" },
+  { id: "cathedral_exit", zoneId: "pilsen_cathedral_interior", kind: "zone_transition", label: "Exit to Namesti", x: 300, y: 550, targetZoneId: "pilsen_namesti" },
+  { id: "cathedral_vendor", zoneId: "pilsen_cathedral_interior", kind: "vendor", label: "Cathedral Vendor", x: 300, y: 200 },
+
+  // Milestone 0.2 — Account Stash Foundation: a Stash interactable near
+  // the Cathedral vendor, opening the account-wide (not per-character)
+  // stash panel.
+  { id: "cathedral_account_stash", zoneId: "pilsen_cathedral_interior", kind: "town_service", label: "Stash", x: 450, y: 200 },
+
+  // Core 0.1 — Persistent Quest & Dialogue System foundation sample quest giver.
+  { id: "pilsen_namesti_quest_giver", zoneId: "pilsen_namesti", kind: "quest_giver", label: "Old Caretaker", x: 700, y: 250, questId: "clear_the_rats" },
+  // Milestone 0.3 -- Pawn Shop / Army Surplus Vendor. `id` doubles as
+  // both the worldProp id and the matching townServices/vendorStocks
+  // `vendorId` (see vendorBuyItem.ts/vendorSellItem.ts/salvageItem.ts,
+  // which resolve the vendor by this same id).
+  { id: "army_surplus_pawn", zoneId: "pilsen_namesti", kind: "vendor", label: "Army Surplus & Pawn", labelKey: "world_prop.army_surplus_pawn.label", x: 600, y: 400 },
+
+  // Milestone 0.2 — Waypoint & Fast Travel: an on-foot road link between
+  // Pilsen Namesti and the new Pilsen Bory city hub, plus one waypoint
+  // shrine in each zone. Deliberately not placed in the cathedral
+  // interior or Blackwire Sewers -- waypoints are an outdoor city-hub
+  // feature only.
+  { id: "bory_road_namesti", zoneId: "pilsen_namesti", kind: "zone_transition", label: "Road to Bory", x: 900, y: 800, targetZoneId: "pilsen_bory" },
+  { id: "bory_road_namesti_exit", zoneId: "pilsen_bory", kind: "zone_transition", label: "Road to Namesti", x: 100, y: 100, targetZoneId: "pilsen_namesti" },
+  { id: "namesti_waypoint", zoneId: "pilsen_namesti", kind: "waypoint", label: "Namesti Waypoint", labelKey: "world_prop.namesti_waypoint.label", x: 200, y: 800, targetZoneId: "pilsen_namesti" },
+  { id: "bory_waypoint", zoneId: "pilsen_bory", kind: "waypoint", label: "Bory Waypoint", labelKey: "world_prop.bory_waypoint.label", x: 600, y: 600, targetZoneId: "pilsen_bory" },
+
+  // Milestone 0.3 -- Namesti Republiky Building Doorway Vendors. Four
+  // vendor triggers anchored directly at real building-footprint points
+  // (`bldg_*` polygons above) facing the square from the north/west/
+  // south/east sides, so the "Press [E] to Enter/Shop" prompt reads as
+  // a doorway into that specific block rather than a prop floating in
+  // open plaza space. `id` doubles as the worldProp id and the matching
+  // townServices/vendorStocks `vendorId`, same convention as
+  // `army_surplus_pawn` above.
+  { id: "lekarna_vendor", zoneId: "namesti_republiky", kind: "vendor", label: "Lékárna", labelKey: "world_prop.lekarna_vendor.label", x: 2130.6, y: 1476.1 },
+  { id: "cisarsky_dum_vendor", zoneId: "namesti_republiky", kind: "vendor", label: "Císařský dům", labelKey: "world_prop.cisarsky_dum_vendor.label", x: 672.6, y: 1801.9 },
+  { id: "tech_hub_vendor", zoneId: "namesti_republiky", kind: "vendor", label: "Tech Hub", labelKey: "world_prop.tech_hub_vendor.label", x: 2604.8, y: 4358.7 },
+  { id: "hostinec_pub_vendor", zoneId: "namesti_republiky", kind: "vendor", label: "Hostinec Pub", labelKey: "world_prop.hostinec_pub_vendor.label", x: 4127, y: 2570.5 },
+
 ] as const satisfies readonly WorldPropContentDefinition[];

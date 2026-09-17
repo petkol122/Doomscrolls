@@ -2,6 +2,19 @@ import { t } from "@doomscrolls/localization";
 import Phaser from "phaser";
 
 import type { TownRoomWorldLootSnapshot } from "../../../net/townRoomWorldLoot";
+import { getItemRarityColor as resolveItemRarityColor, getItemRarityAccentColor } from "../../itemRarityColors";
+import {
+  ensureLootFilterAltListenerAttached,
+  isLootFilterOverrideActive,
+  isLootRarityVisible,
+  subscribeLootFilterState,
+} from "./worldSessionLootFilterState";
+
+/** Milestone 0.3 -- prefer the per-instance rolled tier (see
+ *  affixRollEngine.ts) over the item template's fixed rarity, when set. */
+function resolveDisplayRarity(loot: TownRoomWorldLootSnapshot): string | undefined {
+  return loot.rarityTier !== undefined && loot.rarityTier.length > 0 ? loot.rarityTier : loot.rarity;
+}
 
 const COMMON_LOOT_COLOR = "#ffe7a8";
 const COMMON_LOOT_STROKE = "#221606";
@@ -39,27 +52,17 @@ export function getScatterOffset(id: string): { readonly x: number; readonly y: 
 }
 
 function getItemRarityColor(rarity?: string): string {
-  if (rarity === "epic") {
-    return "#c77dff";
+  if (rarity === undefined || rarity.length === 0 || rarity === "common" || rarity === "normal") {
+    return COMMON_LOOT_COLOR;
   }
-
-  if (rarity === "rare") {
-    return "#8fc7ff";
-  }
-
-  return COMMON_LOOT_COLOR;
+  return resolveItemRarityColor(rarity);
 }
 
 function getItemRarityStrokeColor(rarity?: string): string {
-  if (rarity === "epic") {
-    return "#2e1a40";
+  if (rarity === undefined || rarity.length === 0 || rarity === "common" || rarity === "normal") {
+    return COMMON_LOOT_STROKE;
   }
-
-  if (rarity === "rare") {
-    return "#10233d";
-  }
-
-  return COMMON_LOOT_STROKE;
+  return getItemRarityAccentColor(rarity);
 }
 
 function getLootPlaceholderPalette(loot: TownRoomWorldLootSnapshot): {
@@ -79,7 +82,19 @@ function getLootPlaceholderPalette(loot: TownRoomWorldLootSnapshot): {
     };
   }
 
-  if (loot.rarity === "epic") {
+  const displayRarity = resolveDisplayRarity(loot);
+
+  if (displayRarity === "legendary") {
+    return {
+      glow: 0xff8c3d,
+      ping: 0xffb066,
+      pingStroke: 0xffe4c2,
+      body: 0xc96a1f,
+      bodyStroke: 0xffe4c2,
+    };
+  }
+
+  if (displayRarity === "epic") {
     return {
       glow: 0xa855f7,
       ping: 0xc77dff,
@@ -89,13 +104,23 @@ function getLootPlaceholderPalette(loot: TownRoomWorldLootSnapshot): {
     };
   }
 
-  if (loot.rarity === "rare") {
+  if (displayRarity === "rare") {
     return {
       glow: 0x66b7ff,
       ping: 0x9bd2ff,
       pingStroke: 0xd7efff,
       body: 0x4b86d8,
       bodyStroke: 0xe0f2ff,
+    };
+  }
+
+  if (displayRarity === "magic") {
+    return {
+      glow: 0x4a90ff,
+      ping: 0x7fb0ff,
+      pingStroke: 0xd0e4ff,
+      body: 0x2f5fbf,
+      bodyStroke: 0xd0e4ff,
     };
   }
 
@@ -110,6 +135,36 @@ function getLootPlaceholderPalette(loot: TownRoomWorldLootSnapshot): {
 
 function isCurrencyLoot(loot: TownRoomWorldLootSnapshot): boolean {
   return loot.currencyCopper > 0;
+}
+
+// Milestone 0.3 -- Visual Drop Beams. Only the top two tiers get a beam
+// (matches the classic White/Blue/Yellow/Orange ladder from
+// itemRarityColors.ts -- a beam on every colored drop would just be noise).
+const BEAM_RARITIES = new Set(["rare", "legendary"]);
+const BEAM_HEIGHT = 68;
+const BEAM_WIDTH = 7;
+const BEAM_TOP_Y = -(BEAM_HEIGHT + 4);
+
+function hexColorStringToNumber(hex: string): number {
+  return Number.parseInt(hex.replace("#", ""), 16);
+}
+
+function shouldShowDropBeam(loot: TownRoomWorldLootSnapshot): boolean {
+  if (isCurrencyLoot(loot)) {
+    return false;
+  }
+  const rarity = resolveDisplayRarity(loot);
+  return rarity !== undefined && BEAM_RARITIES.has(rarity);
+}
+
+function getDropBeamColor(loot: TownRoomWorldLootSnapshot): number {
+  return hexColorStringToNumber(getItemRarityColor(resolveDisplayRarity(loot)));
+}
+
+function drawDropBeam(beam: Phaser.GameObjects.Graphics, color: number): void {
+  beam.clear();
+  beam.fillGradientStyle(color, color, color, color, 0.05, 0.05, 0.55, 0.55);
+  beam.fillRect(-BEAM_WIDTH / 2, BEAM_TOP_Y, BEAM_WIDTH, BEAM_HEIGHT);
 }
 
 function getCurrencyLabel(loot: TownRoomWorldLootSnapshot): string {
@@ -131,14 +186,14 @@ function getLootLabelColor(loot: TownRoomWorldLootSnapshot): string {
   if (isCurrencyLoot(loot)) {
     return CURRENCY_LOOT_COLOR;
   }
-  return getItemRarityColor(loot.rarity);
+  return getItemRarityColor(resolveDisplayRarity(loot));
 }
 
 function getLootLabelStrokeColor(loot: TownRoomWorldLootSnapshot): string {
   if (isCurrencyLoot(loot)) {
     return CURRENCY_LOOT_STROKE;
   }
-  return getItemRarityStrokeColor(loot.rarity);
+  return getItemRarityStrokeColor(resolveDisplayRarity(loot));
 }
 
 export interface WorldSessionLootPlaceholderView {
@@ -154,11 +209,34 @@ export function createWorldSessionLootPlaceholderView(
   parentContainer?: Phaser.GameObjects.Container,
   onClick?: (worldLootId: string) => void,
 ): WorldSessionLootPlaceholderView {
+  ensureLootFilterAltListenerAttached();
+
   const initialPalette = getLootPlaceholderPalette(loot);
   const scatter = getScatterOffset(loot.id);
   const container = scene.add.container(loot.x + scatter.x, loot.y + scatter.y);
   container.setDepth(300 + loot.y);
   parentContainer?.add(container);
+
+  // Milestone 0.3 -- Visual Drop Beam, drawn beneath everything else in the
+  // container so the body/label still read on top of it.
+  const beam = scene.add.graphics();
+  const beamTween = scene.tweens.add({
+    targets: beam,
+    alpha: { from: 0.55, to: 1 },
+    duration: 950,
+    yoyo: true,
+    repeat: -1,
+    ease: "Sine.easeInOut",
+  });
+  const applyBeamState = (currentLoot: TownRoomWorldLootSnapshot): void => {
+    const showBeam = shouldShowDropBeam(currentLoot);
+    beam.setVisible(showBeam);
+    if (showBeam) {
+      drawDropBeam(beam, getDropBeamColor(currentLoot));
+    }
+  };
+  applyBeamState(loot);
+
   const glow = scene.add.ellipse(0, 10, 28, 13, initialPalette.glow, 0.32);
   const ping = scene.add.ellipse(0, 9, 36, 15, initialPalette.ping, 0.15);
   ping.setStrokeStyle(2, initialPalette.pingStroke, 0.3);
@@ -189,7 +267,7 @@ export function createWorldSessionLootPlaceholderView(
     onClick?.(loot.id);
   });
 
-  container.add([glow, ping, targetRing, body, labelBg, labelText]);
+  container.add([beam, glow, ping, targetRing, body, labelBg, labelText]);
 
   // Task 314 — hover highlight ring. Separate from the existing targetRing
   // (which is used for pending pickup state). Shown when the player's cursor
@@ -222,12 +300,32 @@ export function createWorldSessionLootPlaceholderView(
   };
   applyPendingTargetState(false);
 
+  // Milestone 0.3 -- Client Loot Filter. `latestLoot` lets the filter
+  // subscription (which fires on Alt press/release and rule toggles, not
+  // just on the next `refresh()` from a room state tick) re-evaluate this
+  // item's visibility against whatever loot it most recently rendered.
+  let latestLoot = loot;
+  const applyFilterVisibility = (): void => {
+    const rarity = isCurrencyLoot(latestLoot) ? undefined : resolveDisplayRarity(latestLoot);
+    const passesFilter = isCurrencyLoot(latestLoot) || isLootRarityVisible(rarity);
+    const overrideActive = isLootFilterOverrideActive();
+    container.setVisible(passesFilter || overrideActive);
+    // Items only visible because of the Alt override render dimmed, so
+    // players can tell "filtered but revealed" apart from "actually shown".
+    container.setAlpha(passesFilter ? 1 : 0.55);
+  };
+  applyFilterVisibility();
+  const unsubscribeFilterState = subscribeLootFilterState(applyFilterVisibility);
+
   return {
     setHovered,
     refresh: (nextLoot: TownRoomWorldLootSnapshot, isPendingTarget = false) => {
+      latestLoot = nextLoot;
       const nextScatter = getScatterOffset(nextLoot.id);
     container.setPosition(nextLoot.x + nextScatter.x, nextLoot.y + nextScatter.y);
     container.setDepth(300 + nextLoot.y);
+      applyBeamState(nextLoot);
+      applyFilterVisibility();
       labelText.setText(getLootLabelText(nextLoot));
       labelText.setColor(getLootLabelColor(nextLoot));
       labelText.setStroke(getLootLabelStrokeColor(nextLoot), 3);
@@ -242,6 +340,8 @@ export function createWorldSessionLootPlaceholderView(
       applyPendingTargetState(isPendingTarget);
     },
     destroy: () => {
+      unsubscribeFilterState();
+      beamTween.stop();
       container.destroy(true);
     },
   };

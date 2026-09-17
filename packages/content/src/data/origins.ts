@@ -7,7 +7,7 @@ export const origins = [
     descriptionKey: "origin.sewer_dweller.description",
     passiveIds: ["nightvision"],
     startingZoneId: "namesti_republiky",
-    allowedClassIds: ["gravewalker", "ironclad"],
+    allowedClassIds: ["gravewalker", "ironclad", "netrunner", "street_alchemist"],
     baseStats: { power: 1, speed: 2, mind: 1, toughness: 2 }
   }
 ] as const satisfies readonly OriginContentDefinition[];

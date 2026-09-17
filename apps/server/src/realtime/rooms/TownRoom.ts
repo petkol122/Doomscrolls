@@ -26,12 +26,19 @@ import type {
   ObjectiveUpdatedServerMessage,
   RequestResetObjectiveClientMessage,
   XpGainedServerMessage,
+  QuestStateServerMessage,
+  QuestUpdatedServerMessage,
+  CurrencyPickedUpServerMessage,
+  RequestAllocateSkillPointClientMessage,
+  RequestAllocateSkillPointAcceptedServerMessage,
+  RequestAllocateSkillPointRejectedServerMessage,
 } from "@doomscrolls/shared";
 import { t } from "@doomscrolls/localization";
 import { RoomJoinValidationService } from "../RoomJoinValidationService";
 import { CharacterService } from "../../character/CharacterService";
 import type { TownRoomJoinOptions } from "./townRoomTypes";
 import { TownRoomState } from "./TownRoomState";
+import type { PlayerPresence } from "./PlayerPresence";
 import { buildTownPlayerPresence } from "./buildPlayerPresence";
 import { createRoomLogger } from "./roomLogger";
 import { validateMovementIntent } from "./movementIntentValidation";
@@ -40,6 +47,10 @@ import { resolveZoneBounds } from "./resolveZoneBounds";
 import { resolveZoneBuildingFootprints } from "./resolveZoneBuildingFootprints";
 import { isPointInsideAnyPolygon } from "./pointInPolygon";
 import { computeBuildingAvoidancePath } from "./buildingAvoidancePathfinding";
+import {
+  stepEnemyTowardPointWithAvoidance,
+  stepEnemyTowardTargetWithAvoidance,
+} from "./enemyPathfinding";
 import { resolvePlayerMovementSpeed, resolveSafeZoneMovementSpeedMultiplier } from "./resolvePlayerMovementSpeed";
 import { resolvePlayerDamage } from "./resolvePlayerDamage";
 import { resolvePlayerArmor } from "./resolvePlayerArmor";
@@ -54,12 +65,14 @@ import { validateInteractIntent, getInteractableResponseMessage } from "./intera
 import { validateAttackIntent } from "./attackIntentValidation";
 import { consumeAttackCooldown, resolveAttackCooldownMs } from "./attackCooldown";
 import { applyEnemyDamage } from "./applyEnemyDamage";
+import { applyStatusEffect, getSlowMultiplier, isStunned } from "./statusEffects";
+import { applyStatusEffectTicks as runStatusEffectTicks } from "./applyStatusEffectTicks";
 import { validateDodgeIntent } from "./dodgeIntentValidation";
 import { applyDodgeIntent } from "./applyDodgeIntent";
 import { consumeDodgeCooldown, isDodgeReady } from "./dodgeCooldown";
-import { validateHealingFlaskIntent } from "./healingFlaskValidation";
-import { applyHealingFlaskIntent } from "./applyHealingFlaskIntent";
-import { restoreFlaskToFull } from "./healingFlaskConfig";
+import { validateFlaskSlotIntent } from "./flaskSlotValidation";
+import { applyFlaskSlotIntent } from "./applyFlaskSlotIntent";
+import { buildFlaskChargesJsonForPresence, restoreFlaskBeltToFull, sumFlaskBeltCharges } from "./flaskBeltConfig";
 import { applyTownRestRefill } from "./townRestRefill";
 import { registerConnectedPlayer, unregisterConnectedPlayer } from "./connectedPlayerRegistry";
 import { registerChatHandler } from "./chatHandler";
@@ -67,10 +80,11 @@ import { clearChatCooldown } from "./chatCooldown";
 import { registerGlobalChatHandler, sendGlobalChatHistory } from "./globalChatHandler";
 import { clearGlobalChatCooldown } from "./globalChatCooldown";
 import { buildEquipmentLoadout } from "../../character/buildEquipmentLoadout";
+import { syncFlaskBeltFromEquipment } from "../../character/syncFlaskBeltFromEquipment";
 import { applyTownRestAreaRefillForAll } from "./townRestAreaTrigger";
 import type {
-  RequestUseHealingFlaskAcceptedServerMessage,
-  RequestUseHealingFlaskRejectedServerMessage,
+  RequestUseFlaskSlotAcceptedServerMessage,
+  RequestUseFlaskSlotRejectedServerMessage,
 } from "@doomscrolls/shared";
 import {
   advanceObjectiveProgressAllSlots,
@@ -79,6 +93,7 @@ import {
   type ObjectiveSlot,
 } from "./advanceObjectiveProgress";
 import { respawnTownEnemies } from "./respawnTownEnemies";
+import { getEnemyRarityMultiplier } from "./enemyRarity";
 import { spawnWorldLootOnEnemyDefeat } from "./spawnWorldLootOnEnemyDefeat";
 import { applyWanderMovement } from "./wanderEnemies";
 import { dispatchPickedUpWorldLoot } from "./pickupWorldLootDispatcher";
@@ -86,16 +101,26 @@ import { validatePickupWorldLootIntent } from "./pickupWorldLootValidation";
 import { clearPendingAction, setPendingAction } from "./pendingActionState";
 import { resolvePlayerInitialPosition } from "./validateCharacterLocation";
 import { contentRegistry, NOTICE_BOARD_OBJECTIVE_SEQUENCE } from "@doomscrolls/content";
-import type { SpawnPointContentId, ObjectiveId, ZoneContentId, WorldPropPoint } from "@doomscrolls/content";
+import type { SpawnPointContentId, ObjectiveId, QuestId, ZoneContentId, WorldPropPoint } from "@doomscrolls/content";
 import { DEFAULT_TOWN_SPAWN_POINT_ID } from "./resolveTownSpawnPoint";
 import { resolveTownZoneId } from "./resolveTownZoneId";
-import { CharacterRepository, ObjectiveRepository } from "../../persistence/repositories";
+import { CharacterRepository, ObjectiveRepository, QuestRepository } from "../../persistence/repositories";
 import { ItemRepository } from "../../persistence/repositories/ItemRepository";
+import { CorpseRepository } from "../../persistence/repositories/CorpseRepository";
 import { tryResolveLevelProgression } from "./levelProgression";
 import { CharacterStatsService } from "../../character/CharacterStatsService";
 import { executeVendorBuyItem } from "./vendorBuyItem";
 import { executeVendorSellItem } from "./vendorSellItem";
+import { executeSalvageItem } from "./salvageItem";
+import { executeWithdrawMaterialItem } from "./withdrawMaterialItem";
+import { executeUnlockProfession } from "./unlockProfession";
 import { executeStoreInventoryItemInStash, executeTakeStashItemToInventory } from "./stashTransferItem";
+import { executeMoveInventoryItem } from "./moveInventoryItem";
+import {
+  executeDepositStashItem,
+  executeListAccountStash,
+  executeWithdrawStashItem,
+} from "./accountStashTransfer";
 // Task 206 -- server-owned approach stop point for deferred queues
 // (attack / pickup / interact). The server still applies the
 // resolved target through applyMovementIntent; the client never
@@ -111,13 +136,24 @@ import {
   resolveWaypointTravel,
 } from "./waypointService";
 import {
+  applySkillEffectIfDefined,
+  deductMana,
   getSkillSlotCooldownAt,
+  getSkillSlotRank,
+  hasSufficientMana,
   pendingActionTypeForSkillSlot,
   resolveSkillCastDamage,
   resolveSkillSlotDefinition,
   setSkillSlotCooldownAt,
+  setSkillSlotRank,
   type SkillSlotId,
 } from "./skillSlotContent";
+import { regenerateMana } from "./manaRegen";
+// Milestone 0.2 -- Server-Authoritative Projectiles & Ground-Targeted AoE Skills.
+import { spawnProjectile, stepProjectiles } from "./projectileSimulation";
+import { resolveGroundAoeCast, cleanupExpiredGroundEffects } from "./groundAoeResolution";
+import { spawnTurret, stepTurrets, type TurretShot } from "./turretSimulation";
+import type { EnemyPresence, ProjectilePresence } from "@doomscrolls/shared";
 
 // Task 227 -- enemy movement speed is authored in the same
 // per-second stat space as the player's derived `moveSpeed` (see
@@ -155,6 +191,10 @@ const INTERACT_APPROACH_DISTANCE = 38;
 const ENEMY_ATTACK_WINDUP_MS = 300;
 const ENEMY_RETURN_ARRIVAL_DISTANCE = 1;
 const ENEMY_RETURN_REACQUIRE_BUFFER = 8;
+// Core 0.1 -- corpse recovery interact range (world units) and the flat
+// XP restoration granted on a successful recovery.
+const CORPSE_INTERACT_RANGE = 30;
+const CORPSE_RECOVERY_XP_REWARD = 15;
 const characterStatsService = new CharacterStatsService();
 const progressionLog = createRoomLogger(undefined);
 type ContentEnemyId = Parameters<typeof contentRegistry.enemies.get>[0];
@@ -343,7 +383,7 @@ function resetNoticeBoardObjective(player: {
 }
 
 async function grantFlatXpReward(
-  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number; damage?: number; armor?: number },
+  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number; damage?: number; armor?: number; skillPoints?: number },
   xpReward: number,
   sendToClient: (type: string, payload: unknown) => void,
 ): Promise<void> {
@@ -377,16 +417,26 @@ async function grantFlatXpReward(
     hp: progressionUpdate.hp,
     maxHp: progressionUpdate.maxHp,
     gainedMaxHp: progressionUpdate.gainedMaxHp,
+    ...(progressionUpdate.gainedSkillPoints > 0
+      ? { gainedSkillPoints: progressionUpdate.gainedSkillPoints, totalSkillPoints: progressionUpdate.totalSkillPoints }
+      : {}),
   };
   sendToClient("xp_gained", xpGained);
 }
 
 type ProgressionUpdateResult =
-  | { readonly ok: true; readonly maxHp: number; readonly hp: number; readonly gainedMaxHp: number }
+  | {
+      readonly ok: true;
+      readonly maxHp: number;
+      readonly hp: number;
+      readonly gainedMaxHp: number;
+      readonly gainedSkillPoints: number;
+      readonly totalSkillPoints: number;
+    }
   | { readonly ok: false };
 
 async function applyProgressionUpdate(
-  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number; damage?: number; armor?: number },
+  player: { characterId: CharacterId; xp: number; level: number; maxHp?: number; hp?: number; damage?: number; armor?: number; skillPoints?: number },
   progression: { readonly xp: number; readonly level: number; readonly leveledUp: boolean },
 ): Promise<ProgressionUpdateResult> {
   const characterRepository = new CharacterRepository();
@@ -413,6 +463,8 @@ async function applyProgressionUpdate(
 
   const previousMaxHp = Number.isFinite(player.maxHp) ? Math.max(0, player.maxHp ?? 0) : 0;
   const previousHp = Number.isFinite(player.hp) ? Math.max(0, player.hp ?? 0) : character.currentHp;
+  const previousLevel = Math.max(1, Math.floor(character.level));
+  const levelsGained = Math.max(0, progression.level - previousLevel);
   const recalculated = characterStatsService.calculateEquippedStats(
     characterStatsService.calculateLevelScaledStats(origin.baseStats, characterClass.baseStats, progression.level).primary,
     modifiers,
@@ -422,8 +474,9 @@ async function applyProgressionUpdate(
   const gainedMaxHp = Math.max(0, nextMaxHp - previousMaxHp);
   const nextHp = Math.min(nextMaxHp, previousHp + gainedMaxHp);
 
+  let updatedCharacter;
   try {
-    await characterRepository.updateProgressionState(player.characterId, {
+    updatedCharacter = await characterRepository.updateProgressionState(player.characterId, {
       xp: progression.xp,
       level: progression.level,
       currentHp: nextHp,
@@ -431,6 +484,7 @@ async function applyProgressionUpdate(
         ...recalculated.primary,
         ...recalculated.derived,
       },
+      levelsGained,
     });
   } catch (error) {
     progressionLog.warn?.(
@@ -459,8 +513,11 @@ async function applyProgressionUpdate(
   if ("armor" in player) {
     player.armor = recalculated.derived.armor;
   }
+  if ("skillPoints" in player && player.skillPoints !== undefined) {
+    player.skillPoints = updatedCharacter.skillPoints;
+  }
 
-  return { ok: true, maxHp: nextMaxHp, hp: nextHp, gainedMaxHp };
+  return { ok: true, maxHp: nextMaxHp, hp: nextHp, gainedMaxHp, gainedSkillPoints: levelsGained, totalSkillPoints: updatedCharacter.skillPoints };
 }
 
 async function grantEnemyDefeatXp(
@@ -523,40 +580,6 @@ function sendEnemyAttackResolved(
   }
 }
 
-function moveEnemyTowardTarget(
-  enemy: { x: number; y: number },
-  target: { x: number; y: number },
-  moveSpeedUnitsPerSecond: number,
-  deltaMs: number,
-): void {
-  if (
-    !Number.isFinite(moveSpeedUnitsPerSecond) ||
-    moveSpeedUnitsPerSecond <= 0 ||
-    !Number.isFinite(deltaMs) ||
-    deltaMs <= 0
-  ) {
-    return;
-  }
-
-  const deltaX = target.x - enemy.x;
-  const deltaY = target.y - enemy.y;
-  const distance = Math.hypot(deltaX, deltaY);
-
-  if (distance <= ENEMY_ATTACK_RANGE) {
-    return;
-  }
-
-  const maxDistance = moveSpeedUnitsPerSecond * (deltaMs / 1000);
-  const distanceToTravel = Math.min(maxDistance, distance - ENEMY_ATTACK_RANGE);
-  if (distanceToTravel <= 0) {
-    return;
-  }
-
-  const scale = distanceToTravel / distance;
-  enemy.x += deltaX * scale;
-  enemy.y += deltaY * scale;
-}
-
 function toWorldUnits(contentUnits: number, fallback: number): number {
   if (!Number.isFinite(contentUnits) || contentUnits <= 0) {
     return fallback;
@@ -587,42 +610,6 @@ function resetEnemyCombatState(enemy: {
   enemy.state = "idle";
   enemy.nextAttackAtMs = 0;
   enemy.attackLandingAtMs = 0;
-}
-
-function moveEnemyTowardPoint(
-  enemy: { x: number; y: number },
-  target: { x: number; y: number },
-  moveSpeedUnitsPerSecond: number,
-  deltaMs: number,
-): void {
-  if (
-    !Number.isFinite(moveSpeedUnitsPerSecond) ||
-    moveSpeedUnitsPerSecond <= 0 ||
-    !Number.isFinite(deltaMs) ||
-    deltaMs <= 0
-  ) {
-    return;
-  }
-
-  const deltaX = target.x - enemy.x;
-  const deltaY = target.y - enemy.y;
-  const distance = Math.hypot(deltaX, deltaY);
-
-  if (distance <= ENEMY_RETURN_ARRIVAL_DISTANCE) {
-    enemy.x = target.x;
-    enemy.y = target.y;
-    return;
-  }
-
-  const maxDistance = moveSpeedUnitsPerSecond * (deltaMs / 1000);
-  const distanceToTravel = Math.min(maxDistance, distance);
-  if (distanceToTravel <= 0) {
-    return;
-  }
-
-  const scale = distanceToTravel / distance;
-  enemy.x += deltaX * scale;
-  enemy.y += deltaY * scale;
 }
 
 /**
@@ -683,15 +670,22 @@ export class TownRoom extends Room {
   private attackHandlerRegistered = false;
   private resetObjectiveHandlerRegistered = false;
   private startBoardObjectiveHandlerRegistered = false;
+  private questHandlerRegistered = false;
   private pickupWorldLootHandlerRegistered = false;
   private respawnHandlerRegistered = false;
   private corpseInteractHandlerRegistered = false;
   private dodgeHandlerRegistered = false;
-  private healingFlaskHandlerRegistered = false;
+  private flaskSlotHandlerRegistered = false;
   private skillSlotHandlerRegistered = false;
+  private allocateSkillPointHandlerRegistered = false;
   private vendorBuyHandlerRegistered = false;
   private vendorSellHandlerRegistered = false;
+  private salvageItemHandlerRegistered = false;
+  private withdrawMaterialHandlerRegistered = false;
+  private unlockProfessionHandlerRegistered = false;
   private stashTransferHandlerRegistered = false;
+  private moveInventoryItemHandlerRegistered = false;
+  private accountStashHandlerRegistered = false;
   private chatHandlerRegistered = false;
   private globalChatHandlerRegistered = false;
   /**
@@ -743,12 +737,19 @@ export class TownRoom extends Room {
     this.registerRespawnHandler(log);
     this.registerCorpseInteractHandler(log);
     this.registerDodgeHandler(log);
-    this.registerHealingFlaskHandler(log);
+    this.registerFlaskSlotHandler(log);
     this.registerSkillSlotHandler(log);
+    this.registerAllocateSkillPointHandler(log);
     this.registerVendorBuyHandler(log);
     this.registerVendorSellHandler(log);
+    this.registerSalvageItemHandler(log);
+    this.registerWithdrawMaterialHandler(log);
+    this.registerUnlockProfessionHandler(log);
     this.registerStashTransferHandler(log);
+    this.registerMoveInventoryItemHandler(log);
+    this.registerAccountStashHandler(log);
     this.registerStartBoardObjectiveHandler(log);
+    this.registerQuestHandlers(log);
     if (!this.chatHandlerRegistered) {
       this.chatHandlerRegistered = true;
       registerChatHandler(this, log);
@@ -765,6 +766,7 @@ export class TownRoom extends Room {
     );
     this.setSimulationInterval((deltaMs: number) => {
       const state = this.state as TownRoomState;
+      this.applyStatusEffectTicks(state, Date.now());
       stepTownRoomMovement(state, deltaMs, {
         now: Date.now(),
         movementSpeedMultiplier,
@@ -784,6 +786,25 @@ export class TownRoom extends Room {
       this.applyEnemyAggroDamage(Date.now(), deltaMs);
       respawnTownEnemies(state, zoneId, Date.now());
 
+      // Milestone 0.2 -- resolve projectile travel/impact and expire
+      // ground-effect visual markers, after enemies have moved this
+      // tick so homing projectiles chase current positions.
+      stepProjectiles(state, deltaMs, Date.now(), (projectile, enemy) => {
+        this.handleProjectileImpact(state, projectile, enemy, Date.now(), log);
+      });
+      cleanupExpiredGroundEffects(state, Date.now());
+
+      // Milestone 0.3 -- Netrunner's overclock_turret: auto-fire any
+      // active turrets at nearby enemies on their own attack cadence.
+      stepTurrets(state, Date.now(), (shot) => {
+        this.handleTurretShot(state, shot, Date.now(), log);
+      });
+
+      // Core 0.1 Foundation -- Mana/Resource System passive regen.
+      state.playerPresence.forEach((player) => {
+        regenerateMana(player, deltaMs);
+      });
+
       // Task 303 — Physical town rest area refill trigger. Runs on
       // each tick and sends the localized notification only when
       // the player's values actually changed (avoiding spam while
@@ -802,7 +823,10 @@ export class TownRoom extends Room {
             targetClient.send("town_rest_refill", {
               type: "town_rest_refill",
               restoredHp: state.playerPresence.get(sessionId)?.hp ?? 0,
-              restoredFlaskCharges: Math.floor(state.playerPresence.get(sessionId)?.flaskCharges ?? 0),
+              restoredFlaskCharges: (() => {
+                const targetPresence = state.playerPresence.get(sessionId);
+                return targetPresence === undefined ? 0 : sumFlaskBeltCharges(targetPresence);
+              })(),
             });
           } catch {
             // swallow client send failures; room state remains authoritative
@@ -911,10 +935,6 @@ export class TownRoom extends Room {
     const currentHp = Math.min(maxHp, Math.max(0, result.character.stats?.currentHp ?? maxHp));
     const damage = resolvePlayerDamage(result.character.stats?.derived.damage);
     const armor = resolvePlayerArmor(result.character.stats?.derived.armor);
-    const persistedFlaskState = await new CharacterRepository().findCurrentFlaskChargesForUser(
-      characterId,
-      resolvedUserId,
-    );
 
     // Task 333D / Core 0.15 — Load persisted objective state for this
     // character so progress, completion and reward-granted status
@@ -968,11 +988,15 @@ export class TownRoom extends Room {
       resolvedZoneId,
       hp: currentHp,
       maxHp,
-      restoredFlaskCharges: persistedFlaskState?.currentFlaskCharges,
       movementSpeed,
       attackCooldownMs,
       damage,
       armor,
+      mind: result.character.stats?.primary.mind ?? 0,
+      skillPoints: result.character.skillPoints,
+      primarySkillRank: result.character.primarySkillRank,
+      secondarySkillRank: result.character.secondarySkillRank,
+      tertiarySkillRank: result.character.tertiarySkillRank,
       restoredLocationZoneId: result.character.lastLocationZoneId ?? undefined,
       restoredLocationX: result.character.lastLocationX ?? undefined,
       restoredLocationY: result.character.lastLocationY ?? undefined,
@@ -1018,6 +1042,34 @@ export class TownRoom extends Room {
       _client.send("equipment_updated", { type: "equipment_updated", equipment });
     } catch {
       // swallow send failures; the next equip/unequip will still sync it
+    }
+
+    // Milestone 0.3 -- populate the flask belt from equipped items +
+    // persisted charges now that the equipment lookup above resolved.
+    try {
+      const flaskState = await new CharacterRepository().findFlaskChargesJsonForUser(characterId, resolvedUserId);
+      await syncFlaskBeltFromEquipment(presence, characterId, flaskState?.flaskChargesJson);
+    } catch {
+      // leave the belt empty; the next equip/unequip will populate it
+    }
+
+    // Core 0.1 — Persistent Quest & Dialogue System foundation. Send the
+    // character's persisted quest state once on join so accepted /
+    // completed status survives scene restarts and rejoins without the
+    // client needing to re-interact with a quest giver.
+    try {
+      const persistedQuests = await new QuestRepository().findByCharacter(characterId.toString());
+      const questState: QuestStateServerMessage = {
+        type: "quest_state",
+        quests: persistedQuests.map((q) => ({
+          questId: q.questId,
+          status: q.status === "COMPLETED" ? "completed" : "accepted",
+        })),
+      };
+      _client.send("quest_state", questState);
+    } catch {
+      // swallow send failures; the client can still interact with a
+      // quest giver directly to resolve its current state
     }
 
     await sendGlobalChatHistory(_client, safeLog);
@@ -1084,7 +1136,7 @@ export class TownRoom extends Room {
           presence.x,
           presence.y,
           Math.max(0, Math.min(presence.maxHp, presence.hp)),
-          Math.max(0, Math.min(presence.maxFlaskCharges, Math.floor(presence.flaskCharges))),
+          buildFlaskChargesJsonForPresence(presence),
         );
       } catch (error: unknown) {
         safeLog.error?.(
@@ -1419,6 +1471,107 @@ export class TownRoom extends Room {
         return;
       }
 
+      // Core 0.1 — Zone transition doors (e.g. cathedral_entrance/exit):
+      // teleport the player to the target zone's default spawn and hand
+      // them off to a fresh TownRoom instance for that zone. A room's
+      // zoneId never changes mid-session (see onCreate), so this is a
+      // leave/rejoin like the combat handoff, not an in-place state edit.
+      const interactedObject = state.interactables.get(message.objectId);
+      if (interactedObject !== undefined && interactedObject.type === "zone_transition") {
+        const worldProp = contentRegistry.worldProps.get(message.objectId as never);
+        const targetZoneId = worldProp?.targetZoneId as ZoneId | undefined;
+        if (targetZoneId === undefined) {
+          const response: InteractResponseServerMessage = {
+            type: "interact_response",
+            objectId: message.objectId,
+            message: "This passage leads nowhere yet.",
+          };
+          try { client.send("interact_response", response); } catch {}
+          return;
+        }
+
+        player.hasMovementTarget = false;
+        clearPendingAction(player);
+
+        const ZONE_TRANSITION_DEFAULT_SPAWN_X = 300;
+        const ZONE_TRANSITION_DEFAULT_SPAWN_Y = 300;
+
+        try {
+          await new CharacterService().updateCharacterLocation(
+            player.characterId,
+            targetZoneId,
+            ZONE_TRANSITION_DEFAULT_SPAWN_X,
+            ZONE_TRANSITION_DEFAULT_SPAWN_Y,
+            Math.max(0, Math.min(player.maxHp, player.hp)),
+            buildFlaskChargesJsonForPresence(player),
+          );
+        } catch {
+          const response: InteractResponseServerMessage = {
+            type: "interact_response",
+            objectId: message.objectId,
+            message: "Could not cross the threshold.",
+          };
+          try { client.send("interact_response", response); } catch {}
+          return;
+        }
+
+        const approved: import("@doomscrolls/shared").ZoneTransitionApprovedServerMessage = {
+          type: "zone_transition_approved",
+          characterId: player.characterId,
+          targetZoneId,
+        };
+        try { client.send("zone_transition_approved", approved); } catch {}
+        return;
+      }
+
+      // Core 0.1 — Persistent Quest & Dialogue System foundation. A
+      // quest_giver interactable responds with a localized dialogue line
+      // (greeting / turn-in reminder / completed) plus questInfo so the
+      // client dialogue view knows which choices (Accept/Complete/Close)
+      // to show. Status is read fresh from the DB on every interact so
+      // it always reflects the persisted, server-authoritative state.
+      if (interactedObject !== undefined && interactedObject.type === "quest_giver") {
+        const worldProp = contentRegistry.worldProps.get(message.objectId as never);
+        const questDef = worldProp?.questId !== undefined ? contentRegistry.quests.get(worldProp.questId) : undefined;
+        if (questDef === undefined) {
+          const response: InteractResponseServerMessage = {
+            type: "interact_response",
+            objectId: message.objectId,
+            message: "This person has nothing to say right now.",
+          };
+          try { client.send("interact_response", response); } catch {}
+          return;
+        }
+
+        const persisted = await new QuestRepository().findOne(player.characterId.toString(), questDef.id);
+        const status: "available" | "accepted" | "completed" = persisted === null
+          ? "available"
+          : persisted.status === "COMPLETED"
+            ? "completed"
+            : "accepted";
+        const dialogueMessage = status === "available"
+          ? t(questDef.greetingKey)
+          : status === "accepted"
+            ? t(questDef.turnInKey)
+            : t(questDef.completedKey);
+
+        const response: InteractResponseServerMessage = {
+          type: "interact_response",
+          objectId: message.objectId,
+          message: dialogueMessage,
+          questInfo: {
+            questId: questDef.id,
+            status,
+            titleKey: questDef.titleKey,
+            descriptionKey: questDef.descriptionKey,
+            xpReward: questDef.xpReward,
+            copperReward: questDef.copperReward,
+          },
+        };
+        try { client.send("interact_response", response); } catch {}
+        return;
+      }
+
       // Send response message to the requesting client
       const responseMessage = getInteractableResponseMessage(message.objectId);
 
@@ -1486,7 +1639,7 @@ export class TownRoom extends Room {
                 result.x,
                 result.y,
                 Math.max(0, Math.min(player.maxHp, player.hp)),
-                Math.max(0, Math.min(player.maxFlaskCharges, Math.floor(player.flaskCharges))),
+                buildFlaskChargesJsonForPresence(player),
               );
             } catch {
               const rejected: import("@doomscrolls/shared").TownCombatHandoffRejectedServerMessage = {
@@ -1524,7 +1677,7 @@ export class TownRoom extends Room {
               result.x,
               result.y,
               Math.max(0, Math.min(player.maxHp, player.hp)),
-              Math.max(0, Math.min(player.maxFlaskCharges, Math.floor(player.flaskCharges))),
+              buildFlaskChargesJsonForPresence(player),
             );
           } catch {
             const rejected: import("@doomscrolls/shared").RequestRouteTravelRejectedServerMessage = {
@@ -1619,7 +1772,7 @@ export class TownRoom extends Room {
       }
 
       try {
-        const result = await resolveWaypointTravel(player.characterId, state.zoneId, message.waypointId);
+        const result = await resolveWaypointTravel(player.characterId, message.waypointId);
         if (!result.ok) {
           const rejected: import("@doomscrolls/shared").RequestWaypointTravelRejectedServerMessage = {
             type: "request_waypoint_travel_rejected",
@@ -1630,25 +1783,40 @@ export class TownRoom extends Room {
           return;
         }
 
-        player.x = result.x;
-        player.y = result.y;
-        player.targetX = result.x;
-        player.targetY = result.y;
-        // Task 334 — Immediately clear movement target and pending
-        // action so stale move-to-interact/attack/pickup state cannot
-        // fire after the player has teleported to a new position.
         player.hasMovementTarget = false;
         clearPendingAction(player);
 
+        // Milestone 0.2 — a waypoint can land the player in a different
+        // town zone than the one they're currently in (e.g. namesti ->
+        // bory). This room's zoneId never changes mid-session, so a
+        // cross-zone destination is a leave/rejoin handoff, same as a
+        // zone_transition door, rather than an in-place schema edit.
+        const isCrossZone = result.zoneId !== state.zoneId;
+
         try {
-          await new CharacterService().updateCharacterLocation(
-            player.characterId,
-            result.zoneId,
-            result.x,
-            result.y,
-            Math.max(0, Math.min(player.maxHp, player.hp)),
-            Math.max(0, Math.min(player.maxFlaskCharges, Math.floor(player.flaskCharges))),
-          );
+          if (isCrossZone) {
+            await new CharacterService().updateCharacterRoomIntent(
+              player.characterId,
+              result.zoneId,
+              result.x,
+              result.y,
+              Math.max(0, Math.min(player.maxHp, player.hp)),
+              buildFlaskChargesJsonForPresence(player),
+            );
+          } else {
+            player.x = result.x;
+            player.y = result.y;
+            player.targetX = result.x;
+            player.targetY = result.y;
+            await new CharacterService().updateCharacterLocation(
+              player.characterId,
+              result.zoneId,
+              result.x,
+              result.y,
+              Math.max(0, Math.min(player.maxHp, player.hp)),
+              buildFlaskChargesJsonForPresence(player),
+            );
+          }
         } catch {
           const rejected: import("@doomscrolls/shared").RequestWaypointTravelRejectedServerMessage = {
             type: "request_waypoint_travel_rejected",
@@ -1659,8 +1827,9 @@ export class TownRoom extends Room {
           return;
         }
 
-        // Client receives new player position via Colyseus schema
-        // sync; no client-side fake transition is sent.
+        // Same-zone: client receives the new player position via
+        // Colyseus schema sync. Cross-zone: the client reads `zoneId`
+        // off this same message to trigger its own room handoff.
         const accepted: import("@doomscrolls/shared").RequestWaypointTravelAcceptedServerMessage = {
           type: "request_waypoint_travel_accepted",
           waypointId: result.waypointId,
@@ -2118,6 +2287,35 @@ export class TownRoom extends Room {
     });
   }
 
+  /**
+   * Core 0.1 -- Persist a server-authoritative `Corpse` row for a
+   * player who just died, and stamp the resolved DB id back onto the
+   * in-memory marker so recovery can resolve/delete the right record.
+   *
+   * Fire-and-forget: death itself must stay synchronous (it runs
+   * inside the enemy-attack tick), so this never blocks the tick. If
+   * the player has already respawned and recovered (or disconnected)
+   * before the write resolves, the stale `hasCorpse` check below skips
+   * stamping the id onto a marker that no longer applies.
+   */
+  private persistDeathCorpse(state: TownRoomState, player: PlayerPresence): void {
+    const sessionId = player.sessionId;
+    const characterId = player.characterId.toString();
+    const zoneId = state.zoneId;
+    const positionX = player.corpseX;
+    const positionY = player.corpseY;
+
+    void new CorpseRepository()
+      .createCorpse({ characterId, zoneId, roomId: this.roomId, positionX, positionY })
+      .then((corpse) => {
+        const current = state.playerPresence.get(sessionId);
+        if (current !== undefined && current.hasCorpse && current.corpseId === "") {
+          current.corpseId = corpse.id;
+        }
+      })
+      .catch(() => {});
+  }
+
   private registerRespawnHandler(
     log: ReturnType<typeof createRoomLogger>,
   ): void {
@@ -2151,6 +2349,7 @@ export class TownRoom extends Room {
 
       player.hp = player.maxHp;
       player.lifeState = "alive";
+      player.statusEffects = "";
       // Keep the corpse marker so the player can walk back and
       // recover it after respawn. The corpse is cleared on
       // successful `request_corpse_interact` instead.
@@ -2159,9 +2358,9 @@ export class TownRoom extends Room {
       player.targetX = respawnPosition.x;
       player.targetY = respawnPosition.y;
       player.hasMovementTarget = false;
-      // Task 096 -- respawn restores a full set of basic healing
-      // flask charges and resets the flask cooldown to "ready".
-      restoreFlaskToFull(player);
+      // Milestone 0.3 -- respawn restores every equipped belt slot to
+      // full charges and resets each slot's cooldown to "ready".
+      restoreFlaskBeltToFull(player);
       clearPendingAction(player);
       state.enemies.forEach((enemy) => {
         if (enemy.targetPlayerSessionId === client.sessionId) {
@@ -2201,7 +2400,7 @@ export class TownRoom extends Room {
     }
     this.corpseInteractHandlerRegistered = true;
 
-    this.onMessage("request_corpse_interact", (client: Client) => {
+    this.onMessage("request_corpse_interact", async (client: Client) => {
       const state = this.state as TownRoomState;
       const player = state.playerPresence.get(client.sessionId);
       if (player === undefined) {
@@ -2236,7 +2435,7 @@ export class TownRoom extends Room {
       const dx = player.corpseX - player.x;
       const dy = player.corpseY - player.y;
       const distance = Math.hypot(dx, dy);
-      if (distance > 30) {
+      if (distance > CORPSE_INTERACT_RANGE) {
         const rejection: import("@doomscrolls/shared").CorpseInteractRejectedServerMessage = {
           type: "corpse_interact_rejected",
           reason: "out_of_range",
@@ -2249,6 +2448,20 @@ export class TownRoom extends Room {
       player.hasCorpse = false;
       player.corpseX = 0;
       player.corpseY = 0;
+      const corpseId = player.corpseId;
+      player.corpseId = "";
+
+      // Core 0.1 -- resolve the DB-backed corpse record. Fire-and-forget:
+      // the in-memory marker is already authoritative for gameplay, this
+      // is bookkeeping so the row doesn't linger as ACTIVE.
+      if (corpseId !== "") {
+        void new CorpseRepository().markRecovered(corpseId).catch(() => {});
+      }
+
+      const sendToClient = (type: string, payload: unknown): void => {
+        try { client.send(type, payload); } catch {}
+      };
+      await grantFlatXpReward(player, CORPSE_RECOVERY_XP_REWARD, sendToClient);
 
       const accepted: import("@doomscrolls/shared").CorpseInteractAcceptedServerMessage = {
         type: "corpse_interact_accepted",
@@ -2257,8 +2470,8 @@ export class TownRoom extends Room {
       try { client.send("corpse_interact_accepted", accepted); } catch {}
 
       log.debug?.(
-        { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, characterId: player.characterId },
-        "TownRoom corpse interact accepted. Corpse marker cleared.",
+        { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, characterId: player.characterId, corpseId },
+        "TownRoom corpse interact accepted. Corpse marker cleared and DB record resolved.",
       );
     });
   }
@@ -2405,34 +2618,50 @@ export class TownRoom extends Room {
   }
 
   /**
-   * Task 096 — Register the `request_use_healing_flask` message
-   * handler on the room.
+   * Milestone 0.3 -- Register the `request_use_flask_slot` message
+   * handler on the room (4-Slot Flask Belt).
    *
    * Scope:
-   *   - validate the intent shape via {@link validateHealingFlaskIntent}
-   *   - apply the flask use through {@link applyHealingFlaskIntent}
-   *     which decides alive / charges / cooldown / full-HP outcomes
-   *   - on acceptance, send `request_use_healing_flask_accepted`
-   *     with safe healed / remainingHp / charges / nextFlaskAt values
-   *   - on rejection, send `request_use_healing_flask_rejected`
-   *     with a safe reason code so the UI can show "full HP" /
-   *     "no charges" / "cooldown" / "downed" feedback
+   *   - validate the intent shape via {@link validateFlaskSlotIntent}
+   *   - apply the slot's effect through {@link applyFlaskSlotIntent},
+   *     which resolves alive / equipped / charges / cooldown / no-op
+   *     outcomes from whatever item is cached on that belt slot
+   *   - on acceptance, send `request_use_flask_slot_accepted` with
+   *     safe effectType / healedAmount / remainingHp / remainingMana /
+   *     charges / nextReadyAt values
+   *   - on rejection, send `request_use_flask_slot_rejected` with a
+   *     safe reason code so the UI can show "empty slot" / "no
+   *     charges" / "cooldown" / "downed" feedback
    *
    * The handler is registered once per room, never throws into
-   * Colyseus, and never trusts client-supplied heal amount,
-   * charges, cooldown or HP.
+   * Colyseus, and never trusts client-supplied heal/mana amount,
+   * charges, cooldown or HP/mana.
    */
-  private registerHealingFlaskHandler(
+  private registerFlaskSlotHandler(
     log: ReturnType<typeof createRoomLogger>,
   ): void {
-    if (this.healingFlaskHandlerRegistered) {
+    if (this.flaskSlotHandlerRegistered) {
       return;
     }
-    this.healingFlaskHandlerRegistered = true;
+    this.flaskSlotHandlerRegistered = true;
 
-    this.onMessage("request_use_healing_flask", (client: Client, raw: unknown) => {
+    this.onMessage("request_use_flask_slot", (client: Client, raw: unknown) => {
       const state = this.state as TownRoomState;
       const player = state.playerPresence.get(client.sessionId);
+
+      const validation = validateFlaskSlotIntent({ message: raw });
+      if (!validation.ok) {
+        log.warn?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+          },
+          "TownRoom request_use_flask_slot rejected: invalid intent shape.",
+        );
+        return;
+      }
+      const slot = validation.message.slot;
 
       if (player === undefined) {
         log.warn?.(
@@ -2441,43 +2670,21 @@ export class TownRoom extends Room {
             roomName: this.roomName,
             sessionId: client.sessionId,
           },
-          "TownRoom request_use_healing_flask rejected: player not found.",
-        );
-        return;
-      }
-
-      const validation = validateHealingFlaskIntent({ message: raw });
-      if (!validation.ok) {
-        const rejection: RequestUseHealingFlaskRejectedServerMessage = {
-          type: "request_use_healing_flask_rejected",
-          reason: validation.reason,
-        };
-        try {
-          client.send("request_use_healing_flask_rejected", rejection);
-        } catch {
-          // swallow send failures
-        }
-        log.warn?.(
-          {
-            roomId: this.roomId,
-            roomName: this.roomName,
-            sessionId: client.sessionId,
-            reason: validation.reason,
-          },
-          "TownRoom request_use_healing_flask rejected: invalid intent shape.",
+          "TownRoom request_use_flask_slot rejected: player not found.",
         );
         return;
       }
 
       const now = Date.now();
-      const result = applyHealingFlaskIntent({ player, now });
+      const result = applyFlaskSlotIntent({ player, slot, now });
       if (!result.ok) {
-        const rejection: RequestUseHealingFlaskRejectedServerMessage = {
-          type: "request_use_healing_flask_rejected",
+        const rejection: RequestUseFlaskSlotRejectedServerMessage = {
+          type: "request_use_flask_slot_rejected",
+          slot,
           reason: result.reason,
         };
         try {
-          client.send("request_use_healing_flask_rejected", rejection);
+          client.send("request_use_flask_slot_rejected", rejection);
         } catch {
           // swallow send failures
         }
@@ -2486,26 +2693,26 @@ export class TownRoom extends Room {
             roomId: this.roomId,
             roomName: this.roomName,
             sessionId: client.sessionId,
+            slot,
             reason: result.reason,
-            flaskCharges: player.flaskCharges,
-            nextFlaskAt: player.nextFlaskAt,
-            hp: player.hp,
-            maxHp: player.maxHp,
           },
-          "TownRoom request_use_healing_flask rejected by application.",
+          "TownRoom request_use_flask_slot rejected by application.",
         );
         return;
       }
 
-      const accepted: RequestUseHealingFlaskAcceptedServerMessage = {
-        type: "request_use_healing_flask_accepted",
+      const accepted: RequestUseFlaskSlotAcceptedServerMessage = {
+        type: "request_use_flask_slot_accepted",
+        slot,
+        effectType: result.effectType,
         healedAmount: result.healedAmount,
         remainingHp: result.remainingHp,
-        flaskCharges: result.flaskCharges,
-        nextFlaskAt: result.nextFlaskAt,
+        remainingMana: result.remainingMana,
+        charges: result.charges,
+        nextReadyAt: result.nextReadyAt,
       };
       try {
-        client.send("request_use_healing_flask_accepted", accepted);
+        client.send("request_use_flask_slot_accepted", accepted);
       } catch {
         // swallow send failures; state sync remains authoritative
       }
@@ -2515,12 +2722,11 @@ export class TownRoom extends Room {
           roomId: this.roomId,
           roomName: this.roomName,
           sessionId: client.sessionId,
-          healedAmount: result.healedAmount,
-          remainingHp: result.remainingHp,
-          flaskCharges: result.flaskCharges,
-          nextFlaskAt: result.nextFlaskAt,
+          slot,
+          effectType: result.effectType,
+          charges: result.charges,
         },
-        "TownRoom request_use_healing_flask accepted and HP / charges synced.",
+        "TownRoom request_use_flask_slot accepted and belt state synced.",
       );
     });
   }
@@ -2576,6 +2782,186 @@ export class TownRoom extends Room {
           reason: "skill_on_cooldown",
         };
         try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      // Core 0.1 Foundation -- Mana/Resource System. Checked before the
+      // target/range validation below so a cast the player can't
+      // afford never queues a deferred move-to-cast action either.
+      if (!hasSufficientMana(player, skillDefinition.manaCost)) {
+        const rejection: RequestUseSkillSlotRejectedServerMessage = {
+          ...rejectionBase,
+          reason: "insufficient_mana",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      // Milestone 0.3 -- Street Alchemist Class Archetype. A self_buff
+      // cast (e.g. adrenaline_stim) has no enemy/ground target: it
+      // applies its status effect to the caster and resolves instantly,
+      // never entering the deferred move-to-cast queue below.
+      if (skillDefinition.targeting === "self_buff") {
+        clearPendingAction(player);
+        setSkillSlotCooldownAt(player, slot, now + skillDefinition.cooldownMs);
+        deductMana(player, skillDefinition.manaCost);
+        applySkillEffectIfDefined(player, skillDefinition, now);
+
+        const selfBuffNextReadyAt = getSkillSlotCooldownAt(player, slot);
+        const selfBuffAccepted: RequestUseSkillSlotAcceptedServerMessage = {
+          type: "request_use_skill_slot_accepted",
+          slot,
+          targetEnemyId: "",
+          damage: 0,
+          remainingHp: 0,
+          defeated: false,
+          nextReadyAt: selfBuffNextReadyAt,
+          remainingMana: player.mana,
+        };
+        try { client.send(selfBuffAccepted.type, selfBuffAccepted); } catch {}
+        return;
+      }
+
+      // Milestone 0.2 -- Server-Authoritative Projectiles & Ground-Targeted
+      // AoE Skills. A ground_aoe cast targets a point, not an enemy, and
+      // resolves every hit instantly (no deferred move-closer queue --
+      // matches CombatRoom's out_of_range rejection for this targeting mode).
+      if (skillDefinition.targeting === "ground_aoe") {
+        const targetX = typeof message?.targetX === "number" ? message.targetX : NaN;
+        const targetY = typeof message?.targetY === "number" ? message.targetY : NaN;
+        if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) {
+          const rejection: RequestUseSkillSlotRejectedServerMessage = {
+            ...rejectionBase,
+            reason: "invalid_ground_target",
+          };
+          try { client.send(rejection.type, rejection); } catch {}
+          return;
+        }
+
+        if (Math.hypot(targetX - player.x, targetY - player.y) > skillDefinition.range) {
+          const rejection: RequestUseSkillSlotRejectedServerMessage = {
+            ...rejectionBase,
+            reason: "out_of_range",
+          };
+          try { client.send(rejection.type, rejection); } catch {}
+          return;
+        }
+
+        clearPendingAction(player);
+        setSkillSlotCooldownAt(player, slot, now + skillDefinition.cooldownMs);
+        deductMana(player, skillDefinition.manaCost);
+        const aoeRank = getSkillSlotRank(player, slot);
+        const aoeCastDamage = resolveSkillCastDamage(skillDefinition, player.damage, aoeRank, skillDefinition.damagePerRank);
+
+        // Milestone 0.3 -- Netrunner's overclock_turret deploys a
+        // stationary turret at the targeted point instead of resolving
+        // an instant AoE hit; see `SkillSlotDefinition.spawnsTurret`.
+        if (skillDefinition.spawnsTurret === true) {
+          spawnTurret(state, {
+            skillId: skillDefinition.skillId,
+            ownerSessionId: client.sessionId,
+            x: targetX,
+            y: targetY,
+            attackRange: skillDefinition.aoeRadius ?? 0,
+            attackDamage: aoeCastDamage,
+            attackIntervalMs: skillDefinition.turretAttackIntervalMs ?? 800,
+            durationMs: skillDefinition.turretDurationMs ?? 6000,
+            now,
+          });
+
+          const turretNextReadyAt = getSkillSlotCooldownAt(player, slot);
+          const turretAccepted: RequestUseSkillSlotAcceptedServerMessage = {
+            type: "request_use_skill_slot_accepted",
+            slot,
+            targetEnemyId: "",
+            damage: 0,
+            remainingHp: 0,
+            defeated: false,
+            nextReadyAt: turretNextReadyAt,
+            remainingMana: player.mana,
+          };
+          try { client.send(turretAccepted.type, turretAccepted); } catch {}
+          return;
+        }
+
+        const { hits } = resolveGroundAoeCast(state, {
+          skillId: skillDefinition.skillId,
+          ownerSessionId: client.sessionId,
+          x: targetX,
+          y: targetY,
+          radius: skillDefinition.aoeRadius ?? 0,
+          damage: aoeCastDamage,
+          appliesEffect: skillDefinition.appliesEffect,
+          effectDurationMs: skillDefinition.effectDurationMs,
+          effectMagnitude: skillDefinition.effectMagnitude,
+          appliesSecondaryEffect: skillDefinition.appliesSecondaryEffect,
+          secondaryEffectDurationMs: skillDefinition.secondaryEffectDurationMs,
+          secondaryEffectMagnitude: skillDefinition.secondaryEffectMagnitude,
+          now,
+        });
+
+        for (const hit of hits) {
+          const damageApplied: DamageAppliedServerMessage = {
+            type: "damage_applied",
+            targetEntityId: hit.enemy.id as unknown as EntityId,
+            sourceEntityId: client.sessionId as unknown as EntityId,
+            damage: hit.damageResult.appliedDamage,
+            remainingHp: hit.damageResult.remainingHp,
+          };
+          try { client.send(damageApplied.type, damageApplied); } catch {}
+
+          if (hit.damageResult.defeated) {
+            spawnWorldLootOnEnemyDefeat(state, hit.enemy, now);
+            const progressResults = advanceObjectiveProgressAllSlots(player, hit.enemy.enemyId, (updated) => {
+              void new ObjectiveRepository().updateProgress(
+                updated.characterId.toString(),
+                updated.objectiveId,
+                updated.currentProgress,
+              ).catch(() => {});
+            });
+            for (const progressResult of progressResults) {
+              const progressUpdate: ObjectiveUpdatedServerMessage = {
+                type: "objective_updated",
+                slot: progressResult.slot,
+                objectiveId: progressResult.objectiveId,
+                label: progressResult.label,
+                descriptionKey: progressResult.descriptionKey,
+                current: progressResult.current,
+                target: progressResult.target,
+                completed: progressResult.completed,
+              };
+              try { client.send("objective_updated", progressUpdate); } catch {}
+            }
+            void grantEnemyDefeatXp(player, hit.enemy.enemyId, (type, payload) => {
+              try { client.send(type, payload); } catch {}
+            }).catch(() => {});
+          }
+        }
+
+        const aoeNextReadyAt = getSkillSlotCooldownAt(player, slot);
+        const aoeAccepted: RequestUseSkillSlotAcceptedServerMessage = {
+          type: "request_use_skill_slot_accepted",
+          slot,
+          targetEnemyId: "",
+          damage: 0,
+          remainingHp: 0,
+          defeated: false,
+          nextReadyAt: aoeNextReadyAt,
+          remainingMana: player.mana,
+        };
+        try { client.send(aoeAccepted.type, aoeAccepted); } catch {}
+
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            slot,
+            hitCount: hits.length,
+            nextReadyAt: aoeNextReadyAt,
+          },
+          "TownRoom request_use_skill_slot (ground_aoe) accepted and resolved instantly.",
+        );
         return;
       }
 
@@ -2647,9 +3033,63 @@ export class TownRoom extends Room {
 
       clearPendingAction(player);
       setSkillSlotCooldownAt(player, slot, now + skillDefinition.cooldownMs);
+      deductMana(player, skillDefinition.manaCost);
 
-      const castDamage = resolveSkillCastDamage(skillDefinition, player.damage);
+      const rank = getSkillSlotRank(player, slot);
+      const castDamage = resolveSkillCastDamage(skillDefinition, player.damage, rank, skillDefinition.damagePerRank);
+
+      // Milestone 0.2 -- a projectile skill travels instead of hitting
+      // instantly: spawn it and defer damage/effect/XP/loot/objective
+      // rewards to the impact callback (see `handleProjectileImpact`,
+      // wired into `stepProjectiles` in the simulation tick).
+      if (skillDefinition.isProjectile === true) {
+        spawnProjectile(state, {
+          skillId: skillDefinition.skillId,
+          ownerSessionId: client.sessionId,
+          originX: player.x,
+          originY: player.y,
+          targetX: enemy.x,
+          targetY: enemy.y,
+          targetEnemyId: enemy.id,
+          speed: skillDefinition.projectileSpeed ?? 480,
+          damage: castDamage,
+          appliesEffect: skillDefinition.appliesEffect,
+          effectDurationMs: skillDefinition.effectDurationMs,
+          effectMagnitude: skillDefinition.effectMagnitude,
+          now,
+        });
+
+        const projectileNextReadyAt = getSkillSlotCooldownAt(player, slot);
+        const projectileAccepted: RequestUseSkillSlotAcceptedServerMessage = {
+          type: "request_use_skill_slot_accepted",
+          slot,
+          targetEnemyId: "",
+          damage: 0,
+          remainingHp: 0,
+          defeated: false,
+          nextReadyAt: projectileNextReadyAt,
+          remainingMana: player.mana,
+        };
+        try { client.send(projectileAccepted.type, projectileAccepted); } catch {}
+
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            slot,
+            targetEnemyId: enemy.id,
+            nextReadyAt: projectileNextReadyAt,
+          },
+          "TownRoom request_use_skill_slot (projectile) accepted; damage deferred to impact.",
+        );
+        return;
+      }
+
       const damageResult = applyEnemyDamage(enemy, castDamage);
+      if (!damageResult.defeated) {
+        applySkillEffectIfDefined(enemy, skillDefinition, now);
+      }
 
       if (damageResult.defeated) {
         spawnWorldLootOnEnemyDefeat(state, enemy, now);
@@ -2689,6 +3129,7 @@ export class TownRoom extends Room {
         remainingHp: damageResult.remainingHp,
         defeated: damageResult.defeated,
         nextReadyAt,
+        remainingMana: player.mana,
       };
       try { client.send(accepted.type, accepted); } catch {}
 
@@ -2705,6 +3146,261 @@ export class TownRoom extends Room {
           nextSkillSlotAt: nextReadyAt,
         },
         "TownRoom request_use_skill_slot accepted: skill hit target.",
+      );
+    });
+  }
+
+  /**
+   * Milestone 0.2 -- resolves a homing projectile's impact: applies
+   * damage/effect and (on kill) the same XP/loot/objective-progress
+   * rewards the instant-cast path grants inline, then sends
+   * `damage_applied` to the projectile owner's client. Looked up by
+   * `ownerSessionId` (not a handler's `client`) since impact happens on
+   * a later simulation tick, possibly after the casting message handler
+   * has returned. A no-op "miss" when the owner or enemy is gone.
+   */
+  private handleProjectileImpact(
+    state: TownRoomState,
+    projectile: ProjectilePresence,
+    enemy: EnemyPresence | undefined,
+    now: number,
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (enemy === undefined) {
+      return;
+    }
+    const player = state.playerPresence.get(projectile.ownerSessionId);
+    if (player === undefined) {
+      return;
+    }
+    const ownerClient = this.clients.find((client) => client.sessionId === projectile.ownerSessionId);
+
+    const damageResult = applyEnemyDamage(enemy, projectile.damage);
+    if (!damageResult.defeated && projectile.appliesEffect.length > 0) {
+      applySkillEffectIfDefined(enemy, {
+        appliesEffect: projectile.appliesEffect as "bleed" | "slow" | "stun" | "burn" | "emp_dot",
+        effectDurationMs: projectile.effectDurationMs,
+        effectMagnitude: projectile.effectMagnitude,
+      }, now);
+    }
+
+    if (ownerClient !== undefined) {
+      const damageApplied: DamageAppliedServerMessage = {
+        type: "damage_applied",
+        targetEntityId: enemy.id as unknown as EntityId,
+        sourceEntityId: projectile.ownerSessionId as unknown as EntityId,
+        damage: damageResult.appliedDamage,
+        remainingHp: damageResult.remainingHp,
+      };
+      try { ownerClient.send(damageApplied.type, damageApplied); } catch {}
+    }
+
+    if (damageResult.defeated) {
+      spawnWorldLootOnEnemyDefeat(state, enemy, now);
+
+      if (ownerClient !== undefined) {
+        const progressResults = advanceObjectiveProgressAllSlots(player, enemy.enemyId, (updated) => {
+          void new ObjectiveRepository().updateProgress(
+            updated.characterId.toString(),
+            updated.objectiveId,
+            updated.currentProgress,
+          ).catch(() => {});
+        });
+        for (const progressResult of progressResults) {
+          const progressUpdate: ObjectiveUpdatedServerMessage = {
+            type: "objective_updated",
+            slot: progressResult.slot,
+            objectiveId: progressResult.objectiveId,
+            label: progressResult.label,
+            descriptionKey: progressResult.descriptionKey,
+            current: progressResult.current,
+            target: progressResult.target,
+            completed: progressResult.completed,
+          };
+          try { ownerClient.send("objective_updated", progressUpdate); } catch {}
+        }
+        void grantEnemyDefeatXp(player, enemy.enemyId, (type, payload) => {
+          try { ownerClient.send(type, payload); } catch {}
+        }).catch(() => {});
+      }
+    }
+
+    log.debug?.(
+      {
+        roomId: this.roomId,
+        roomName: this.roomName,
+        projectileId: projectile.id,
+        targetEnemyId: enemy.id,
+        appliedDamage: damageResult.appliedDamage,
+        defeated: damageResult.defeated,
+      },
+      "TownRoom projectile impact resolved.",
+    );
+  }
+
+  /**
+   * Milestone 0.3 -- resolves one automated turret shot, mirroring
+   * `handleProjectileImpact`'s reward/logging shape: damage always
+   * lands, XP/loot/objective-progress rewards only fire while the
+   * turret's owner is still connected.
+   */
+  private handleTurretShot(
+    state: TownRoomState,
+    shot: TurretShot,
+    now: number,
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    const { enemy, damageResult } = shot;
+    const player = state.playerPresence.get(shot.turret.ownerSessionId);
+    const ownerClient = this.clients.find((client) => client.sessionId === shot.turret.ownerSessionId);
+
+    if (ownerClient !== undefined) {
+      const damageApplied: DamageAppliedServerMessage = {
+        type: "damage_applied",
+        targetEntityId: enemy.id as unknown as EntityId,
+        sourceEntityId: shot.turret.ownerSessionId as unknown as EntityId,
+        damage: damageResult.appliedDamage,
+        remainingHp: damageResult.remainingHp,
+      };
+      try { ownerClient.send(damageApplied.type, damageApplied); } catch {}
+    }
+
+    if (damageResult.defeated) {
+      spawnWorldLootOnEnemyDefeat(state, enemy, now);
+
+      if (player !== undefined && ownerClient !== undefined) {
+        const progressResults = advanceObjectiveProgressAllSlots(player, enemy.enemyId, (updated) => {
+          void new ObjectiveRepository().updateProgress(
+            updated.characterId.toString(),
+            updated.objectiveId,
+            updated.currentProgress,
+          ).catch(() => {});
+        });
+        for (const progressResult of progressResults) {
+          const progressUpdate: ObjectiveUpdatedServerMessage = {
+            type: "objective_updated",
+            slot: progressResult.slot,
+            objectiveId: progressResult.objectiveId,
+            label: progressResult.label,
+            descriptionKey: progressResult.descriptionKey,
+            current: progressResult.current,
+            target: progressResult.target,
+            completed: progressResult.completed,
+          };
+          try { ownerClient.send("objective_updated", progressUpdate); } catch {}
+        }
+        void grantEnemyDefeatXp(player, enemy.enemyId, (type, payload) => {
+          try { ownerClient.send(type, payload); } catch {}
+        }).catch(() => {});
+      }
+    }
+
+    log.debug?.(
+      {
+        roomId: this.roomId,
+        roomName: this.roomName,
+        turretId: shot.turret.id,
+        targetEnemyId: enemy.id,
+        appliedDamage: damageResult.appliedDamage,
+        defeated: damageResult.defeated,
+      },
+      "TownRoom turret shot resolved.",
+    );
+  }
+
+  /**
+   * Core 0.1 Foundation — Skill Point Allocation.
+   *
+   * Validates the player has an unallocated skill point and the
+   * target slot's rank isn't already maxed, then persists the raised
+   * rank + decremented point total and updates the synced presence.
+   */
+  private registerAllocateSkillPointHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.allocateSkillPointHandlerRegistered) {
+      return;
+    }
+    this.allocateSkillPointHandlerRegistered = true;
+
+    this.onMessage("request_allocate_skill_point", (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const message = raw as Partial<RequestAllocateSkillPointClientMessage> | null;
+      const player = state.playerPresence.get(client.sessionId);
+
+      const slot: SkillSlotId | undefined =
+        message?.slot === "primary" || message?.slot === "secondary" || message?.slot === "tertiary"
+          ? message.slot
+          : undefined;
+
+      if (slot === undefined || player === undefined) {
+        const rejection: RequestAllocateSkillPointRejectedServerMessage = {
+          type: "request_allocate_skill_point_rejected",
+          slot: slot ?? "primary",
+          reason: "invalid_slot",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      if (!Number.isFinite(player.skillPoints) || player.skillPoints <= 0) {
+        const rejection: RequestAllocateSkillPointRejectedServerMessage = {
+          type: "request_allocate_skill_point_rejected",
+          slot,
+          reason: "no_points_available",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      const skillDefinition = resolveSkillSlotDefinition(slot, player.classKey);
+      const currentRank = getSkillSlotRank(player, slot);
+      if (currentRank >= skillDefinition.maxRank) {
+        const rejection: RequestAllocateSkillPointRejectedServerMessage = {
+          type: "request_allocate_skill_point_rejected",
+          slot,
+          reason: "rank_maxed",
+        };
+        try { client.send(rejection.type, rejection); } catch {}
+        return;
+      }
+
+      const newRank = currentRank + 1;
+      const remainingSkillPoints = player.skillPoints - 1;
+
+      void new CharacterRepository().updateSkillAllocation(player.characterId, {
+        skillPoints: remainingSkillPoints,
+        slot,
+        newRank,
+      }).catch((error) => {
+        log.warn?.(
+          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, err: error },
+          "TownRoom request_allocate_skill_point failed to persist; presence updated optimistically.",
+        );
+      });
+
+      player.skillPoints = remainingSkillPoints;
+      setSkillSlotRank(player, slot, newRank);
+
+      const accepted: RequestAllocateSkillPointAcceptedServerMessage = {
+        type: "request_allocate_skill_point_accepted",
+        slot,
+        skillId: skillDefinition.skillId,
+        newRank,
+        remainingSkillPoints,
+      };
+      try { client.send(accepted.type, accepted); } catch {}
+
+      log.debug?.(
+        {
+          roomId: this.roomId,
+          roomName: this.roomName,
+          sessionId: client.sessionId,
+          slot,
+          newRank,
+          remainingSkillPoints,
+        },
+        "TownRoom request_allocate_skill_point accepted.",
       );
     });
   }
@@ -2925,6 +3621,300 @@ export class TownRoom extends Room {
     });
   }
 
+  /**
+   * Milestone 0.3 — Register the `request_salvage_item` message handler.
+   *
+   * Validates vendor existence, item ownership and equipment state,
+   * then atomically deletes the item and deposits the resulting
+   * material stack. Sends accepted/rejected feedback to the
+   * originating client.
+   */
+  private registerSalvageItemHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.salvageItemHandlerRegistered) {
+      return;
+    }
+    this.salvageItemHandlerRegistered = true;
+
+    this.onMessage("request_salvage_item", async (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const message = raw as { vendorId?: string; itemInstanceId?: string } | null;
+
+      if (
+        !message ||
+        typeof message.vendorId !== "string" ||
+        typeof message.itemInstanceId !== "string"
+      ) {
+        log.warn?.(
+          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+          "TownRoom request_salvage_item rejected: invalid shape.",
+        );
+        return;
+      }
+
+      const player = state.playerPresence.get(client.sessionId);
+      if (player === undefined || player.lifeState !== "alive") {
+        try {
+          client.send("request_salvage_item_rejected", {
+            type: "request_salvage_item_rejected",
+            reason: "vendor_unavailable",
+          });
+        } catch {}
+        log.warn?.(
+          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+          "TownRoom request_salvage_item rejected: player not found or downed.",
+        );
+        return;
+      }
+
+      const result = await executeSalvageItem({
+        characterId: player.characterId,
+        vendorId: message.vendorId,
+        itemInstanceId: message.itemInstanceId,
+      });
+
+      if (result.ok) {
+        const accepted: import("@doomscrolls/shared").RequestSalvageItemAcceptedServerMessage = {
+          type: "request_salvage_item_accepted",
+          itemInstanceId: result.itemInstanceId,
+          definitionId: result.definitionId,
+          materialItemId: result.materialItemId,
+          materialQuantity: result.materialQuantity,
+          newMaterialBalance: result.newMaterialBalance,
+        };
+        try { client.send("request_salvage_item_accepted", accepted); } catch {}
+
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            itemInstanceId: result.itemInstanceId,
+            materialItemId: result.materialItemId,
+          },
+          "TownRoom request_salvage_item accepted: item salvaged.",
+        );
+      } else {
+        try {
+          client.send("request_salvage_item_rejected", {
+            type: "request_salvage_item_rejected",
+            reason: result.reason,
+            itemInstanceId: message.itemInstanceId,
+          });
+        } catch {}
+
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            reason: result.reason,
+          },
+          "TownRoom request_salvage_item rejected.",
+        );
+      }
+    });
+  }
+
+  /**
+   * Withdraws a chosen quantity of a salvage-material currency balance
+   * (Iron Scrap / Arcane Dust) back into a physical inventory item
+   * stack. Not vendor-scoped -- the player's own currency, convertible
+   * anywhere. Sends accepted/rejected feedback to the originating
+   * client.
+   */
+  private registerWithdrawMaterialHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.withdrawMaterialHandlerRegistered) {
+      return;
+    }
+    this.withdrawMaterialHandlerRegistered = true;
+
+    this.onMessage("request_withdraw_material", async (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const message = raw as { materialId?: string; quantity?: number } | null;
+
+      if (
+        !message ||
+        typeof message.materialId !== "string" ||
+        typeof message.quantity !== "number"
+      ) {
+        log.warn?.(
+          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+          "TownRoom request_withdraw_material rejected: invalid shape.",
+        );
+        return;
+      }
+
+      const player = state.playerPresence.get(client.sessionId);
+      if (player === undefined || player.lifeState !== "alive") {
+        try {
+          client.send("request_withdraw_material_rejected", {
+            type: "request_withdraw_material_rejected",
+            reason: "character_not_found",
+          });
+        } catch {}
+        log.warn?.(
+          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+          "TownRoom request_withdraw_material rejected: player not found or downed.",
+        );
+        return;
+      }
+
+      const result = await executeWithdrawMaterialItem({
+        characterId: player.characterId,
+        materialId: message.materialId,
+        quantity: message.quantity,
+      });
+
+      if (result.ok) {
+        const accepted: import("@doomscrolls/shared").RequestWithdrawMaterialAcceptedServerMessage = {
+          type: "request_withdraw_material_accepted",
+          materialId: result.materialId,
+          quantity: result.quantity,
+          newMaterialBalance: result.newMaterialBalance,
+        };
+        try { client.send("request_withdraw_material_accepted", accepted); } catch {}
+
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            materialId: result.materialId,
+            quantity: result.quantity,
+          },
+          "TownRoom request_withdraw_material accepted.",
+        );
+      } else {
+        try {
+          client.send("request_withdraw_material_rejected", {
+            type: "request_withdraw_material_rejected",
+            reason: result.reason,
+          });
+        } catch {}
+
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            reason: result.reason,
+          },
+          "TownRoom request_withdraw_material rejected.",
+        );
+      }
+    });
+  }
+
+  /**
+   * Milestone 0.3 — Register the `request_unlock_profession` message handler.
+   *
+   * Validates vendor existence, profession id, next-tier availability
+   * and player currency, then atomically deducts copper and persists
+   * the raised tier. Sends accepted/rejected feedback to the
+   * originating client.
+   */
+  private registerUnlockProfessionHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.unlockProfessionHandlerRegistered) {
+      return;
+    }
+    this.unlockProfessionHandlerRegistered = true;
+
+    this.onMessage("request_unlock_profession", async (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const message = raw as { vendorId?: string; professionId?: string } | null;
+
+      if (
+        !message ||
+        typeof message.vendorId !== "string" ||
+        typeof message.professionId !== "string"
+      ) {
+        log.warn?.(
+          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+          "TownRoom request_unlock_profession rejected: invalid shape.",
+        );
+        return;
+      }
+
+      const player = state.playerPresence.get(client.sessionId);
+      if (player === undefined || player.lifeState !== "alive") {
+        try {
+          client.send("request_unlock_profession_rejected", {
+            type: "request_unlock_profession_rejected",
+            reason: "vendor_unavailable",
+          });
+        } catch {}
+        log.warn?.(
+          { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId },
+          "TownRoom request_unlock_profession rejected: player not found or downed.",
+        );
+        return;
+      }
+
+      const result = await executeUnlockProfession({
+        characterId: player.characterId,
+        vendorId: message.vendorId,
+        professionId: message.professionId,
+      });
+
+      if (result.ok) {
+        const accepted: import("@doomscrolls/shared").RequestUnlockProfessionAcceptedServerMessage = {
+          type: "request_unlock_profession_accepted",
+          professionId: result.professionId,
+          newTier: result.newTier,
+          costCopper: result.costCopper,
+          remainingCopper: result.remainingCopper,
+        };
+        try { client.send("request_unlock_profession_accepted", accepted); } catch {}
+
+        // Also send a currency_picked_up message so the client can
+        // update the HUD money display without waiting for /me.
+        try {
+          client.send("currency_picked_up", {
+            type: "currency_picked_up",
+            characterId: player.characterId,
+            gainedCopper: 0,
+            totalMoneyCopper: result.remainingCopper,
+          });
+        } catch {}
+
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            professionId: result.professionId,
+            newTier: result.newTier,
+          },
+          "TownRoom request_unlock_profession accepted: profession trained.",
+        );
+      } else {
+        try {
+          client.send("request_unlock_profession_rejected", {
+            type: "request_unlock_profession_rejected",
+            reason: result.reason,
+            professionId: message.professionId,
+          });
+        } catch {}
+
+        log.debug?.(
+          {
+            roomId: this.roomId,
+            roomName: this.roomName,
+            sessionId: client.sessionId,
+            reason: result.reason,
+          },
+          "TownRoom request_unlock_profession rejected.",
+        );
+      }
+    });
+  }
+
   private registerStashTransferHandler(
     log: ReturnType<typeof createRoomLogger>,
   ): void {
@@ -3068,6 +4058,238 @@ export class TownRoom extends Room {
   }
 
   /**
+   * Milestone 0.2 — Inventory Grid Repositioning. Server-authoritative
+   * `move_inventory_item`: repositions an already-owned inventory item
+   * within its own grid, rejecting an out-of-bounds or overlapping
+   * target slot.
+   */
+  private registerMoveInventoryItemHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.moveInventoryItemHandlerRegistered) {
+      return;
+    }
+    this.moveInventoryItemHandlerRegistered = true;
+
+    this.onMessage("move_inventory_item", async (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+      const message = raw as {
+        itemInstanceId?: unknown;
+        targetPageIndex?: unknown;
+        targetX?: unknown;
+        targetY?: unknown;
+      } | null;
+
+      if (
+        message === null ||
+        typeof message !== "object" ||
+        typeof message.itemInstanceId !== "string" ||
+        typeof message.targetPageIndex !== "number" ||
+        typeof message.targetX !== "number" ||
+        typeof message.targetY !== "number"
+      ) {
+        try {
+          client.send("move_inventory_item_rejected", {
+            type: "move_inventory_item_rejected",
+            reason: "item_unavailable",
+          });
+        } catch {}
+        return;
+      }
+
+      if (player === undefined || player.lifeState !== "alive") {
+        try {
+          client.send("move_inventory_item_rejected", {
+            type: "move_inventory_item_rejected",
+            itemInstanceId: message.itemInstanceId,
+            reason: "item_not_owned",
+          });
+        } catch {}
+        return;
+      }
+
+      const result = await executeMoveInventoryItem({
+        characterId: player.characterId.toString(),
+        itemInstanceId: message.itemInstanceId,
+        targetPageIndex: message.targetPageIndex,
+        targetX: message.targetX,
+        targetY: message.targetY,
+      });
+
+      if (result.ok) {
+        try {
+          client.send("move_inventory_item_accepted", {
+            type: "move_inventory_item_accepted",
+            itemInstanceId: result.itemInstanceId,
+          });
+        } catch {}
+        return;
+      }
+
+      log.debug?.({ roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, reason: result.reason }, "TownRoom move_inventory_item rejected.");
+      try {
+        client.send("move_inventory_item_rejected", {
+          type: "move_inventory_item_rejected",
+          itemInstanceId: message.itemInstanceId,
+          reason: result.reason,
+        });
+      } catch {}
+    });
+  }
+
+  /**
+   * Milestone 0.2 — Account Stash Foundation. Server-authoritative
+   * deposit/withdraw/list for the account-wide `StashItem` table (see
+   * `accountStashTransfer.ts`) -- separate from the per-character bank
+   * registered by `registerStashTransferHandler` above.
+   */
+  private registerAccountStashHandler(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.accountStashHandlerRegistered) {
+      return;
+    }
+    this.accountStashHandlerRegistered = true;
+
+    this.onMessage("request_list_account_stash", async (client: Client) => {
+      const state = this.state as TownRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+      if (player === undefined) {
+        try {
+          client.send("account_stash_list_rejected", {
+            type: "account_stash_list_rejected",
+            reason: "character_not_ready",
+          });
+        } catch {}
+        return;
+      }
+
+      try {
+        const userId = await new CharacterRepository().findOwnerUserId(player.characterId.toString());
+        if (userId === null) {
+          throw new Error("owner_not_found");
+        }
+        const items = await executeListAccountStash({ userId });
+        client.send("account_stash_listed", { type: "account_stash_listed", items });
+      } catch {
+        try {
+          client.send("account_stash_list_rejected", {
+            type: "account_stash_list_rejected",
+            reason: "list_failed",
+          });
+        } catch {}
+      }
+    });
+
+    this.onMessage("request_deposit_stash_item", async (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+      const message = raw as { itemInstanceId?: unknown; quantity?: unknown } | null;
+
+      if (message === null || typeof message !== "object" || typeof message.itemInstanceId !== "string") {
+        try {
+          client.send("request_deposit_stash_item_rejected", {
+            type: "request_deposit_stash_item_rejected",
+            reason: "item_unavailable",
+          });
+        } catch {}
+        return;
+      }
+
+      if (player === undefined || player.lifeState !== "alive") {
+        try {
+          client.send("request_deposit_stash_item_rejected", {
+            type: "request_deposit_stash_item_rejected",
+            itemInstanceId: message.itemInstanceId,
+            reason: "item_not_owned",
+          });
+        } catch {}
+        return;
+      }
+
+      const result = await executeDepositStashItem({
+        characterId: player.characterId.toString(),
+        itemInstanceId: message.itemInstanceId,
+        ...(typeof message.quantity === "number" ? { quantity: message.quantity } : {}),
+      });
+
+      if (result.ok) {
+        try {
+          client.send("request_deposit_stash_item_accepted", {
+            type: "request_deposit_stash_item_accepted",
+            itemInstanceId: result.itemInstanceId,
+            stashItems: result.stashItems,
+          });
+        } catch {}
+        return;
+      }
+
+      log.debug?.({ roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, reason: result.reason }, "TownRoom request_deposit_stash_item rejected.");
+      try {
+        client.send("request_deposit_stash_item_rejected", {
+          type: "request_deposit_stash_item_rejected",
+          itemInstanceId: message.itemInstanceId,
+          reason: result.reason,
+        });
+      } catch {}
+    });
+
+    this.onMessage("request_withdraw_stash_item", async (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+      const message = raw as { stashItemId?: unknown; quantity?: unknown } | null;
+
+      if (message === null || typeof message !== "object" || typeof message.stashItemId !== "string") {
+        try {
+          client.send("request_withdraw_stash_item_rejected", {
+            type: "request_withdraw_stash_item_rejected",
+            reason: "item_unavailable",
+          });
+        } catch {}
+        return;
+      }
+
+      if (player === undefined || player.lifeState !== "alive") {
+        try {
+          client.send("request_withdraw_stash_item_rejected", {
+            type: "request_withdraw_stash_item_rejected",
+            stashItemId: message.stashItemId,
+            reason: "item_not_in_stash",
+          });
+        } catch {}
+        return;
+      }
+
+      const result = await executeWithdrawStashItem({
+        characterId: player.characterId.toString(),
+        stashItemId: message.stashItemId,
+        ...(typeof message.quantity === "number" ? { quantity: message.quantity } : {}),
+      });
+
+      if (result.ok) {
+        try {
+          client.send("request_withdraw_stash_item_accepted", {
+            type: "request_withdraw_stash_item_accepted",
+            stashItemId: result.stashItemId,
+            stashItems: result.stashItems,
+          });
+        } catch {}
+        return;
+      }
+
+      log.debug?.({ roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, reason: result.reason }, "TownRoom request_withdraw_stash_item rejected.");
+      try {
+        client.send("request_withdraw_stash_item_rejected", {
+          type: "request_withdraw_stash_item_rejected",
+          stashItemId: message.stashItemId,
+          reason: result.reason,
+        });
+      } catch {}
+    });
+  }
+
+  /**
    * Task 348 — Register the `request_start_board_objective` message handler.
    *
    * Validates the requested objective ID, checks the player has no
@@ -3197,6 +4419,158 @@ export class TownRoom extends Room {
     });
   }
 
+  /**
+   * Core 0.1 — Persistent Quest & Dialogue System foundation.
+   *
+   * `request_accept_quest`/`request_complete_quest` are independent of
+   * the notice board's kill-objective system: quests here are a simple
+   * accept -> complete loop offered by a "quest_giver" world prop (see
+   * the `interact_response`'s `questInfo` branch in the interact
+   * handler). Persistence is server-authoritative via QuestRepository,
+   * mirroring ObjectiveRepository's per-character-row conventions.
+   */
+  private registerQuestHandlers(
+    log: ReturnType<typeof createRoomLogger>,
+  ): void {
+    if (this.questHandlerRegistered) {
+      return;
+    }
+    this.questHandlerRegistered = true;
+
+    this.onMessage("request_accept_quest", async (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+      if (player === undefined) {
+        return;
+      }
+
+      const message = raw as { questId?: unknown } | null;
+      if (!message || typeof message.questId !== "string" || message.questId.length === 0) {
+        try {
+          client.send("request_accept_quest_rejected", { type: "request_accept_quest_rejected", reason: "invalid_request" });
+        } catch {}
+        return;
+      }
+
+      const questId = message.questId;
+      const questDef = contentRegistry.quests.get(questId as QuestId);
+      if (questDef === undefined) {
+        try {
+          client.send("request_accept_quest_rejected", { type: "request_accept_quest_rejected", questId, reason: "quest_not_found" });
+        } catch {}
+        return;
+      }
+
+      const existing = await new QuestRepository().findOne(player.characterId.toString(), questId);
+      if (existing !== null) {
+        try {
+          client.send("request_accept_quest_rejected", {
+            type: "request_accept_quest_rejected",
+            questId,
+            reason: existing.status === "COMPLETED" ? "already_completed" : "already_accepted",
+          });
+        } catch {}
+        return;
+      }
+
+      try {
+        await new QuestRepository().accept(player.characterId.toString(), questId);
+      } catch {
+        try {
+          client.send("request_accept_quest_rejected", { type: "request_accept_quest_rejected", questId, reason: "invalid_request" });
+        } catch {}
+        return;
+      }
+
+      const updated: QuestUpdatedServerMessage = { type: "quest_updated", questId, status: "accepted" };
+      try {
+        client.send("quest_updated", updated);
+      } catch {}
+
+      log.debug?.(
+        { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, characterId: player.characterId, questId },
+        "TownRoom request_accept_quest accepted: quest started.",
+      );
+    });
+
+    this.onMessage("request_complete_quest", async (client: Client, raw: unknown) => {
+      const state = this.state as TownRoomState;
+      const player = state.playerPresence.get(client.sessionId);
+      if (player === undefined) {
+        return;
+      }
+
+      const message = raw as { questId?: unknown } | null;
+      if (!message || typeof message.questId !== "string" || message.questId.length === 0) {
+        try {
+          client.send("request_complete_quest_rejected", { type: "request_complete_quest_rejected", reason: "invalid_request" });
+        } catch {}
+        return;
+      }
+
+      const questId = message.questId;
+      const questDef = contentRegistry.quests.get(questId as QuestId);
+      if (questDef === undefined) {
+        try {
+          client.send("request_complete_quest_rejected", { type: "request_complete_quest_rejected", questId, reason: "quest_not_found" });
+        } catch {}
+        return;
+      }
+
+      const characterId = player.characterId.toString();
+      const existing = await new QuestRepository().findOne(characterId, questId);
+      if (existing === null) {
+        try {
+          client.send("request_complete_quest_rejected", { type: "request_complete_quest_rejected", questId, reason: "not_accepted" });
+        } catch {}
+        return;
+      }
+      if (existing.status === "COMPLETED") {
+        try {
+          client.send("request_complete_quest_rejected", { type: "request_complete_quest_rejected", questId, reason: "already_completed" });
+        } catch {}
+        return;
+      }
+
+      const completed = await new QuestRepository().complete(characterId, questId);
+      if (completed === null) {
+        try {
+          client.send("request_complete_quest_rejected", { type: "request_complete_quest_rejected", questId, reason: "invalid_request" });
+        } catch {}
+        return;
+      }
+
+      const sendToClient = (type: string, payload: unknown): void => {
+        try { client.send(type, payload); } catch {}
+      };
+
+      await grantFlatXpReward(player, questDef.xpReward, sendToClient);
+
+      if (questDef.copperReward > 0) {
+        const total = await new CharacterRepository().incrementMoneyCopper(characterId, questDef.copperReward);
+        if (total !== null) {
+          const currencyMessage: CurrencyPickedUpServerMessage = {
+            type: "currency_picked_up",
+            characterId: player.characterId,
+            gainedCopper: questDef.copperReward,
+            totalMoneyCopper: total,
+          };
+          sendToClient("currency_picked_up", currencyMessage);
+        }
+      }
+
+      const updated: QuestUpdatedServerMessage = { type: "quest_updated", questId, status: "completed" };
+      try {
+        client.send("quest_updated", updated);
+      } catch {}
+
+      log.debug?.(
+        { roomId: this.roomId, roomName: this.roomName, sessionId: client.sessionId, characterId: player.characterId, questId },
+        "TownRoom request_complete_quest accepted: quest completed and rewards granted.",
+      );
+    });
+  }
+
   private applyEnemyAggroDamage(now: number, deltaMs: number): void {
     const state = this.state as TownRoomState;
 
@@ -3212,7 +4586,11 @@ export class TownRoom extends Room {
       const enemyAggroRange = toWorldUnits(enemyDefinition?.aggroRange ?? 0, 120);
       const enemyLeashRange = toWorldUnits(enemyDefinition?.leashRange ?? 0, 180);
       const enemyAttackCooldownMs = enemyDefinition?.attackCooldownMs ?? 1200;
-      const enemyAttackDamage = enemyDefinition?.damage ?? 2;
+      // Core 0.1 Foundation -- Champion/Elite enemies deal scaled damage
+      // (see enemyRarity.ts). Applied here (not baked into content) so
+      // the same enemy content definition serves every rarity tier.
+      const rarityMultiplier = getEnemyRarityMultiplier(enemy.rarity);
+      const enemyAttackDamage = (enemyDefinition?.damage ?? 2) * rarityMultiplier.damage;
       // Task 264 -- Brute heavy attack config. Read once per enemy tick
       // so the heavy windup, damage, chance and cooldown come from the
       // existing content fields, not from any hardcoded values. Heavy
@@ -3220,7 +4598,7 @@ export class TownRoom extends Room {
       // and finite; otherwise the enemy is treated as a normal-only
       // attacker (preserves the existing Runt / Skitter behaviour).
       const heavyWindupMs = enemyDefinition?.heavyAttackWindupMs ?? 0;
-      const heavyDamage = enemyDefinition?.heavyAttackDamage ?? 0;
+      const heavyDamage = (enemyDefinition?.heavyAttackDamage ?? 0) * rarityMultiplier.damage;
       const heavyCooldownMs = enemyDefinition?.heavyAttackCooldownMs ?? 0;
       const heavyChance = enemyDefinition?.heavyAttackChance ?? 0;
       const heavyAttackEligible =
@@ -3236,6 +4614,15 @@ export class TownRoom extends Room {
         enemy.nextAttackAtMs = 0;
         return;
       }
+
+      // Core 0.2 -- a stunned enemy can neither move nor attack this
+      // tick; leave its aggro/target state exactly as-is so it resumes
+      // right where it left off once the stun expires.
+      if (isStunned(enemy, now)) {
+        return;
+      }
+
+      const slowMultiplier = getSlowMultiplier(enemy, now);
 
       const currentTargetSessionId =
         typeof enemy.targetPlayerSessionId === "string" ? enemy.targetPlayerSessionId : "";
@@ -3253,11 +4640,12 @@ export class TownRoom extends Room {
       }
 
       if (enemy.targetPlayerSessionId.length === 0 && enemy.state === "returning") {
-        moveEnemyTowardPoint(
+        stepEnemyTowardPointWithAvoidance(
           enemy,
           { x: enemy.spawnX, y: enemy.spawnY },
-          enemyMoveSpeed,
+          enemyMoveSpeed * slowMultiplier,
           deltaMs,
+          this.buildingFootprints,
         );
 
         const remainingDistanceToSpawn = Math.hypot(enemy.x - enemy.spawnX, enemy.y - enemy.spawnY);
@@ -3294,7 +4682,7 @@ export class TownRoom extends Room {
         ) {
           enemy.state = "idle";
           // Task 107 — idle enemies wander near their spawn point
-          applyWanderMovement(enemy, enemyMoveSpeed, deltaMs, now);
+          applyWanderMovement(enemy, enemyMoveSpeed * slowMultiplier, deltaMs, now);
           return;
         }
 
@@ -3314,11 +4702,12 @@ export class TownRoom extends Room {
       }
 
       enemy.state = "chasing";
-      moveEnemyTowardTarget(
+      stepEnemyTowardTargetWithAvoidance(
         enemy,
         targetPlayer,
-        enemyMoveSpeed,
+        enemyMoveSpeed * slowMultiplier,
         deltaMs,
+        this.buildingFootprints,
       );
 
       const distanceAfterMovement = Math.hypot(enemy.x - targetPlayer.x, enemy.y - targetPlayer.y);
@@ -3403,14 +4792,33 @@ export class TownRoom extends Room {
           landingTarget.hasCorpse = true;
           landingTarget.corpseX = landingTarget.x;
           landingTarget.corpseY = landingTarget.y;
+          landingTarget.corpseId = "";
           clearPendingAction(landingTarget);
           clearEnemyTargetAndReturn(enemy);
+          this.persistDeathCorpse(state, landingTarget);
         } else {
           // Task 264 -- heavy hits still consume the heavy cooldown
           // (a successful Brute smash is a long-recovery swing).
           enemy.nextAttackAtMs = now + landingCooldownMs;
           if (landingKind === "heavy") {
             enemy.nextHeavyAttackAtMs = now + heavyCooldownMs;
+          }
+          // Core 0.2 -- Champion/Elite (and any content-flagged) heavy
+          // attacks can optionally apply a status effect to a target
+          // that survives the hit.
+          if (
+            landingKind === "heavy" &&
+            enemyDefinition?.heavyAttackAppliesEffect !== undefined &&
+            Number.isFinite(enemyDefinition.heavyAttackEffectDurationMs) &&
+            Number.isFinite(enemyDefinition.heavyAttackEffectMagnitude)
+          ) {
+            applyStatusEffect(
+              landingTarget,
+              enemyDefinition.heavyAttackAppliesEffect,
+              now,
+              enemyDefinition.heavyAttackEffectDurationMs as number,
+              enemyDefinition.heavyAttackEffectMagnitude as number,
+            );
           }
         }
 
@@ -3485,6 +4893,27 @@ export class TownRoom extends Room {
           attackKind,
         );
       }
+    });
+  }
+
+  /**
+   * Core 0.2 -- Server-Authoritative Status Effects & Debuff System.
+   * TownRoom's per-tick hook into the shared `applyStatusEffectTicks`
+   * helper: a player downed by a bleed/burn tick gets the same corpse
+   * bookkeeping as one downed by an enemy attack (see the landing
+   * damage branch in `applyEnemyAggroDamage` above).
+   */
+  private applyStatusEffectTicks(state: TownRoomState, now: number): void {
+    runStatusEffectTicks(state, now, {
+      onPlayerDowned: (player) => {
+        player.targetX = player.x;
+        player.targetY = player.y;
+        player.hasCorpse = true;
+        player.corpseX = player.x;
+        player.corpseY = player.y;
+        player.corpseId = "";
+        this.persistDeathCorpse(state, player);
+      },
     });
   }
 }

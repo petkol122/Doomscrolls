@@ -62,6 +62,30 @@ import {
   type WorldSessionLootPlaceholderView,
 } from "./worldSessionLootPlaceholderView";
 import {
+  getTownRoomProjectiles,
+  type TownRoomProjectileSnapshot,
+} from "../../../net/townRoomProjectiles";
+import {
+  getTownRoomGroundEffects,
+  type TownRoomGroundEffectSnapshot,
+} from "../../../net/townRoomGroundEffects";
+import {
+  createWorldSessionProjectileView,
+  type WorldSessionProjectileView,
+} from "./worldSessionProjectileView";
+import {
+  createWorldSessionGroundAoeView,
+  type WorldSessionGroundAoeView,
+} from "./worldSessionGroundAoeView";
+import {
+  getTownRoomTurrets,
+  type TownRoomTurretSnapshot,
+} from "../../../net/townRoomTurrets";
+import {
+  createWorldSessionTurretView,
+  type WorldSessionTurretView,
+} from "./worldSessionTurretView";
+import {
   createFloatingDamageNumberView,
   type FloatingDamageNumberView,
 } from "./floatingDamageNumberView";
@@ -104,8 +128,13 @@ const AREA_MAX_CAMERA_ZOOM = 24;
  * "readable"). This shrinks the base marker size on top of
  * `resolveEntityScaleFactor`'s zoom-consistency scaling, targeting
  * roughly half that -- a first pass, tunable after another live look.
+ * Milestone 0.3 scale/speed pass -- dropped another ~20% (0.5 -> 0.4) so
+ * building footprints around Namesti Republiky read as grander relative
+ * to the player/other-player markers; enemy placeholders got the same
+ * ~20% cut applied directly to their SIZE_* tiers (they scale with the
+ * world container, not this constant).
  */
-const PLAYER_MARKER_BASE_SCALE = 0.5;
+const PLAYER_MARKER_BASE_SCALE = 0.4;
 
 // Core 0.4x follow-up -- resolveEntityScaleFactor grows linearly with
 // camera zoom (zoom / AREA_DEFAULT_CAMERA_ZOOM), unbounded up to
@@ -224,6 +253,13 @@ export interface WorldSessionAreaView {
   readonly getLastClickTarget: () => ClickTargetSnapshot | null;
   readonly getSkillTargetingState: () => WorldSessionSkillTargetingState;
   readonly setPendingPickupTarget: (worldLootId: string | null) => void;
+  /**
+   * Milestone 0.2 -- projects a screen-space point (e.g. the current
+   * mouse position) to a world point, for a ground_aoe skill cast. Same
+   * projection the click-to-move handler already uses internally; returns
+   * null outside the viewport or when not in debug_top_down projection.
+   */
+  readonly getWorldPointFromScreenPoint: (screenX: number, screenY: number) => ClickTargetSnapshot | null;
   readonly destroy: () => void;
 }
 
@@ -349,6 +385,11 @@ export function createWorldSessionAreaView(
   // it remains present on the parsed entry for the local HUD's own use.
   const otherPlayerPlaceholders = new Map<string, WorldSessionPlayerPlaceholderView>();
   const lootPlaceholders = new Map<string, WorldSessionLootPlaceholderView>();
+  // Milestone 0.2 -- Server-Authoritative Projectiles & Ground-Targeted
+  // AoE Skills. Same create/update/destroy-by-id idiom as the maps above.
+  const projectileViews = new Map<string, WorldSessionProjectileView>();
+  const groundAoeViews = new Map<string, WorldSessionGroundAoeView>();
+  const turretViews = new Map<string, WorldSessionTurretView>();
   const floatingDamageView: FloatingDamageNumberView = createFloatingDamageNumberView(scene, worldContainer);
   const enemyScreenPositions = new Map<string, EnemyScreenPositionSnapshot>();
   const lootScreenPositions = new Map<string, WorldLootScreenPositionSnapshot>();
@@ -428,7 +469,11 @@ export function createWorldSessionAreaView(
   let previousPosition: PositionSnapshot | null = null;
   let lastClickTarget: ClickTargetSnapshot | null = null;
   let projectionMode: WorldProjectionMode = defaultWorldProjection;
-  let showDebugOverlay = true;
+  // Core 0.4 HUD Overhaul -- raw coordinate/status text dumps default to
+  // hidden now; the Debug Panel checkbox (dev builds only) still toggles
+  // them back on, this just stops them cluttering the polished HUD by
+  // default for every player.
+  let showDebugOverlay = false;
   let selfScreenPosition: { readonly x: number; readonly y: number } | null = null;
   let cameraZoom = DEFAULT_CAMERA_ZOOM;
   let selfWorldPosition: { readonly x: number; readonly y: number } | null = null;
@@ -1227,6 +1272,87 @@ export function createWorldSessionAreaView(
       }
     }
 
+    // --- Projectile processing (continues [C]) --- Milestone 0.2.
+    const currentProjectiles = getTownRoomProjectiles(nextRoom.state);
+    const projectedProjectiles = currentProjectiles
+      .map((projectile: TownRoomProjectileSnapshot) => projectPointToArea(projectile, worldProjection))
+      .filter((projectile: TownRoomProjectileSnapshot | null): projectile is TownRoomProjectileSnapshot => projectile !== null);
+    const currentProjectileIds = new Set(currentProjectiles.map((projectile: TownRoomProjectileSnapshot) => projectile.id));
+
+    for (const [id, view] of projectileViews.entries()) {
+      if (!currentProjectileIds.has(id)) {
+        view.destroy();
+        projectileViews.delete(id);
+      }
+    }
+
+    for (const projectile of projectedProjectiles) {
+      const existingProjectileView = projectileViews.get(projectile.id);
+      if (existingProjectileView === undefined) {
+        projectileViews.set(projectile.id, createWorldSessionProjectileView(scene, projectile, worldContainer));
+      } else {
+        existingProjectileView.update(projectile);
+      }
+    }
+
+    // --- Ground-effect marker processing (continues [C]) --- Milestone 0.2.
+    // `radius` is a world-unit distance, not a point -- scale it by the
+    // same world->viewport ratio the projection uses so the drawn circle
+    // reflects the real AoE hit area at the current zoom level.
+    const groundEffectScale = worldProjection.viewport.width / Math.max(1, worldProjection.bounds.maxX - worldProjection.bounds.minX);
+    const currentGroundEffects = getTownRoomGroundEffects(nextRoom.state);
+    const projectedGroundEffects = currentGroundEffects
+      .map((effect: TownRoomGroundEffectSnapshot) => {
+        const projected = projectPointToArea(effect, worldProjection);
+        return projected === null ? null : { ...projected, radius: projected.radius * groundEffectScale };
+      })
+      .filter((effect: TownRoomGroundEffectSnapshot | null): effect is TownRoomGroundEffectSnapshot => effect !== null);
+    const currentGroundEffectIds = new Set(currentGroundEffects.map((effect: TownRoomGroundEffectSnapshot) => effect.id));
+
+    for (const [id, view] of groundAoeViews.entries()) {
+      if (!currentGroundEffectIds.has(id) || view.isExpired(Date.now())) {
+        view.destroy();
+        groundAoeViews.delete(id);
+      }
+    }
+
+    for (const effect of projectedGroundEffects) {
+      const existingGroundEffectView = groundAoeViews.get(effect.id);
+      if (existingGroundEffectView === undefined) {
+        groundAoeViews.set(effect.id, createWorldSessionGroundAoeView(scene, effect, worldContainer));
+      } else {
+        existingGroundEffectView.update(effect);
+      }
+    }
+
+    // --- Turret marker processing (continues [C]) --- Milestone 0.3.
+    // `attackRange` is a world-unit distance, same scaling as ground
+    // effect `radius` above.
+    const currentTurrets = getTownRoomTurrets(nextRoom.state);
+    const projectedTurrets = currentTurrets
+      .map((turret: TownRoomTurretSnapshot) => {
+        const projected = projectPointToArea(turret, worldProjection);
+        return projected === null ? null : { ...projected, attackRange: projected.attackRange * groundEffectScale };
+      })
+      .filter((turret: TownRoomTurretSnapshot | null): turret is TownRoomTurretSnapshot => turret !== null);
+    const currentTurretIds = new Set(currentTurrets.map((turret: TownRoomTurretSnapshot) => turret.id));
+
+    for (const [id, view] of turretViews.entries()) {
+      if (!currentTurretIds.has(id) || view.isExpired(Date.now())) {
+        view.destroy();
+        turretViews.delete(id);
+      }
+    }
+
+    for (const turret of projectedTurrets) {
+      const existingTurretView = turretViews.get(turret.id);
+      if (existingTurretView === undefined) {
+        turretViews.set(turret.id, createWorldSessionTurretView(scene, turret, worldContainer));
+      } else {
+        existingTurretView.update(turret);
+      }
+    }
+
     // --- Corpse marker processing (continues [C]) ---
     const currentCorpsePlayerIds = new Set<string>();
     corpseScreenPositions.clear();
@@ -1374,6 +1500,7 @@ export function createWorldSessionAreaView(
         otherView.setScale(otherEntityScale * PLAYER_MARKER_BASE_SCALE);
         otherView.setLabelScale(Math.min(otherEntityScale, PLAYER_LABEL_MAX_SCALE));
         otherView.setInfo(player.displayName, player.hp, player.maxHp);
+        otherView.setStatusEffects(player.statusEffects);
       }
     }
     for (const [sessionId, view] of otherPlayerPlaceholders.entries()) {
@@ -1433,6 +1560,7 @@ export function createWorldSessionAreaView(
     playerPlaceholder.setScale(selfEntityScale * PLAYER_MARKER_BASE_SCALE);
     playerPlaceholder.setLabelScale(Math.min(selfEntityScale, PLAYER_LABEL_MAX_SCALE));
     playerPlaceholder.setInfo(self.displayName, self.hp, self.maxHp);
+    playerPlaceholder.setStatusEffects(self.statusEffects);
     playerPlaceholder.setApproachLabel(self.pendingActionType ?? null);
 
     if (lastClickTarget) {
@@ -1669,6 +1797,8 @@ export function createWorldSessionAreaView(
     resolveEnemyAttackOutcome,
     getSelfWorldPosition: () => selfWorldPosition,
     getLastClickTarget: () => lastClickTarget,
+    getWorldPointFromScreenPoint: (screenX: number, screenY: number) =>
+      resolveWorldTargetFromScreenPoint(screenX, screenY, currentProjectionState.offset, currentProjectionState.projection),
     getSkillTargetingState: () => {
       const resolvedTargetEnemyId = hoveredEnemyId ?? selectedSkillTargetEnemyId;
       if (resolvedTargetEnemyId === null) {
@@ -1730,6 +1860,18 @@ export function createWorldSessionAreaView(
       }
       lootPlaceholders.clear();
       lootScreenPositions.clear();
+      for (const view of projectileViews.values()) {
+        view.destroy();
+      }
+      projectileViews.clear();
+      for (const view of groundAoeViews.values()) {
+        view.destroy();
+      }
+      groundAoeViews.clear();
+      for (const view of turretViews.values()) {
+        view.destroy();
+      }
+      turretViews.clear();
       for (const marker of corpseMarkers.values()) {
         marker.destroy(true);
       }
@@ -1955,6 +2097,49 @@ function formatPickupFeedbackLabel(loot: TownRoomWorldLootSnapshot): string {
 
 function formatItemRarityLabel(rarity: string): string {
   return rarity.charAt(0).toUpperCase() + rarity.slice(1);
+}
+
+/**
+ * Milestone 0.2 -- generic world->screen point projection shared by the
+ * projectile/ground-effect views, following `projectWorldLootToArea`'s
+ * exact shape (a point-like snapshot with x/y, reprojected in place).
+ */
+function projectPointToArea<T extends { readonly x: number; readonly y: number }>(
+  point: T,
+  projection: AreaProjectionContext,
+): T | null {
+  const width = projection.bounds.maxX - projection.bounds.minX;
+  const height = projection.bounds.maxY - projection.bounds.minY;
+
+  if (width <= 0 || height <= 0) {
+    return null;
+  }
+
+  const normalizedX = (point.x - projection.bounds.minX) / width;
+  const normalizedY = (point.y - projection.bounds.minY) / height;
+
+  if (
+    !Number.isFinite(normalizedX) ||
+    !Number.isFinite(normalizedY) ||
+    normalizedX < 0 ||
+    normalizedX > 1 ||
+    normalizedY < 0 ||
+    normalizedY > 1
+  ) {
+    return null;
+  }
+
+  return {
+    ...point,
+    ...worldToScreenActiveProjection(
+      point.x,
+      point.y,
+      projection.bounds,
+      projection.viewport,
+      projection.projectionMode,
+      projection.rotationDeg,
+    ),
+  };
 }
 
 function projectEnemyToArea(

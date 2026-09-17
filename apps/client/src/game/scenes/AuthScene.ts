@@ -1,9 +1,16 @@
 import { t } from "@doomscrolls/localization";
 import Phaser from "phaser";
 
-import { clearStoredSessionToken, readStoredSessionToken, storeSessionToken } from "../../auth/sessionStorage";
+import {
+  clearStoredSessionToken,
+  readRememberAccountPreference,
+  readStoredSessionToken,
+  storeSessionToken
+} from "../../auth/sessionStorage";
 import { clientEnv } from "../../config/env";
 import { ApiClient, ApiClientError, type AccountState, type ApiErrorCode } from "../../net/ApiClient";
+import { createButton, createInput, createToggleSwitch } from "./accountShell/accountShellDom";
+import { theme } from "./accountShell/theme";
 import { makeOverlayInteractive } from "./worldSession/worldSessionPointerEvents";
 
 type AuthMode = "register" | "login";
@@ -11,6 +18,8 @@ type AuthMode = "register" | "login";
 interface AuthFormElements {
   readonly root: HTMLDivElement;
   readonly status: HTMLParagraphElement;
+  readonly tabs: Readonly<Record<AuthMode, HTMLButtonElement>>;
+  readonly panes: Readonly<Record<AuthMode, HTMLElement>>;
   readonly registerUsername: HTMLInputElement;
   readonly registerDisplayName: HTMLInputElement;
   readonly registerPassword: HTMLInputElement;
@@ -18,11 +27,13 @@ interface AuthFormElements {
   readonly loginUsername: HTMLInputElement;
   readonly loginPassword: HTMLInputElement;
   readonly loginButton: HTMLButtonElement;
+  readonly rememberAccount: HTMLInputElement;
 }
 
 export class AuthScene extends Phaser.Scene {
   private overlay: HTMLDivElement | null = null;
   private apiClient: ApiClient | null = null;
+  private mode: AuthMode = "login";
 
   public constructor() {
     super("AuthScene");
@@ -34,8 +45,8 @@ export class AuthScene extends Phaser.Scene {
 
     this.add
       .text(this.scale.width / 2, 94, "Doomscrolls", {
-        color: "#d8c6a3",
-        fontFamily: "Georgia, serif",
+        color: theme.color.textBody,
+        fontFamily: theme.font.heading,
         fontSize: "44px"
       })
       .setOrigin(0.5);
@@ -96,7 +107,7 @@ export class AuthScene extends Phaser.Scene {
         displayName: elements.registerDisplayName.value,
         password: elements.registerPassword.value
       });
-      storeSessionToken(result.session.token);
+      storeSessionToken(result.session.token, elements.rememberAccount.checked);
 
       const account = await this.apiClient.getMe(result.session.token);
       this.startAccountShell(account);
@@ -120,7 +131,7 @@ export class AuthScene extends Phaser.Scene {
         username: elements.loginUsername.value,
         password: elements.loginPassword.value
       });
-      storeSessionToken(result.session.token);
+      storeSessionToken(result.session.token, elements.rememberAccount.checked);
 
       const account = await this.apiClient.getMe(result.session.token);
       this.startAccountShell(account);
@@ -143,125 +154,133 @@ export class AuthScene extends Phaser.Scene {
     root.style.display = "flex";
     root.style.alignItems = "center";
     root.style.justifyContent = "center";
-    root.style.fontFamily = "Arial, sans-serif";
+    root.style.fontFamily = theme.font.body;
 
     const panel = makeOverlayInteractive(document.createElement("div"));
-    panel.style.width = "min(920px, calc(100vw - 32px))";
+    panel.style.width = "min(420px, calc(100vw - 32px))";
     panel.style.marginTop = "80px";
     panel.style.padding = "24px";
-    panel.style.border = "1px solid #4d3f2a";
-    panel.style.borderRadius = "12px";
-    panel.style.background = "rgba(13, 10, 8, 0.94)";
-    panel.style.color = "#d8c6a3";
-    panel.style.boxShadow = "0 20px 70px rgba(0, 0, 0, 0.45)";
+    panel.style.border = `1px solid ${theme.color.border}`;
+    panel.style.borderRadius = theme.radius.panel;
+    panel.style.background = theme.color.panelBg;
+    panel.style.color = theme.color.textBody;
+    panel.style.boxShadow = theme.color.shadow;
     root.appendChild(panel);
 
     const title = document.createElement("h1");
     title.textContent = t("auth.title");
     title.style.margin = "0 0 18px";
-    title.style.fontFamily = "Georgia, serif";
+    title.style.fontFamily = theme.font.heading;
+    title.style.fontSize = "24px";
+    title.style.color = theme.color.textHeading;
     panel.appendChild(title);
 
-    const columns = document.createElement("div");
-    columns.style.display = "grid";
-    columns.style.gridTemplateColumns = "repeat(2, minmax(0, 1fr))";
-    columns.style.gap = "20px";
-    panel.appendChild(columns);
+    const tabRow = document.createElement("div");
+    tabRow.style.display = "flex";
+    tabRow.style.gap = "8px";
+    tabRow.style.marginBottom = "16px";
+    panel.appendChild(tabRow);
 
-    const registerForm = this.createFormSection(t("auth.register_title"));
-    const registerUsername = this.createInput(t("auth.username"), "text", "doomscrolls-register-username");
-    const registerDisplayName = this.createInput(t("profile.display_name"), "text", "doomscrolls-register-display-name");
-    const registerPassword = this.createInput(t("auth.password"), "password", "doomscrolls-register-password");
-    const registerButton = this.createButton(t("auth.register"));
-    registerForm.append(registerUsername.wrapper, registerDisplayName.wrapper, registerPassword.wrapper, registerButton);
+    const loginTab = this.createTabButton(t("auth.login_title"));
+    const registerTab = this.createTabButton(t("auth.register_title"));
+    tabRow.append(loginTab, registerTab);
 
-    const loginForm = this.createFormSection(t("auth.login_title"));
-    const loginUsername = this.createInput(t("auth.username"), "text", "doomscrolls-login-username");
-    const loginPassword = this.createInput(t("auth.password"), "password", "doomscrolls-login-password");
-    const loginButton = this.createButton(t("auth.login"));
-    loginForm.append(loginUsername.wrapper, loginPassword.wrapper, loginButton);
+    const loginPane = this.createFormSection();
+    const loginUsername = createInput(t("auth.username"), "doomscrolls-login-username");
+    const loginPassword = createInput(t("auth.password"), "doomscrolls-login-password", "password");
+    const loginButton = createButton(t("auth.login"));
+    loginButton.style.width = "100%";
+    loginPane.append(loginUsername.wrapper, loginPassword.wrapper, loginButton);
 
-    columns.append(registerForm, loginForm);
+    const registerPane = this.createFormSection();
+    const registerUsername = createInput(t("auth.username"), "doomscrolls-register-username");
+    const registerDisplayName = createInput(t("profile.display_name"), "doomscrolls-register-display-name");
+    const registerPassword = createInput(t("auth.password"), "doomscrolls-register-password", "password");
+    const registerButton = createButton(t("auth.register"));
+    registerButton.style.width = "100%";
+    registerPane.append(
+      registerUsername.wrapper,
+      registerDisplayName.wrapper,
+      registerPassword.wrapper,
+      registerButton
+    );
+
+    panel.append(loginPane, registerPane);
+
+    const rememberAccount = createToggleSwitch(
+      t("auth.remember_account"),
+      "doomscrolls-remember-account",
+      readRememberAccountPreference()
+    );
+    rememberAccount.wrapper.style.margin = "14px 0 0";
+    panel.appendChild(rememberAccount.wrapper);
 
     const status = document.createElement("p");
     status.setAttribute("role", "status");
     status.style.minHeight = "24px";
-    status.style.margin = "18px 0 0";
-    status.style.color = "#d8c6a3";
+    status.style.margin = "14px 0 0";
+    status.style.color = theme.color.textBody;
     panel.appendChild(status);
 
     document.body.appendChild(root);
 
-    return {
+    const elements: AuthFormElements = {
       root,
       status,
+      tabs: { login: loginTab, register: registerTab },
+      panes: { login: loginPane, register: registerPane },
       registerUsername: registerUsername.input,
       registerDisplayName: registerDisplayName.input,
       registerPassword: registerPassword.input,
       registerButton,
       loginUsername: loginUsername.input,
       loginPassword: loginPassword.input,
-      loginButton
+      loginButton,
+      rememberAccount: rememberAccount.checkbox
     };
+
+    loginTab.addEventListener("click", () => {
+      this.setMode(elements, "login");
+    });
+    registerTab.addEventListener("click", () => {
+      this.setMode(elements, "register");
+    });
+    this.setMode(elements, this.mode);
+
+    return elements;
   }
 
-  private createFormSection(titleText: string): HTMLElement {
+  private setMode(elements: AuthFormElements, mode: AuthMode): void {
+    this.mode = mode;
+    for (const key of ["login", "register"] as const) {
+      const isActive = key === mode;
+      elements.panes[key].style.display = isActive ? "flex" : "none";
+      elements.tabs[key].style.borderBottomColor = isActive ? theme.color.borderSelected : "transparent";
+      elements.tabs[key].style.color = isActive ? theme.color.textHeading : theme.color.textMuted;
+    }
+  }
+
+  private createTabButton(label: string): HTMLButtonElement {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.style.flex = "1";
+    button.style.padding = "8px 4px";
+    button.style.border = "none";
+    button.style.borderBottom = "2px solid transparent";
+    button.style.background = "transparent";
+    button.style.cursor = "pointer";
+    button.style.font = "inherit";
+    button.style.fontWeight = "600";
+    return button;
+  }
+
+  private createFormSection(): HTMLElement {
     const section = document.createElement("section");
     section.style.display = "flex";
     section.style.flexDirection = "column";
     section.style.gap = "12px";
-
-    const title = document.createElement("h2");
-    title.textContent = titleText;
-    title.style.margin = "0 0 4px";
-    title.style.fontFamily = "Georgia, serif";
-    title.style.fontSize = "24px";
-    section.appendChild(title);
-
     return section;
-  }
-
-  private createInput(
-    labelText: string,
-    type: "password" | "text",
-    id: string
-  ): { readonly wrapper: HTMLElement; readonly input: HTMLInputElement } {
-    const wrapper = document.createElement("label");
-    wrapper.style.display = "flex";
-    wrapper.style.flexDirection = "column";
-    wrapper.style.gap = "6px";
-    wrapper.style.fontSize = "14px";
-    wrapper.setAttribute("for", id);
-    wrapper.textContent = labelText;
-
-    const input = document.createElement("input");
-    input.id = id;
-    input.type = type;
-    input.autocomplete = type === "password" ? "current-password" : "username";
-    input.style.padding = "10px 12px";
-    input.style.border = "1px solid #5f4a2f";
-    input.style.borderRadius = "8px";
-    input.style.background = "#130f0c";
-    input.style.color = "#f0dec0";
-    input.style.font = "inherit";
-    wrapper.appendChild(input);
-
-    return { wrapper, input };
-  }
-
-  private createButton(label: string): HTMLButtonElement {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = label;
-    button.style.marginTop = "4px";
-    button.style.padding = "11px 14px";
-    button.style.border = "1px solid #8d6a35";
-    button.style.borderRadius = "8px";
-    button.style.background = "#5a311f";
-    button.style.color = "#ffe6bd";
-    button.style.cursor = "pointer";
-    button.style.font = "inherit";
-    return button;
   }
 
   private setButtonsDisabled(elements: AuthFormElements, disabled: boolean): void {
@@ -271,7 +290,7 @@ export class AuthScene extends Phaser.Scene {
 
   private setStatus(elements: AuthFormElements, message: string, tone: "error" | "info"): void {
     elements.status.textContent = message;
-    elements.status.style.color = tone === "error" ? "#ff9c8a" : "#d8c6a3";
+    elements.status.style.color = tone === "error" ? theme.color.textError : theme.color.textBody;
   }
 
   private toSafeErrorMessage(error: unknown, mode: AuthMode): string {

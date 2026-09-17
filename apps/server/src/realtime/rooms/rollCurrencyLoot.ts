@@ -1,7 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { contentRegistry } from "@doomscrolls/content";
+import type { EnemyRarity } from "@doomscrolls/shared";
 import { createLootRoller } from "./lootRoller";
 import { createRng } from "./serverRng";
+import { getEnemyRarityMultiplier } from "./enemyRarity";
 
 function createLootSeed(): number {
   return randomBytes(4).readUInt32BE(0);
@@ -11,7 +13,7 @@ function createLootSeed(): number {
  * Roll a copper amount (inclusive both ends) for a defeated enemy.
  * Returns `0` when the enemy has no `currencyDrop` definition in content.
  */
-export function rollCurrencyLoot(enemyId: string, now: number): number {
+export function rollCurrencyLoot(enemyId: string, now: number, rarity: EnemyRarity = "normal"): number {
   const enemyDefinition = contentRegistry.enemies.get(enemyId as never);
   if (enemyDefinition === undefined) {
     return 0;
@@ -37,5 +39,7 @@ export function rollCurrencyLoot(enemyId: string, now: number): number {
   void createLootRoller(createLootSeed());
   const fallback = createRng((now ^ 0x9e3779b9) >>> 0);
   const span = max - min + 1;
-  return min + fallback.nextInt(0, span);
+  const rolled = min + fallback.nextInt(0, span);
+  // Core 0.1 Foundation -- Champion/Elite currency multiplier (see enemyRarity.ts).
+  return Math.round(rolled * getEnemyRarityMultiplier(rarity).currency);
 }

@@ -65,6 +65,8 @@ function resetEnemy(
   enemy.attackLandingAtMs = 0;
   enemy.attackKind = "normal";
   enemy.nextHeavyAttackAtMs = 0;
+  enemy.pathWaypoints = "";
+  enemy.statusEffects = "";
   clearWanderState(enemy.id);
 }
 

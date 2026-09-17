@@ -13,6 +13,11 @@ import { en } from "@doomscrolls/localization";
  * kind values. This replaces the earlier hardcoded `zoneId === "nightmarket"`
  * branch so that any zone with matching world prop definitions automatically
  * gets its interactables populated.
+ *
+ * Cathedral hub build — `cathedral_vendor` (a "vendor" prop) and the
+ * `cathedral_entrance`/`cathedral_exit` doors (a "zone_transition" prop)
+ * all flow through this same data-driven lookup once registered in
+ * `worldProps.ts`; no per-zone or per-id branching is added here.
  */
 const INTERACTABLE_PROP_KINDS: ReadonlySet<WorldPropKind> = new Set<WorldPropKind>([
   "town_service",
@@ -20,6 +25,8 @@ const INTERACTABLE_PROP_KINDS: ReadonlySet<WorldPropKind> = new Set<WorldPropKin
   "waypoint",
   "loot_container",
   "combat_edge",
+  "zone_transition",
+  "quest_giver",
 ]);
 
 export function initializeTownInteractables(

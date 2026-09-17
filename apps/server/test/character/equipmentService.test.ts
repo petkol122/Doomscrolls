@@ -120,7 +120,6 @@ function buildFakeDb() {
               id: CHARACTER_ID,
               level: 3,
               currentHp: 80,
-              currentFlaskCharges: 3,
               originId: "sewer_dweller",
               classId: "gravewalker",
             }
@@ -188,6 +187,9 @@ describe("EquipmentService equipment_updated broadcast", () => {
         amulet: null,
         belt: null,
         flask_1: null,
+        flask_2: null,
+        flask_3: null,
+        flask_4: null,
       },
     });
   });
@@ -222,6 +224,9 @@ describe("EquipmentService equipment_updated broadcast", () => {
         amulet: null,
         belt: null,
         flask_1: null,
+        flask_2: null,
+        flask_3: null,
+        flask_4: null,
       },
     });
   });

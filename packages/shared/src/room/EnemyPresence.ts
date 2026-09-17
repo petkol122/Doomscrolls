@@ -5,10 +5,20 @@ export type EnemyState = "idle" | "chasing" | "returning" | "defeated";
 
 export type EnemyAttackKind = "normal" | "heavy";
 
+/**
+ * Core 0.1 Foundation -- enemy rarity tier. Server-authoritative and
+ * rolled once at spawn time (see `enemyRarity.ts`); scales the enemy's
+ * hp/damage/loot without needing a distinct content-registered enemy id
+ * per tier. "normal" is the default, unscaled tier every enemy already
+ * shipped with.
+ */
+export type EnemyRarity = "normal" | "champion" | "elite";
+
 export class EnemyPresence extends Schema {
   @type("string") id!: string;
   @type("string") enemyId!: string;
   @type("string") label!: LocalizationKey;
+  @type("string") rarity!: EnemyRarity;
   @type("number") spawnX!: number;
   @type("number") spawnY!: number;
   @type("number") x!: number;
@@ -34,6 +44,21 @@ export class EnemyPresence extends Schema {
   // the regular `nextAttackAtMs` cooldown so heavy attacks can run
   // on a separate cadence.
   @type("number") nextHeavyAttackAtMs!: number;
+  // Core 0.1 Foundation -- server-computed obstacle-avoidance waypoints
+  // beyond the enemy's immediate movement step, flattened as
+  // "x1,y1,x2,y2,...". Populated by `stepEnemyTowardTargetWithAvoidance`
+  // / `stepEnemyTowardPointWithAvoidance` (see `enemyPathfinding.ts`)
+  // when a chase/return move isn't a clear straight line; consumed one
+  // waypoint at a time as each is reached. Empty string = no queued
+  // route (direct line, or zone has no obstacle geometry).
+  @type("string") pathWaypoints!: string;
+  // Core 0.2 -- server-owned active status effects (bleed/slow/stun/burn),
+  // flattened as "type:expiresAtMs:magnitude:nextTickAtMs" entries joined
+  // by "|". Empty string = no active effects. See
+  // `apps/server/src/realtime/rooms/statusEffects.ts` for the engine that
+  // reads/writes this field; clients only ever read it for a visual
+  // indicator.
+  @type("string") statusEffects!: string;
 }
 
 export type WorldEnemy = Pick<
@@ -41,6 +66,7 @@ export type WorldEnemy = Pick<
   | "id"
   | "enemyId"
   | "label"
+  | "rarity"
   | "x"
   | "y"
   | "state"
@@ -51,4 +77,5 @@ export type WorldEnemy = Pick<
   | "respawnAtMs"
   | "attackLandingAtMs"
   | "attackKind"
+  | "statusEffects"
 >;

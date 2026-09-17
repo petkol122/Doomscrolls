@@ -7,6 +7,8 @@ import { rollCurrencyLoot } from "./rollCurrencyLoot";
 import { rollLoot } from "./rollLoot";
 import { createRng } from "./serverRng";
 import { resolveZoneBounds } from "./resolveZoneBounds";
+import { rollItemAffixes } from "./affixRollEngine";
+import { serializeRolledAffixes } from "@doomscrolls/shared";
 
 const MAX_ACTIVE_WORLD_LOOT = 20;
 const BASE_FIXED_OFFSET_X = 10;
@@ -61,8 +63,8 @@ export function spawnWorldLootOnEnemyDefeat(
 ): WorldLoot[] {
   const spawned: WorldLoot[] = [];
 
-  const itemId = rollLoot(enemy.enemyId);
-  const currencyAmount = rollCurrencyLoot(enemy.enemyId, now);
+  const itemId = rollLoot(enemy.enemyId, enemy.rarity);
+  const currencyAmount = rollCurrencyLoot(enemy.enemyId, now, enemy.rarity);
 
   const baseX = enemy.x + BASE_FIXED_OFFSET_X;
   const baseY = enemy.y + BASE_FIXED_OFFSET_Y;
@@ -71,6 +73,12 @@ export function spawnWorldLootOnEnemyDefeat(
     const itemDefinition = contentRegistry.items.get(itemId);
     if (itemDefinition !== undefined) {
       const pos = applyDropScatter(baseX, baseY, state.zoneId, `item:${now}`);
+      // Milestone 0.3 -- roll the instance's rarity tier/affixes once,
+      // at drop time, from its own seed (distinct from the scatter-
+      // offset seed above) so the ground marker and the eventual
+      // persisted ItemInstance always agree on the same roll.
+      const affixSeed = hashStringToSeed(`${enemy.id},affixes,${now}`);
+      const { tier, affixes } = rollItemAffixes(affixSeed);
       const loot = new WorldLoot(
         buildWorldLootId(enemy.id, "item", now),
         itemId,
@@ -79,6 +87,8 @@ export function spawnWorldLootOnEnemyDefeat(
         pos.x,
         pos.y,
         0,
+        tier,
+        serializeRolledAffixes(affixes),
       );
       evictOldestWorldLootIfNeeded(state);
       state.worldLoot.set(loot.id, loot);

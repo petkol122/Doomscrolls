@@ -3,9 +3,9 @@ import { t } from "@doomscrolls/localization";
 import type { CharacterClassKey, CharacterId, SpawnPointId, ZoneId } from "@doomscrolls/shared";
 import { PlayerPresence } from "./PlayerPresence";
 import { isPositionInsideZoneBounds } from "./validateCharacterLocation";
-import { restoreFlaskToFull } from "./healingFlaskConfig";
 import { COMBAT_SPAWN_BOX } from "./initializeCombatEnemies";
 import { applyPersistedObjectiveSlot, type PersistedObjectiveState } from "./buildPlayerPresence";
+import { resolveMaxMana } from "./manaRegen";
 
 export interface BuildCombatPlayerPresenceInput {
   readonly sessionId: string;
@@ -17,11 +17,16 @@ export interface BuildCombatPlayerPresenceInput {
   readonly resolvedZoneId: ZoneId;
   readonly hp: number;
   readonly maxHp: number;
-  readonly restoredFlaskCharges: number | undefined;
   readonly movementSpeed: number;
   readonly attackCooldownMs: number;
   readonly damage: number;
   readonly armor: number;
+  /** Core 0.1 Foundation -- see `BuildTownPlayerPresenceInput.mind`. */
+  readonly mind: number;
+  readonly skillPoints: number;
+  readonly primarySkillRank: number;
+  readonly secondarySkillRank: number;
+  readonly tertiarySkillRank: number;
   readonly restoredLocationZoneId: string | undefined;
   readonly restoredLocationX: number | undefined;
   readonly restoredLocationY: number | undefined;
@@ -107,14 +112,17 @@ export function buildCombatPlayerPresence(
     input.damage,
     input.armor,
   );
-  restoreFlaskToFull(presence);
-  const restoredFlaskCharges = Number.isFinite(input.restoredFlaskCharges)
-    ? Math.floor(input.restoredFlaskCharges ?? 0)
-    : presence.maxFlaskCharges;
-  presence.flaskCharges = Math.min(
-    presence.maxFlaskCharges,
-    Math.max(0, restoredFlaskCharges),
-  );
+  // Milestone 0.3 -- the flask belt starts empty (constructor default);
+  // the caller (CombatRoom.onJoin) populates it from the character's
+  // equipped items + persisted charges via `syncFlaskBeltFromEquipment`
+  // right after this presence is built, once the equipped-items lookup
+  // resolves.
+  presence.maxMana = resolveMaxMana(input.mind);
+  presence.mana = presence.maxMana;
+  presence.skillPoints = Math.max(0, Math.floor(input.skillPoints));
+  presence.primarySkillRank = Math.max(1, Math.floor(input.primarySkillRank));
+  presence.secondarySkillRank = Math.max(1, Math.floor(input.secondarySkillRank));
+  presence.tertiarySkillRank = Math.max(1, Math.floor(input.tertiarySkillRank));
 
   applyPersistedObjectiveSlot(presence, 1, input.objectiveState);
   applyPersistedObjectiveSlot(presence, 2, input.objectiveState2);

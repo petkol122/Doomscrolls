@@ -2,13 +2,24 @@ import type { CharacterDetails } from "../character/CharacterTypes";
 import type { CharacterCorpseState } from "../character/DeathTypes";
 import type { RequestBuyVendorItemRejectedReason } from "../room/VendorBuyTypes";
 import type { RequestSellItemRejectedReason } from "../room/VendorSellTypes";
+import type { RequestSalvageItemRejectedReason } from "../room/SalvageTypes";
+import type { RequestWithdrawMaterialRejectedReason } from "../room/WithdrawMaterialTypes";
+import type { MaterialId } from "../economy/MaterialTypes";
+import type { RequestUnlockProfessionRejectedReason } from "../room/ProfessionTrainingTypes";
 import type {
   RequestStoreInventoryItemInStashRejectedReason,
   RequestTakeStashItemToInventoryRejectedReason,
   StashItemsListRejectedReason,
 } from "../room/StashTypes";
+import type {
+  AccountStashItemSummary,
+  AccountStashListRejectedReason,
+  RequestDepositStashItemRejectedReason,
+  RequestWithdrawStashItemRejectedReason,
+} from "../room/AccountStashTypes";
+import type { MoveInventoryItemRejectedReason } from "../inventory/InventoryTypes";
 import type { WaypointDestinationEntry, WaypointRejectedReason } from "../room/WaypointTypes";
-import type { EquipmentLoadout } from "../inventory/EquipmentTypes";
+import type { EquipmentLoadout, FlaskBeltSlotNumber } from "../inventory/EquipmentTypes";
 import type { InventoryGrid } from "../inventory/InventoryTypes";
 import type { ItemInstance } from "../inventory/ItemTypes";
 import type { CharacterId, EntityId, ItemInstanceId, ZoneId } from "../ids";
@@ -81,6 +92,14 @@ export interface XpGainedServerMessage {
   readonly hp?: number;
   readonly maxHp?: number;
   readonly gainedMaxHp?: number;
+  /**
+   * Core 0.1 Foundation — Skill Point Allocation. Present only when
+   * `leveledUp` is true: 1 point per level gained, and the player's
+   * new unallocated total, so the skill panel updates without waiting
+   * for a full state resync.
+   */
+  readonly gainedSkillPoints?: number;
+  readonly totalSkillPoints?: number;
 }
 
 export interface LootDroppedServerMessage {
@@ -339,31 +358,37 @@ export interface RequestDodgeAcceptedServerMessage {
 }
 
 // ---------------------------------------------------------------------------
-// Task 096 — Basic Healing Flask Foundation.
+// Milestone 0.3 — 4-Slot Flask Belt.
 //
-// Safe server-owned rejection reasons for `request_use_healing_flask`
-// intents. The client never decides whether a flask charge is usable;
-// the server is the only authority for the heal, the cooldown, the
-// charge count, the full-HP / no-charges / cooldown / downed feedback
-// and the resulting synced HP / flask state.
+// Safe server-owned rejection reasons for `request_use_flask_slot`
+// intents. The client never decides whether a slot's charge is usable;
+// the server is the only authority for the effect (heal / mana restore /
+// dodge-cooldown reset), the cooldown, the charge count, the
+// empty-slot / no-charges / cooldown / downed feedback and the resulting
+// synced HP / mana / flask-belt state.
 // ---------------------------------------------------------------------------
-export type RequestUseHealingFlaskRejectedReason =
+export type RequestUseFlaskSlotRejectedReason =
   | "player_downed"
-  | "already_full_hp"
+  | "slot_empty"
   | "no_charges"
-  | "flask_on_cooldown";
+  | "flask_on_cooldown"
+  | "no_effect";
 
-export interface RequestUseHealingFlaskAcceptedServerMessage {
-  readonly type: "request_use_healing_flask_accepted";
+export interface RequestUseFlaskSlotAcceptedServerMessage {
+  readonly type: "request_use_flask_slot_accepted";
+  readonly slot: FlaskBeltSlotNumber;
+  readonly effectType: string;
   readonly healedAmount: number;
   readonly remainingHp: number;
-  readonly flaskCharges: number;
-  readonly nextFlaskAt: number;
+  readonly remainingMana: number;
+  readonly charges: number;
+  readonly nextReadyAt: number;
 }
 
-export interface RequestUseHealingFlaskRejectedServerMessage {
-  readonly type: "request_use_healing_flask_rejected";
-  readonly reason: RequestUseHealingFlaskRejectedReason;
+export interface RequestUseFlaskSlotRejectedServerMessage {
+  readonly type: "request_use_flask_slot_rejected";
+  readonly slot: FlaskBeltSlotNumber;
+  readonly reason: RequestUseFlaskSlotRejectedReason;
 }
 
 export type RequestUseSkillSlotRejectedReason =
@@ -373,7 +398,14 @@ export type RequestUseSkillSlotRejectedReason =
   | "skill_unavailable"
   | "enemy_not_found"
   | "enemy_defeated"
-  | "out_of_range";
+  | "out_of_range"
+  // Core 0.1 Foundation — Mana/Resource System. The caster's mana pool
+  // did not cover the skill's manaCost; the cast is rejected and no
+  // mana, cooldown or damage is applied.
+  | "insufficient_mana"
+  // Milestone 0.2 — a "ground_aoe" cast arrived without a finite
+  // targetX/targetY ground point.
+  | "invalid_ground_target";
 
 export interface RequestUseSkillSlotAcceptedServerMessage {
   readonly type: "request_use_skill_slot_accepted";
@@ -383,6 +415,13 @@ export interface RequestUseSkillSlotAcceptedServerMessage {
   readonly remainingHp: number;
   readonly defeated: boolean;
   readonly nextReadyAt: number;
+  /**
+   * Core 0.1 Foundation — the caster's mana pool immediately after this
+   * cast's cost was deducted. Lets the client reconcile its HUD without
+   * waiting for the next full state sync, mirroring how healing-flask
+   * accept messages already carry `remainingHp`.
+   */
+  readonly remainingMana: number;
 }
 
 export interface RequestUseSkillSlotRejectedServerMessage {
@@ -404,6 +443,9 @@ export interface RequestPickupWorldLootAcceptedServerMessage {
   readonly message: string;
   readonly itemLabel?: string;
   readonly rarity?: string;
+  /** Milestone 0.3 -- the rolled instance tier, preferred over `rarity`
+   *  for display when present (see `affixRollEngine.ts`). */
+  readonly rarityTier?: string;
   /**
    * Set when the picked-up world-loot was a currency drop. The amount
    * is the copper gained by the character. Absent (undefined) for
@@ -468,6 +510,20 @@ export interface InteractResponseServerMessage {
     readonly titleKey: string;
     readonly descriptionKey: string;
   }[];
+  /**
+   * Core 0.1 — Persistent Quest & Dialogue System foundation. Present
+   * when the interacted object is a "quest_giver": the quest it offers
+   * and the character's current persisted status for it, so the client
+   * dialogue view can show the right greeting/turn-in copy and choices.
+   */
+  readonly questInfo?: {
+    readonly questId: string;
+    readonly status: "available" | "accepted" | "completed";
+    readonly titleKey: string;
+    readonly descriptionKey: string;
+    readonly xpReward: number;
+    readonly copperReward: number;
+  };
 }
 
 export interface ObjectiveUpdatedServerMessage {
@@ -556,6 +612,65 @@ export interface RequestSellItemRejectedServerMessage {
   readonly itemInstanceId?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Milestone 0.3 -- Pawn Shop / Army Surplus Vendor: Salvage & Tech Teardown.
+//
+// Server sends accepted/rejected feedback after validating a salvage
+// request. The client never decides the resulting material.
+// ---------------------------------------------------------------------------
+export interface RequestSalvageItemAcceptedServerMessage {
+  readonly type: "request_salvage_item_accepted";
+  readonly itemInstanceId: string;
+  readonly definitionId: string;
+  readonly materialItemId: MaterialId;
+  readonly materialQuantity: number;
+  /** New balance of `materialItemId` after this salvage, so the HUD can update without waiting on a full refresh. */
+  readonly newMaterialBalance: number;
+}
+
+export interface RequestSalvageItemRejectedServerMessage {
+  readonly type: "request_salvage_item_rejected";
+  readonly reason: RequestSalvageItemRejectedReason;
+  readonly itemInstanceId?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Withdraw a chosen quantity of a salvage-material currency balance back
+// into a physical, tradeable inventory item stack (see `MaterialTypes.ts`
+// and `withdrawMaterialItem.ts`).
+// ---------------------------------------------------------------------------
+export interface RequestWithdrawMaterialAcceptedServerMessage {
+  readonly type: "request_withdraw_material_accepted";
+  readonly materialId: MaterialId;
+  readonly quantity: number;
+  readonly newMaterialBalance: number;
+}
+
+export interface RequestWithdrawMaterialRejectedServerMessage {
+  readonly type: "request_withdraw_material_rejected";
+  readonly reason: RequestWithdrawMaterialRejectedReason;
+}
+
+// ---------------------------------------------------------------------------
+// Milestone 0.3 -- Profession Training System.
+//
+// Server sends accepted/rejected feedback after validating an unlock/
+// rank-up request. The client never decides the tier cost.
+// ---------------------------------------------------------------------------
+export interface RequestUnlockProfessionAcceptedServerMessage {
+  readonly type: "request_unlock_profession_accepted";
+  readonly professionId: string;
+  readonly newTier: number;
+  readonly costCopper: number;
+  readonly remainingCopper: number;
+}
+
+export interface RequestUnlockProfessionRejectedServerMessage {
+  readonly type: "request_unlock_profession_rejected";
+  readonly reason: RequestUnlockProfessionRejectedReason;
+  readonly professionId?: string;
+}
+
 export interface StashItemsListedServerMessage {
   readonly type: "stash_items_listed";
   readonly objectId: string;
@@ -596,6 +711,60 @@ export interface RequestTakeStashItemToInventoryRejectedServerMessage {
   readonly serviceId: string;
   readonly itemInstanceId?: string;
   readonly reason: RequestTakeStashItemToInventoryRejectedReason;
+}
+
+/**
+ * Milestone 0.2 — Inventory Grid Repositioning: the server is the sole
+ * authority on slot placement; the accepted message carries the item id
+ * only, the client re-fetches account state for the persisted grid.
+ */
+export interface MoveInventoryItemAcceptedServerMessage {
+  readonly type: "move_inventory_item_accepted";
+  readonly itemInstanceId: string;
+}
+
+export interface MoveInventoryItemRejectedServerMessage {
+  readonly type: "move_inventory_item_rejected";
+  readonly itemInstanceId?: string;
+  readonly reason: MoveInventoryItemRejectedReason;
+}
+
+/**
+ * Milestone 0.2 — Account Stash Foundation network contract. Separate
+ * from the per-character `StashItemsListedServerMessage` family above.
+ */
+export interface AccountStashListedServerMessage {
+  readonly type: "account_stash_listed";
+  readonly items: readonly AccountStashItemSummary[];
+}
+
+export interface AccountStashListRejectedServerMessage {
+  readonly type: "account_stash_list_rejected";
+  readonly reason: AccountStashListRejectedReason;
+}
+
+export interface RequestDepositStashItemAcceptedServerMessage {
+  readonly type: "request_deposit_stash_item_accepted";
+  readonly itemInstanceId: string;
+  readonly stashItems: readonly AccountStashItemSummary[];
+}
+
+export interface RequestDepositStashItemRejectedServerMessage {
+  readonly type: "request_deposit_stash_item_rejected";
+  readonly itemInstanceId?: string;
+  readonly reason: RequestDepositStashItemRejectedReason;
+}
+
+export interface RequestWithdrawStashItemAcceptedServerMessage {
+  readonly type: "request_withdraw_stash_item_accepted";
+  readonly stashItemId: string;
+  readonly stashItems: readonly AccountStashItemSummary[];
+}
+
+export interface RequestWithdrawStashItemRejectedServerMessage {
+  readonly type: "request_withdraw_stash_item_rejected";
+  readonly stashItemId?: string;
+  readonly reason: RequestWithdrawStashItemRejectedReason;
 }
 
 export interface WaypointOpenedServerMessage {
@@ -643,6 +812,83 @@ export interface RequestRouteTravelRejectedServerMessage {
   readonly reason: RequestRouteTravelRejectedReason;
 }
 
+// ---------------------------------------------------------------------------
+// Core 0.1 — Persistent Quest & Dialogue System foundation.
+//
+// Quest accept/complete state is persisted per character (see
+// CharacterQuest / QuestRepository) and survives scene restarts and
+// rejoins. `quest_state` is sent once, on join, with every quest the
+// character has accepted or completed; `quest_updated` is sent after a
+// successful accept/complete so the dialogue view and any quest log can
+// update without a full rejoin.
+// ---------------------------------------------------------------------------
+export type QuestStatus = "accepted" | "completed";
+
+export interface QuestStateServerMessage {
+  readonly type: "quest_state";
+  readonly quests: readonly {
+    readonly questId: string;
+    readonly status: QuestStatus;
+  }[];
+}
+
+export interface QuestUpdatedServerMessage {
+  readonly type: "quest_updated";
+  readonly questId: string;
+  readonly status: QuestStatus;
+}
+
+export type RequestAcceptQuestRejectedReason =
+  | "invalid_request"
+  | "quest_not_found"
+  | "already_accepted"
+  | "already_completed";
+
+export interface RequestAcceptQuestRejectedServerMessage {
+  readonly type: "request_accept_quest_rejected";
+  readonly questId?: string;
+  readonly reason: RequestAcceptQuestRejectedReason;
+}
+
+export type RequestCompleteQuestRejectedReason =
+  | "invalid_request"
+  | "quest_not_found"
+  | "not_accepted"
+  | "already_completed";
+
+export interface RequestCompleteQuestRejectedServerMessage {
+  readonly type: "request_complete_quest_rejected";
+  readonly questId?: string;
+  readonly reason: RequestCompleteQuestRejectedReason;
+}
+
+// ---------------------------------------------------------------------------
+// Core 0.1 Foundation — Skill Point Allocation.
+//
+// Server sends accepted/rejected feedback after validating a
+// `request_allocate_skill_point` intent. The client never decides
+// whether a point is available or how much a rank increases damage by;
+// the server is the sole authority and persists the resulting rank.
+// ---------------------------------------------------------------------------
+export type RequestAllocateSkillPointRejectedReason =
+  | "invalid_slot"
+  | "no_points_available"
+  | "rank_maxed";
+
+export interface RequestAllocateSkillPointAcceptedServerMessage {
+  readonly type: "request_allocate_skill_point_accepted";
+  readonly slot: "primary" | "secondary" | "tertiary";
+  readonly skillId: string;
+  readonly newRank: number;
+  readonly remainingSkillPoints: number;
+}
+
+export interface RequestAllocateSkillPointRejectedServerMessage {
+  readonly type: "request_allocate_skill_point_rejected";
+  readonly slot: "primary" | "secondary" | "tertiary";
+  readonly reason: RequestAllocateSkillPointRejectedReason;
+}
+
 export type ServerRoomMessage =
   | RoomStateSnapshotServerMessage
   | RoomStatePatchServerMessage
@@ -678,8 +924,8 @@ export type ServerRoomMessage =
   | ObjectiveUpdatedServerMessage
   | RequestDodgeAcceptedServerMessage
   | RequestDodgeRejectedServerMessage
-  | RequestUseHealingFlaskAcceptedServerMessage
-  | RequestUseHealingFlaskRejectedServerMessage
+  | RequestUseFlaskSlotAcceptedServerMessage
+  | RequestUseFlaskSlotRejectedServerMessage
   | RequestUseSkillSlotAcceptedServerMessage
   | RequestUseSkillSlotRejectedServerMessage
   | CurrencyPickedUpServerMessage
@@ -688,18 +934,38 @@ export type ServerRoomMessage =
   | RequestBuyVendorItemRejectedServerMessage
   | RequestSellItemAcceptedServerMessage
   | RequestSellItemRejectedServerMessage
+  | RequestSalvageItemAcceptedServerMessage
+  | RequestSalvageItemRejectedServerMessage
+  | RequestWithdrawMaterialAcceptedServerMessage
+  | RequestWithdrawMaterialRejectedServerMessage
+  | RequestUnlockProfessionAcceptedServerMessage
+  | RequestUnlockProfessionRejectedServerMessage
   | StashItemsListedServerMessage
   | StashItemsListRejectedServerMessage
   | RequestStoreInventoryItemInStashAcceptedServerMessage
   | RequestStoreInventoryItemInStashRejectedServerMessage
   | RequestTakeStashItemToInventoryAcceptedServerMessage
   | RequestTakeStashItemToInventoryRejectedServerMessage
+  | MoveInventoryItemAcceptedServerMessage
+  | MoveInventoryItemRejectedServerMessage
+  | AccountStashListedServerMessage
+  | AccountStashListRejectedServerMessage
+  | RequestDepositStashItemAcceptedServerMessage
+  | RequestDepositStashItemRejectedServerMessage
+  | RequestWithdrawStashItemAcceptedServerMessage
+  | RequestWithdrawStashItemRejectedServerMessage
   | WaypointOpenedServerMessage
   | RequestWaypointTravelAcceptedServerMessage
   | RequestWaypointTravelRejectedServerMessage
   | RequestRouteTravelAcceptedServerMessage
   | RequestRouteTravelRejectedServerMessage
   | RequestStartBoardObjectiveRejectedServerMessage
+  | QuestStateServerMessage
+  | QuestUpdatedServerMessage
+  | RequestAcceptQuestRejectedServerMessage
+  | RequestCompleteQuestRejectedServerMessage
+  | RequestAllocateSkillPointAcceptedServerMessage
+  | RequestAllocateSkillPointRejectedServerMessage
   | RequestChatRejectedServerMessage
   | RequestGlobalChatRejectedServerMessage
   | ErrorServerMessage;

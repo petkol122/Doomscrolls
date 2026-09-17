@@ -8,6 +8,17 @@ export type ApproachActionLabel = "attack" | "interact" | "pickup" | null;
 import Phaser from "phaser";
 import { DEFAULT_PLAYER_TINT, type PlayerPlaceholderTint } from "./classTint";
 import { PLAYER_SPRITE_ASSET_IDS } from "../../visualAssetLoader";
+import { parseActiveStatusEffectTypes, type StatusEffectType } from "../../../net/statusEffects";
+
+// Core 0.2 -- Status Effects & Debuff System. Same icon glyphs as the
+// enemy placeholder view -- see worldSessionEnemyPlaceholderView.ts.
+const STATUS_EFFECT_ICONS: Readonly<Record<StatusEffectType, string>> = {
+  bleed: "🩸",
+  slow: "🐌",
+  stun: "💫",
+  burn: "🔥",
+  emp_dot: "⚡",
+};
 
 const HIDDEN_POSITION = -9999;
 
@@ -67,6 +78,10 @@ export interface WorldSessionPlayerPlaceholderView {
   // read at high zoom.
   readonly setLabelScale: (scale: number) => void;
   readonly setInfo: (displayName?: string, hp?: number, maxHp?: number) => void;
+  // Core 0.2 -- shows small icons above the player for currently active
+  // status effects (bleed/slow/stun/burn). Purely visual; the server
+  // remains the sole authority for what's actually active.
+  readonly setStatusEffects: (raw: string | undefined) => void;
   readonly setMarkerDirection: (angle: number) => void;
   // Task 207 -- small visual hint that the player is currently
   // walking toward a queued deferred-action target. Pass `null` to
@@ -148,6 +163,14 @@ export function createWorldSessionPlayerPlaceholderView(
     .setOrigin(0.5)
     .setVisible(false);
 
+  // Core 0.2 -- status effect icon row, shown just above the name/HP label.
+  const statusEffectsText = scene.add
+    .text(0, -46, "", {
+      fontSize: "12px",
+    })
+    .setOrigin(0.5)
+    .setVisible(false);
+
   container.add([shadow, ring, body, marker, damageFlashOverlay, core]);
 
   // Core 0.4x follow-up -- name/HP label and the approach-action label
@@ -158,7 +181,7 @@ export function createWorldSessionPlayerPlaceholderView(
   const labelContainer = scene.add.container(HIDDEN_POSITION, HIDDEN_POSITION);
   labelContainer.setDepth(501);
   parentContainer?.add(labelContainer);
-  labelContainer.add([infoText, approachLabelText]);
+  labelContainer.add([infoText, approachLabelText, statusEffectsText]);
 
   const setInfo = (displayName?: string, hp?: number, maxHp?: number): void => {
     const safeName = typeof displayName === "string" ? displayName.trim() : "";
@@ -237,6 +260,11 @@ export function createWorldSessionPlayerPlaceholderView(
       labelContainer.setScale(Number.isFinite(scale) && scale > 0 ? scale : 1);
     },
     setInfo,
+    setStatusEffects: (raw: string | undefined) => {
+      const activeTypes = parseActiveStatusEffectTypes(raw, Date.now());
+      statusEffectsText.setText(activeTypes.map((type) => STATUS_EFFECT_ICONS[type]).join(" "));
+      statusEffectsText.setVisible(activeTypes.length > 0);
+    },
     setMarkerDirection: (angle: number) => {
       marker.setRotation(angle);
     },

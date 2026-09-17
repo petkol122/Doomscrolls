@@ -59,9 +59,10 @@ function sendUnknownError(reply: FastifyReply): void {
 /**
  * Register authenticated character HTTP routes.
  *
- * GET  /characters              - List the authenticated user's characters
- * GET  /characters/:characterId - Get one owned character's details
- * POST /characters              - Create a character for the authenticated user
+ * GET    /characters              - List the authenticated user's characters
+ * GET    /characters/:characterId - Get one owned character's details
+ * POST   /characters              - Create a character for the authenticated user
+ * DELETE /characters/:characterId - Delete one owned character
  */
 export async function registerCharacterRoutes(app: FastifyInstance, _options: FastifyPluginOptions): Promise<void> {
   const authService = new AuthService();
@@ -138,6 +139,36 @@ export async function registerCharacterRoutes(app: FastifyInstance, _options: Fa
     try {
       const character = await characterService.getCharacterForUser(parsed.data.characterId, account.user.id);
       void reply.code(200).send(toCharacterDetailsHttpDto(character));
+    } catch (error: unknown) {
+      if (error instanceof CharacterError) {
+        void reply.code(getHttpStatusFromCharacterError(error)).send(mapCharacterErrorToHttpResponse(error));
+        return;
+      }
+
+      sendUnknownError(reply);
+    }
+  });
+
+  app.delete("/characters/:characterId", async (request, reply) => {
+    const account = await authenticateRequest(request, reply, authService);
+
+    if (account === null) {
+      return;
+    }
+
+    const parsed = getCharacterParamsSchema.safeParse(request.params);
+
+    if (!parsed.success) {
+      void reply.code(400).send({
+        error: "Invalid route parameters",
+        code: "VALIDATION_ERROR",
+      });
+      return;
+    }
+
+    try {
+      await characterService.deleteCharacterForUser(parsed.data.characterId, account.user.id);
+      void reply.code(204).send();
     } catch (error: unknown) {
       if (error instanceof CharacterError) {
         void reply.code(getHttpStatusFromCharacterError(error)).send(mapCharacterErrorToHttpResponse(error));

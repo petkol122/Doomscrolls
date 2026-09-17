@@ -1,5 +1,6 @@
 import { Schema, type } from "@colyseus/schema";
 import type { CharacterClassKey, CharacterId, SpawnPointId } from "@doomscrolls/shared";
+import { EMPTY_FLASK_BELT } from "./flaskBeltConfig";
 
 /**
  * Minimal player presence entry for TownRoom.
@@ -79,15 +80,34 @@ export class PlayerPresence extends Schema {
   // 0 means "no dodge in progress / ready".
   @type("number") public nextDodgeAt: number;
 
-  // Task 096 -- server-owned basic healing flask state.
-  // flaskCharges  : current number of usable charges (0..maxFlaskCharges).
-  // maxFlaskCharges: total charges granted on respawn / join.
-  // nextFlaskAt   : cooldown timestamp (ms since epoch). 0 = ready now.
-  // The server is the sole authority for charge counts, cooldown and
-  // heal amount; the client only reads these values for display.
-  @type("number") public flaskCharges: number;
-  @type("number") public maxFlaskCharges: number;
-  @type("number") public nextFlaskAt: number;
+  // Milestone 0.3 -- 4-Slot Flask Belt. Colyseus schema instances are
+  // capped at 64 `@type` fields (this class was already at 63 before
+  // this feature); one flat field per belt-slot property (as the
+  // primary/secondary/tertiary skill cooldowns and two-objective-slot
+  // fields above do) would need ~20 fields and blow the cap. Instead
+  // all 4 slots are packed into this single flattened string, one
+  // "effectType,effectValue,charges,maxCharges,nextReadyAt" segment
+  // per slot joined by "|" -- same idiom `statusEffects` already uses
+  // for a variable-length collection of per-entry fields. Read/write
+  // through `flaskBeltConfig.ts`'s accessors, never parsed by hand
+  // elsewhere. Empty string segments (effectType "") mean "no flask
+  // equipped in this slot".
+  @type("string") public flaskBelt: string;
+  // Core 0.1 Foundation -- Mana/Resource System. Always resets to full
+  // on join/respawn (never persisted); regenerates passively on the
+  // room's simulation tick (see `regenerateMana`) and is deducted by
+  // `resolveSkillSlotDefinition`'s `manaCost` before a skill cast is
+  // accepted.
+  @type("number") public mana: number;
+  @type("number") public maxMana: number;
+  // Core 0.1 Foundation -- Skill Point Allocation. `skillPoints` is the
+  // unallocated total (1 gained per level); the three `*SkillRank`
+  // fields are the persisted rank of each of the player's class's
+  // skill slots (every skill starts at rank 1, already castable).
+  @type("number") public skillPoints: number;
+  @type("number") public primarySkillRank: number;
+  @type("number") public secondarySkillRank: number;
+  @type("number") public tertiarySkillRank: number;
   @type("number") public nextSkillSlotAt: number;
   // Core 0.7 -- independent cooldown for the new tertiary skill slot
   // (Bone Splinter), separate from nextSkillSlotAt (secondary/Grave Spark).
@@ -120,6 +140,17 @@ export class PlayerPresence extends Schema {
   @type("boolean") public hasCorpse: boolean;
   @type("number") public corpseX: number;
   @type("number") public corpseY: number;
+  // Core 0.1 -- id of the server-persisted `Corpse` DB row backing the
+  // in-memory corpse marker above, so recovery can resolve/delete the
+  // right record. Empty string = no DB-backed corpse (marker not yet
+  // persisted, or already recovered).
+  @type("string") public corpseId: string;
+  // Core 0.2 -- server-owned active status effects (bleed/slow/stun/burn),
+  // flattened as "type:expiresAtMs:magnitude:nextTickAtMs" entries joined
+  // by "|". Empty string = no active effects. See
+  // `./statusEffects.ts` for the engine that reads/writes this field;
+  // the client only ever reads it for a visual indicator.
+  @type("string") public statusEffects: string;
 
   constructor(
     sessionId: string,
@@ -167,13 +198,21 @@ export class PlayerPresence extends Schema {
     this.pendingTargetX = x;
     this.pendingTargetY = y;
     this.nextDodgeAt = 0;
-    // Task 096 -- initialize server-owned basic healing flask state
-    // for a fresh presence entry. Respawn / join both go through this
-    // constructor path, so the player always starts with a full
-    // set of charges and a ready cooldown.
-    this.flaskCharges = 0;
-    this.maxFlaskCharges = 0;
-    this.nextFlaskAt = 0;
+    // Milestone 0.3 -- initialize the 4-slot flask belt to "empty, no
+    // effect" for a fresh presence entry. `buildTownPlayerPresence` /
+    // `buildCombatPlayerPresence` populate the real per-slot state from
+    // the character's equipped items + persisted charges right after
+    // construction, mirroring how mana/skill ranks are set below.
+    this.flaskBelt = EMPTY_FLASK_BELT;
+    // Core 0.1 Foundation -- default to an empty pool; `buildTownPlayerPresence`
+    // / `buildCombatPlayerPresence` set the real mana/maxMana/skillPoints/
+    // rank values right after construction, mirroring the flask pattern above.
+    this.mana = 0;
+    this.maxMana = 0;
+    this.skillPoints = 0;
+    this.primarySkillRank = 1;
+    this.secondarySkillRank = 1;
+    this.tertiarySkillRank = 1;
     this.nextSkillSlotAt = 0;
     this.nextTertiarySkillSlotAt = 0;
     this.nextPrimarySkillSlotAt = 0;
@@ -198,5 +237,7 @@ export class PlayerPresence extends Schema {
     this.hasCorpse = false;
     this.corpseX = 0;
     this.corpseY = 0;
+    this.corpseId = "";
+    this.statusEffects = "";
   }
 }

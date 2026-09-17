@@ -1,10 +1,12 @@
 import type {
   CharacterClassKey,
+  CurrencyId,
   EquipmentSlot,
   ItemCategory,
   ItemDefinitionId,
   OriginKey,
   PassiveKey,
+  ProfessionId,
   PrimaryStats,
   SpawnPointId,
   StatModifier,
@@ -14,12 +16,15 @@ import type { LocalizationKey } from "@doomscrolls/localization";
 
 export type ContentLocalizationKey = LocalizationKey;
 
-export type SkillId = "heavy_strike" | "grave_spark" | "bone_splinter" | "shatter_blow" | "groundbreaker";
+export type SkillId = "heavy_strike" | "grave_spark" | "bone_splinter" | "shatter_blow" | "groundbreaker" | "malware_surge" | "overclock_turret" | "aerosol_flash" | "adrenaline_stim";
 export type EnemyId = "trashboar_runt" | "trashboar_brute" | "trashboar_skitter" | "static_wretch" | "slag_hound" | "foundry_warden" | "yard_drudge" | "ash_rat" | "brine_crawler" | "tide_stalker" | "drowned_hauler" | "arc_sentinel";
 export type LootTableId = "sewer_starter_loot" | "sewer_brute_loot" | "sewer_skitter_loot" | "static_yard_loot" | "cinderworks_loot" | "saltmere_docks_loot";
 export type LevelTableId = "level_1_to_10";
 export type ObjectiveId = "cull_trashboars" | "break_the_brute" | "sewer_cleanup" | "skitter_hunt" | "static_cleanup" | "sewer_patrol" | "slag_hunt" | "foundry_purge" | "drudge_patrol" | "ash_cull" | "brine_cull" | "tide_hunt" | "hauler_purge" | "arc_purge" | "yard_patrol" | "cinder_patrol" | "dock_patrol";
-export type ZoneContentId = "namesti_republiky" | "blackwire_sewers" | "static_yard" | "cinderworks" | "saltmere_docks";
+// Core 0.1 — Persistent Quest & Dialogue System foundation. One quest id
+// today; more can be added to this union as content grows.
+export type QuestId = "clear_the_rats";
+export type ZoneContentId = "namesti_republiky" | "blackwire_sewers" | "static_yard" | "cinderworks" | "saltmere_docks" | "pilsen_namesti" | "pilsen_cathedral_interior" | "pilsen_bory";
 // Core 0.32 — World Map Foundation. A real-world world/continent/area
 // hierarchy the existing zones migrate under. Content/UI-layer only:
 // the server and protocol have no notion of any of these three ids.
@@ -27,17 +32,50 @@ export type WorldContentId = "earth";
 export type ContinentContentId = "europe";
 export type AreaContentId = "pilsen";
 export type ItemRarity = "common" | "rare" | "epic";
-export type SkillTargetingMode = "target";
+/**
+ * Milestone 0.3 -- Street Alchemist Class Archetype. `"self_buff"` casts
+ * apply the skill's `appliesEffect` to the caster instead of an enemy/
+ * ground point -- no `targetEnemyId`/ground point is ever expected, and
+ * the cast always resolves instantly (see `adrenaline_stim`).
+ */
+export type SkillTargetingMode = "target" | "ground_aoe" | "self_buff";
 export type ZoneRoomType = "town" | "combat";
 export type ZoneClassification = "safe_hub" | "combat" | "test_hybrid";
 export type SpawnPointContentId = "namesti_republiky_spawn";
 export type CombatInteractableId = "combat_return_to_town" | "static_yard_return_to_town" | "cinderworks_return_to_town" | "saltmere_docks_return_to_town";
 export type EquipmentSlotCategory = "weapon" | "armor" | "accessory" | "belt" | "flask";
-export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken" | "loot_container" | "vendor" | "town_service" | "waypoint" | "combat_edge" | "combat_return_gate" | "area_label" | "path_marker" | "boundary_marker" | "safe_area_marker" | "rest_area_marker" | "building_footprint" | "street_surface" | "water_surface";
+export type WorldPropKind = "crate" | "lamp" | "debris" | "junk" | "ambient_rat" | "ambient_pig" | "ambient_chicken" | "loot_container" | "vendor" | "town_service" | "waypoint" | "combat_edge" | "combat_return_gate" | "area_label" | "path_marker" | "boundary_marker" | "safe_area_marker" | "rest_area_marker" | "building_footprint" | "street_surface" | "water_surface" | "zone_transition" | "quest_giver";
 export type VisualAssetCategory = "ground_tile" | "enemy_sprite" | "player_sprite" | "prop_sprite" | "item_icon" | "hp_bar" | "rarity_frame";
-export type VendorId = never;
-export type TownServiceId = never;
+// Milestone 0.3 -- Pawn Shop / Army Surplus Vendor. First real vendor
+// content: an army-surplus-and-pawn shop in pilsen_namesti trading in
+// CZK, buying back gear and offering profession training.
+// Milestone 0.3 (Namesti Republiky Building Doorway Vendors) added the
+// four Pilsen Square doorway vendors below -- see worldProps.ts/
+// townServices.ts/vendorStocks.ts.
+export type VendorId = "army_surplus_pawn" | "lekarna_vendor" | "cisarsky_dum_vendor" | "tech_hub_vendor" | "hostinec_pub_vendor";
+export type TownServiceId = VendorId;
 export type TownServiceKind = "vendor" | "stash" | "trainer" | "waypoint";
+
+/**
+ * Milestone 0.3 -- Profession Training System. `ProfessionId` (imported
+ * from `@doomscrolls/shared`) is the single source of truth so
+ * server-side persistence code can reference it without depending on
+ * this content package (see `packages/shared/src/profession/ProfessionTypes.ts`,
+ * the same pattern `CurrencyId` already uses for the wallet).
+ * `gunsmithing` is defined here as a named profession but has no
+ * purchasable tiers yet -- only salvaging/fishing/cooking are trainable
+ * at the Pawn Shop today.
+ */
+export interface ProfessionTierDefinition {
+  readonly tier: number;
+  readonly costCopper: number;
+}
+
+export interface ProfessionContentDefinition extends LocalizedContentDefinition {
+  readonly id: ProfessionId;
+  /** Ascending by `tier`, starting at 1. Empty = not trainable yet. */
+  readonly tiers: readonly ProfessionTierDefinition[];
+}
 
 export interface TownServiceContentDefinition {
   readonly id: TownServiceId;
@@ -54,6 +92,35 @@ export interface VendorStockEntryDefinition {
   readonly priceCopper: number;
 }
 
+/**
+ * Milestone 0.3 -- Multi-Currency Wallet Engine. One currency a
+ * character's wallet can hold. `czkPerUnit` is the exchange rate into
+ * CZK (the Net Worth base unit, see `calculatePlayerNetWorth`) --
+ * `isCosmeticOnly` currencies (Street Cred) carry no `czkPerUnit`-driven
+ * value and are never counted toward Net Worth, keeping cosmetic
+ * progression strictly non-pay-to-win.
+ */
+export interface CurrencyContentDefinition extends LocalizedContentDefinition {
+  readonly id: CurrencyId;
+  readonly symbol: string;
+  readonly czkPerUnit: number;
+  readonly isRegionalPrimary: boolean;
+  readonly isCosmeticOnly: boolean;
+  readonly iconKey: string;
+}
+
+/**
+ * Core 0.1 Foundation -- Enemy Rarity Tiers & Multi-Type Pack Spawning.
+ * An additional enemy type spawned alongside a spawn zone's primary
+ * `enemyId`/`count`, e.g. 2 supporting Skitter runts around a Brute pack
+ * leader. Purely additive so every existing single-type spawn zone
+ * (no `pack` field) keeps spawning exactly as before.
+ */
+export interface SpawnPackMemberDefinition {
+  readonly enemyId: EnemyId;
+  readonly count: number;
+}
+
 export interface SpawnZoneDefinition {
   readonly id: string;
   readonly zoneId: string;
@@ -63,6 +130,25 @@ export interface SpawnZoneDefinition {
   readonly maxX: number;
   readonly minY: number;
   readonly maxY: number;
+  /**
+   * Optional additional enemy types spawned in this same pocket
+   * alongside the primary `enemyId`/`count` (e.g. runts flanking a
+   * brute pack leader). Absent = single-type pocket, unchanged from
+   * pre-0.1-Foundation behavior.
+   */
+  readonly pack?: readonly SpawnPackMemberDefinition[];
+  /**
+   * Chance (0-1) the pocket's pack leader (the first enemy instance
+   * spawned from the primary `enemyId`) rolls Elite rarity instead of
+   * Normal. Checked before `leaderChampionChance`. Absent/0 = never.
+   */
+  readonly leaderEliteChance?: number;
+  /**
+   * Chance (0-1) the pocket's pack leader rolls Champion rarity
+   * instead of Normal (only rolled when the Elite roll above misses).
+   * Absent/0 = never.
+   */
+  readonly leaderChampionChance?: number;
 }
 
 export interface LocalizedContentDefinition {
@@ -103,6 +189,62 @@ export interface SkillContentDefinition extends LocalizedContentDefinition {
   readonly range: number;
   readonly cooldownMs: number;
   readonly baseDamage: number;
+  /**
+   * Core 0.1 Foundation -- mana cost deducted from the caster's pool
+   * before the cast is accepted. 0 = free (the basic-attack-flavored
+   * `heavy_strike` primary slot).
+   */
+  readonly manaCost: number;
+  /**
+   * Highest rank a player can allocate skill points into for this
+   * skill. Every skill starts at rank 1 (already castable, matching
+   * pre-existing behavior) -- points spent beyond that raise the rank
+   * up to this cap, each rank adding `damagePerRank` bonus damage.
+   */
+  readonly maxRank: number;
+  readonly damagePerRank: number;
+  /**
+   * Core 0.2 -- Status Effects & Debuff System. Optional status effect a
+   * successful cast applies to its target, alongside the skill's own
+   * damage. Absent = the skill is damage-only (unchanged pre-0.2
+   * behavior). Every field below must be present for the effect to
+   * apply -- see `resolveSkillSlotDefinition`.
+   */
+  readonly appliesEffect?: "bleed" | "slow" | "stun" | "burn" | "emp_dot" | "haste";
+  readonly effectDurationMs?: number;
+  readonly effectMagnitude?: number;
+  /**
+   * Milestone 0.3 -- Street Alchemist Class Archetype. Optional second
+   * status effect applied alongside `appliesEffect` (e.g. `aerosol_flash`
+   * applies Burn as its primary effect and Slow as this one) -- absent =
+   * single-effect, unchanged pre-0.3 behavior. Every field below must be
+   * present for the secondary effect to apply -- see
+   * `applySkillEffectIfDefined`.
+   */
+  readonly appliesSecondaryEffect?: "bleed" | "slow" | "stun" | "burn" | "emp_dot" | "haste";
+  readonly secondaryEffectDurationMs?: number;
+  readonly secondaryEffectMagnitude?: number;
+  /**
+   * Milestone 0.2 -- Server-Authoritative Projectiles & Ground-Targeted
+   * AoE Skills. `isProjectile`/`projectileSpeed` (units/sec) mark a
+   * `targeting: "target"` skill as travel-time instead of instant-hit;
+   * `aoeRadius` is required when `targeting` is `"ground_aoe"`.
+   */
+  readonly isProjectile?: boolean;
+  readonly projectileSpeed?: number;
+  readonly aoeRadius?: number;
+  /**
+   * Milestone 0.3 -- Netrunner Urban-Magic Class Archetype. Marks a
+   * `targeting: "ground_aoe"` skill as summoning a stationary, automated
+   * turret at the targeted point instead of resolving an instant AoE hit
+   * -- see `overclock_turret` and `apps/server/src/realtime/rooms/
+   * turretSimulation.ts`. `aoeRadius` doubles as the turret's `attackRange`
+   * and `baseDamage`/rank bonuses as its per-shot `attackDamage`; every
+   * field below must be present for a turret to actually spawn.
+   */
+  readonly spawnsTurret?: boolean;
+  readonly turretDurationMs?: number;
+  readonly turretAttackIntervalMs?: number;
 }
 
 export interface EnemyCurrencyDropDefinition {
@@ -123,6 +265,17 @@ export interface EnemyContentDefinition extends LocalizedContentDefinition {
   readonly heavyAttackWindupMs?: number;
   readonly heavyAttackCooldownMs?: number;
   readonly heavyAttackChance?: number;
+  /**
+   * Core 0.2 -- Status Effects & Debuff System. Optional status effect a
+   * landed heavy attack applies to its target, alongside the existing
+   * `heavyAttackDamage`. Absent = the heavy attack is damage-only
+   * (unchanged pre-0.2 behavior). Every field below must be present for
+   * the effect to apply -- see `applyEnemyAggroDamage`'s heavy-attack
+   * landing branch.
+   */
+  readonly heavyAttackAppliesEffect?: "bleed" | "slow" | "stun" | "burn";
+  readonly heavyAttackEffectDurationMs?: number;
+  readonly heavyAttackEffectMagnitude?: number;
   readonly aggroRange: number;
   readonly leashRange: number;
   readonly xp: number;
@@ -238,8 +391,18 @@ export interface AreaContentDefinition extends LocalizedContentDefinition {
   readonly longitude: number;
 }
 
+/**
+ * Milestone 0.3 -- 4-Slot Flask Belt. `"restoreHpInstant"` is the
+ * original healing-flask effect; `"restoreManaInstant"` and
+ * `"restoreStaminaInstant"` extend the same shape to mana flasks and to
+ * a stamina/utility flask -- since this codebase has no stamina
+ * resource pool, its `value` is instead a dodge-cooldown reduction in
+ * milliseconds (see `applyFlaskSlotIntent`).
+ */
+export type ItemUseEffectType = "restoreHpInstant" | "restoreManaInstant" | "restoreStaminaInstant";
+
 export interface ItemUseEffectDefinition {
-  readonly type: "restoreHpInstant";
+  readonly type: ItemUseEffectType;
   readonly value: number;
   readonly charges: number;
 }
@@ -256,6 +419,32 @@ export interface ItemContentDefinition extends LocalizedContentDefinition {
   readonly durabilityMax?: number;
   readonly useEffect?: ItemUseEffectDefinition;
   readonly iconKey: string;
+  /**
+   * Milestone 0.3 -- Multi-Currency Wallet Engine. Base CZK value used by
+   * `calculatePlayerNetWorth` for an equipped instance of this item.
+   * Absent = the Net Worth calculation falls back to a per-`rarity`
+   * default (see `NET_WORTH_RARITY_FALLBACK_CZK`).
+   */
+  readonly baseValueCzk?: number;
+}
+
+export type AffixKind = "prefix" | "suffix";
+
+/**
+ * Milestone 0.3 -- Server-Authoritative Item Rarity & Random Affix Engine.
+ * A rollable stat range an item instance can roll at drop time (see
+ * `apps/server/src/realtime/rooms/affixRollEngine.ts`). Distinct from
+ * `ItemRarity` above, which is a fixed tag on the item's own template,
+ * not something rolled per-drop.
+ */
+export interface AffixContentDefinition {
+  readonly id: string;
+  readonly kind: AffixKind;
+  readonly nameKey: ContentLocalizationKey;
+  readonly target: StatModifier["target"];
+  readonly operation: StatModifier["operation"];
+  readonly min: number;
+  readonly max: number;
 }
 
 export interface LootTableEntryDefinition {
@@ -299,6 +488,26 @@ export interface ObjectiveContentDefinition {
    * Used by the client to display location information.
    */
   readonly zoneId?: ZoneContentId;
+}
+
+/**
+ * Core 0.1 — Persistent Quest & Dialogue System foundation. A quest a
+ * "quest_giver" world prop offers: a greeting shown before it's
+ * accepted, a turn-in line shown while accepted-but-not-complete, and a
+ * completed line shown afterward. Deliberately flat (no objective steps
+ * or branching dialogue tree) -- this is the minimal accept/complete
+ * loop the foundation needs; a richer quest step system can build on
+ * top of this shape later.
+ */
+export interface QuestContentDefinition {
+  readonly id: QuestId;
+  readonly titleKey: ContentLocalizationKey;
+  readonly descriptionKey: ContentLocalizationKey;
+  readonly greetingKey: ContentLocalizationKey;
+  readonly turnInKey: ContentLocalizationKey;
+  readonly completedKey: ContentLocalizationKey;
+  readonly xpReward: number;
+  readonly copperReward: number;
 }
 
 export interface SpawnPointContentDefinition {
@@ -346,6 +555,16 @@ export interface WorldPropContentDefinition {
    * solid-looking world geometry only, never clickable.
    */
   readonly points?: readonly WorldPropPoint[];
+  /**
+   * Required for `kind: "zone_transition"` (see ContentValidation.ts): the
+   * zone this door/entrance moves the player into on interact.
+   */
+  readonly targetZoneId?: ZoneContentId;
+  /**
+   * Required for `kind: "quest_giver"` (see ContentValidation.ts): the
+   * quest this NPC offers/turns in on interact.
+   */
+  readonly questId?: QuestId;
 }
 
 export interface WorldPropPoint {

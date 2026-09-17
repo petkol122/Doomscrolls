@@ -10,6 +10,13 @@ import {
 } from "../../worldProjection";
 import type { WorldSessionAreaLayout } from "./worldSessionAreaLayout";
 
+// Core 0.1 Visuals — y-depth sort band. Sits below loot (300+y) and enemies
+// (400+y) so a vendor/gate standing behind a player or in front of loot still
+// resolves the same way everywhere else in the world already does: higher
+// screen-y (closer to camera) draws on top. Label is +1 so it always layers
+// above its own graphic at the same y, matching the player/enemy pattern.
+const INTERACTABLE_DEPTH_BAND = 250;
+
 /**
  * Task 057 — Interactable Object Foundation Batch
  *
@@ -102,6 +109,15 @@ export function createWorldSessionInteractablesView(
       graphic.strokeRect(pixelX - 12, pixelY - 16, 24, 32);
       return;
     }
+    if (objectType === "zone_transition") {
+      graphic.fillStyle(0x5a4632, 0.92);
+      graphic.fillRect(pixelX - 10, pixelY - 18, 20, 34);
+      graphic.lineStyle(2, 0x2f2418, 0.95);
+      graphic.strokeRect(pixelX - 10, pixelY - 18, 20, 34);
+      graphic.fillStyle(0x1c140c, 0.9);
+      graphic.fillEllipse(pixelX, pixelY - 2, 12, 20);
+      return;
+    }
     if (objectType === "combat_return_gate") {
       graphic.fillStyle(0x5f8fda, 0.92);
       graphic.fillCircle(pixelX, pixelY, 15);
@@ -109,6 +125,15 @@ export function createWorldSessionInteractablesView(
       graphic.strokeCircle(pixelX, pixelY, 19);
       graphic.lineStyle(2, 0x284f7d, 0.95);
       graphic.strokeCircle(pixelX, pixelY, 11);
+      return;
+    }
+    if (objectType === "waypoint") {
+      graphic.fillStyle(0x3fd9c8, 0.92);
+      graphic.fillCircle(pixelX, pixelY, 13);
+      graphic.lineStyle(3, 0xdcfff9, 0.95);
+      graphic.strokeCircle(pixelX, pixelY, 17);
+      graphic.fillStyle(0xdcfff9, 0.95);
+      graphic.fillTriangle(pixelX, pixelY - 9, pixelX - 8, pixelY + 6, pixelX + 8, pixelY + 6);
       return;
     }
     if (objectType === "loot_container") {
@@ -134,6 +159,15 @@ export function createWorldSessionInteractablesView(
   const resolveDisplayLabel = (objectType: string, label: string, opened: boolean): string => {
     if (objectType === "loot_container" && opened) {
       return "Empty";
+    }
+    // Milestone 0.3 -- Namesti Republiky Building Doorway Vendors: an
+    // explicit call-to-action so a vendor doorway (`lekarna_vendor`,
+    // `cisarsky_dum_vendor`, `tech_hub_vendor`, `hostinec_pub_vendor` in
+    // worldProps.ts) reads as "walk up and shop here", not just a named
+    // prop. Says "Click" (not "[E]") because interactables are click-
+    // driven in this build -- see `findClickedInteractable` below.
+    if (objectType === "vendor") {
+      return `${label} — Click to Shop`;
     }
     return label;
   };
@@ -180,6 +214,7 @@ export function createWorldSessionInteractablesView(
 
       const graphic = scene.add.graphics();
       drawInteractableGraphic(graphic, objectType, pixelX, pixelY, opened);
+      graphic.setDepth(INTERACTABLE_DEPTH_BAND + pixelY);
       container.add(graphic);
       graphicsObjects.set(objectId, graphic);
       objectTypes.set(objectId, objectType);
@@ -192,6 +227,7 @@ export function createWorldSessionInteractablesView(
         fontFamily: "Arial, sans-serif",
         fontSize: "10px",
       });
+      labelText.setDepth(INTERACTABLE_DEPTH_BAND + 1 + pixelY);
       container.add(labelText);
       labelTexts.set(objectId, labelText);
 
@@ -243,12 +279,14 @@ export function createWorldSessionInteractablesView(
       const graphic = graphicsObjects.get(objectId);
       if (graphic !== undefined) {
         drawInteractableGraphic(graphic, objectType, pixelX, pixelY, opened);
+        graphic.setDepth(INTERACTABLE_DEPTH_BAND + pixelY);
       }
 
       const labelText = labelTexts.get(objectId);
       if (labelText !== undefined) {
         labelText.setPosition(pixelX + 14, pixelY - 14);
         labelText.setText(resolveDisplayLabel(objectType, label, opened));
+        labelText.setDepth(INTERACTABLE_DEPTH_BAND + 1 + pixelY);
       }
 
       objectTypes.set(objectId, objectType);

@@ -6,6 +6,9 @@ export interface TownRoomWorldLootSnapshot {
   readonly itemId: string;
   readonly label: LocalizationKey;
   readonly rarity?: string;
+  /** Milestone 0.3 -- the rolled instance tier ("normal"/"magic"/"rare"/
+   *  "legendary"), preferred over `rarity` for display when present. */
+  readonly rarityTier?: string;
   readonly currencyCopper: number;
   readonly x: number;
   readonly y: number;
@@ -31,6 +34,7 @@ export function getTownRoomWorldLoot(
     const itemId = entry.itemId;
     const label = entry.label;
     const rarity = entry.rarity;
+    const rarityTier = entry.rarityTier;
     const rawCurrencyCopper = entry.currencyCopper;
     const x = entry.x;
     const y = entry.y;
@@ -40,6 +44,7 @@ export function getTownRoomWorldLoot(
       typeof itemId !== "string" ||
       typeof label !== "string" ||
       (rarity !== undefined && typeof rarity !== "string") ||
+      (rarityTier !== undefined && typeof rarityTier !== "string") ||
       typeof x !== "number" ||
       typeof y !== "number"
     ) {
@@ -62,6 +67,7 @@ export function getTownRoomWorldLoot(
       itemId,
       label: label as LocalizationKey,
       ...(rarity === undefined ? {} : { rarity }),
+      ...(rarityTier === undefined || rarityTier.length === 0 ? {} : { rarityTier }),
       currencyCopper,
       x,
       y,

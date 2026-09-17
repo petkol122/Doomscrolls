@@ -22,6 +22,9 @@ export interface CreateItemInstanceData {
   readonly quantity?: number;
   readonly durabilityCurrent?: number;
   readonly durabilityMax?: number;
+  /** Milestone 0.3 -- Server-Authoritative Item Rarity & Random Affix Engine. */
+  readonly rarityTier?: string;
+  readonly rolledAffixes?: string;
 }
 
 export interface UpdateItemLocationData {
@@ -89,6 +92,16 @@ export class ItemRepository {
 
   public updateItemLocation(itemInstanceId: string, data: UpdateItemLocationData) {
     return this.db.itemInstance.update({ where: { id: itemInstanceId }, data });
+  }
+
+  /**
+   * Milestone 0.2 — Account Stash Foundation: shrink a stack's quantity
+   * after a partial deposit into the account stash. Callers must ensure
+   * `quantity` stays positive -- use `deleteItemInstance` to consume a
+   * stack entirely.
+   */
+  public updateQuantity(itemInstanceId: string, quantity: number) {
+    return this.db.itemInstance.update({ where: { id: itemInstanceId }, data: { quantity } });
   }
 
   /**

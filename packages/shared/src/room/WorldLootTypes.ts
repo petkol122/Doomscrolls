@@ -20,4 +20,13 @@ export interface WorldLoot {
   readonly currencyCopper?: number;
   readonly x: number;
   readonly y: number;
+  /**
+   * Milestone 0.3 -- Server-Authoritative Item Rarity & Random Affix
+   * Engine. The instance-level roll made at drop time (see
+   * `affixRollEngine.ts`), carried through to pickup so it persists
+   * unchanged onto the resulting `ItemInstance`. Empty/"[]" for
+   * currency loot.
+   */
+  readonly rarityTier?: string;
+  readonly rolledAffixesJson?: string;
 }

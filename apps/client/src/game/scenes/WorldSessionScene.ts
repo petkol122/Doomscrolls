@@ -1,5 +1,6 @@
 import type { Room } from "@colyseus/sdk";
 import type {
+  AccountStashItemSummary,
   CharacterId,
   CharacterSummary,
   EquipmentLoadout,
@@ -22,16 +23,23 @@ import { registerPickupWorldLootResponseListeners } from "../../net/pickupWorldL
 import { sendResetObjectiveIntent } from "../../net/resetObjectiveClient";
 import { registerRespawnListeners, sendRespawnRequest } from "../../net/respawnClient";
 import { registerSkillSlotResponseListeners } from "../../net/skillSlotIntentClient";
+import { registerAllocateSkillPointResponseListeners, sendAllocateSkillPointIntent } from "../../net/skillPointAllocationClient";
+import { createWorldSessionSkillTreeView, type WorldSessionSkillTreeView } from "./worldSession/worldSessionSkillTreeView";
+import { getCurrentPlayerPresence } from "../../net/townRoomPresence";
 import { createWorldSessionAreaBannerView, type WorldSessionAreaBannerView } from "./worldSession/worldSessionAreaBannerView";
 import { createWorldSessionFeedbackView, type WorldSessionFeedbackView } from "./worldSession/worldSessionFeedbackView";
 import { createWorldSessionOverlayView } from "./worldSession/worldSessionOverlayView";
+import { createWorldSessionHudGlobesView } from "./worldSession/worldSessionHudView";
 import {
+  createVendorInteractionPanel,
   type VendorInteractionPanel,
   type InventoryItemView,
-} from "./worldSession/vendorInteractionPanel";
+  type ProfessionTrainingView,
+} from "./worldSession/worldSessionVendorView";
 import {
   type TownServiceInteractionPanel,
 } from "./worldSession/townServiceInteractionPanel";
+import { showMaterialWithdrawPanel } from "./worldSession/worldSessionMaterialWithdrawPanel";
 import {
   createWaypointInteractionPanel,
   type WaypointInteractionPanel,
@@ -44,10 +52,18 @@ import {
   type StashInteractionPanel,
 } from "./worldSession/stashInteractionPanel";
 import {
+  createWorldSessionStashView,
+  type WorldSessionStashView,
+} from "./worldSession/worldSessionStashView";
+import {
   createNoticeBoardInteractionPanel,
   type NoticeBoardInteractionPanel,
 } from "./worldSession/noticeBoardInteractionPanel";
-import type { AvailableObjectiveEntry } from "../../net/interactResponseClient";
+import {
+  createWorldSessionDialogueView,
+  type WorldSessionDialogueView,
+} from "./worldSession/worldSessionDialogueView";
+import type { AvailableObjectiveEntry, InteractQuestInfo } from "../../net/interactResponseClient";
 import {
   createWorldSessionAreaView,
   type WorldSessionAreaView,
@@ -55,9 +71,9 @@ import {
 } from "./worldSession/worldSessionAreaView";
 import { attachWorldSessionDodgeInput, type WorldSessionDodgeInput } from "./worldSession/worldSessionDodgeInput";
 import {
-  attachWorldSessionHealingFlaskInput,
-  type WorldSessionHealingFlaskInput,
-} from "./worldSession/worldSessionHealingFlaskInput";
+  attachWorldSessionFlaskBeltInput,
+  type WorldSessionFlaskBeltInput,
+} from "./worldSession/worldSessionFlaskBeltInput";
 import {
   attachWorldSessionSkillTertiaryInput,
   type WorldSessionSkillTertiaryInput,
@@ -70,7 +86,7 @@ import {
   applyWorldSessionOverlayRootStyles,
   applyWorldSessionOverlayHudStyles,
   applyWorldSessionOverlayStatusStyles,
-  applyWorldSessionOverlayUtilityStyles,
+  applyWorldSessionOverlayQuestStyles,
   applyWorldSessionOverlayChatStyles,
 } from "./worldSession/worldSessionOverlayLayout";
 import { createWorldSessionChatView } from "./worldSession/worldSessionChatView";
@@ -78,9 +94,15 @@ import type { WorldProjectionMode } from "../worldProjection";
 import { defaultWorldProjection } from "../worldProjection";
 import {
   createEmptyEquipmentLoadout,
+  createWorldSessionCharacterWindowView,
   registerEquipmentListener,
+  type WorldSessionCharacterWindowView,
 } from "./worldSession/worldSessionEquipmentView";
-import type { WorldSessionUtilityPanelOpenState } from "./worldSession/worldSessionOverlayView";
+import {
+  createWorldSessionInventoryWindowView,
+  type WorldSessionInventoryWindowView,
+} from "./worldSession/worldSessionInventoryView";
+import type { WorldSessionOverlayWindowToggles, WorldSessionUtilityPanelOpenState } from "./worldSession/worldSessionOverlayView";
 import { queueZoneGroundTileLoad, queueEnemyHpBarLoad, queuePlayerSpriteLoad } from "../visualAssetLoader";
 
 function formatItemRarityLabel(rarity?: string): string | null {
@@ -118,6 +140,12 @@ function formatPickupAcceptedNotice(
     : `${message.message} ${t(message.itemLabel as never)} [${rarityLabel}]`;
 }
 
+// Milestone 0.2 — Account Stash Foundation: the Cathedral stash keeper's
+// interactable id (see `packages/content/src/data/worldProps.ts`),
+// dispatched to the account-wide stash panel regardless of interactable
+// kind (a generic "town_service" placeholder otherwise).
+const ACCOUNT_STASH_OBJECT_ID = "cathedral_account_stash";
+
 interface WorldSessionSceneData {
   readonly account: AccountState;
   readonly characterId: CharacterId;
@@ -127,6 +155,7 @@ interface WorldSessionSceneData {
 export class WorldSessionScene extends Phaser.Scene {
   private overlay: HTMLDivElement | null = null;
   private overlayView: ReturnType<typeof createWorldSessionOverlayView> | null = null;
+  private hudGlobesView: ReturnType<typeof createWorldSessionHudGlobesView> | null = null;
   private account: AccountState | null = null;
   private characterId: CharacterId | null = null;
   private room: Room<DoomscrollsRoomState> | null = null;
@@ -135,7 +164,7 @@ export class WorldSessionScene extends Phaser.Scene {
   private feedbackView: WorldSessionFeedbackView | null = null;
   private apiClient: ApiClient | null = null;
   private dodgeInput: WorldSessionDodgeInput | null = null;
-  private healingFlaskInput: WorldSessionHealingFlaskInput | null = null;
+  private flaskBeltInput: WorldSessionFlaskBeltInput | null = null;
   private tertiarySkillInput: WorldSessionSkillTertiaryInput | null = null;
   private primarySkillInput: WorldSessionSkillPrimaryInput | null = null;
   private equipmentLoadout: EquipmentLoadout = createEmptyEquipmentLoadout();
@@ -144,21 +173,29 @@ export class WorldSessionScene extends Phaser.Scene {
   private vendorPanel: VendorInteractionPanel | null = null;
   private townServicePanel: TownServiceInteractionPanel | null = null;
   private stashPanel: StashInteractionPanel | null = null;
+  private accountStashPanel: WorldSessionStashView | null = null;
   private waypointPanel: WaypointInteractionPanel | null = null;
   private noticeBoardPanel: NoticeBoardInteractionPanel | null = null;
+  private dialogueView: WorldSessionDialogueView | null = null;
+  // Core 0.1 -- persisted quest status, hydrated from `quest_state` on
+  // join and kept in sync via `quest_updated`. Server-authoritative;
+  // the client never derives status locally.
+  private questStatusById: Map<string, "accepted" | "completed"> = new Map();
   private travelOverlayView: ReturnType<typeof createWorldSessionTravelOverlayView> | null = null;
   private pendingTravelKind: WorldSessionTravelOverlayKind | null = null;
   private pendingTravelHideAfterStateApply = false;
   private travelOverlayTimeout: ReturnType<typeof setTimeout> | null = null;
   private utilityPanelOpenState: WorldSessionUtilityPanelOpenState = {
     controls: false,
-    objectives: false,
-    equipment: false,
-    inventory: false,
+    questTrackerExpanded: true,
     debug: false,
+    lootFilter: false,
   };
   private areaBanner: WorldSessionAreaBannerView | null = null;
   private latestSkillRejectedReason: string | null = null;
+  private skillTreeView: WorldSessionSkillTreeView | null = null;
+  private characterWindowView: WorldSessionCharacterWindowView | null = null;
+  private inventoryWindowView: WorldSessionInventoryWindowView | null = null;
   private pendingRoomHandoff = false;
 
   public constructor() {
@@ -218,12 +255,84 @@ export class WorldSessionScene extends Phaser.Scene {
     this.travelOverlayView = createWorldSessionTravelOverlayView();
     this.apiClient = clientEnv.apiUrl === undefined ? null : new ApiClient(clientEnv.apiUrl);
 
-    this.input.keyboard?.on("keydown-J", () => {
+    const toggleQuestsPanel = (): void => {
       this.utilityPanelOpenState = {
         ...this.utilityPanelOpenState,
-        objectives: !this.utilityPanelOpenState.objectives,
+        questTrackerExpanded: !this.utilityPanelOpenState.questTrackerExpanded,
       };
       this.renderOverlay();
+    };
+    this.input.keyboard?.on("keydown-J", toggleQuestsPanel);
+    // Core 0.1 UI Overhaul Phase 1 -- Micro Menu labels this "Quests [L]";
+    // 'J' stays wired too so nothing that depended on it breaks.
+    this.input.keyboard?.on("keydown-L", toggleQuestsPanel);
+
+    this.input.keyboard?.on("keydown-B", () => {
+      this.toggleInventoryWindow();
+    });
+
+    this.input.keyboard?.on("keydown-C", () => {
+      this.toggleCharacterWindow();
+    });
+
+    this.input.keyboard?.on("keydown-ESC", () => {
+      this.vendorPanel?.destroy();
+      this.vendorPanel = null;
+    });
+
+    // Core 0.1 Foundation -- Skill Point Allocation panel toggle.
+    this.skillTreeView = createWorldSessionSkillTreeView((slot) => {
+      if (this.room !== null) {
+        sendAllocateSkillPointIntent(this.room, slot);
+      }
+    });
+    this.input.keyboard?.on("keydown-K", () => {
+      this.skillTreeView?.toggle();
+      this.renderOverlay();
+    });
+
+    // Core 0.1 UI Overhaul Phase 2 -- Inventory ('B') and Character ('C')
+    // are standalone draggable windows (worldSessionInventoryView.ts,
+    // worldSessionEquipmentView.ts), not flyouts in the corner icon menu.
+    this.inventoryWindowView = createWorldSessionInventoryWindowView(
+      (characterId: string, itemInstanceId: string, slot: string) => this.handleEquipItem(characterId, itemInstanceId, slot),
+      (characterId: string, slot: string) => this.handleUnequipItem(characterId, slot),
+      (itemInstanceId: string, targetPageIndex: number, targetX: number, targetY: number) => {
+        this.room?.send("move_inventory_item", {
+          type: "move_inventory_item",
+          itemInstanceId,
+          targetPageIndex,
+          targetX,
+          targetY,
+        });
+      },
+    );
+    this.characterWindowView = createWorldSessionCharacterWindowView(
+      () => this.equipmentLoadout,
+      () => this.account?.characters.find((next) => next.id === this.characterId)?.inventorySummaryItems ?? [],
+      () => this.account?.characters.find((next) => next.id === this.characterId) ?? null,
+      (slot: string) => {
+        const characterId = this.characterId;
+        return characterId === null ? Promise.resolve() : this.handleUnequipItem(characterId, slot);
+      },
+      (characterId: string, itemInstanceId: string, slot: string) => this.handleEquipItem(characterId, itemInstanceId, slot),
+    );
+
+    registerAllocateSkillPointResponseListeners(this.room, {
+      onAccepted: () => {
+        this.updateSkillTreeView();
+      },
+      onRejected: (message) => {
+        if (message.reason === "no_points_available") {
+          this.feedbackView?.showNotice(t("skill_panel.no_points_available" as never));
+          return;
+        }
+        if (message.reason === "rank_maxed") {
+          this.feedbackView?.showNotice(t("skill_panel.rank_already_maxed" as never));
+          return;
+        }
+        this.feedbackView?.showNotice(t("skill_panel.allocate_unavailable" as never));
+      },
     });
 
     this.worldAreaView = createWorldSessionAreaView(
@@ -254,7 +363,68 @@ export class WorldSessionScene extends Phaser.Scene {
       }
     });
 
-    registerInteractResponseListener(this.room, (message: string, _objectId?: string, _availableObjectives?: readonly AvailableObjectiveEntry[]) => {
+    // Core 0.1 -- Persistent Quest & Dialogue System foundation.
+    this.dialogueView?.destroy();
+    this.dialogueView = createWorldSessionDialogueView({
+      onAcceptQuest: (questId: string) => {
+        this.room?.send("request_accept_quest", { type: "request_accept_quest", questId });
+      },
+      onCompleteQuest: (questId: string) => {
+        this.room?.send("request_complete_quest", { type: "request_complete_quest", questId });
+      },
+    });
+
+    this.room.onMessage("quest_state", (raw: unknown) => {
+      const msg = raw as { quests?: readonly { questId: string; status: "accepted" | "completed" }[] } | null;
+      if (!msg || !Array.isArray(msg.quests)) {
+        return;
+      }
+      this.questStatusById.clear();
+      for (const entry of msg.quests) {
+        this.questStatusById.set(entry.questId, entry.status);
+      }
+    });
+
+    this.room.onMessage("quest_updated", (raw: unknown) => {
+      const msg = raw as { questId?: unknown; status?: unknown } | null;
+      if (!msg || typeof msg.questId !== "string" || (msg.status !== "accepted" && msg.status !== "completed")) {
+        return;
+      }
+      this.questStatusById.set(msg.questId, msg.status);
+      // The dialogue view can't reflect the new state without re-fetching
+      // the localized dialogue line from the server; close it so the
+      // player re-interacts to see the updated greeting/turn-in copy.
+      this.dialogueView?.hide();
+    });
+
+    this.room.onMessage("request_accept_quest_rejected", (raw: unknown) => {
+      const msg = raw as { reason?: string } | null;
+      this.feedbackView?.showNotice(`Could not accept quest: ${msg?.reason ?? "unknown reason"}`);
+    });
+
+    this.room.onMessage("request_complete_quest_rejected", (raw: unknown) => {
+      const msg = raw as { reason?: string } | null;
+      this.feedbackView?.showNotice(`Could not complete quest: ${msg?.reason ?? "unknown reason"}`);
+    });
+
+    registerInteractResponseListener(this.room, (
+      message: string,
+      objectId?: string,
+      _availableObjectives?: readonly AvailableObjectiveEntry[],
+      questInfo?: InteractQuestInfo,
+    ) => {
+      if (objectId !== undefined && this.getInteractableType(objectId) === "vendor") {
+        this.openVendorPanel(objectId);
+        return;
+      }
+      if (objectId === ACCOUNT_STASH_OBJECT_ID) {
+        this.openAccountStashPanel();
+        return;
+      }
+      if (objectId !== undefined && this.getInteractableType(objectId) === "quest_giver" && questInfo !== undefined) {
+        this.dialogueView?.show(message, questInfo);
+        return;
+      }
       this.feedbackView?.showNotice(message);
     }, (message: ObjectiveUpdatedServerMessage) => {
       // Clear stale completion/ready-to-turn-in notice when a new in-progress objective arrives.
@@ -372,7 +542,7 @@ export class WorldSessionScene extends Phaser.Scene {
       void this.refreshAccountStateAfterPickup();
     });
 
-    this.room.onMessage("waypoint_opened", (message: { destinations?: unknown; activated?: unknown; waypointId?: unknown }) => {
+    this.room.onMessage("waypoint_opened", (message: { destinations?: unknown; activated?: unknown; waypointId?: unknown; objectId?: unknown }) => {
       const destinations = Array.isArray(message.destinations) ? message.destinations as import("@doomscrolls/shared").WaypointDestinationEntry[] : [];
       this.waypointPanel?.destroy();
       this.waypointPanel = createWaypointInteractionPanel({
@@ -385,18 +555,35 @@ export class WorldSessionScene extends Phaser.Scene {
         },
       });
       this.waypointPanel.show(destinations);
-      const notice = message.activated === true
-        ? t("town_service.waypoint.discovered" as never)
-        : t("town_service.waypoint.already_discovered" as never);
-      this.feedbackView?.showNotice(notice);
+      if (message.activated === true) {
+        const objectId = typeof message.objectId === "string" ? message.objectId : "";
+        const prop = objectId.length > 0 ? contentRegistry.worldProps.get(objectId as never) : undefined;
+        const waypointName = prop?.labelKey !== undefined ? t(prop.labelKey as never) : prop?.label ?? "Waypoint";
+        this.feedbackView?.showNotice(t("town_service.waypoint.discovered_named" as never, { name: waypointName }));
+      } else {
+        this.feedbackView?.showNotice(t("town_service.waypoint.already_discovered" as never));
+      }
     });
 
-    this.room.onMessage("request_waypoint_travel_accepted", (message: { message?: unknown }) => {
-      this.pendingTravelHideAfterStateApply = true;
+    this.room.onMessage("request_waypoint_travel_accepted", (message: { zoneId?: unknown; message?: unknown }) => {
       const feedback = typeof message.message === "string" && message.message.length > 0
         ? message.message
         : t("town_service.waypoint.travel_success" as never);
       this.feedbackView?.showNotice(feedback);
+
+      const targetZoneId = typeof message.zoneId === "string" && message.zoneId.length > 0 ? message.zoneId : null;
+      const currentState = this.room?.state as unknown as Record<string, unknown> | undefined;
+      const currentZoneId = typeof currentState?.zoneId === "string" ? currentState.zoneId : null;
+
+      // Milestone 0.2 — a waypoint that landed the player in a different
+      // town zone needs the same leave/rejoin handoff a zone_transition
+      // door uses; same-zone travel keeps relying on schema sync.
+      if (targetZoneId !== null && currentZoneId !== null && targetZoneId !== currentZoneId) {
+        void this.beginTownRoomReturnHandoff(targetZoneId as never, "waypoint");
+        return;
+      }
+
+      this.pendingTravelHideAfterStateApply = true;
     });
 
     this.room.onMessage("request_waypoint_travel_rejected", (message: { reason?: unknown }) => {
@@ -440,6 +627,26 @@ export class WorldSessionScene extends Phaser.Scene {
         : "Entering combat.";
       this.feedbackView?.showNotice(feedback);
       void this.beginCombatRoomHandoff(targetZoneId as never);
+    });
+
+    // Core 0.1 — Zone transition doors (e.g. cathedral entrance/exit).
+    // The server has already persisted the new zone/spawn location;
+    // hand off to a fresh TownRoom instance for that zone the same way
+    // a combat return does.
+    this.room.onMessage("zone_transition_approved", (message: { targetZoneId?: unknown }) => {
+      const targetZoneId = typeof message.targetZoneId === "string" && message.targetZoneId.length > 0
+        ? message.targetZoneId
+        : null;
+      if (targetZoneId === null) {
+        this.finishTravelOverlay(false);
+        this.feedbackView?.showNotice("Could not enter world.");
+        return;
+      }
+
+      const zone = contentRegistry.zones.get(targetZoneId as never);
+      const zoneLabel = zone !== undefined ? t(zone.nameKey as never) : targetZoneId;
+      this.feedbackView?.showNotice(`Entered ${zoneLabel}.`);
+      void this.beginTownRoomReturnHandoff(targetZoneId as never, "zone_transition");
     });
 
     this.room.onMessage("town_combat_handoff_rejected", (message: { reason?: unknown }) => {
@@ -542,6 +749,81 @@ export class WorldSessionScene extends Phaser.Scene {
       this.vendorPanel?.showFeedback(feedbackText);
     });
 
+    // Milestone 0.3 — Salvage & Tech Teardown accepted/rejected feedback
+    this.room.onMessage("request_salvage_item_accepted", (message: { definitionId?: string; materialItemId?: string; materialQuantity?: number }) => {
+      const definitionId = typeof message.definitionId === "string" ? message.definitionId : "";
+      const itemDef = contentRegistry.items.get(definitionId as never);
+      const itemLabel = itemDef !== undefined ? t(itemDef.nameKey as never) : "Item";
+      const materialItemId = typeof message.materialItemId === "string" ? message.materialItemId : "";
+      const materialDef = contentRegistry.items.get(materialItemId as never);
+      const materialLabel = materialDef !== undefined ? t(materialDef.nameKey as never) : "material";
+      const feedbackText = t("town_service.vendor_panel.salvage_success" as never, { itemLabel, materialLabel });
+      this.feedbackView?.showNotice(feedbackText);
+      this.vendorPanel?.showFeedback(feedbackText);
+      void this.refreshAccountStateAfterPickup().then(() => {
+        if (this.account !== null && this.vendorPanel !== null) {
+          const char = this.account.characters.find((c) => c.id === this.characterId) ?? null;
+          this.vendorPanel.updateInventory(this.buildInventoryItemsForSell(char));
+        }
+      });
+    });
+
+    this.room.onMessage("request_salvage_item_rejected", (message: { reason?: string }) => {
+      const reason = typeof message?.reason === "string" ? message.reason : "";
+      const key = `town_service.vendor_panel.salvage_rejected.${reason}` as Parameters<typeof t>[0];
+      const fallback = t("town_service.vendor_panel.salvage_rejected.vendor_unavailable" as never);
+      const feedbackText = (() => { try { return t(key as never); } catch { return fallback; } })();
+      this.feedbackView?.showNotice(feedbackText);
+      this.vendorPanel?.showFeedback(feedbackText);
+    });
+
+    // Withdraw a salvage-material currency balance (Iron Scrap/Arcane
+    // Dust) back into a physical inventory item stack.
+    this.room.onMessage("request_withdraw_material_accepted", (message: { materialId?: string; quantity?: number }) => {
+      const materialId = typeof message.materialId === "string" ? message.materialId : "";
+      const materialDef = contentRegistry.items.get(materialId as never);
+      const materialLabel = materialDef !== undefined ? t(materialDef.nameKey as never) : "material";
+      const quantity = typeof message.quantity === "number" ? message.quantity : 0;
+      this.feedbackView?.showNotice(t("town_service.material_withdraw.success" as never, { quantity, materialLabel }));
+      void this.refreshAccountStateAfterPickup();
+    });
+
+    this.room.onMessage("request_withdraw_material_rejected", (message: { reason?: string }) => {
+      const reason = typeof message?.reason === "string" ? message.reason : "";
+      const key = `town_service.material_withdraw.rejected.${reason}` as Parameters<typeof t>[0];
+      const fallback = t("town_service.material_withdraw.rejected.character_not_found" as never);
+      const feedbackText = (() => { try { return t(key as never); } catch { return fallback; } })();
+      this.feedbackView?.showNotice(feedbackText);
+    });
+
+    // Milestone 0.3 — Profession Training accepted/rejected feedback
+    this.room.onMessage("request_unlock_profession_accepted", (message: { professionId?: string; newTier?: number; remainingCopper?: number }) => {
+      const professionId = typeof message.professionId === "string" ? message.professionId : "";
+      const professionDef = contentRegistry.professions.get(professionId as never);
+      const professionLabel = professionDef !== undefined ? t(professionDef.nameKey as never) : "Profession";
+      const tier = typeof message.newTier === "number" ? message.newTier : 0;
+      const remaining = typeof message.remainingCopper === "number" ? message.remainingCopper : 0;
+      const feedbackText = t("town_service.vendor_panel.training_success" as never, { professionLabel, tier });
+      this.feedbackView?.showNotice(feedbackText);
+      this.vendorPanel?.updateMoney(remaining);
+      this.vendorPanel?.showFeedback(feedbackText);
+      void this.refreshAccountStateAfterPickup().then(() => {
+        if (this.account !== null && this.vendorPanel !== null) {
+          const char = this.account.characters.find((c) => c.id === this.characterId) ?? null;
+          this.vendorPanel.updateProfessions(this.buildProfessionViews(char));
+        }
+      });
+    });
+
+    this.room.onMessage("request_unlock_profession_rejected", (message: { reason?: string }) => {
+      const reason = typeof message?.reason === "string" ? message.reason : "";
+      const key = `town_service.vendor_panel.training_rejected.${reason}` as Parameters<typeof t>[0];
+      const fallback = t("town_service.vendor_panel.training_rejected.vendor_unavailable" as never);
+      const feedbackText = (() => { try { return t(key as never); } catch { return fallback; } })();
+      this.feedbackView?.showNotice(feedbackText);
+      this.vendorPanel?.showFeedback(feedbackText);
+    });
+
     this.room.onMessage("stash_items_listed", (message: { items?: unknown }) => {
       const items = Array.isArray(message.items)
         ? (message.items as import("@doomscrolls/shared").ItemInstance[])
@@ -608,7 +890,72 @@ export class WorldSessionScene extends Phaser.Scene {
       this.stashPanel?.showFeedback(feedback);
     });
 
-    this.room.onMessage("xp_gained", (message: { amount?: unknown; totalXp?: unknown; leveledUp?: unknown; level?: unknown; hp?: unknown; maxHp?: unknown; gainedMaxHp?: unknown }) => {
+    // Milestone 0.2 — Inventory grid repositioning: the server is the sole
+    // authority on slot placement, so a successful move just triggers a
+    // fresh account state fetch to pick up the persisted position.
+    this.room.onMessage("move_inventory_item_accepted", () => {
+      void this.refreshAccountStateAfterPickup();
+    });
+
+    this.room.onMessage("move_inventory_item_rejected", (message: { reason?: string }) => {
+      const reason = typeof message?.reason === "string" ? message.reason : "move_failed";
+      this.feedbackView?.showNotice(`Could not move item: ${reason}`);
+    });
+
+    this.room.onMessage("account_stash_listed", (message: { items?: unknown }) => {
+      const items = Array.isArray(message.items) ? (message.items as AccountStashItemSummary[]) : [];
+      this.accountStashPanel?.setStashItems(items);
+    });
+
+    this.room.onMessage("request_deposit_stash_item_accepted", (message: { stashItems?: unknown }) => {
+      const items = Array.isArray(message.stashItems) ? (message.stashItems as AccountStashItemSummary[]) : [];
+      this.accountStashPanel?.setStashItems(items);
+      const feedback = t("account_stash.deposit_success" as never);
+      this.feedbackView?.showNotice(feedback);
+      this.accountStashPanel?.showFeedback(feedback);
+      void this.refreshAccountStateAfterPickup().then(() => {
+        const character = this.account !== null && this.characterId !== null
+          ? this.account.characters.find((c) => c.id === this.characterId) ?? null
+          : null;
+        this.accountStashPanel?.setInventoryItems(this.buildInventoryItemsForStash(character));
+      });
+    });
+
+    this.room.onMessage("request_withdraw_stash_item_accepted", (message: { stashItems?: unknown }) => {
+      const items = Array.isArray(message.stashItems) ? (message.stashItems as AccountStashItemSummary[]) : [];
+      this.accountStashPanel?.setStashItems(items);
+      const feedback = t("account_stash.withdraw_success" as never);
+      this.feedbackView?.showNotice(feedback);
+      this.accountStashPanel?.showFeedback(feedback);
+      void this.refreshAccountStateAfterPickup().then(() => {
+        const character = this.account !== null && this.characterId !== null
+          ? this.account.characters.find((c) => c.id === this.characterId) ?? null
+          : null;
+        this.accountStashPanel?.setInventoryItems(this.buildInventoryItemsForStash(character));
+      });
+    });
+
+    const showAccountStashRejected = (reason?: string): void => {
+      const key = `account_stash.rejected.${typeof reason === "string" ? reason : "stash_unavailable"}` as Parameters<typeof t>[0];
+      const fallback = t("account_stash.rejected.stash_unavailable" as never);
+      const feedbackText = (() => { try { return t(key as never); } catch { return fallback; } })();
+      this.feedbackView?.showNotice(feedbackText);
+      this.accountStashPanel?.showFeedback(feedbackText);
+    };
+
+    this.room.onMessage("request_deposit_stash_item_rejected", (message: { reason?: string }) => {
+      showAccountStashRejected(message.reason);
+    });
+
+    this.room.onMessage("request_withdraw_stash_item_rejected", (message: { reason?: string }) => {
+      showAccountStashRejected(message.reason);
+    });
+
+    this.room.onMessage("account_stash_list_rejected", () => {
+      showAccountStashRejected("stash_unavailable");
+    });
+
+    this.room.onMessage("xp_gained", (message: { amount?: unknown; totalXp?: unknown; leveledUp?: unknown; level?: unknown; hp?: unknown; maxHp?: unknown; gainedMaxHp?: unknown; gainedSkillPoints?: unknown }) => {
       const amount = typeof message.amount === "number" && Number.isFinite(message.amount)
         ? Math.max(0, Math.floor(message.amount))
         : 0;
@@ -626,6 +973,10 @@ export class WorldSessionScene extends Phaser.Scene {
         ? Math.floor(message.gainedMaxHp)
         : 0;
 
+      const gainedSkillPoints = typeof message.gainedSkillPoints === "number" && Number.isFinite(message.gainedSkillPoints)
+        ? Math.max(0, Math.floor(message.gainedSkillPoints))
+        : 0;
+
       if (leveledUp && newLevel !== null) {
         // Prominent level-up notice showing new level and HP gain.
         this.feedbackView?.showNotice(
@@ -633,6 +984,9 @@ export class WorldSessionScene extends Phaser.Scene {
             ? t("world_area.level_up_hp_notice", { level: newLevel, gainedMaxHp })
             : t("world_area.level_up_notice", { level: newLevel }),
         );
+        if (gainedSkillPoints > 0) {
+          this.feedbackView?.showNotice(t("skill_panel.gained_points" as never, { gainedSkillPoints }));
+        }
       } else {
         this.feedbackView?.showNotice(
           totalXp === null
@@ -641,6 +995,7 @@ export class WorldSessionScene extends Phaser.Scene {
         );
       }
       this.renderOverlay();
+      this.updateSkillTreeView();
     });
 
     registerRespawnListeners(this.room, {
@@ -693,8 +1048,8 @@ export class WorldSessionScene extends Phaser.Scene {
 
     this.dodgeInput?.destroy();
     this.dodgeInput = null;
-    this.healingFlaskInput?.destroy();
-    this.healingFlaskInput = null;
+    this.flaskBeltInput?.destroy();
+    this.flaskBeltInput = null;
     this.tertiarySkillInput?.destroy();
     this.tertiarySkillInput = null;
     this.primarySkillInput?.destroy();
@@ -721,18 +1076,28 @@ export class WorldSessionScene extends Phaser.Scene {
       },
     );
 
-    this.healingFlaskInput = attachWorldSessionHealingFlaskInput(this, this.room, {
+    this.flaskBeltInput = attachWorldSessionFlaskBeltInput(this, this.room, {
       onFlaskSentFeedback: (message) => {
         this.feedbackView?.showNotice(message);
       },
       onFlaskAcceptedFeedback: (message) => {
-        this.feedbackView?.showHealFeedback(
-          t("world_area.flask_healed", { healed: message.healedAmount, hp: message.remainingHp }),
-        );
+        if (message.effectType === "restoreHpInstant") {
+          this.feedbackView?.showHealFeedback(
+            t("world_area.flask_healed", { healed: message.healedAmount, hp: message.remainingHp }),
+          );
+          return;
+        }
+        if (message.effectType === "restoreManaInstant") {
+          this.feedbackView?.showNotice(
+            t("world_area.flask_mana_restored", { restored: message.healedAmount, mana: message.remainingMana }),
+          );
+          return;
+        }
+        this.feedbackView?.showNotice(t("world_area.flask_stamina_restored"));
       },
       onFlaskRejectedFeedback: (message) => {
         if (message.reason === "no_charges") { this.feedbackView?.showNotice(t("world_area.flask_no_charges")); return; }
-        if (message.reason === "already_full_hp") { this.feedbackView?.showNotice(t("world_area.flask_full_hp")); return; }
+        if (message.reason === "slot_empty") { this.feedbackView?.showNotice(t("world_area.flask_slot_empty")); return; }
         if (message.reason === "flask_on_cooldown") { this.feedbackView?.showNotice(t("world_area.flask_on_cooldown")); return; }
         if (message.reason === "player_downed") { this.feedbackView?.showNotice(t("world_area.flask_downed")); return; }
         this.feedbackView?.showNotice(t("world_area.flask_unavailable"));
@@ -752,6 +1117,21 @@ export class WorldSessionScene extends Phaser.Scene {
           const state = this.worldAreaView?.getSkillTargetingState();
           return state?.hoveredEnemyId ?? state?.selectedEnemyId ?? null;
         },
+        // Milestone 0.2 -- Groundbreaker (Ironclad tertiary) is
+        // `ground_aoe`; Bone Splinter (Gravewalker tertiary) stays
+        // `target`. This shared input handler serves both classes, so
+        // the targeting mode is resolved per-cast from the joined
+        // character's own class content, same lookup skillSlotContent.ts
+        // uses server-side.
+        isGroundTargeted: () => this.resolveTertiarySkillTargeting() === "ground_aoe",
+        getGroundTargetPoint: () => {
+          const pointer = this.input.activePointer;
+          return this.worldAreaView?.getWorldPointFromScreenPoint(pointer.x, pointer.y) ?? null;
+        },
+        // Milestone 0.3 -- Street Alchemist's adrenaline_stim tertiary is
+        // `self_buff`: same per-class content lookup as the ground_aoe
+        // check above, just resolving to a different targeting mode.
+        isSelfTargeted: () => this.resolveTertiarySkillTargeting() === "self_buff",
       },
       {
         onSentFeedback: (message) => {
@@ -889,6 +1269,11 @@ export class WorldSessionScene extends Phaser.Scene {
           this.renderOverlay();
           return;
         }
+        if (message.reason === "insufficient_mana") {
+          this.feedbackView?.showNotice(t("world_area.skill_insufficient_mana"));
+          this.renderOverlay();
+          return;
+        }
         this.feedbackView?.showNotice(t("world_area.skill_unavailable"));
         this.renderOverlay();
       },
@@ -898,12 +1283,14 @@ export class WorldSessionScene extends Phaser.Scene {
     this.showAreaBanner();
 
     this.renderOverlay();
+    this.updateSkillTreeView();
     this.bootMarker?.destroy();
     this.bootMarker = null;
     this.room.onStateChange(() => {
       if (this.room !== null) {
         this.worldAreaView?.refreshFromRoomState(this.room);
         this.renderOverlay();
+        this.updateSkillTreeView();
         if (this.pendingTravelHideAfterStateApply) {
           this.finishTravelOverlay(true);
         }
@@ -948,6 +1335,27 @@ export class WorldSessionScene extends Phaser.Scene {
     }
 
     this.overlayView.update(character, this.room, debugState, skillTargeting, this.latestSkillRejectedReason);
+    this.hudGlobesView?.update(character, this.room);
+    this.characterWindowView?.update();
+    this.inventoryWindowView?.update(character);
+  }
+
+  /** Bundles the Character/Inventory/Skill-tree window toggle+open-state
+   *  callbacks the overlay's Micro Menu and action-bar Bag icon need --
+   *  built once per `createOverlay()` call since the windows themselves
+   *  (and their toggle methods) don't change identity across a session. */
+  private buildWindowToggles(): WorldSessionOverlayWindowToggles {
+    return {
+      onToggleCharacter: () => this.toggleCharacterWindow(),
+      onToggleInventory: () => this.toggleInventoryWindow(),
+      onToggleSkillTree: () => {
+        this.skillTreeView?.toggle();
+        this.renderOverlay();
+      },
+      isCharacterOpen: () => this.characterWindowView?.isOpen() ?? false,
+      isInventoryOpen: () => this.inventoryWindowView?.isOpen() ?? false,
+      isSkillTreeOpen: () => this.skillTreeView?.isOpen() ?? false,
+    };
   }
 
   private createOverlay(
@@ -964,7 +1372,7 @@ export class WorldSessionScene extends Phaser.Scene {
     root.appendChild(statusRegion);
 
     const utilityRegion = document.createElement("div");
-    applyWorldSessionOverlayUtilityStyles(utilityRegion);
+    applyWorldSessionOverlayQuestStyles(utilityRegion);
     root.appendChild(utilityRegion);
 
     const hudRegion = document.createElement("div");
@@ -1004,15 +1412,9 @@ export class WorldSessionScene extends Phaser.Scene {
       (nextState: WorldSessionUtilityPanelOpenState) => {
         this.utilityPanelOpenState = nextState;
       },
-      () => this.equipmentLoadout,
-      (loadout: EquipmentLoadout) => {
-        this.equipmentLoadout = loadout;
-      },
-      (characterId: string, itemInstanceId: string, slot: string) => {
-        return this.handleEquipItem(characterId, itemInstanceId, slot);
-      },
-      (characterId: string, slot: string) => {
-        return this.handleUnequipItem(characterId, slot);
+      this.buildWindowToggles(),
+      (materialId, materialLabel, currentBalance) => {
+        this.openMaterialWithdrawPanel(materialId, materialLabel, currentBalance);
       },
     );
     utilityRegion.appendChild(overlayView.utilityPanel);
@@ -1020,6 +1422,10 @@ export class WorldSessionScene extends Phaser.Scene {
     if (overlayView.statusPanel !== null) {
       statusRegion.appendChild(overlayView.statusPanel);
     }
+
+    const hudGlobesView = createWorldSessionHudGlobesView(character, room);
+    root.appendChild(hudGlobesView.root);
+    this.hudGlobesView = hudGlobesView;
 
     document.body.appendChild(root);
     return { root, view: overlayView };
@@ -1040,6 +1446,7 @@ export class WorldSessionScene extends Phaser.Scene {
 
   private destroyOverlay(): void {
     this.overlayView = null;
+    this.hudGlobesView = null;
     this.overlay?.remove();
     this.overlay = null;
   }
@@ -1109,8 +1516,8 @@ export class WorldSessionScene extends Phaser.Scene {
     this.bootMarker = null;
     this.dodgeInput?.destroy();
     this.dodgeInput = null;
-    this.healingFlaskInput?.destroy();
-    this.healingFlaskInput = null;
+    this.flaskBeltInput?.destroy();
+    this.flaskBeltInput = null;
     this.tertiarySkillInput?.destroy();
     this.tertiarySkillInput = null;
     this.primarySkillInput?.destroy();
@@ -1123,9 +1530,12 @@ export class WorldSessionScene extends Phaser.Scene {
     this.townServicePanel = null;
     this.stashPanel?.destroy();
     this.stashPanel = null;
+    this.accountStashPanel?.destroy();
+    this.accountStashPanel = null;
     this.waypointPanel?.destroy();
     this.waypointPanel = null;
     this.noticeBoardPanel?.destroy();
+    this.dialogueView?.destroy();
     this.areaBanner?.destroy();
     this.areaBanner = null;
     if (this.travelOverlayTimeout !== null) {
@@ -1139,7 +1549,76 @@ export class WorldSessionScene extends Phaser.Scene {
     this.travelOverlayView = null;
     this.worldAreaView?.destroy();
     this.worldAreaView = null;
+    this.skillTreeView?.destroy();
+    this.skillTreeView = null;
     this.destroyOverlay();
+  }
+
+  /**
+   * Milestone 0.2 -- resolves the joined character's own class's tertiary
+   * skill targeting mode ("target" | "ground_aoe" | "self_buff" as of
+   * Milestone 0.3), mirroring the server's `resolveSkillSlotDefinition`
+   * lookup (class -> tertiarySkillId -> skill.targeting) so the client
+   * input path and the server's cast validation always agree on which
+   * slot behavior applies.
+   */
+  private resolveTertiarySkillTargeting(): "target" | "ground_aoe" | "self_buff" {
+    if (this.room === null) {
+      return "target";
+    }
+    const presence = getCurrentPlayerPresence(
+      this.room.state as unknown as Record<string, unknown>,
+      this.room.sessionId,
+    );
+    const classKey = presence?.classKey;
+    if (classKey === undefined) {
+      return "target";
+    }
+    const characterClass = contentRegistry.classes.get(classKey as never);
+    const skill = characterClass !== undefined
+      ? contentRegistry.skills.get(characterClass.tertiarySkillId as never)
+      : undefined;
+    return skill?.targeting ?? "target";
+  }
+
+  private updateSkillTreeView(): void {
+    if (this.room === null || this.skillTreeView === null) {
+      return;
+    }
+    const presence = getCurrentPlayerPresence(
+      this.room.state as unknown as Record<string, unknown>,
+      this.room.sessionId,
+    );
+    this.skillTreeView.update({
+      classKey: presence?.classKey,
+      skillPoints: presence?.skillPoints ?? 0,
+      primarySkillRank: presence?.primarySkillRank ?? 1,
+      secondarySkillRank: presence?.secondarySkillRank ?? 1,
+      tertiarySkillRank: presence?.tertiarySkillRank ?? 1,
+    });
+  }
+
+  /** Inventory ('B') opens/closes independently. */
+  private toggleInventoryWindow(): void {
+    this.inventoryWindowView?.toggle();
+    this.renderOverlay();
+  }
+
+  /** Character ('C') also opens the Inventory window alongside it (not
+   *  the reverse) so the equipment paperdoll and bag grid land
+   *  side-by-side, ready for drag-and-drop equipping, the moment the
+   *  player opens their character sheet. Closing Character leaves
+   *  Inventory as the player left it. */
+  private toggleCharacterWindow(): void {
+    if (this.characterWindowView?.isOpen() === true) {
+      this.characterWindowView.hide();
+    } else {
+      this.characterWindowView?.show();
+      if (this.inventoryWindowView?.isOpen() === false) {
+        this.inventoryWindowView.show();
+      }
+    }
+    this.renderOverlay();
   }
 
   private handleRespawn(): void {
@@ -1214,7 +1693,10 @@ export class WorldSessionScene extends Phaser.Scene {
     }
   }
 
-  private async beginTownRoomReturnHandoff(targetZoneId: import("@doomscrolls/shared").ZoneId): Promise<void> {
+  private async beginTownRoomReturnHandoff(
+    targetZoneId: import("@doomscrolls/shared").ZoneId,
+    overlayKind: WorldSessionTravelOverlayKind = "return_handoff",
+  ): Promise<void> {
     if (this.characterId === null || this.account === null) {
       return;
     }
@@ -1227,7 +1709,7 @@ export class WorldSessionScene extends Phaser.Scene {
       return;
     }
 
-    this.beginTravelOverlay("return_handoff");
+    this.beginTravelOverlay(overlayKind);
 
     try {
       try { currentRoom.leave(); } catch {}
@@ -1313,8 +1795,152 @@ export class WorldSessionScene extends Phaser.Scene {
     });
   }
 
+  // Core 0.1 — Look up an interactable's server-synced type by object ID
+  // (e.g. "vendor", "town_service") so the interact response handler can
+  // decide which UI panel to open.
+  private getInteractableType(objectId: string): string | null {
+    const state = this.room?.state as unknown as Record<string, unknown> | undefined;
+    const interactables = state?.interactables as
+      | { get?: (id: string) => { type?: unknown } | undefined }
+      | undefined;
+    const entry = interactables?.get?.(objectId);
+    return typeof entry?.type === "string" ? entry.type : null;
+  }
+
+  // Right-click on a salvage-material currency counter (Iron Scrap/
+  // Arcane Dust) in the HUD -- opens the quantity picker and sends the
+  // resulting withdrawal request. The server decides whether the
+  // balance/inventory space allow it.
+  private openMaterialWithdrawPanel(materialId: string, materialLabel: string, currentBalance: number): void {
+    showMaterialWithdrawPanel({
+      materialLabel,
+      currentBalance,
+      onConfirm: (quantity) => {
+        this.room?.send("request_withdraw_material", {
+          type: "request_withdraw_material",
+          materialId,
+          quantity,
+        });
+      },
+    });
+  }
+
+  // Core 0.1 — Open the vendor UI panel for a vendor interactable, wiring
+  // buy/sell callbacks to the existing server-authoritative room messages.
+  private openVendorPanel(vendorId: string): void {
+    if (this.account === null || this.characterId === null) {
+      return;
+    }
+    const character = this.account.characters.find((c) => c.id === this.characterId) ?? null;
+    if (character === null) {
+      return;
+    }
+    const state = this.room?.state as unknown as Record<string, unknown> | undefined;
+    const interactables = state?.interactables as
+      | { get?: (id: string) => { label?: unknown } | undefined }
+      | undefined;
+    const label = interactables?.get?.(vendorId)?.label;
+    const vendorName = typeof label === "string" && label.length > 0 ? label : "Vendor";
+
+    this.vendorPanel?.destroy();
+    this.vendorPanel = createVendorInteractionPanel(vendorName, character.moneyCopper, vendorId, {
+      inventoryItems: this.buildInventoryItemsForSell(character),
+      professions: this.buildProfessionViews(character),
+      onBuy: (targetVendorId, stockEntryId) => {
+        this.room?.send("request_buy_vendor_item", {
+          type: "request_buy_vendor_item",
+          vendorId: targetVendorId,
+          stockEntryId,
+        });
+      },
+      onSell: (targetVendorId, itemInstanceId) => {
+        this.room?.send("request_sell_item", {
+          type: "request_sell_item",
+          vendorId: targetVendorId,
+          itemInstanceId,
+        });
+      },
+      onSalvage: (targetVendorId, itemInstanceId) => {
+        this.room?.send("request_salvage_item", {
+          type: "request_salvage_item",
+          vendorId: targetVendorId,
+          itemInstanceId,
+        });
+      },
+      onTrainProfession: (targetVendorId, professionId) => {
+        this.room?.send("request_unlock_profession", {
+          type: "request_unlock_profession",
+          vendorId: targetVendorId,
+          professionId,
+        });
+      },
+    });
+    this.vendorPanel.show();
+  }
+
+  // Milestone 0.3 — Build the Training & Licenses tab's view model from
+  // the character's persisted profession tiers plus content-defined
+  // next-tier costs. `nextTierCostCopper` absent = not trainable
+  // (either maxed out or -- gunsmithing today -- no tiers defined yet).
+  private buildProfessionViews(
+    character: { professions?: import("@doomscrolls/shared").ProfessionTiers } | null,
+  ): ProfessionTrainingView[] {
+    const tiers = character?.professions;
+    const views: ProfessionTrainingView[] = [];
+    for (const profession of contentRegistry.professions.all) {
+      const currentTier = tiers?.[profession.id] ?? 0;
+      const nextTierDef = profession.tiers.find((tierDef) => tierDef.tier === currentTier + 1);
+      views.push({
+        professionId: profession.id,
+        label: t(profession.nameKey as never),
+        currentTier,
+        ...(nextTierDef !== undefined ? { nextTierCostCopper: nextTierDef.costCopper } : {}),
+      });
+    }
+    return views;
+  }
+
+  // Milestone 0.2 — Open the account-wide stash panel and request its
+  // current contents; the panel's inventory-side list is fed from the
+  // already-loaded account state (same helper the per-character stash
+  // panel uses).
+  private openAccountStashPanel(): void {
+    if (this.room === null) {
+      return;
+    }
+    const character = this.account !== null && this.characterId !== null
+      ? this.account.characters.find((c) => c.id === this.characterId) ?? null
+      : null;
+
+    this.accountStashPanel?.destroy();
+    this.accountStashPanel = createWorldSessionStashView({
+      onDeposit: (itemInstanceId) => {
+        this.room?.send("request_deposit_stash_item", {
+          type: "request_deposit_stash_item",
+          itemInstanceId,
+        });
+      },
+      onWithdraw: (stashItemId) => {
+        this.room?.send("request_withdraw_stash_item", {
+          type: "request_withdraw_stash_item",
+          stashItemId,
+        });
+      },
+    });
+    this.accountStashPanel.setInventoryItems(this.buildInventoryItemsForStash(character));
+    this.accountStashPanel.show();
+    this.room.send("request_list_account_stash", { type: "request_list_account_stash" });
+  }
+
   // Task 320 — Build inventory items view model for vendor sell section.
   // Only includes inventory items (not equipped items).
+  //
+  // Mirrors the server's authoritative `computeSellPrice`
+  // (vendorSellItem.ts): vendor-stocked items sell for 50% of their buy
+  // price; everything else (salvage/loot materials no vendor stocks)
+  // falls back to 50% of the same baseValueCzk/rarity value the Net
+  // Worth calculation uses, instead of a flat 1-copper floor, so the
+  // preview shown here matches what the server will actually pay.
   private buildInventoryItemsForSell(
     character: { inventorySummaryItems?: readonly { itemInstanceId: string; definitionId: string }[] } | null,
   ): InventoryItemView[] {
@@ -1323,16 +1949,21 @@ export class WorldSessionScene extends Phaser.Scene {
     }
     const sellPriceRatio = 0.5;
     const minSell = 1;
+    const rarityFallbackCzk: Record<string, number> = { common: 50, rare: 250, epic: 1000 };
     const items: InventoryItemView[] = [];
     for (const item of character.inventorySummaryItems) {
       const def = contentRegistry.items.get(item.definitionId as never);
       if (def === undefined) continue;
-      let sellPrice = minSell;
+      let sellPrice: number | undefined;
       for (const entry of contentRegistry.vendorStocks.all) {
         if (entry.itemId === item.definitionId) {
           sellPrice = Math.max(minSell, Math.floor(entry.priceCopper * sellPriceRatio));
           break;
         }
+      }
+      if (sellPrice === undefined) {
+        const valueCzk = def.baseValueCzk ?? rarityFallbackCzk[def.rarity] ?? 0;
+        sellPrice = Math.max(minSell, Math.floor(valueCzk * sellPriceRatio));
       }
       items.push({
         itemInstanceId: item.itemInstanceId,

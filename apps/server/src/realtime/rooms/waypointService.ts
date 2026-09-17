@@ -47,14 +47,6 @@ function findRouteByGateObjectId(objectId: string): CombatZoneRoute | undefined 
   return COMBAT_ZONE_ROUTES.find((route) => route.gateObjectId === objectId);
 }
 
-function findRouteByWaypointObjectId(objectId: string): CombatZoneRoute | undefined {
-  return COMBAT_ZONE_ROUTES.find((route) => route.waypointObjectId === objectId);
-}
-
-function findRouteByWaypointId(waypointId: string): CombatZoneRoute | undefined {
-  return COMBAT_ZONE_ROUTES.find((route) => route.waypointId === waypointId);
-}
-
 function findRouteByCombatZoneId(zoneId: ZoneId): CombatZoneRoute | undefined {
   return COMBAT_ZONE_ROUTES.find((route) => route.combatZoneId === zoneId);
 }
@@ -64,9 +56,47 @@ export function isCombatGateObjectId(objectId: string): boolean {
   return findRouteByGateObjectId(objectId) !== undefined;
 }
 
-/** True when `objectId` opens the waypoint panel (a combat-zone fast-travel entry). */
+/**
+ * Milestone 0.2 — Waypoint & Fast Travel. Unlike the (currently empty,
+ * deferred) `COMBAT_ZONE_ROUTES` table above, city waypoint shrines are
+ * content-driven: any `WorldPropContentDefinition` of kind `"waypoint"`
+ * is a valid fast-travel destination, keyed by its own prop id, landing
+ * at its own `x`/`y` in its own `targetZoneId` (a waypoint always sits
+ * in the zone it teleports to). This is what lets `namesti_waypoint`
+ * and `bory_waypoint` -- two different town zones -- both work without
+ * any hand-maintained route table.
+ */
+interface WaypointDefinition {
+  readonly objectId: string;
+  readonly waypointId: string;
+  readonly zoneId: ZoneId;
+  readonly x: number;
+  readonly y: number;
+  readonly labelKey: string;
+}
+
+const WAYPOINT_DEFINITIONS: readonly WaypointDefinition[] = contentRegistry.worldProps.all
+  .filter((prop) => prop.kind === "waypoint" && prop.targetZoneId !== undefined)
+  .map((prop) => ({
+    objectId: prop.id,
+    waypointId: prop.id,
+    zoneId: prop.targetZoneId as ZoneId,
+    x: prop.x,
+    y: prop.y,
+    labelKey: prop.labelKey ?? `world_prop.${prop.id}.label`,
+  }));
+
+function findWaypointByObjectId(objectId: string): WaypointDefinition | undefined {
+  return WAYPOINT_DEFINITIONS.find((waypoint) => waypoint.objectId === objectId);
+}
+
+function findWaypointById(waypointId: string): WaypointDefinition | undefined {
+  return WAYPOINT_DEFINITIONS.find((waypoint) => waypoint.waypointId === waypointId);
+}
+
+/** True when `objectId` opens the waypoint fast-travel panel. */
 export function isWaypointObjectId(objectId: string): boolean {
-  return findRouteByWaypointObjectId(objectId) !== undefined;
+  return findWaypointByObjectId(objectId) !== undefined;
 }
 
 /**
@@ -114,30 +144,14 @@ export interface WaypointTravelFailure {
   readonly reason: WaypointRejectedReason;
 }
 
-function resolveWaypointFromObjectId(objectId: string): {
-  readonly objectId: string;
-  readonly waypointId: string;
-} | null {
-  const route = findRouteByWaypointObjectId(objectId);
-  if (route !== undefined && route.waypointId !== undefined) {
-    return { objectId, waypointId: route.waypointId };
-  }
-  return null;
-}
-
 function buildWaypointDestinations(activeIds: ReadonlySet<string>): WaypointDestinationEntry[] {
-  const allDestinations: readonly Omit<WaypointDestinationEntry, "discovered">[] = COMBAT_ZONE_ROUTES.filter(
-    (route): route is CombatZoneRoute & { readonly waypointId: string; readonly waypointLabelKey: string } =>
-      route.waypointId !== undefined && route.waypointLabelKey !== undefined,
-  ).map((route) => ({
-    waypointId: route.waypointId,
-    zoneId: TOWN_ZONE_ID,
-    labelKey: route.waypointLabelKey,
-  }));
-
-  return allDestinations.map((entry) => ({
-    ...entry,
-    discovered: activeIds.has(entry.waypointId),
+  // Task instruction: the fast-travel panel lists ONLY the player's own
+  // already-unlocked waypoints, not every waypoint that exists.
+  return WAYPOINT_DEFINITIONS.filter((waypoint) => activeIds.has(waypoint.waypointId)).map((waypoint) => ({
+    waypointId: waypoint.waypointId,
+    zoneId: waypoint.zoneId,
+    labelKey: waypoint.labelKey,
+    discovered: true,
   }));
 }
 
@@ -145,28 +159,28 @@ export async function activateAndBuildWaypointPanel(
   characterId: CharacterId,
   objectId: string,
 ): Promise<WaypointOpenedServerMessage | null> {
-  const resolvedWaypoint = resolveWaypointFromObjectId(objectId);
-  if (resolvedWaypoint === null) {
+  const waypoint = findWaypointByObjectId(objectId);
+  if (waypoint === undefined) {
     return null;
   }
 
   const repository = new CharacterRepository();
   const existingActivations = await repository.listWaypointActivations(characterId.toString());
   const alreadyActivated = existingActivations.some(
-    (entry: { waypointId: string }) => entry.waypointId === resolvedWaypoint.waypointId,
+    (entry: { waypointId: string }) => entry.waypointId === waypoint.waypointId,
   );
 
   if (!alreadyActivated) {
-    await repository.activateWaypoint(characterId.toString(), resolvedWaypoint.waypointId, TOWN_ZONE_ID);
+    await repository.activateWaypoint(characterId.toString(), waypoint.waypointId, waypoint.zoneId);
   }
 
-  const activations = await repository.listWaypointActivations(characterId.toString());
+  const activations = alreadyActivated ? existingActivations : await repository.listWaypointActivations(characterId.toString());
   const activeIds = new Set(activations.map((entry: { waypointId: string }) => entry.waypointId));
 
   return {
     type: "waypoint_opened",
-    objectId: resolvedWaypoint.objectId,
-    waypointId: resolvedWaypoint.waypointId,
+    objectId: waypoint.objectId,
+    waypointId: waypoint.waypointId,
     activated: !alreadyActivated,
     destinations: buildWaypointDestinations(activeIds),
   };
@@ -174,15 +188,10 @@ export async function activateAndBuildWaypointPanel(
 
 export async function resolveWaypointTravel(
   characterId: CharacterId,
-  currentZoneId: ZoneId,
   waypointId: string,
 ): Promise<WaypointTravelSuccess | WaypointTravelFailure> {
-  if (currentZoneId !== TOWN_ZONE_ID) {
-    return { ok: false, reason: "waypoint_unavailable" };
-  }
-
-  const route = findRouteByWaypointId(waypointId);
-  if (route === undefined) {
+  const waypoint = findWaypointById(waypointId);
+  if (waypoint === undefined) {
     return { ok: false, reason: "destination_unavailable" };
   }
 
@@ -193,23 +202,16 @@ export async function resolveWaypointTravel(
     return { ok: false, reason: "destination_not_activated" };
   }
 
-  const spawn = contentRegistry.spawnPoints.get(route.entrySpawnId as never);
-  if (spawn === undefined) {
-    return { ok: false, reason: "invalid_destination" };
-  }
-  if (spawn.zoneId !== TOWN_ZONE_ID) {
-    return { ok: false, reason: "invalid_destination" };
-  }
-  if (!isPositionInsideZoneBounds(TOWN_ZONE_ID, spawn.x, spawn.y)) {
+  if (!isPositionInsideZoneBounds(waypoint.zoneId, waypoint.x, waypoint.y)) {
     return { ok: false, reason: "invalid_destination" };
   }
 
   return {
     ok: true,
     waypointId,
-    zoneId: TOWN_ZONE_ID,
-    x: spawn.x,
-    y: spawn.y,
+    zoneId: waypoint.zoneId,
+    x: waypoint.x,
+    y: waypoint.y,
   };
 }
 
